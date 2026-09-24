@@ -33,3 +33,5 @@ swift run calopod-agent
 ```
 
 The placeholder reports zero operations until the first provider vertical slice is added.
+
+The complete command tree, date-range behavior, output envelope, and exit codes are documented in [docs/COMMAND_LINE.md](docs/COMMAND_LINE.md).

@@ -18,6 +18,10 @@ let package = Package(
     ],
     dependencies: [
         .package(
+            url: "https://github.com/apple/swift-argument-parser.git",
+            exact: "1.8.2"
+        ),
+        .package(
             url: "https://github.com/groue/GRDB.swift.git",
             exact: "7.10.0"
         ),
@@ -36,9 +40,17 @@ let package = Package(
             name: "CalopodSync",
             dependencies: ["CalopodDomain", "CalopodProviders", "CalopodStore"]
         ),
+        .target(
+            name: "CalopodCommands",
+            dependencies: [
+                "CalopodDomain",
+                "CalopodSync",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ]
+        ),
         .executableTarget(
             name: "CalopodCLI",
-            dependencies: ["CalopodDomain", "CalopodSync"]
+            dependencies: ["CalopodCommands"]
         ),
         .executableTarget(
             name: "CalopodAgent",
@@ -60,6 +72,10 @@ let package = Package(
         .testTarget(
             name: "CalopodStoreTests",
             dependencies: ["CalopodDomain", "CalopodStore"]
+        ),
+        .testTarget(
+            name: "CalopodCommandsTests",
+            dependencies: ["CalopodCommands"]
         ),
     ]
 )
