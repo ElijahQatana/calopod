@@ -18,10 +18,8 @@ public struct CalendarsCommand: AsyncParsableCommand {
     public func run() async throws {
         do {
             let repository = try CommandEnvironment.repository()
-            let selected = try selectedGoogleConnection(id: connection, repository: repository)
-            let calendars = try await CommandEnvironment.googleService().refreshCalendars(
-                connectionID: selected.id
-            )
+            let selected = try selectedConnection(id: connection, repository: repository)
+            let calendars = try await refreshCalendars(for: selected)
             try OutputRenderer.write(
                 command: "calendars",
                 payload: CommandPayload(
@@ -70,7 +68,7 @@ public struct EventsCommand: AsyncParsableCommand {
         guard let resolved else { return }
         do {
             let repository = try CommandEnvironment.repository()
-            let selectedConnection = try selectedGoogleConnection(
+            let selectedConnection = try selectedConnection(
                 id: connection,
                 repository: repository
             )
@@ -79,12 +77,11 @@ public struct EventsCommand: AsyncParsableCommand {
                 connectionID: selectedConnection.id,
                 repository: repository
             )
-            let page = try await CommandEnvironment.googleService().events(
-                connectionID: selectedConnection.id,
+            let page = try await readEvents(
+                connection: selectedConnection,
                 binding: selectedCalendar,
-                from: resolved.window.start,
-                through: resolved.window.end,
-                useIncrementalRefresh: false
+                start: resolved.window.start,
+                end: resolved.window.end
             )
             try OutputRenderer.write(
                 command: "events",

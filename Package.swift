@@ -12,6 +12,7 @@ let package = Package(
         .library(name: "CalopodDomain", targets: ["CalopodDomain"]),
         .library(name: "CalopodProviders", targets: ["CalopodProviders"]),
         .library(name: "CalopodGoogle", targets: ["CalopodGoogle"]),
+        .library(name: "CalopodMicrosoft", targets: ["CalopodMicrosoft"]),
         .library(name: "CalopodStore", targets: ["CalopodStore"]),
         .library(name: "CalopodSync", targets: ["CalopodSync"]),
         .executable(name: "calopod", targets: ["CalopodCLI"]),
@@ -49,10 +50,15 @@ let package = Package(
             dependencies: ["CalopodDomain", "CalopodProviders", "CalopodStore"]
         ),
         .target(
+            name: "CalopodMicrosoft",
+            dependencies: ["CalopodDomain", "CalopodProviders", "CalopodStore"]
+        ),
+        .target(
             name: "CalopodCommands",
             dependencies: [
                 "CalopodDomain",
                 "CalopodGoogle",
+                "CalopodMicrosoft",
                 "CalopodProviders",
                 "CalopodStore",
                 "CalopodSync",
@@ -91,6 +97,10 @@ let package = Package(
         .testTarget(
             name: "CalopodGoogleTests",
             dependencies: ["CalopodGoogle", "CalopodProviders", "CalopodStore"]
+        ),
+        .testTarget(
+            name: "CalopodMicrosoftTests",
+            dependencies: ["CalopodMicrosoft", "CalopodProviders", "CalopodStore"]
         ),
     ]
 )

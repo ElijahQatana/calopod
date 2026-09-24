@@ -32,15 +32,25 @@ import Network
 
 public final class LoopbackBrowserAuthorizationSession: BrowserAuthorizationSession, @unchecked Sendable {
     private let timeoutSeconds: UInt64
+    private let redirectHost: String
+    private let callbackPath: String
 
-    public init(timeoutSeconds: UInt64 = 300) {
+    public init(
+        timeoutSeconds: UInt64 = 300,
+        redirectHost: String = "127.0.0.1",
+        callbackPath: String = "/oauth/callback"
+    ) {
         self.timeoutSeconds = timeoutSeconds
+        self.redirectHost = redirectHost
+        self.callbackPath = callbackPath.hasPrefix("/") ? callbackPath : "/\(callbackPath)"
     }
 
     public func authorize(
         makeURL: @escaping @Sendable (BrowserAuthorizationContext) throws -> URL
     ) async throws -> BrowserAuthorizationResult {
-        try await withCheckedThrowingContinuation { continuation in
+        let redirectHost = self.redirectHost
+        let callbackPath = self.callbackPath
+        return try await withCheckedThrowingContinuation { continuation in
             let queue = DispatchQueue(label: "com.calopod.oauth-loopback")
             let parameters = NWParameters.tcp
             parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
@@ -57,7 +67,9 @@ public final class LoopbackBrowserAuthorizationSession: BrowserAuthorizationSess
                     switch listenerState {
                     case .ready:
                         guard let port = listener.port,
-                              let callback = URL(string: "http://127.0.0.1:\(port.rawValue)/oauth/callback") else {
+                              let callback = URL(
+                                string: "http://\(redirectHost):\(port.rawValue)\(callbackPath)"
+                              ) else {
                             coordinator.finish(.failure(ProviderFailure.invalidResponse))
                             return
                         }
@@ -95,8 +107,9 @@ public final class LoopbackBrowserAuthorizationSession: BrowserAuthorizationSess
                         guard let data,
                               let request = String(data: data, encoding: .utf8),
                               let target = request.split(separator: " ").dropFirst().first,
-                              let callback = URL(string: "http://127.0.0.1\(target)"),
+                              let callback = URL(string: "http://\(redirectHost)\(target)"),
                               let components = URLComponents(url: callback, resolvingAgainstBaseURL: false),
+                              components.path == callbackPath,
                               let redirectURI = coordinator.redirectURI else {
                             coordinator.finish(.failure(ProviderFailure.invalidResponse))
                             return
@@ -125,6 +138,13 @@ public final class LoopbackBrowserAuthorizationSession: BrowserAuthorizationSess
                         }
                         if values["error"] == "access_denied" {
                             coordinator.finish(.failure(ProviderFailure.consentDenied))
+                            return
+                        }
+                        if values["error"] == "interaction_required"
+                            || values["error"] == "login_required"
+                            || values["error"] == "consent_required"
+                        {
+                            coordinator.finish(.failure(ProviderFailure.accountPolicyRequired))
                             return
                         }
                         guard let code = values["code"], !code.isEmpty else {

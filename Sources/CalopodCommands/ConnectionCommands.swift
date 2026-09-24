@@ -37,7 +37,7 @@ public struct ConnectionAddCommand: AsyncParsableCommand {
     public init() {}
 
     public func run() async throws {
-        guard provider == .google else {
+        guard provider == .google || provider == .microsoft else {
             try OutputRenderer.write(
                 command: "connection.add",
                 payload: CommandPayload(
@@ -51,14 +51,28 @@ public struct ConnectionAddCommand: AsyncParsableCommand {
 
         #if os(macOS)
         do {
-            let service = try CommandEnvironment.googleService()
-            let connection = try await service.authorize(using: LoopbackBrowserAuthorizationSession())
-            let calendars = try await service.refreshCalendars(connectionID: connection.id)
+            let connection: StoredConnection
+            switch provider {
+            case .google:
+                connection = try await CommandEnvironment.googleService().authorize(
+                    using: LoopbackBrowserAuthorizationSession()
+                )
+            case .microsoft:
+                connection = try await CommandEnvironment.microsoftService().authorize(
+                    using: LoopbackBrowserAuthorizationSession(
+                        redirectHost: "localhost",
+                        callbackPath: "/"
+                    )
+                )
+            case .eventkit, .ics:
+                throw ExitCode(CalopodExitCode.unavailable.rawValue)
+            }
+            let calendars = try await refreshCalendars(for: connection)
             try OutputRenderer.write(
                 command: "connection.add",
                 payload: CommandPayload(
                     status: "ok",
-                    message: "Connected Google Calendar.",
+                    message: "Connected \(connection.displayLabel ?? connection.provider).",
                     count: calendars.count,
                     items: [
                         CommandItem(
@@ -153,16 +167,10 @@ public struct ConnectionRemoveCommand: ParsableCommand {
             guard let connection = try repository.connection(id: connectionID) else {
                 throw ValidationError("Connection '\(connectionID)' was not found.")
             }
-            guard connection.provider == "google" else {
-                try unavailable(command: "connection.remove", output: output)
-                return
-            }
-            try CommandEnvironment.googleService(requireClientID: false).disconnect(
-                connectionID: connectionID
-            )
+            try disconnect(connection)
             try OutputRenderer.write(
                 command: "connection.remove",
-                payload: CommandPayload(status: "ok", message: "Removed the Google Connection."),
+                payload: CommandPayload(status: "ok", message: "Removed the Connection."),
                 format: output.format
             )
         } catch {

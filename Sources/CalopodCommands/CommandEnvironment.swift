@@ -1,5 +1,6 @@
 import ArgumentParser
 import CalopodGoogle
+import CalopodMicrosoft
 import CalopodProviders
 import CalopodStore
 import Foundation
@@ -39,16 +40,36 @@ enum CommandEnvironment {
             state: try repository()
         )
     }
+
+    static func microsoftService(requireClientID: Bool = true) throws -> MicrosoftConnectionService {
+        let environment = ProcessInfo.processInfo.environment
+        let clientID = environment["CALOPOD_MICROSOFT_CLIENT_ID"] ?? ""
+        if requireClientID, clientID.isEmpty {
+            throw CommandEnvironmentError.missingMicrosoftClientID
+        }
+        let tenant = environment["CALOPOD_MICROSOFT_TENANT"] ?? "common"
+        return MicrosoftConnectionService(
+            oauth: MicrosoftOAuthClient(
+                configuration: MicrosoftOAuthConfiguration(clientID: clientID, tenant: tenant)
+            ),
+            graph: MicrosoftGraphClient(),
+            tokenVault: OAuthTokenVault(secretStore: KeychainSecretStore()),
+            state: try repository()
+        )
+    }
 }
 
 enum CommandEnvironmentError: Error, CustomStringConvertible {
     case missingGoogleClientID
+    case missingMicrosoftClientID
     case unsupportedPlatform
 
     var description: String {
         switch self {
         case .missingGoogleClientID:
             "Set CALOPOD_GOOGLE_CLIENT_ID to the desktop OAuth client ID, then try again."
+        case .missingMicrosoftClientID:
+            "Set CALOPOD_MICROSOFT_CLIENT_ID to the public client ID, then try again."
         case .unsupportedPlatform:
             "Browser authorization is currently available on macOS."
         }
@@ -66,29 +87,34 @@ func failCommand(_ error: Error) throws -> Never {
 private func commandFailure(_ error: Error) -> (message: String, exitCode: CalopodExitCode) {
     if let provider = error as? ProviderFailure {
         switch provider {
+        case .accountPolicyRequired:
+            return (
+                "The account requires consent, an administrator, or another sign-in action.",
+                .permissionDenied
+            )
         case .authorizationRequired:
-            return ("Authorization is required. Reconnect the Google account.", .permissionDenied)
+            return ("Authorization is required. Reconnect the calendar account.", .permissionDenied)
         case let .configurationMissing(name):
             return ("Missing configuration: \(name).", .invalidConfiguration)
         case .consentDenied:
             return ("Authorization was cancelled.", .permissionDenied)
         case .cursorExpired:
             return (
-                "Google expired the saved cursor. Run the command again for a clean refresh.",
+                "The provider expired the saved cursor. Run the command again for a clean refresh.",
                 .temporaryFailure
             )
         case let .httpStatus(status):
-            return ("Google Calendar returned HTTP \(status).", .unavailable)
+            return ("The calendar provider returned HTTP \(status).", .unavailable)
         case .invalidResponse:
-            return ("Google Calendar returned an invalid response.", .unavailable)
+            return ("The calendar provider returned an invalid response.", .unavailable)
         case .refreshRejected:
             return (
-                "Google rejected the saved refresh token. Reconnect the account.",
+                "The provider rejected the saved refresh token. Reconnect the account.",
                 .permissionDenied
             )
         case let .temporaryFailure(retryAfter):
             let suffix = retryAfter.map { " Try again in \($0) seconds." } ?? " Try again shortly."
-            return ("Google Calendar is temporarily unavailable.\(suffix)", .temporaryFailure)
+            return ("The calendar provider is temporarily unavailable.\(suffix)", .temporaryFailure)
         }
     }
     if let environment = error as? CommandEnvironmentError {
@@ -103,21 +129,78 @@ private func commandFailure(_ error: Error) -> (message: String, exitCode: Calop
     return ("Local state could not be read or updated.", .localStateFailure)
 }
 
-func selectedGoogleConnection(
+func selectedConnection(
     id: String?,
     repository: LocalStateRepository
 ) throws -> StoredConnection {
     if let id {
-        guard let stored = try repository.connection(id: id), stored.provider == "google" else {
-            throw ValidationError("Google Connection '\(id)' was not found.")
+        guard let stored = try repository.connection(id: id),
+              stored.provider == "google" || stored.provider == "microsoft" else {
+            throw ValidationError("Connection '\(id)' was not found or is not supported here.")
         }
         return stored
     }
-    let connections = try repository.connections(provider: "google")
+    let connections = try repository.connections().filter {
+        $0.provider == "google" || $0.provider == "microsoft"
+    }
     guard connections.count == 1, let only = connections.first else {
-        throw ValidationError("Pass --connection with a Google Connection identifier.")
+        throw ValidationError("Pass --connection with a Connection identifier.")
     }
     return only
+}
+
+func refreshCalendars(for connection: StoredConnection) async throws -> [StoredCalendarBinding] {
+    switch connection.provider {
+    case "google":
+        return try await CommandEnvironment.googleService().refreshCalendars(connectionID: connection.id)
+    case "microsoft":
+        return try await CommandEnvironment.microsoftService().refreshCalendars(connectionID: connection.id)
+    default:
+        throw ValidationError("That provider does not support calendar discovery yet.")
+    }
+}
+
+func readEvents(
+    connection: StoredConnection,
+    binding: StoredCalendarBinding,
+    start: Date,
+    end: Date
+) async throws -> ProviderEventPage {
+    switch connection.provider {
+    case "google":
+        return try await CommandEnvironment.googleService().events(
+            connectionID: connection.id,
+            binding: binding,
+            from: start,
+            through: end,
+            useIncrementalRefresh: false
+        )
+    case "microsoft":
+        return try await CommandEnvironment.microsoftService().events(
+            connectionID: connection.id,
+            binding: binding,
+            from: start,
+            through: end,
+            useIncrementalRefresh: false
+        )
+    default:
+        throw ValidationError("That provider does not support event reads yet.")
+    }
+}
+
+func disconnect(_ connection: StoredConnection) throws {
+    switch connection.provider {
+    case "google":
+        try CommandEnvironment.googleService(requireClientID: false).disconnect(
+            connectionID: connection.id
+        )
+    case "microsoft":
+        try CommandEnvironment.microsoftService(requireClientID: false).disconnect(
+            connectionID: connection.id
+        )
+    default:
+        throw ValidationError("That provider does not support disconnect yet.")
+    }
 }
 
 func selectedCalendarBinding(

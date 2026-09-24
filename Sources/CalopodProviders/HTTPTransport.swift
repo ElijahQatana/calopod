@@ -43,6 +43,7 @@ public struct URLSessionTransport: HTTPTransport, @unchecked Sendable {
 }
 
 public enum ProviderFailure: Error, Equatable, Sendable {
+    case accountPolicyRequired
     case authorizationRequired
     case configurationMissing(String)
     case consentDenied
