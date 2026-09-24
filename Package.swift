@@ -16,10 +16,22 @@ let package = Package(
         .executable(name: "calopod", targets: ["CalopodCLI"]),
         .executable(name: "calopod-agent", targets: ["CalopodAgent"]),
     ],
+    dependencies: [
+        .package(
+            url: "https://github.com/groue/GRDB.swift.git",
+            exact: "7.10.0"
+        ),
+    ],
     targets: [
         .target(name: "CalopodDomain"),
         .target(name: "CalopodProviders", dependencies: ["CalopodDomain"]),
-        .target(name: "CalopodStore", dependencies: ["CalopodDomain"]),
+        .target(
+            name: "CalopodStore",
+            dependencies: [
+                "CalopodDomain",
+                .product(name: "GRDB", package: "GRDB.swift"),
+            ]
+        ),
         .target(
             name: "CalopodSync",
             dependencies: ["CalopodDomain", "CalopodProviders", "CalopodStore"]
@@ -44,6 +56,10 @@ let package = Package(
         .testTarget(
             name: "CalopodSyncTests",
             dependencies: ["CalopodDomain", "CalopodSync", "CalopodTestSupport"]
+        ),
+        .testTarget(
+            name: "CalopodStoreTests",
+            dependencies: ["CalopodDomain", "CalopodStore"]
         ),
     ]
 )
