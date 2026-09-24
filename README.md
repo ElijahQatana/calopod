@@ -15,3 +15,21 @@ Calopod connects separate calendar accounts, keeps them cross-blocked, publishes
 The first release is a local command-line utility for macOS. A background Mac service, native Mac app, and manual-sync iPhone app follow from the same shared core.
 
 Calopod is in its foundation stage. The complete product boundary is in [PROJECT_CHARTER.md](PROJECT_CHARTER.md).
+
+## Development
+
+Calopod requires Swift 6.1 or newer. Build and test the shared workspace from the repository root:
+
+```sh
+swift build
+swift test
+```
+
+The two executable targets already call the same placeholder sync engine:
+
+```sh
+swift run calopod sync --dry-run
+swift run calopod-agent
+```
+
+The placeholder reports zero operations until the first provider vertical slice is added.
