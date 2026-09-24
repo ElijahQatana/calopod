@@ -11,6 +11,7 @@ let package = Package(
     products: [
         .library(name: "CalopodDomain", targets: ["CalopodDomain"]),
         .library(name: "CalopodProviders", targets: ["CalopodProviders"]),
+        .library(name: "CalopodGoogle", targets: ["CalopodGoogle"]),
         .library(name: "CalopodStore", targets: ["CalopodStore"]),
         .library(name: "CalopodSync", targets: ["CalopodSync"]),
         .executable(name: "calopod", targets: ["CalopodCLI"]),
@@ -28,7 +29,10 @@ let package = Package(
     ],
     targets: [
         .target(name: "CalopodDomain"),
-        .target(name: "CalopodProviders", dependencies: ["CalopodDomain"]),
+        .target(
+            name: "CalopodProviders",
+            dependencies: ["CalopodDomain", "CalopodStore"]
+        ),
         .target(
             name: "CalopodStore",
             dependencies: [
@@ -41,9 +45,16 @@ let package = Package(
             dependencies: ["CalopodDomain", "CalopodProviders", "CalopodStore"]
         ),
         .target(
+            name: "CalopodGoogle",
+            dependencies: ["CalopodDomain", "CalopodProviders", "CalopodStore"]
+        ),
+        .target(
             name: "CalopodCommands",
             dependencies: [
                 "CalopodDomain",
+                "CalopodGoogle",
+                "CalopodProviders",
+                "CalopodStore",
                 "CalopodSync",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ]
@@ -75,7 +86,11 @@ let package = Package(
         ),
         .testTarget(
             name: "CalopodCommandsTests",
-            dependencies: ["CalopodCommands"]
+            dependencies: ["CalopodCommands", "CalopodStore"]
+        ),
+        .testTarget(
+            name: "CalopodGoogleTests",
+            dependencies: ["CalopodGoogle", "CalopodProviders", "CalopodStore"]
         ),
     ]
 )

@@ -25,7 +25,7 @@ swift build
 swift test
 ```
 
-The two executable targets already call the same placeholder sync engine:
+The first read-only Google connection is available. Setup lives in [docs/GOOGLE_CALENDAR.md](docs/GOOGLE_CALENDAR.md). The two executable targets share the same core:
 
 ```sh
 swift run calopod sync --dry-run

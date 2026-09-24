@@ -46,19 +46,62 @@ public struct CommandPayload: Codable, Equatable, Sendable {
     public let count: Int?
     public let range: RangeOutput?
     public let mode: String?
+    public let items: [CommandItem]?
 
     public init(
         status: String,
         message: String,
         count: Int? = nil,
         range: RangeOutput? = nil,
-        mode: String? = nil
+        mode: String? = nil,
+        items: [CommandItem]? = nil
     ) {
         self.status = status
         self.message = message
         self.count = count
         self.range = range
         self.mode = mode
+        self.items = items
+    }
+}
+
+public struct CommandItem: Codable, Equatable, Sendable {
+    public let id: String
+    public let kind: String
+    public let label: String?
+    public let parentID: String?
+    public let selected: Bool?
+    public let readOnly: Bool?
+    public let startsAt: String?
+    public let endsAt: String?
+    public let allDay: Bool?
+    public let cancelled: Bool?
+    public let availability: String?
+
+    public init(
+        id: String,
+        kind: String,
+        label: String? = nil,
+        parentID: String? = nil,
+        selected: Bool? = nil,
+        readOnly: Bool? = nil,
+        startsAt: String? = nil,
+        endsAt: String? = nil,
+        allDay: Bool? = nil,
+        cancelled: Bool? = nil,
+        availability: String? = nil
+    ) {
+        self.id = id
+        self.kind = kind
+        self.label = label
+        self.parentID = parentID
+        self.selected = selected
+        self.readOnly = readOnly
+        self.startsAt = startsAt
+        self.endsAt = endsAt
+        self.allDay = allDay
+        self.cancelled = cancelled
+        self.availability = availability
     }
 }
 
@@ -96,6 +139,19 @@ public enum OutputRenderer {
                 lines.append("From: \(range.start)")
                 lines.append("Through: \(range.endExclusive) (exclusive)")
                 lines.append("Timezone: \(range.timezone)")
+            }
+            if let items = payload.items {
+                lines.append(contentsOf: items.map { item in
+                    var details = [item.id, item.label].compactMap { $0 }
+                    if item.selected == true { details.append("selected") }
+                    if item.readOnly == true { details.append("read only") }
+                    if let startsAt = item.startsAt { details.append(startsAt) }
+                    if let endsAt = item.endsAt { details.append("to \(endsAt)") }
+                    if item.allDay == true { details.append("all day") }
+                    if item.cancelled == true { details.append("cancelled") }
+                    if let availability = item.availability { details.append(availability) }
+                    return details.joined(separator: "  ")
+                })
             }
             lines.append(contentsOf: warnings.map { "Warning: \($0)" })
             return lines.joined(separator: "\n")

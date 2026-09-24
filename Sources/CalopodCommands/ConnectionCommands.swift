@@ -1,4 +1,6 @@
 import ArgumentParser
+import CalopodProviders
+import CalopodStore
 
 public enum ConnectionProvider: String, CaseIterable, ExpressibleByArgument, Sendable {
     case eventkit
@@ -24,7 +26,7 @@ public struct ConnectionCommand: ParsableCommand {
     public init() {}
 }
 
-public struct ConnectionAddCommand: ParsableCommand {
+public struct ConnectionAddCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(commandName: "add")
 
     @Argument(help: "Provider name: google, microsoft, eventkit, or ics.")
@@ -34,16 +36,46 @@ public struct ConnectionAddCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try OutputRenderer.write(
-            command: "connection.add",
-            payload: CommandPayload(
-                status: "unavailable",
-                message: "The \(provider.rawValue) connection adapter is not available yet. No change was made."
-            ),
-            format: output.format
-        )
-        throw ExitCode(CalopodExitCode.unavailable.rawValue)
+    public func run() async throws {
+        guard provider == .google else {
+            try OutputRenderer.write(
+                command: "connection.add",
+                payload: CommandPayload(
+                    status: "unavailable",
+                    message: "The \(provider.rawValue) connection adapter is not available yet. No change was made."
+                ),
+                format: output.format
+            )
+            throw ExitCode(CalopodExitCode.unavailable.rawValue)
+        }
+
+        #if os(macOS)
+        do {
+            let service = try CommandEnvironment.googleService()
+            let connection = try await service.authorize(using: LoopbackBrowserAuthorizationSession())
+            let calendars = try await service.refreshCalendars(connectionID: connection.id)
+            try OutputRenderer.write(
+                command: "connection.add",
+                payload: CommandPayload(
+                    status: "ok",
+                    message: "Connected Google Calendar.",
+                    count: calendars.count,
+                    items: [
+                        CommandItem(
+                            id: connection.id,
+                            kind: connection.provider,
+                            label: connection.displayLabel
+                        )
+                    ]
+                ),
+                format: output.format
+            )
+        } catch {
+            try failCommand(error)
+        }
+        #else
+        throw commandFailure(CommandEnvironmentError.unsupportedPlatform)
+        #endif
     }
 }
 
@@ -55,15 +87,23 @@ public struct ConnectionListCommand: ParsableCommand {
     public init() {}
 
     public func run() throws {
-        try OutputRenderer.write(
-            command: "connection.list",
-            payload: CommandPayload(
-                status: "ok",
-                message: "No Connections are configured.",
-                count: 0
-            ),
-            format: output.format
-        )
+        do {
+            let connections = try CommandEnvironment.repository().connections()
+            try OutputRenderer.write(
+                command: "connection.list",
+                payload: CommandPayload(
+                    status: "ok",
+                    message: connections.isEmpty ? "No Connections are configured." : "Configured Connections.",
+                    count: connections.count,
+                    items: connections.map {
+                        CommandItem(id: $0.id, kind: $0.provider, label: $0.displayLabel)
+                    }
+                ),
+                format: output.format
+            )
+        } catch {
+            try failCommand(error)
+        }
     }
 }
 
@@ -108,7 +148,26 @@ public struct ConnectionRemoveCommand: ParsableCommand {
     public init() {}
 
     public func run() throws {
-        try unavailable(command: "connection.remove", output: output)
+        do {
+            let repository = try CommandEnvironment.repository()
+            guard let connection = try repository.connection(id: connectionID) else {
+                throw ValidationError("Connection '\(connectionID)' was not found.")
+            }
+            guard connection.provider == "google" else {
+                try unavailable(command: "connection.remove", output: output)
+                return
+            }
+            try CommandEnvironment.googleService(requireClientID: false).disconnect(
+                connectionID: connectionID
+            )
+            try OutputRenderer.write(
+                command: "connection.remove",
+                payload: CommandPayload(status: "ok", message: "Removed the Google Connection."),
+                format: output.format
+            )
+        } catch {
+            try failCommand(error)
+        }
     }
 }
 
