@@ -7,7 +7,7 @@ public enum ProviderAvailability: String, Codable, Sendable {
     case unavailable
 }
 
-public struct ProviderEvent: Equatable, Sendable {
+public struct ProviderEvent: Codable, Equatable, Sendable {
     public let provider: String
     public let connectionID: String
     public let calendarID: String
@@ -56,7 +56,7 @@ public struct ProviderEvent: Equatable, Sendable {
     }
 }
 
-public struct ProviderEventPage: Equatable, Sendable {
+public struct ProviderEventPage: Codable, Equatable, Sendable {
     public let events: [ProviderEvent]
     public let nextSyncToken: String?
 

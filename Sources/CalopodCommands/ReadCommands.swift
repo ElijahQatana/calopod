@@ -10,8 +10,14 @@ public struct CalendarsCommand: AsyncParsableCommand {
 
     @OptionGroup public var output: OutputOptions
 
-    @Option(name: .long, help: "Logical Connection identifier. Uses the only Google Connection when omitted.")
+    @Option(name: .long, help: "Logical Connection identifier. Uses the only supported Connection when omitted.")
     public var connection: String?
+
+    @Option(name: .long, help: "Select one calendar identifier returned by this command.")
+    public var select: String?
+
+    @Option(name: .long, help: "Deselect one calendar identifier returned by this command.")
+    public var deselect: String?
 
     public init() {}
 
@@ -20,23 +26,54 @@ public struct CalendarsCommand: AsyncParsableCommand {
             let repository = try CommandEnvironment.repository()
             let selected = try selectedConnection(id: connection, repository: repository)
             let calendars = try await refreshCalendars(for: selected)
+            if select != nil, deselect != nil {
+                throw ValidationError("Use either --select or --deselect, not both.")
+            }
+            if let calendarID = select ?? deselect {
+                guard let calendar = calendars.first(where: { $0.id == calendarID }) else {
+                    throw ValidationError("Calendar '\(calendarID)' was not found on that Connection.")
+                }
+                let shouldSelect = select != nil
+                if shouldSelect,
+                   let conflict = try CalendarSelectionSafety.conflictMessage(
+                       selecting: calendar,
+                       on: selected,
+                       repository: repository
+                   ) {
+                    throw ValidationError(conflict)
+                }
+                guard let updated = try repository.setCalendarSelection(
+                    id: calendar.id,
+                    isSelected: shouldSelect
+                ) else {
+                    throw ValidationError("Calendar '\(calendarID)' was not found on that Connection.")
+                }
+                try OutputRenderer.write(
+                    command: "calendars",
+                    payload: CommandPayload(
+                        status: "ok",
+                        message: shouldSelect ? "Selected the calendar." : "Deselected the calendar.",
+                        count: 1,
+                        items: [calendarItem(updated)]
+                    ),
+                    format: output.format
+                )
+                return
+            }
+            let warnings = try CalendarSelectionSafety.warnings(
+                for: calendars,
+                connection: selected,
+                repository: repository
+            )
             try OutputRenderer.write(
                 command: "calendars",
                 payload: CommandPayload(
                     status: "ok",
                     message: calendars.isEmpty ? "No calendars were found." : "Selectable calendars.",
                     count: calendars.count,
-                    items: calendars.map {
-                        CommandItem(
-                            id: $0.id,
-                            kind: "calendar",
-                            label: $0.displayLabel,
-                            parentID: $0.connectionID,
-                            selected: $0.isSelected,
-                            readOnly: $0.isReadOnly
-                        )
-                    }
+                    items: calendars.map(calendarItem)
                 ),
+                warnings: warnings,
                 format: output.format
             )
         } catch {
@@ -55,7 +92,7 @@ public struct EventsCommand: AsyncParsableCommand {
     @OptionGroup public var range: DateRangeOptions
     @OptionGroup public var output: OutputOptions
 
-    @Option(name: .long, help: "Logical Connection identifier. Uses the only Google Connection when omitted.")
+    @Option(name: .long, help: "Logical Connection identifier. Uses the only supported Connection when omitted.")
     public var connection: String?
 
     @Option(name: .long, help: "Calendar identifier from the calendars command. Uses the only selected calendar when omitted.")
@@ -110,6 +147,19 @@ public struct EventsCommand: AsyncParsableCommand {
             try failCommand(error)
         }
     }
+}
+
+private func calendarItem(_ binding: StoredCalendarBinding) -> CommandItem {
+    CommandItem(
+        id: binding.id,
+        kind: "calendar",
+        label: binding.displayLabel,
+        parentID: binding.connectionID,
+        selected: binding.isSelected,
+        readOnly: binding.isReadOnly,
+        sourceType: binding.providerSourceType,
+        sourceLabel: binding.providerSourceLabel
+    )
 }
 
 private func outputDate(_ date: Date?) -> String? {

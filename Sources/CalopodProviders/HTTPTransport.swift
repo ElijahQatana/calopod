@@ -50,6 +50,7 @@ public enum ProviderFailure: Error, Equatable, Sendable {
     case cursorExpired
     case httpStatus(Int)
     case invalidResponse
+    case permissionDenied
     case refreshRejected
     case temporaryFailure(retryAfterSeconds: Int?)
 }

@@ -1,4 +1,5 @@
 import ArgumentParser
+import CalopodEventKit
 import CalopodProviders
 import CalopodStore
 
@@ -6,6 +7,7 @@ public enum ConnectionProvider: String, CaseIterable, ExpressibleByArgument, Sen
     case eventkit
     case google
     case ics
+    case mac
     case microsoft
 }
 
@@ -29,7 +31,7 @@ public struct ConnectionCommand: ParsableCommand {
 public struct ConnectionAddCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(commandName: "add")
 
-    @Argument(help: "Provider name: google, microsoft, eventkit, or ics.")
+    @Argument(help: "Provider name: mac, google, microsoft, eventkit, or ics.")
     public var provider: ConnectionProvider
 
     @OptionGroup public var output: OutputOptions
@@ -37,7 +39,10 @@ public struct ConnectionAddCommand: AsyncParsableCommand {
     public init() {}
 
     public func run() async throws {
-        guard provider == .google || provider == .microsoft else {
+        guard provider == .google
+                || provider == .microsoft
+                || provider == .eventkit
+                || provider == .mac else {
             try OutputRenderer.write(
                 command: "connection.add",
                 payload: CommandPayload(
@@ -64,7 +69,20 @@ public struct ConnectionAddCommand: AsyncParsableCommand {
                         callbackPath: "/"
                     )
                 )
-            case .eventkit, .ics:
+            case .eventkit, .mac:
+                let runner = try EventKitHostRunner()
+                let permission = try runner.requestPermission()
+                guard permission.status == .fullAccess, permission.errorCode == nil else {
+                    throw ProviderFailure.permissionDenied
+                }
+                let response = try runner.perform(EventKitHostRequest(operation: .calendars))
+                guard response.status == .fullAccess, response.errorCode == nil else {
+                    throw ProviderFailure.permissionDenied
+                }
+                connection = try CommandEnvironment.eventKitService().connect(
+                    calendars: response.calendars
+                )
+            case .ics:
                 throw ExitCode(CalopodExitCode.unavailable.rawValue)
             }
             let calendars = try await refreshCalendars(for: connection)

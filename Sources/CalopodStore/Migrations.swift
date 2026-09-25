@@ -175,6 +175,14 @@ extension CalopodDatabase {
             )
         }
 
+        migrator.registerMigration("v2_calendar_sources") { database in
+            try database.alter(table: "calendar_bindings") { table in
+                table.add(column: "provider_source_id", .text)
+                table.add(column: "provider_source_type", .text)
+                table.add(column: "provider_source_label", .text)
+            }
+        }
+
         return migrator
     }
 }

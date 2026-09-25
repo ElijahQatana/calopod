@@ -61,7 +61,7 @@ public struct GoogleConnectionService: Sendable {
                 connectionID: connectionID,
                 providerCalendarID: $0.id,
                 displayLabel: $0.summary,
-                isSelected: $0.primary,
+                isSelected: false,
                 isReadOnly: $0.accessRole == "reader" || $0.accessRole == "freeBusyReader"
             )
         }

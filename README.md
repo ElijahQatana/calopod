@@ -12,9 +12,9 @@ Calopod connects separate calendar accounts, keeps them cross-blocked, publishes
 - **Main calendar** is the complete unified view.
 - **Availability** is derived across the selected sources.
 
-The first release is a local command-line utility for macOS. A background Mac service, native Mac app, and manual-sync iPhone app follow from the same shared core.
+The first release is a local command-line utility for macOS. It starts with the calendar accounts already configured on the Mac, so normal local use does not require a Google Cloud project or Microsoft Entra registration. A background Mac service, native Mac app, and manual-sync iPhone app follow from the same shared core.
 
-Calopod is in its foundation stage. The complete product boundary is in [PROJECT_CHARTER.md](PROJECT_CHARTER.md).
+The complete product boundary is in [PROJECT_CHARTER.md](PROJECT_CHARTER.md).
 
 ## Development
 
@@ -25,13 +25,15 @@ swift build
 swift test
 ```
 
-Read-only Google and Microsoft connections are available. Setup lives in [docs/GOOGLE_CALENDAR.md](docs/GOOGLE_CALENDAR.md) and [docs/MICROSOFT_CALENDAR.md](docs/MICROSOFT_CALENDAR.md). The two executable targets share the same core:
+Start with [Calendars on this Mac](docs/CALENDARS_ON_THIS_MAC.md). Direct Google and Microsoft connections are also available for provider development and advanced setups; those paths currently require a developer-owned client ID. Setup lives in [docs/GOOGLE_CALENDAR.md](docs/GOOGLE_CALENDAR.md) and [docs/MICROSOFT_CALENDAR.md](docs/MICROSOFT_CALENDAR.md).
+
+The CLI and agent targets share the same core:
 
 ```sh
 swift run calopod sync --dry-run
 swift run calopod-agent
 ```
 
-The placeholder reports zero operations until the first provider vertical slice is added.
+Sync still reports zero operations while the write planner is being built.
 
 The complete command tree, date-range behavior, output envelope, and exit codes are documented in [docs/COMMAND_LINE.md](docs/COMMAND_LINE.md).

@@ -77,6 +77,8 @@ public struct CommandItem: Codable, Equatable, Sendable {
     public let allDay: Bool?
     public let cancelled: Bool?
     public let availability: String?
+    public let sourceType: String?
+    public let sourceLabel: String?
 
     public init(
         id: String,
@@ -89,7 +91,9 @@ public struct CommandItem: Codable, Equatable, Sendable {
         endsAt: String? = nil,
         allDay: Bool? = nil,
         cancelled: Bool? = nil,
-        availability: String? = nil
+        availability: String? = nil,
+        sourceType: String? = nil,
+        sourceLabel: String? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -102,6 +106,8 @@ public struct CommandItem: Codable, Equatable, Sendable {
         self.allDay = allDay
         self.cancelled = cancelled
         self.availability = availability
+        self.sourceType = sourceType
+        self.sourceLabel = sourceLabel
     }
 }
 
@@ -150,6 +156,8 @@ public enum OutputRenderer {
                     if item.allDay == true { details.append("all day") }
                     if item.cancelled == true { details.append("cancelled") }
                     if let availability = item.availability { details.append(availability) }
+                    if let sourceType = item.sourceType { details.append(sourceType) }
+                    if let sourceLabel = item.sourceLabel { details.append(sourceLabel) }
                     return details.joined(separator: "  ")
                 })
             }

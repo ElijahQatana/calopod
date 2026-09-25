@@ -30,6 +30,9 @@ public struct StoredCalendarBinding: Equatable, Sendable {
     public let displayLabel: String?
     public let isSelected: Bool
     public let isReadOnly: Bool
+    public let providerSourceID: String?
+    public let providerSourceType: String?
+    public let providerSourceLabel: String?
 
     public init(
         id: String,
@@ -37,7 +40,10 @@ public struct StoredCalendarBinding: Equatable, Sendable {
         providerCalendarID: String,
         displayLabel: String?,
         isSelected: Bool,
-        isReadOnly: Bool
+        isReadOnly: Bool,
+        providerSourceID: String? = nil,
+        providerSourceType: String? = nil,
+        providerSourceLabel: String? = nil
     ) {
         self.id = id
         self.connectionID = connectionID
@@ -45,6 +51,9 @@ public struct StoredCalendarBinding: Equatable, Sendable {
         self.displayLabel = displayLabel
         self.isSelected = isSelected
         self.isReadOnly = isReadOnly
+        self.providerSourceID = providerSourceID
+        self.providerSourceType = providerSourceType
+        self.providerSourceLabel = providerSourceLabel
     }
 }
 
@@ -178,8 +187,9 @@ public final class LocalStateRepository: @unchecked Sendable {
                     sql: """
                         INSERT INTO calendar_bindings
                             (id, connection_id, provider_calendar_id, display_label,
-                             is_selected, is_read_only, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                             is_selected, is_read_only, provider_source_id,
+                             provider_source_type, provider_source_label, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                     arguments: [
                         binding.id,
@@ -188,6 +198,9 @@ public final class LocalStateRepository: @unchecked Sendable {
                         binding.displayLabel,
                         existingSelections[binding.providerCalendarID] ?? binding.isSelected,
                         binding.isReadOnly,
+                        binding.providerSourceID,
+                        binding.providerSourceType,
+                        binding.providerSourceLabel,
                         now,
                     ]
                 )
@@ -201,7 +214,8 @@ public final class LocalStateRepository: @unchecked Sendable {
                 database,
                 sql: """
                     SELECT id, connection_id, provider_calendar_id, display_label,
-                           is_selected, is_read_only
+                           is_selected, is_read_only, provider_source_id,
+                           provider_source_type, provider_source_label
                     FROM calendar_bindings
                     WHERE connection_id = ?
                     ORDER BY display_label, id
@@ -214,7 +228,10 @@ public final class LocalStateRepository: @unchecked Sendable {
                     providerCalendarID: $0["provider_calendar_id"],
                     displayLabel: $0["display_label"],
                     isSelected: $0["is_selected"],
-                    isReadOnly: $0["is_read_only"]
+                    isReadOnly: $0["is_read_only"],
+                    providerSourceID: $0["provider_source_id"],
+                    providerSourceType: $0["provider_source_type"],
+                    providerSourceLabel: $0["provider_source_label"]
                 )
             }
         }
@@ -226,7 +243,8 @@ public final class LocalStateRepository: @unchecked Sendable {
                 database,
                 sql: """
                     SELECT id, connection_id, provider_calendar_id, display_label,
-                           is_selected, is_read_only
+                           is_selected, is_read_only, provider_source_id,
+                           provider_source_type, provider_source_label
                     FROM calendar_bindings
                     WHERE id = ?
                     """,
@@ -240,9 +258,26 @@ public final class LocalStateRepository: @unchecked Sendable {
                 providerCalendarID: row["provider_calendar_id"],
                 displayLabel: row["display_label"],
                 isSelected: row["is_selected"],
-                isReadOnly: row["is_read_only"]
+                isReadOnly: row["is_read_only"],
+                providerSourceID: row["provider_source_id"],
+                providerSourceType: row["provider_source_type"],
+                providerSourceLabel: row["provider_source_label"]
             )
         }
+    }
+
+    @discardableResult
+    public func setCalendarSelection(
+        id: String,
+        isSelected: Bool
+    ) throws -> StoredCalendarBinding? {
+        try database.write { database in
+            try database.execute(
+                sql: "UPDATE calendar_bindings SET is_selected = ? WHERE id = ?",
+                arguments: [isSelected, id]
+            )
+        }
+        return try calendarBinding(id: id)
     }
 
     public func saveCursor(

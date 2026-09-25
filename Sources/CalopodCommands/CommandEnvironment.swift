@@ -1,4 +1,5 @@
 import ArgumentParser
+import CalopodEventKit
 import CalopodGoogle
 import CalopodMicrosoft
 import CalopodProviders
@@ -57,11 +58,17 @@ enum CommandEnvironment {
             state: try repository()
         )
     }
+
+    static func eventKitService() throws -> EventKitConnectionService {
+        EventKitConnectionService(state: try repository())
+    }
 }
 
 enum CommandEnvironmentError: Error, CustomStringConvertible {
     case missingGoogleClientID
     case missingMicrosoftClientID
+    case missingEventKitHost
+    case eventKitHostFailed
     case unsupportedPlatform
 
     var description: String {
@@ -70,6 +77,10 @@ enum CommandEnvironmentError: Error, CustomStringConvertible {
             "Set CALOPOD_GOOGLE_CLIENT_ID to the desktop OAuth client ID, then try again."
         case .missingMicrosoftClientID:
             "Set CALOPOD_MICROSOFT_CLIENT_ID to the public client ID, then try again."
+        case .missingEventKitHost:
+            "Build the EventKit host with Scripts/build-eventkit-host.sh, then try again."
+        case .eventKitHostFailed:
+            "The EventKit host did not return a valid response. Rebuild it, then try again."
         case .unsupportedPlatform:
             "Browser authorization is currently available on macOS."
         }
@@ -107,6 +118,11 @@ private func commandFailure(_ error: Error) -> (message: String, exitCode: Calop
             return ("The calendar provider returned HTTP \(status).", .unavailable)
         case .invalidResponse:
             return ("The calendar provider returned an invalid response.", .unavailable)
+        case .permissionDenied:
+            return (
+                "Calendar access is denied. Grant full calendar access in System Settings, then try again.",
+                .permissionDenied
+            )
         case .refreshRejected:
             return (
                 "The provider rejected the saved refresh token. Reconnect the account.",
@@ -135,13 +151,15 @@ func selectedConnection(
 ) throws -> StoredConnection {
     if let id {
         guard let stored = try repository.connection(id: id),
-              stored.provider == "google" || stored.provider == "microsoft" else {
+              stored.provider == "google"
+                || stored.provider == "microsoft"
+                || stored.provider == "eventkit" else {
             throw ValidationError("Connection '\(id)' was not found or is not supported here.")
         }
         return stored
     }
     let connections = try repository.connections().filter {
-        $0.provider == "google" || $0.provider == "microsoft"
+        $0.provider == "google" || $0.provider == "microsoft" || $0.provider == "eventkit"
     }
     guard connections.count == 1, let only = connections.first else {
         throw ValidationError("Pass --connection with a Connection identifier.")
@@ -155,6 +173,19 @@ func refreshCalendars(for connection: StoredConnection) async throws -> [StoredC
         return try await CommandEnvironment.googleService().refreshCalendars(connectionID: connection.id)
     case "microsoft":
         return try await CommandEnvironment.microsoftService().refreshCalendars(connectionID: connection.id)
+    case "eventkit":
+        #if os(macOS)
+        let response = try EventKitHostRunner().perform(EventKitHostRequest(operation: .calendars))
+        guard response.status == .fullAccess, response.errorCode == nil else {
+            throw ProviderFailure.permissionDenied
+        }
+        return try CommandEnvironment.eventKitService().refreshCalendars(
+            response.calendars,
+            connectionID: connection.id
+        )
+        #else
+        throw CommandEnvironmentError.unsupportedPlatform
+        #endif
     default:
         throw ValidationError("That provider does not support calendar discovery yet.")
     }
@@ -183,6 +214,23 @@ func readEvents(
             through: end,
             useIncrementalRefresh: false
         )
+    case "eventkit":
+        #if os(macOS)
+        let response = try EventKitHostRunner().perform(
+            EventKitHostRequest(
+                operation: .events,
+                calendarIDs: [binding.providerCalendarID],
+                start: start,
+                end: end
+            )
+        )
+        guard response.status == .fullAccess, response.errorCode == nil else {
+            throw ProviderFailure.permissionDenied
+        }
+        return ProviderEventPage(events: response.events, nextSyncToken: nil)
+        #else
+        throw CommandEnvironmentError.unsupportedPlatform
+        #endif
     default:
         throw ValidationError("That provider does not support event reads yet.")
     }
@@ -198,6 +246,8 @@ func disconnect(_ connection: StoredConnection) throws {
         try CommandEnvironment.microsoftService(requireClientID: false).disconnect(
             connectionID: connection.id
         )
+    case "eventkit":
+        try CommandEnvironment.eventKitService().disconnect(connectionID: connection.id)
     default:
         throw ValidationError("That provider does not support disconnect yet.")
     }
@@ -212,6 +262,11 @@ func selectedCalendarBinding(
         guard let binding = try repository.calendarBinding(id: id),
               binding.connectionID == connectionID else {
             throw ValidationError("Calendar '\(id)' was not found on that Connection.")
+        }
+        guard binding.isSelected else {
+            throw ValidationError(
+                "Calendar '\(id)' is not selected. Run calendars --select \(id) first."
+            )
         }
         return binding
     }

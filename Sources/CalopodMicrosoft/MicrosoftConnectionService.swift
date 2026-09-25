@@ -60,7 +60,7 @@ public struct MicrosoftConnectionService: Sendable {
                 connectionID: connectionID,
                 providerCalendarID: $0.id,
                 displayLabel: $0.name,
-                isSelected: $0.isDefault,
+                isSelected: false,
                 isReadOnly: !$0.canEdit
             )
         }

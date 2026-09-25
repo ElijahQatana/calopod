@@ -12,11 +12,13 @@ let package = Package(
         .library(name: "CalopodDomain", targets: ["CalopodDomain"]),
         .library(name: "CalopodProviders", targets: ["CalopodProviders"]),
         .library(name: "CalopodGoogle", targets: ["CalopodGoogle"]),
+        .library(name: "CalopodEventKit", targets: ["CalopodEventKit"]),
         .library(name: "CalopodMicrosoft", targets: ["CalopodMicrosoft"]),
         .library(name: "CalopodStore", targets: ["CalopodStore"]),
         .library(name: "CalopodSync", targets: ["CalopodSync"]),
         .executable(name: "calopod", targets: ["CalopodCLI"]),
         .executable(name: "calopod-agent", targets: ["CalopodAgent"]),
+        .executable(name: "calopod-eventkit-host", targets: ["CalopodEventKitHost"]),
     ],
     dependencies: [
         .package(
@@ -50,6 +52,10 @@ let package = Package(
             dependencies: ["CalopodDomain", "CalopodProviders", "CalopodStore"]
         ),
         .target(
+            name: "CalopodEventKit",
+            dependencies: ["CalopodDomain", "CalopodProviders", "CalopodStore"]
+        ),
+        .target(
             name: "CalopodMicrosoft",
             dependencies: ["CalopodDomain", "CalopodProviders", "CalopodStore"]
         ),
@@ -57,6 +63,7 @@ let package = Package(
             name: "CalopodCommands",
             dependencies: [
                 "CalopodDomain",
+                "CalopodEventKit",
                 "CalopodGoogle",
                 "CalopodMicrosoft",
                 "CalopodProviders",
@@ -72,6 +79,10 @@ let package = Package(
         .executableTarget(
             name: "CalopodAgent",
             dependencies: ["CalopodDomain", "CalopodSync"]
+        ),
+        .executableTarget(
+            name: "CalopodEventKitHost",
+            dependencies: ["CalopodEventKit", "CalopodProviders"]
         ),
         .target(
             name: "CalopodTestSupport",
@@ -97,6 +108,15 @@ let package = Package(
         .testTarget(
             name: "CalopodGoogleTests",
             dependencies: ["CalopodGoogle", "CalopodProviders", "CalopodStore"]
+        ),
+        .testTarget(
+            name: "CalopodEventKitTests",
+            dependencies: [
+                "CalopodDomain",
+                "CalopodEventKit",
+                "CalopodProviders",
+                "CalopodStore",
+            ]
         ),
         .testTarget(
             name: "CalopodMicrosoftTests",
