@@ -95,7 +95,13 @@ let package = Package(
         ),
         .testTarget(
             name: "CalopodSyncTests",
-            dependencies: ["CalopodDomain", "CalopodSync", "CalopodTestSupport"]
+            dependencies: [
+                "CalopodDomain",
+                "CalopodProviders",
+                "CalopodStore",
+                "CalopodSync",
+                "CalopodTestSupport",
+            ]
         ),
         .testTarget(
             name: "CalopodStoreTests",

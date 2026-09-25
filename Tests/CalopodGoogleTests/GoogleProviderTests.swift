@@ -202,11 +202,17 @@ struct GoogleConnectionServiceTests {
         let start = Date(timeIntervalSince1970: 1_000)
         let end = start.addingTimeInterval(86_400)
 
-        _ = try await firstService.events(
+        let firstPage = try await firstService.events(
             connectionID: connection.id,
             binding: binding,
             from: start,
             through: end
+        )
+        try saveCursorUpdates(
+            firstPage,
+            repository: state,
+            connectionID: connection.id,
+            calendarBindingID: binding.id
         )
         let reopenedService = service(
             state: LocalStateRepository(database: database),
@@ -266,11 +272,17 @@ struct GoogleConnectionServiceTests {
 
         let connection = try await service.authorize(using: StubBrowserSession { _ in })
         let bindings = try await service.refreshCalendars(connectionID: connection.id)
-        _ = try await service.events(
+        let page = try await service.events(
             connectionID: connection.id,
             binding: bindings[0],
             from: fixedNow,
             through: fixedNow.addingTimeInterval(86_400)
+        )
+        try saveCursorUpdates(
+            page,
+            repository: state,
+            connectionID: connection.id,
+            calendarBindingID: bindings[0].id
         )
 
         let reopenedState = LocalStateRepository(database: database)
@@ -305,6 +317,24 @@ struct GoogleConnectionServiceTests {
             tokenVault: vault,
             state: state,
             now: { now }
+        )
+    }
+}
+
+private func saveCursorUpdates(
+    _ page: ProviderEventPage,
+    repository: LocalStateRepository,
+    connectionID: String,
+    calendarBindingID: String
+) throws {
+    for cursor in page.cursorUpdates {
+        try repository.saveCursor(
+            connectionID: connectionID,
+            calendarBindingID: calendarBindingID,
+            scopeKey: cursor.scopeKey,
+            value: cursor.value,
+            scopeStart: cursor.scopeStart,
+            scopeEnd: cursor.scopeEnd
         )
     }
 }

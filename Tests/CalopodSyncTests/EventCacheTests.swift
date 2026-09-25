@@ -1,0 +1,285 @@
+import CalopodProviders
+import CalopodStore
+import CalopodSync
+import Foundation
+import Testing
+
+@Suite("Normalized event cache")
+struct EventCacheTests {
+    @Test("Normalization covers recurrence, privacy, availability, cancellation, and malformed input")
+    func normalization() {
+        let connection = testConnection()
+        let calendar = testCalendar(connectionID: connection.id)
+        let start = Date(timeIntervalSince1970: 1_000)
+        let end = start.addingTimeInterval(86_400)
+        let events = [
+            event(
+                id: "all-day",
+                start: start,
+                end: end,
+                allDay: true,
+                availability: .free,
+                isPrivate: true,
+                title: "Synthetic private day"
+            ),
+            event(
+                id: "occurrence",
+                seriesID: "series",
+                originalStart: "2026-03-08T09:00:00-04:00",
+                start: start.addingTimeInterval(3_600),
+                end: start.addingTimeInterval(5_400),
+                availability: .tentative,
+                title: "Synthetic recurrence"
+            ),
+            event(id: "cancelled", isCancelled: true),
+            event(id: "missing-end", start: start, end: nil),
+            event(
+                id: "outside",
+                start: end.addingTimeInterval(60),
+                end: end.addingTimeInterval(120)
+            ),
+        ]
+
+        let result = EventNormalizer.normalize(
+            events,
+            connection: connection,
+            calendar: calendar,
+            from: start,
+            through: end
+        )
+
+        #expect(result.instances.count == 2)
+        #expect(result.cancelledSourceKeyHashes.count == 1)
+        #expect(result.discardedCount == 2)
+        #expect(result.instances[0].isAllDay)
+        #expect(result.instances[0].availability == "free")
+        #expect(result.instances[0].isPrivate)
+        #expect(result.instances[1].availability == "tentative")
+        #expect(result.instances[1].recurrenceID == "2026-03-08T09:00:00-04:00")
+        #expect(result.instances.allSatisfy { $0.sourceKeyHash.count == 64 })
+    }
+
+    @Test("Full and incremental refreshes converge cache and cursors")
+    func refreshLifecycle() throws {
+        let database = try CalopodDatabase.inMemory()
+        let repository = LocalStateRepository(database: database)
+        let connection = testConnection()
+        let calendar = testCalendar(connectionID: connection.id)
+        try repository.saveConnection(connection)
+        try repository.replaceCalendarBindings(
+            connectionID: connection.id,
+            bindings: [calendar]
+        )
+        let cache = EventCache(repository: repository)
+        let start = Date(timeIntervalSince1970: 1_000)
+        let end = start.addingTimeInterval(86_400)
+
+        let initial = ProviderEventPage(
+            events: [
+                event(id: "one", start: start, end: start.addingTimeInterval(1_800)),
+                event(
+                    id: "two",
+                    start: start.addingTimeInterval(1_800),
+                    end: start.addingTimeInterval(3_600)
+                ),
+            ],
+            nextSyncToken: "cursor-one",
+            refreshMode: .full,
+            cursorUpdates: [
+                ProviderCursorUpdate(
+                    scopeKey: "synthetic-window",
+                    value: "cursor-one",
+                    scopeStart: start,
+                    scopeEnd: end
+                ),
+            ]
+        )
+        let initialResult = try cache.apply(
+            initial,
+            connection: connection,
+            calendar: calendar,
+            from: start,
+            through: end
+        )
+        #expect(initialResult.storedCount == 2)
+        #expect(
+            try repository.normalizedInstances(
+                calendarBindingIDs: [calendar.id],
+                from: start,
+                through: end
+            ).count == 2
+        )
+        #expect(
+            try repository.cursor(
+                connectionID: connection.id,
+                calendarBindingID: calendar.id,
+                scopeKey: "synthetic-window"
+            ) == "cursor-one"
+        )
+
+        let rediscoveredCalendar = StoredCalendarBinding(
+            id: calendar.id,
+            connectionID: connection.id,
+            providerCalendarID: calendar.providerCalendarID,
+            displayLabel: "Renamed synthetic calendar",
+            isSelected: false,
+            isReadOnly: true
+        )
+        try repository.replaceCalendarBindings(
+            connectionID: connection.id,
+            bindings: [rediscoveredCalendar]
+        )
+        let rediscoveredBindings = try repository.calendarBindings(connectionID: connection.id)
+        let preservedBinding = try #require(rediscoveredBindings.first)
+        #expect(preservedBinding.isSelected)
+        #expect(preservedBinding.displayLabel == "Renamed synthetic calendar")
+        #expect(
+            try repository.normalizedInstances(
+                calendarBindingIDs: [calendar.id],
+                from: start,
+                through: end
+            ).count == 2
+        )
+
+        let incremental = ProviderEventPage(
+            events: [
+                event(
+                    id: "one",
+                    start: start,
+                    end: start.addingTimeInterval(2_400),
+                    title: "Synthetic update"
+                ),
+                event(id: "two", isCancelled: true),
+            ],
+            nextSyncToken: "cursor-two",
+            refreshMode: .incremental,
+            cursorUpdates: [
+                ProviderCursorUpdate(
+                    scopeKey: "synthetic-window",
+                    value: "cursor-two",
+                    scopeStart: start,
+                    scopeEnd: end
+                ),
+            ]
+        )
+        let incrementalResult = try cache.apply(
+            incremental,
+            connection: connection,
+            calendar: calendar,
+            from: start,
+            through: end
+        )
+        let remaining = try repository.normalizedInstances(
+            calendarBindingIDs: [calendar.id],
+            from: start,
+            through: end
+        )
+
+        #expect(incrementalResult.cancelledCount == 1)
+        #expect(remaining.count == 1)
+        #expect(remaining[0].title == "Synthetic update")
+        #expect(remaining[0].endsAt == start.addingTimeInterval(2_400))
+        #expect(
+            try repository.cursor(
+                connectionID: connection.id,
+                calendarBindingID: calendar.id,
+                scopeKey: "synthetic-window"
+            ) == "cursor-two"
+        )
+        #expect(try repository.connectionHealth(connectionID: connection.id)?.status == "healthy")
+
+        _ = try cache.apply(
+            ProviderEventPage(events: [], nextSyncToken: nil, refreshMode: .full),
+            connection: connection,
+            calendar: calendar,
+            from: start,
+            through: end
+        )
+        #expect(
+            try repository.normalizedInstances(
+                calendarBindingIDs: [calendar.id],
+                from: start,
+                through: end
+            ).isEmpty
+        )
+    }
+
+    @Test("Stale health keeps the first failure time")
+    func staleHealth() throws {
+        let database = try CalopodDatabase.inMemory()
+        let repository = LocalStateRepository(database: database)
+        let connection = testConnection()
+        try repository.saveConnection(connection)
+        let first = Date(timeIntervalSince1970: 1_000)
+        let second = Date(timeIntervalSince1970: 2_000)
+
+        try repository.markConnectionStale(
+            connectionID: connection.id,
+            errorCode: "temporary",
+            now: first
+        )
+        try repository.markConnectionStale(
+            connectionID: connection.id,
+            errorCode: "permission",
+            now: second
+        )
+        let storedHealth = try repository.connectionHealth(connectionID: connection.id)
+        let health = try #require(storedHealth)
+
+        #expect(health.status == "stale")
+        #expect(health.staleSince == first)
+        #expect(health.checkedAt == second)
+        #expect(health.errorCode == "permission")
+    }
+
+    private func testConnection() -> StoredConnection {
+        StoredConnection(
+            id: "connection",
+            configurationID: "default",
+            provider: "eventkit",
+            displayLabel: "Synthetic Connection",
+            isEnabled: true
+        )
+    }
+
+    private func testCalendar(connectionID: String) -> StoredCalendarBinding {
+        StoredCalendarBinding(
+            id: "calendar-binding",
+            connectionID: connectionID,
+            providerCalendarID: "provider-calendar",
+            displayLabel: "Synthetic calendar",
+            isSelected: true,
+            isReadOnly: false
+        )
+    }
+
+    private func event(
+        id: String,
+        seriesID: String? = nil,
+        originalStart: String? = nil,
+        start: Date? = nil,
+        end: Date? = nil,
+        allDay: Bool = false,
+        availability: ProviderAvailability = .busy,
+        isCancelled: Bool = false,
+        isPrivate: Bool = false,
+        title: String? = "Synthetic event"
+    ) -> ProviderEvent {
+        ProviderEvent(
+            provider: "eventkit",
+            connectionID: "connection",
+            calendarID: "provider-calendar",
+            eventID: id,
+            seriesID: seriesID,
+            originalStart: originalStart,
+            start: start,
+            end: end,
+            isAllDay: allDay,
+            availability: availability,
+            isCancelled: isCancelled,
+            isPrivate: isPrivate,
+            title: title,
+            updatedAt: nil
+        )
+    }
+}

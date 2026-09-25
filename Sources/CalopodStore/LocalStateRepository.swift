@@ -58,7 +58,7 @@ public struct StoredCalendarBinding: Equatable, Sendable {
 }
 
 public final class LocalStateRepository: @unchecked Sendable {
-    private let database: CalopodDatabase
+    let database: CalopodDatabase
 
     public init(database: CalopodDatabase) {
         self.database = database
@@ -177,11 +177,6 @@ public final class LocalStateRepository: @unchecked Sendable {
                 result[row["provider_calendar_id"]] = row["is_selected"]
             }
 
-            try database.execute(
-                sql: "DELETE FROM calendar_bindings WHERE connection_id = ?",
-                arguments: [connectionID]
-            )
-
             for binding in bindings {
                 try database.execute(
                     sql: """
@@ -190,6 +185,13 @@ public final class LocalStateRepository: @unchecked Sendable {
                              is_selected, is_read_only, provider_source_id,
                              provider_source_type, provider_source_label, created_at)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(connection_id, provider_calendar_id) DO UPDATE SET
+                            display_label = excluded.display_label,
+                            is_selected = excluded.is_selected,
+                            is_read_only = excluded.is_read_only,
+                            provider_source_id = excluded.provider_source_id,
+                            provider_source_type = excluded.provider_source_type,
+                            provider_source_label = excluded.provider_source_label
                         """,
                     arguments: [
                         binding.id,
@@ -203,6 +205,24 @@ public final class LocalStateRepository: @unchecked Sendable {
                         binding.providerSourceLabel,
                         now,
                     ]
+                )
+            }
+
+            if bindings.isEmpty {
+                try database.execute(
+                    sql: "DELETE FROM calendar_bindings WHERE connection_id = ?",
+                    arguments: [connectionID]
+                )
+            } else {
+                let providerCalendarIDs = bindings.map(\.providerCalendarID)
+                try database.execute(
+                    sql: """
+                        DELETE FROM calendar_bindings
+                        WHERE connection_id = ?
+                          AND provider_calendar_id NOT IN (\(databaseQuestionMarks(count: providerCalendarIDs.count)))
+                        """,
+                    arguments: StatementArguments([connectionID])
+                        + StatementArguments(providerCalendarIDs)
                 )
             }
         }
@@ -349,4 +369,8 @@ public final class LocalStateRepository: @unchecked Sendable {
             }
         }
     }
+}
+
+private func databaseQuestionMarks(count: Int) -> String {
+    Array(repeating: "?", count: count).joined(separator: ", ")
 }

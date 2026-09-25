@@ -218,11 +218,17 @@ struct MicrosoftConnectionServiceTests {
         let rangeEnd = rangeStart.addingTimeInterval(86_400)
         let first = service(state: state, vault: vault, transport: transport)
 
-        _ = try await first.events(
+        let firstPage = try await first.events(
             connectionID: connection.id,
             binding: binding,
             from: rangeStart,
             through: rangeEnd
+        )
+        try saveCursorUpdates(
+            firstPage,
+            repository: state,
+            connectionID: connection.id,
+            calendarBindingID: binding.id
         )
         let reopened = service(
             state: LocalStateRepository(database: database),
@@ -264,6 +270,24 @@ struct MicrosoftConnectionServiceTests {
             graph: MicrosoftGraphClient(transport: transport),
             tokenVault: vault,
             state: state
+        )
+    }
+}
+
+private func saveCursorUpdates(
+    _ page: ProviderEventPage,
+    repository: LocalStateRepository,
+    connectionID: String,
+    calendarBindingID: String
+) throws {
+    for cursor in page.cursorUpdates {
+        try repository.saveCursor(
+            connectionID: connectionID,
+            calendarBindingID: calendarBindingID,
+            scopeKey: cursor.scopeKey,
+            value: cursor.value,
+            scopeStart: cursor.scopeStart,
+            scopeEnd: cursor.scopeEnd
         )
     }
 }

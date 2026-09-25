@@ -59,9 +59,42 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
 public struct ProviderEventPage: Codable, Equatable, Sendable {
     public let events: [ProviderEvent]
     public let nextSyncToken: String?
+    public let refreshMode: ProviderRefreshMode
+    public let cursorUpdates: [ProviderCursorUpdate]
 
-    public init(events: [ProviderEvent], nextSyncToken: String?) {
+    public init(
+        events: [ProviderEvent],
+        nextSyncToken: String?,
+        refreshMode: ProviderRefreshMode = .full,
+        cursorUpdates: [ProviderCursorUpdate] = []
+    ) {
         self.events = events
         self.nextSyncToken = nextSyncToken
+        self.refreshMode = refreshMode
+        self.cursorUpdates = cursorUpdates
+    }
+}
+
+public enum ProviderRefreshMode: String, Codable, Equatable, Sendable {
+    case full
+    case incremental
+}
+
+public struct ProviderCursorUpdate: Codable, Equatable, Sendable {
+    public let scopeKey: String
+    public let value: String
+    public let scopeStart: Date?
+    public let scopeEnd: Date?
+
+    public init(
+        scopeKey: String,
+        value: String,
+        scopeStart: Date? = nil,
+        scopeEnd: Date? = nil
+    ) {
+        self.scopeKey = scopeKey
+        self.value = value
+        self.scopeStart = scopeStart
+        self.scopeEnd = scopeEnd
     }
 }

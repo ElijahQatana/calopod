@@ -1,5 +1,6 @@
 import ArgumentParser
 import CalopodStore
+import CalopodSync
 import Foundation
 
 public struct CalendarsCommand: AsyncParsableCommand {
@@ -120,27 +121,43 @@ public struct EventsCommand: AsyncParsableCommand {
                 start: resolved.window.start,
                 end: resolved.window.end
             )
+            let cacheResult = try EventCache(repository: repository).apply(
+                page,
+                connection: selectedConnection,
+                calendar: selectedCalendar,
+                from: resolved.window.start,
+                through: resolved.window.end
+            )
+            let events = try repository.normalizedInstances(
+                calendarBindingIDs: [selectedCalendar.id],
+                from: resolved.window.start,
+                through: resolved.window.end
+            )
+            let warnings = cacheResult.discardedCount == 0
+                ? []
+                : ["Ignored \(cacheResult.discardedCount) malformed or out-of-range event records."]
             try OutputRenderer.write(
                 command: "events",
                 payload: CommandPayload(
                     status: "ok",
-                    message: page.events.isEmpty ? "No events were found." : "Events in the requested range.",
-                    count: page.events.count,
+                    message: events.isEmpty ? "No events were found." : "Events in the requested range.",
+                    count: events.count,
                     range: RangeOutput(range: resolved),
-                    items: page.events.map {
+                    items: events.map {
                         CommandItem(
-                            id: $0.eventID,
+                            id: $0.sourceKeyHash,
                             kind: "event",
                             label: $0.title,
                             parentID: selectedCalendar.id,
-                            startsAt: outputDate($0.start),
-                            endsAt: outputDate($0.end),
+                            startsAt: outputDate($0.startsAt),
+                            endsAt: outputDate($0.endsAt),
                             allDay: $0.isAllDay,
-                            cancelled: $0.isCancelled,
-                            availability: $0.availability.rawValue
+                            cancelled: false,
+                            availability: $0.availability
                         )
                     }
                 ),
+                warnings: warnings,
                 format: output.format
             )
         } catch {

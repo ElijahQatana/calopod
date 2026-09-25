@@ -100,6 +100,7 @@ public struct GoogleConnectionService: Sendable {
         }
 
         let page: ProviderEventPage
+        let refreshMode: ProviderRefreshMode
         do {
             page = try await calendarClient.events(
                 accessToken: tokens.accessToken,
@@ -109,6 +110,7 @@ public struct GoogleConnectionService: Sendable {
                 through: end,
                 updatedSince: watermark
             )
+            refreshMode = watermark == nil ? .full : .incremental
         } catch ProviderFailure.cursorExpired {
             page = try await calendarClient.events(
                 accessToken: tokens.accessToken,
@@ -117,29 +119,33 @@ public struct GoogleConnectionService: Sendable {
                 from: start,
                 through: end
             )
+            refreshMode = .full
         }
 
-        try state.saveCursor(
-            connectionID: connectionID,
-            calendarBindingID: binding.id,
-            scopeKey: watermarkScope,
-            value: StoredDate.string(from: requestStartedAt),
-            scopeStart: start,
-            scopeEnd: end,
-            now: now()
-        )
-        if let nextSyncToken = page.nextSyncToken {
-            try state.saveCursor(
-                connectionID: connectionID,
-                calendarBindingID: binding.id,
-                scopeKey: syncTokenScope,
-                value: nextSyncToken,
+        var cursorUpdates = [
+            ProviderCursorUpdate(
+                scopeKey: watermarkScope,
+                value: StoredDate.string(from: requestStartedAt),
                 scopeStart: start,
-                scopeEnd: end,
-                now: now()
+                scopeEnd: end
+            ),
+        ]
+        if let nextSyncToken = page.nextSyncToken {
+            cursorUpdates.append(
+                ProviderCursorUpdate(
+                    scopeKey: syncTokenScope,
+                    value: nextSyncToken,
+                    scopeStart: start,
+                    scopeEnd: end
+                )
             )
         }
-        return page
+        return ProviderEventPage(
+            events: page.events,
+            nextSyncToken: page.nextSyncToken,
+            refreshMode: refreshMode,
+            cursorUpdates: cursorUpdates
+        )
     }
 
     public func disconnect(connectionID: String) throws {

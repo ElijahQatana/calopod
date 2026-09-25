@@ -183,6 +183,14 @@ extension CalopodDatabase {
             }
         }
 
+        migrator.registerMigration("v3_normalized_event_details") { database in
+            try database.alter(table: "normalized_instances") { table in
+                table.add(column: "title", .text)
+                table.add(column: "is_private", .boolean).notNull().defaults(to: false)
+                table.add(column: "provider_updated_at", .datetime)
+            }
+        }
+
         return migrator
     }
 }

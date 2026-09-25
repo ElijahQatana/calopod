@@ -86,6 +86,7 @@ public struct MicrosoftConnectionService: Sendable {
             : nil
 
         let page: ProviderEventPage
+        let refreshMode: ProviderRefreshMode
         do {
             page = try await graph.events(
                 accessToken: tokens.accessToken,
@@ -95,6 +96,7 @@ public struct MicrosoftConnectionService: Sendable {
                 through: end,
                 deltaLink: deltaLink
             )
+            refreshMode = deltaLink == nil ? .full : .incremental
         } catch ProviderFailure.cursorExpired {
             page = try await graph.events(
                 accessToken: tokens.accessToken,
@@ -103,20 +105,26 @@ public struct MicrosoftConnectionService: Sendable {
                 from: start,
                 through: end
             )
+            refreshMode = .full
         }
 
+        var cursorUpdates: [ProviderCursorUpdate] = []
         if let nextDeltaLink = page.nextSyncToken {
-            try state.saveCursor(
-                connectionID: connectionID,
-                calendarBindingID: binding.id,
-                scopeKey: scope,
-                value: nextDeltaLink,
-                scopeStart: start,
-                scopeEnd: end,
-                now: now()
+            cursorUpdates.append(
+                ProviderCursorUpdate(
+                    scopeKey: scope,
+                    value: nextDeltaLink,
+                    scopeStart: start,
+                    scopeEnd: end
+                )
             )
         }
-        return page
+        return ProviderEventPage(
+            events: page.events,
+            nextSyncToken: page.nextSyncToken,
+            refreshMode: refreshMode,
+            cursorUpdates: cursorUpdates
+        )
     }
 
     public func disconnect(connectionID: String) throws {
