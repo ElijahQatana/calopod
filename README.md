@@ -30,11 +30,11 @@ Start with [Calendars on this Mac](docs/CALENDARS_ON_THIS_MAC.md). Direct Google
 The CLI and agent targets share the same core:
 
 ```sh
-swift run calopod sync --dry-run
+swift run calopod sync --dry-run --day 2026-09-25
 swift run calopod-agent
 ```
 
-Sync still reports zero operations while the write planner is being built.
+Dry-run sync refreshes configured Arm sources and reports deterministic creates, updates, removals, repairs, and no-ops without writing calendar events. Apply mode remains unavailable while provider writes are being built.
 
 The complete command tree, date-range behavior, output envelope, and exit codes are documented in [docs/COMMAND_LINE.md](docs/COMMAND_LINE.md).
 Combined Busy and Free interval behavior is documented in [docs/AVAILABILITY.md](docs/AVAILABILITY.md).

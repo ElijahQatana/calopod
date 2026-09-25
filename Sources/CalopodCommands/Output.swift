@@ -100,6 +100,10 @@ public struct CommandItem: Codable, Equatable, Sendable {
     public let targetID: String?
     public let rule: String?
     public let enabled: Bool?
+    public let reason: String?
+    public let armID: String?
+    public let mirrorKey: String?
+    public let desiredFingerprint: String?
 
     public init(
         id: String,
@@ -118,7 +122,11 @@ public struct CommandItem: Codable, Equatable, Sendable {
         sourceIDs: [String]? = nil,
         targetID: String? = nil,
         rule: String? = nil,
-        enabled: Bool? = nil
+        enabled: Bool? = nil,
+        reason: String? = nil,
+        armID: String? = nil,
+        mirrorKey: String? = nil,
+        desiredFingerprint: String? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -137,6 +145,10 @@ public struct CommandItem: Codable, Equatable, Sendable {
         self.targetID = targetID
         self.rule = rule
         self.enabled = enabled
+        self.reason = reason
+        self.armID = armID
+        self.mirrorKey = mirrorKey
+        self.desiredFingerprint = desiredFingerprint
     }
 }
 
@@ -197,6 +209,9 @@ public enum OutputRenderer {
                     if let targetID = item.targetID { details.append("target: \(targetID)") }
                     if let rule = item.rule { details.append("rule: \(rule)") }
                     if let enabled = item.enabled { details.append(enabled ? "enabled" : "disabled") }
+                    if let reason = item.reason { details.append("reason: \(reason)") }
+                    if let armID = item.armID { details.append("arm: \(armID)") }
+                    if let mirrorKey = item.mirrorKey { details.append("mirror: \(mirrorKey)") }
                     return details.joined(separator: "  ")
                 })
             }

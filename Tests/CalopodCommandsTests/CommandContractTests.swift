@@ -42,6 +42,21 @@ func armsUseAnExplicitBusyDefaultAndAcceptFullDetails() throws {
 }
 
 @Test
+func syncDryRunAcceptsAnExplicitBoundedDay() throws {
+    let command = try SyncCommand.parse([
+        "--dry-run",
+        "--day", "2026-09-25",
+        "--timezone", "UTC",
+        "--format", "json",
+    ])
+
+    #expect(command.dryRun)
+    #expect(command.range.day == "2026-09-25")
+    #expect(command.range.timezone == "UTC")
+    #expect(command.output.format == .json)
+}
+
+@Test
 func jsonOutputUsesTheStableEnvelope() throws {
     let resolved = try DateRangeResolver(day: "2026-09-24", timezone: "UTC")
         .resolve(default: .none, systemTimeZone: TimeZone(secondsFromGMT: 0)!)
