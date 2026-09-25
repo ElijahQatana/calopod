@@ -9,11 +9,19 @@ struct EventKitHostMain {
         let client = EventKitClient()
         do {
             let response: EventKitHostResponse
-            if CommandLine.arguments.dropFirst() == ["--request-permission"] {
+            let arguments = Array(CommandLine.arguments.dropFirst())
+            if arguments == ["--request-permission"] {
                 let status = try await client.requestFullAccess()
                 response = EventKitHostResponse(status: status)
             } else {
-                let requestData = FileHandle.standardInput.readDataToEndOfFile()
+                let requestData: Data
+                if arguments.count == 2, arguments[0] == "--request-file" {
+                    requestData = try Data(contentsOf: URL(fileURLWithPath: arguments[1]))
+                } else if arguments.isEmpty {
+                    requestData = FileHandle.standardInput.readDataToEndOfFile()
+                } else {
+                    throw ProviderFailure.invalidResponse
+                }
                 let request = try JSONDecoder().decode(EventKitHostRequest.self, from: requestData)
                 response = try handle(request, client: client)
             }

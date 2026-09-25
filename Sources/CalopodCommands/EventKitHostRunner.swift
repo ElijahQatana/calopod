@@ -4,7 +4,6 @@ import Foundation
 
 struct EventKitHostRunner {
     private let appURL: URL
-    private let executableURL: URL
 
     init(environment: [String: String] = ProcessInfo.processInfo.environment) throws {
         if let configured = environment["CALOPOD_EVENTKIT_HOST_APP"], !configured.isEmpty {
@@ -13,7 +12,7 @@ struct EventKitHostRunner {
             appURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
                 .appendingPathComponent(".build/eventkit-host/Calopod EventKit Host.app")
         }
-        executableURL = appURL
+        let executableURL = appURL
             .appendingPathComponent("Contents/MacOS/CalopodEventKitHost")
         guard FileManager.default.isExecutableFile(atPath: executableURL.path) else {
             throw CommandEnvironmentError.missingEventKitHost
@@ -21,18 +20,44 @@ struct EventKitHostRunner {
     }
 
     func requestPermission() throws -> EventKitHostResponse {
+        try runApp(arguments: ["--request-permission"])
+    }
+
+    func perform(_ request: EventKitHostRequest) throws -> EventKitHostResponse {
+        let data = try JSONEncoder().encode(request)
+        return try runApp(arguments: [], requestData: data)
+    }
+
+    private func runApp(
+        arguments: [String],
+        requestData: Data? = nil
+    ) throws -> EventKitHostResponse {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("calopod-eventkit-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(
             at: temporaryDirectory,
             withIntermediateDirectories: true
         )
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o700],
+            ofItemAtPath: temporaryDirectory.path
+        )
         defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
 
         let stdoutURL = temporaryDirectory.appendingPathComponent("stdout.json")
         let stderrURL = temporaryDirectory.appendingPathComponent("stderr.log")
-        FileManager.default.createFile(atPath: stdoutURL.path, contents: nil)
-        FileManager.default.createFile(atPath: stderrURL.path, contents: nil)
+        _ = FileManager.default.createFile(atPath: stdoutURL.path, contents: nil)
+        _ = FileManager.default.createFile(atPath: stderrURL.path, contents: nil)
+        try setPrivatePermissions(on: stdoutURL)
+        try setPrivatePermissions(on: stderrURL)
+
+        var appArguments = arguments
+        if let requestData {
+            let requestURL = temporaryDirectory.appendingPathComponent("request.json")
+            try requestData.write(to: requestURL, options: .atomic)
+            try setPrivatePermissions(on: requestURL)
+            appArguments.append(contentsOf: ["--request-file", requestURL.path])
+        }
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
@@ -41,8 +66,9 @@ struct EventKitHostRunner {
             "--stdout", stdoutURL.path,
             "--stderr", stderrURL.path,
             appURL.path,
-            "--args", "--request-permission",
+            "--args",
         ]
+        process.arguments?.append(contentsOf: appArguments)
         try process.run()
         process.waitUntilExit()
 
@@ -53,31 +79,11 @@ struct EventKitHostRunner {
         return response
     }
 
-    func perform(_ request: EventKitHostRequest) throws -> EventKitHostResponse {
-        let input = Pipe()
-        let output = Pipe()
-        let errors = Pipe()
-        let process = Process()
-        process.executableURL = executableURL
-        process.standardInput = input
-        process.standardOutput = output
-        process.standardError = errors
-
-        try process.run()
-        let data = try JSONEncoder().encode(request)
-        input.fileHandleForWriting.write(data)
-        try input.fileHandleForWriting.close()
-        let responseData = output.fileHandleForReading.readDataToEndOfFile()
-        _ = errors.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-
-        guard let response = try? JSONDecoder().decode(
-            EventKitHostResponse.self,
-            from: responseData
-        ) else {
-            throw CommandEnvironmentError.eventKitHostFailed
-        }
-        return response
+    private func setPrivatePermissions(on url: URL) throws {
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o600],
+            ofItemAtPath: url.path
+        )
     }
 }
 #endif
