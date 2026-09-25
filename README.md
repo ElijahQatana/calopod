@@ -37,3 +37,4 @@ swift run calopod-agent
 Sync still reports zero operations while the write planner is being built.
 
 The complete command tree, date-range behavior, output envelope, and exit codes are documented in [docs/COMMAND_LINE.md](docs/COMMAND_LINE.md).
+Combined Busy and Free interval behavior is documented in [docs/AVAILABILITY.md](docs/AVAILABILITY.md).

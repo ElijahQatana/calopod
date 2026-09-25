@@ -46,6 +46,7 @@ public struct CommandPayload: Codable, Equatable, Sendable {
     public let count: Int?
     public let range: RangeOutput?
     public let mode: String?
+    public let sources: [CommandSource]?
     public let items: [CommandItem]?
 
     public init(
@@ -54,6 +55,7 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         count: Int? = nil,
         range: RangeOutput? = nil,
         mode: String? = nil,
+        sources: [CommandSource]? = nil,
         items: [CommandItem]? = nil
     ) {
         self.status = status
@@ -61,7 +63,22 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         self.count = count
         self.range = range
         self.mode = mode
+        self.sources = sources
         self.items = items
+    }
+}
+
+public struct CommandSource: Codable, Equatable, Sendable {
+    public let id: String
+    public let connectionID: String
+    public let provider: String
+    public let label: String?
+
+    public init(id: String, connectionID: String, provider: String, label: String?) {
+        self.id = id
+        self.connectionID = connectionID
+        self.provider = provider
+        self.label = label
     }
 }
 
@@ -145,6 +162,12 @@ public enum OutputRenderer {
                 lines.append("From: \(range.start)")
                 lines.append("Through: \(range.endExclusive) (exclusive)")
                 lines.append("Timezone: \(range.timezone)")
+            }
+            if let sources = payload.sources {
+                lines.append("Sources: \(sources.count)")
+                lines.append(contentsOf: sources.map {
+                    [$0.id, $0.label, $0.provider].compactMap { $0 }.joined(separator: "  ")
+                })
             }
             if let items = payload.items {
                 lines.append(contentsOf: items.map { item in

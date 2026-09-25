@@ -93,10 +93,10 @@ public struct EventsCommand: AsyncParsableCommand {
     @OptionGroup public var range: DateRangeOptions
     @OptionGroup public var output: OutputOptions
 
-    @Option(name: .long, help: "Logical Connection identifier. Uses the only supported Connection when omitted.")
+    @Option(name: .long, help: "Limit events to one Connection. Uses every enabled selected Connection when omitted.")
     public var connection: String?
 
-    @Option(name: .long, help: "Calendar identifier from the calendars command. Uses the only selected calendar when omitted.")
+    @Option(name: .long, help: "Limit events to one selected calendar. Uses every selected calendar when omitted.")
     public var calendar: String?
 
     public init() {}
@@ -106,49 +106,36 @@ public struct EventsCommand: AsyncParsableCommand {
         guard let resolved else { return }
         do {
             let repository = try CommandEnvironment.repository()
-            let selectedConnection = try selectedConnection(
-                id: connection,
+            let sources = try selectedCalendarSources(
+                connectionID: connection,
+                calendarID: calendar,
                 repository: repository
             )
-            let selectedCalendar = try selectedCalendarBinding(
-                id: calendar,
-                connectionID: selectedConnection.id,
-                repository: repository
-            )
-            let page = try await readEvents(
-                connection: selectedConnection,
-                binding: selectedCalendar,
-                start: resolved.window.start,
-                end: resolved.window.end
-            )
-            let cacheResult = try EventCache(repository: repository).apply(
-                page,
-                connection: selectedConnection,
-                calendar: selectedCalendar,
+            let refresh = await refreshCalendarSources(
+                sources,
                 from: resolved.window.start,
-                through: resolved.window.end
+                through: resolved.window.end,
+                repository: repository
             )
             let events = try repository.normalizedInstances(
-                calendarBindingIDs: [selectedCalendar.id],
+                calendarBindingIDs: sources.map(\.calendar.id),
                 from: resolved.window.start,
                 through: resolved.window.end
             )
-            let warnings = cacheResult.discardedCount == 0
-                ? []
-                : ["Ignored \(cacheResult.discardedCount) malformed or out-of-range event records."]
             try OutputRenderer.write(
                 command: "events",
                 payload: CommandPayload(
-                    status: "ok",
+                    status: refresh.failedSourceCount == 0 ? "ok" : "partial",
                     message: events.isEmpty ? "No events were found." : "Events in the requested range.",
                     count: events.count,
                     range: RangeOutput(range: resolved),
+                    sources: commandSources(sources),
                     items: events.map {
                         CommandItem(
                             id: $0.sourceKeyHash,
                             kind: "event",
                             label: $0.title,
-                            parentID: selectedCalendar.id,
+                            parentID: $0.calendarBindingID,
                             startsAt: outputDate($0.startsAt),
                             endsAt: outputDate($0.endsAt),
                             allDay: $0.isAllDay,
@@ -157,7 +144,7 @@ public struct EventsCommand: AsyncParsableCommand {
                         )
                     }
                 ),
-                warnings: warnings,
+                warnings: refresh.warnings,
                 format: output.format
             )
         } catch {
@@ -187,7 +174,7 @@ private func outputDate(_ date: Date?) -> String? {
     return formatter.string(from: date)
 }
 
-public struct AvailabilityCommand: ParsableCommand {
+public struct AvailabilityCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "availability",
         abstract: "Show combined busy and free intervals for a day or range."
@@ -196,19 +183,83 @@ public struct AvailabilityCommand: ParsableCommand {
     @OptionGroup public var range: DateRangeOptions
     @OptionGroup public var output: OutputOptions
 
+    @Option(name: .long, help: "Limit Availability to one Connection identifier.")
+    public var connection: String?
+
+    @Option(name: .long, help: "Limit Availability to one selected calendar identifier.")
+    public var calendar: String?
+
     public init() {}
 
-    public func run() throws {
+    public func run() async throws {
         let resolved = try resolveRange(range, default: .currentDay)
-        try OutputRenderer.write(
-            command: "availability",
-            payload: CommandPayload(
-                status: "ok",
-                message: "No Availability sources are configured.",
-                count: 0,
-                range: resolved.map(RangeOutput.init)
-            ),
-            format: output.format
+        guard let resolved else { return }
+        do {
+            let repository = try CommandEnvironment.repository()
+            let sources = try selectedCalendarSources(
+                connectionID: connection,
+                calendarID: calendar,
+                repository: repository
+            )
+            let refresh = await refreshCalendarSources(
+                sources,
+                from: resolved.window.start,
+                through: resolved.window.end,
+                repository: repository
+            )
+            let events = try repository.normalizedInstances(
+                calendarBindingIDs: sources.map(\.calendar.id),
+                from: resolved.window.start,
+                through: resolved.window.end
+            )
+            let availability = AvailabilityCalculator.calculate(
+                instances: events,
+                from: resolved.window.start,
+                through: resolved.window.end
+            )
+            let intervals = (availability.busy + availability.free).sorted {
+                if $0.start == $1.start {
+                    return $0.kind.rawValue < $1.kind.rawValue
+                }
+                return $0.start < $1.start
+            }
+            try OutputRenderer.write(
+                command: "availability",
+                payload: CommandPayload(
+                    status: refresh.failedSourceCount == 0 ? "ok" : "partial",
+                    message: intervals.isEmpty
+                        ? "No Availability intervals were found."
+                        : "Availability in the requested range.",
+                    count: intervals.count,
+                    range: RangeOutput(range: resolved),
+                    sources: commandSources(sources),
+                    items: intervals.enumerated().map { index, interval in
+                        CommandItem(
+                            id: "availability-\(interval.kind.rawValue)-\(index + 1)",
+                            kind: "availability",
+                            label: interval.kind == .busy ? "Busy" : "Free",
+                            startsAt: outputDate(interval.start),
+                            endsAt: outputDate(interval.end),
+                            availability: interval.kind.rawValue
+                        )
+                    }
+                ),
+                warnings: refresh.warnings,
+                format: output.format
+            )
+        } catch {
+            try failCommand(error)
+        }
+    }
+}
+
+private func commandSources(_ sources: [CalendarReadSource]) -> [CommandSource] {
+    sources.map {
+        CommandSource(
+            id: $0.calendar.id,
+            connectionID: $0.connection.id,
+            provider: $0.connection.provider,
+            label: $0.calendar.displayLabel
         )
     }
 }

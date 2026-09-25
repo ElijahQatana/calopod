@@ -32,7 +32,15 @@ func jsonOutputUsesTheStableEnvelope() throws {
             status: "ok",
             message: "No events are available.",
             count: 0,
-            range: RangeOutput(range: range)
+            range: RangeOutput(range: range),
+            sources: [
+                CommandSource(
+                    id: "synthetic-calendar",
+                    connectionID: "synthetic-connection",
+                    provider: "eventkit",
+                    label: "Synthetic calendar"
+                ),
+            ]
         ),
         format: .json
     )
@@ -42,7 +50,8 @@ func jsonOutputUsesTheStableEnvelope() throws {
     #expect(object["schemaVersion"] as? Int == 1)
     #expect(object["command"] as? String == "events")
     #expect(object["warnings"] as? [String] == [])
-    #expect(object["data"] is [String: Any])
+    let payload = try #require(object["data"] as? [String: Any])
+    #expect((payload["sources"] as? [[String: Any]])?.count == 1)
 }
 
 @Test
@@ -211,4 +220,143 @@ func eventReadsRequireASelectedCalendar() throws {
         didThrow = true
     }
     #expect(didThrow)
+}
+
+@Test
+func combinedReadsUseEverySelectedCalendarInStableOrder() throws {
+    let database = try CalopodDatabase.inMemory()
+    let repository = LocalStateRepository(database: database)
+    let firstConnection = StoredConnection(
+        id: "first-connection",
+        configurationID: "default",
+        provider: "eventkit",
+        displayLabel: "Calendars on this Mac",
+        isEnabled: true
+    )
+    let secondConnection = StoredConnection(
+        id: "second-connection",
+        configurationID: "default",
+        provider: "google",
+        displayLabel: "Google Calendar",
+        isEnabled: true
+    )
+    try repository.saveConnection(firstConnection, now: Date(timeIntervalSince1970: 1))
+    try repository.saveConnection(secondConnection, now: Date(timeIntervalSince1970: 2))
+    try repository.replaceCalendarBindings(
+        connectionID: firstConnection.id,
+        bindings: [
+            StoredCalendarBinding(
+                id: "first-selected",
+                connectionID: firstConnection.id,
+                providerCalendarID: "provider-first",
+                displayLabel: "A synthetic calendar",
+                isSelected: true,
+                isReadOnly: false
+            ),
+            StoredCalendarBinding(
+                id: "not-selected",
+                connectionID: firstConnection.id,
+                providerCalendarID: "provider-hidden",
+                displayLabel: "Hidden synthetic calendar",
+                isSelected: false,
+                isReadOnly: false
+            ),
+        ]
+    )
+    try repository.replaceCalendarBindings(
+        connectionID: secondConnection.id,
+        bindings: [
+            StoredCalendarBinding(
+                id: "second-selected",
+                connectionID: secondConnection.id,
+                providerCalendarID: "provider-second",
+                displayLabel: "B synthetic calendar",
+                isSelected: true,
+                isReadOnly: false
+            ),
+        ]
+    )
+
+    let all = try selectedCalendarSources(
+        connectionID: nil,
+        calendarID: nil,
+        repository: repository
+    )
+    let filtered = try selectedCalendarSources(
+        connectionID: nil,
+        calendarID: "second-selected",
+        repository: repository
+    )
+
+    #expect(all.map(\.calendar.id) == ["first-selected", "second-selected"])
+    #expect(filtered.map(\.calendar.id) == ["second-selected"])
+}
+
+@Test
+func failedRefreshKeepsCachedEventsAndReturnsAStaleWarning() async throws {
+    let database = try CalopodDatabase.inMemory()
+    let repository = LocalStateRepository(database: database)
+    let connection = StoredConnection(
+        id: "connection",
+        configurationID: "default",
+        provider: "synthetic",
+        displayLabel: "Synthetic provider",
+        isEnabled: true
+    )
+    let calendar = StoredCalendarBinding(
+        id: "calendar",
+        connectionID: connection.id,
+        providerCalendarID: "provider-calendar",
+        displayLabel: "Synthetic calendar",
+        isSelected: true,
+        isReadOnly: false
+    )
+    let start = Date(timeIntervalSince1970: 1_000)
+    let end = start.addingTimeInterval(3_600)
+    let cached = StoredNormalizedInstance(
+        sourceKeyHash: "source-key",
+        connectionID: connection.id,
+        calendarBindingID: calendar.id,
+        providerEventID: "provider-event",
+        recurrenceID: nil,
+        startsAt: start,
+        endsAt: end,
+        isAllDay: false,
+        availability: "busy",
+        isCancelled: false,
+        isPrivate: false,
+        title: "Synthetic event",
+        contentFingerprint: "fingerprint",
+        providerUpdatedAt: nil
+    )
+    try repository.saveConnection(connection)
+    try repository.replaceCalendarBindings(connectionID: connection.id, bindings: [calendar])
+    try repository.applyEventRefresh(
+        connectionID: connection.id,
+        calendarBindingID: calendar.id,
+        windowStart: start,
+        windowEnd: end,
+        instances: [cached],
+        cancelledSourceKeyHashes: [],
+        isFullRefresh: true,
+        cursorUpdates: []
+    )
+
+    let summary = await refreshCalendarSources(
+        [CalendarReadSource(connection: connection, calendar: calendar)],
+        from: start,
+        through: end,
+        repository: repository
+    )
+    let remaining = try repository.normalizedInstances(
+        calendarBindingIDs: [calendar.id],
+        from: start,
+        through: end
+    )
+
+    #expect(summary.refreshedSourceCount == 0)
+    #expect(summary.failedSourceCount == 1)
+    #expect(summary.warnings.count == 1)
+    #expect(remaining == [cached])
+    #expect(try repository.connectionHealth(connectionID: connection.id)?.status == "stale")
 }
