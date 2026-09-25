@@ -18,6 +18,7 @@ public enum SyncPlanReason: String, Codable, Sendable {
     case providerIdentityChanged = "provider-identity-changed"
     case ownershipUnverified = "ownership-unverified"
     case sourceSnapshotIncomplete = "source-snapshot-incomplete"
+    case targetSnapshotIncomplete = "target-snapshot-incomplete"
 }
 
 public struct DesiredEventPayload: Codable, Equatable, Sendable {

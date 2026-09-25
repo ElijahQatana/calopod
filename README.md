@@ -34,7 +34,7 @@ swift run calopod sync --dry-run --day 2026-09-25
 swift run calopod-agent
 ```
 
-Dry-run sync refreshes configured Arm sources and reports deterministic creates, updates, removals, repairs, and no-ops without writing calendar events. Apply mode can create new managed mirrors; lifecycle updates and removals are added in the next reconciliation stage.
+Dry-run sync refreshes configured Arm sources and managed targets, then reports deterministic creates, updates, removals, repairs, and no-ops without writing calendar events. Apply mode verifies signed ownership before changing a target, preserves provider identity on updates, and stops when ownership or refresh state is ambiguous.
 
 The complete command tree, date-range behavior, output envelope, and exit codes are documented in [docs/COMMAND_LINE.md](docs/COMMAND_LINE.md).
 Combined Busy and Free interval behavior is documented in [docs/AVAILABILITY.md](docs/AVAILABILITY.md).

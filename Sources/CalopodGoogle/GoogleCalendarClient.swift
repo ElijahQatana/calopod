@@ -1,3 +1,4 @@
+import CalopodDomain
 import CalopodProviders
 import Foundation
 #if canImport(FoundationNetworking)
@@ -116,6 +117,42 @@ public struct GoogleCalendarClient: Sendable {
         } while pageToken != nil
 
         return ProviderEventPage(events: events, nextSyncToken: nextSyncToken)
+    }
+
+    public func managedEvents(
+        accessToken: String,
+        calendarID: String,
+        from start: Date,
+        through end: Date
+    ) async throws -> [ManagedEventSnapshot] {
+        var snapshots: [ManagedEventSnapshot] = []
+        var pageToken: String?
+        repeat {
+            var components = URLComponents(
+                url: eventCollectionURL(calendarID: calendarID),
+                resolvingAgainstBaseURL: false
+            )
+            var query = [
+                URLQueryItem(name: "timeMin", value: RFC3339.string(from: start)),
+                URLQueryItem(name: "timeMax", value: RFC3339.string(from: end)),
+                URLQueryItem(name: "singleEvents", value: "true"),
+                URLQueryItem(name: "showDeleted", value: "true"),
+                URLQueryItem(name: "maxResults", value: "2500"),
+            ]
+            if let pageToken {
+                query.append(URLQueryItem(name: "pageToken", value: pageToken))
+            }
+            components?.queryItems = query
+            guard let url = components?.url else { throw ProviderFailure.invalidResponse }
+            let response = try await send(url: url, accessToken: accessToken)
+            let page: EventListResponse = try decode(response)
+            let fallbackTimeZone = page.timeZone.flatMap(TimeZone.init(identifier:)) ?? .gmt
+            snapshots.append(contentsOf: page.items.map {
+                $0.managedSnapshot(fallbackTimeZone: fallbackTimeZone)
+            })
+            pageToken = page.nextPageToken
+        } while pageToken != nil
+        return snapshots
     }
 
     public func createManagedEvent(
@@ -369,6 +406,7 @@ private struct EventListResponse: Decodable {
 
 private struct GoogleEvent: Decodable {
     let id: String
+    let etag: String?
     let recurringEventID: String?
     let originalStartTime: GoogleEventTime?
     let start: GoogleEventTime?
@@ -378,9 +416,11 @@ private struct GoogleEvent: Decodable {
     let visibility: String?
     let summary: String?
     let updated: String?
+    let extendedProperties: GoogleExtendedProperties?
 
     enum CodingKeys: String, CodingKey {
         case id
+        case etag
         case recurringEventID = "recurringEventId"
         case originalStartTime
         case start
@@ -390,6 +430,7 @@ private struct GoogleEvent: Decodable {
         case visibility
         case summary
         case updated
+        case extendedProperties
     }
 
     func providerEvent(
@@ -413,6 +454,42 @@ private struct GoogleEvent: Decodable {
             title: summary,
             updatedAt: updated.flatMap(RFC3339.date(from:))
         )
+    }
+
+    func managedSnapshot(fallbackTimeZone: TimeZone) -> ManagedEventSnapshot {
+        let decoded = OwnershipMarkerCodec.marker(fields: extendedProperties?.privateValues)
+        let startsAt = start?.date(fallbackTimeZone: fallbackTimeZone)
+        let endsAt = end?.date(fallbackTimeZone: fallbackTimeZone)
+        let payload: DesiredEventPayload?
+        if status != "cancelled", let startsAt, let endsAt, startsAt < endsAt {
+            payload = DesiredEventPayload(
+                startsAt: startsAt,
+                endsAt: endsAt,
+                isAllDay: start?.dateOnly != nil,
+                availability: transparency == "transparent" ? "free" : "busy",
+                title: summary,
+                isPrivate: decoded.provenance?.ruleMode == .busy
+                    ? nil
+                    : visibility == "private" || visibility == "confidential"
+            )
+        } else {
+            payload = nil
+        }
+        return ManagedEventSnapshot(
+            providerEventID: id,
+            providerVersion: etag,
+            payload: payload,
+            markerStatus: decoded.status,
+            provenance: decoded.provenance
+        )
+    }
+}
+
+private struct GoogleExtendedProperties: Decodable {
+    let privateValues: [String: String]?
+
+    enum CodingKeys: String, CodingKey {
+        case privateValues = "private"
     }
 }
 

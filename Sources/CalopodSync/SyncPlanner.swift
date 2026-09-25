@@ -16,21 +16,27 @@ public enum TargetOwnershipStatus: String, Codable, Equatable, Sendable {
 public struct TargetEventObservation: Codable, Equatable, Sendable {
     public let calendarBindingID: String
     public let providerEventID: String
+    public let providerVersion: String?
     public let mirrorKey: String?
     public let contentFingerprint: String?
+    public let ownershipKeyID: String?
     public let ownershipStatus: TargetOwnershipStatus
 
     public init(
         calendarBindingID: String,
         providerEventID: String,
+        providerVersion: String? = nil,
         mirrorKey: String?,
         contentFingerprint: String?,
+        ownershipKeyID: String? = nil,
         ownershipStatus: TargetOwnershipStatus
     ) {
         self.calendarBindingID = calendarBindingID
         self.providerEventID = providerEventID
+        self.providerVersion = providerVersion
         self.mirrorKey = mirrorKey
         self.contentFingerprint = contentFingerprint
+        self.ownershipKeyID = ownershipKeyID
         self.ownershipStatus = ownershipStatus
     }
 }
@@ -42,7 +48,8 @@ public enum SyncPlanner {
         mappings: [StoredMirrorMapping],
         targetEvents: [TargetEventObservation],
         window: SyncWindow,
-        sourceSnapshotComplete: Bool
+        sourceSnapshotComplete: Bool,
+        targetSnapshotComplete: Bool = true
     ) -> SyncPlan {
         let armSourceIDs = Set(arm.sourceBindingIDs)
         let boundedSources = sources.filter {
@@ -86,6 +93,9 @@ public enum SyncPlanner {
             if verified.count > 1 {
                 action = .repair
                 reason = .verifiedDuplicates
+            } else if !unverified.isEmpty {
+                action = .repair
+                reason = .ownershipUnverified
             } else if let target = verified.first {
                 guard let mapping else {
                     items.append(
@@ -111,9 +121,12 @@ public enum SyncPlanner {
                     action = .update
                     reason = .targetDiffers
                 }
-            } else if mapping != nil || !unverified.isEmpty {
+            } else if mapping != nil {
                 action = .repair
-                reason = .ownershipUnverified
+                reason = targetSnapshotComplete ? .targetMissing : .targetSnapshotIncomplete
+            } else if !targetSnapshotComplete {
+                action = .repair
+                reason = .targetSnapshotIncomplete
             } else {
                 action = .create
                 reason = .targetMissing
@@ -142,6 +155,11 @@ public enum SyncPlanner {
             } else if verified.count > 1 {
                 action = .repair
                 reason = .verifiedDuplicates
+            } else if observations.contains(where: {
+                $0.ownershipStatus != .verified && $0.ownershipStatus != .unmanaged
+            }) {
+                action = .repair
+                reason = .ownershipUnverified
             } else if let target = verified.first,
                       target.providerEventID == mapping.providerEventID {
                 action = .remove
@@ -149,6 +167,12 @@ public enum SyncPlanner {
             } else if verified.first != nil {
                 action = .repair
                 reason = .providerIdentityChanged
+            } else if targetSnapshotComplete && observations.isEmpty {
+                action = .repair
+                reason = .targetMissing
+            } else if !targetSnapshotComplete {
+                action = .repair
+                reason = .targetSnapshotIncomplete
             } else {
                 action = .repair
                 reason = .ownershipUnverified

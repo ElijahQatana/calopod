@@ -73,6 +73,21 @@ struct EventKitHostMain {
                     through: end
                 )
             )
+        case .managedEvents:
+            guard request.calendarIDs.count == 1,
+                  let start = request.start,
+                  let end = request.end,
+                  start < end else {
+                throw ProviderFailure.invalidResponse
+            }
+            return EventKitHostResponse(
+                status: client.authorizationStatus,
+                managedEvents: try client.managedEvents(
+                    calendarID: request.calendarIDs[0],
+                    from: start,
+                    through: end
+                )
+            )
         case .createManagedEvent:
             guard request.calendarIDs.count == 1, let managed = request.managedEvent else {
                 throw ProviderFailure.invalidResponse

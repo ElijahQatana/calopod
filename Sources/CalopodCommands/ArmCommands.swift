@@ -23,6 +23,7 @@ public struct ArmCommand: ParsableCommand {
             ArmAddCommand.self,
             ArmListCommand.self,
             ArmInspectCommand.self,
+            ArmUpdateCommand.self,
             ArmDisableCommand.self,
             ArmRemoveCommand.self,
         ],
@@ -30,6 +31,45 @@ public struct ArmCommand: ParsableCommand {
     )
 
     public init() {}
+}
+
+public struct ArmUpdateCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "update",
+        abstract: "Change an Arm Rule without writing calendar events."
+    )
+
+    @Argument(help: "Arm identifier.")
+    public var armID: String
+
+    @Option(name: .long, help: "Disclosure Rule: busy or full-details.")
+    public var rule: ArmRuleArgument
+
+    @OptionGroup public var output: OutputOptions
+
+    public init() {}
+
+    public func run() throws {
+        do {
+            let arm = try ArmConfigurationService(
+                repository: CommandEnvironment.repository()
+            ).updateRule(armID: armID, ruleMode: rule.ruleMode)
+            try OutputRenderer.write(
+                command: "arm.update",
+                payload: CommandPayload(
+                    status: "ok",
+                    message: "Updated the Arm Rule. No calendar events were changed.",
+                    count: 1,
+                    items: [armItem(arm)]
+                ),
+                format: output.format
+            )
+        } catch let error as ArmConfigurationError {
+            try failCommand(ValidationError(error.description))
+        } catch {
+            try failCommand(error)
+        }
+    }
 }
 
 public struct ArmAddCommand: ParsableCommand {

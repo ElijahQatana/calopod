@@ -79,6 +79,15 @@ extension LocalStateRepository {
             ).map(storedMirrorMapping)
         }
     }
+
+    public func removeMirrorMapping(mirrorKey: String) throws {
+        try database.write { database in
+            try database.execute(
+                sql: "DELETE FROM mirror_mappings WHERE mirror_key = ?",
+                arguments: [mirrorKey]
+            )
+        }
+    }
 }
 
 private func storedMirrorMapping(_ row: Row) -> StoredMirrorMapping {

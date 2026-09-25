@@ -39,6 +39,7 @@ public enum EventKitHostOperation: String, Codable, Sendable {
     case permissionStatus
     case calendars
     case events
+    case managedEvents
     case createManagedEvent
     case updateManagedEvent
     case deleteManagedEvent
@@ -76,6 +77,7 @@ public struct EventKitHostResponse: Codable, Sendable {
     public let status: EventKitAccessStatus
     public let calendars: [EventKitCalendarSnapshot]
     public let events: [ProviderEvent]
+    public let managedEvents: [ManagedEventSnapshot]
     public let managedEvent: ManagedEventWriteResult?
     public let errorCode: String?
 
@@ -83,12 +85,14 @@ public struct EventKitHostResponse: Codable, Sendable {
         status: EventKitAccessStatus,
         calendars: [EventKitCalendarSnapshot] = [],
         events: [ProviderEvent] = [],
+        managedEvents: [ManagedEventSnapshot] = [],
         managedEvent: ManagedEventWriteResult? = nil,
         errorCode: String? = nil
     ) {
         self.status = status
         self.calendars = calendars
         self.events = events
+        self.managedEvents = managedEvents
         self.managedEvent = managedEvent
         self.errorCode = errorCode
     }

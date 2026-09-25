@@ -4,6 +4,7 @@ import Foundation
 
 public enum ArmConfigurationError: Error, Equatable, Sendable, CustomStringConvertible {
     case noSources
+    case armNotFound(String)
     case duplicateSource(String)
     case calendarNotFound(String)
     case sourceNotSelected(String)
@@ -20,6 +21,8 @@ public enum ArmConfigurationError: Error, Equatable, Sendable, CustomStringConve
         switch self {
         case .noSources:
             "Choose at least one source calendar."
+        case let .armNotFound(id):
+            "Arm '\(id)' was not found."
         case let .duplicateSource(id):
             "Source calendar '\(id)' was provided more than once."
         case let .calendarNotFound(id):
@@ -51,6 +54,21 @@ public struct ArmConfigurationService: Sendable {
 
     public init(repository: LocalStateRepository) {
         self.repository = repository
+    }
+
+    public func updateRule(
+        armID: String,
+        ruleMode: ArmRuleMode,
+        now: Date = Date()
+    ) throws -> StoredArm {
+        guard let arm = try repository.setArmRuleMode(
+            id: armID,
+            ruleMode: ruleMode,
+            now: now
+        ) else {
+            throw ArmConfigurationError.armNotFound(armID)
+        }
+        return arm
     }
 
     @discardableResult

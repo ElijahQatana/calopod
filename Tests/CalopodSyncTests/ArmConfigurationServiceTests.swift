@@ -35,6 +35,26 @@ struct ArmConfigurationServiceTests {
         #expect(arm.ruleMode == .fullDetails)
     }
 
+    @Test("Changes an existing Rule without replacing the Arm")
+    func updatesRule() throws {
+        let setup = try armTestSetup()
+        let arm = try setup.service.createArm(
+            id: "arm-one",
+            sourceBindingIDs: ["source-one"],
+            targetBindingID: "target"
+        )
+
+        let updated = try setup.service.updateRule(
+            armID: arm.id,
+            ruleMode: .fullDetails,
+            now: Date(timeIntervalSince1970: 20)
+        )
+
+        #expect(updated.id == arm.id)
+        #expect(updated.ruleMode == .fullDetails)
+        #expect(try setup.repository.arm(id: arm.id) == updated)
+    }
+
     @Test("Rejects an unselected source")
     func rejectsUnselectedSource() throws {
         let setup = try armTestSetup(sourceOneSelected: false)

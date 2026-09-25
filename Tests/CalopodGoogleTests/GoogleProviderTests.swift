@@ -394,6 +394,39 @@ struct GoogleManagedWriteTests {
 
         #expect(updated.providerVersion == "next-etag")
     }
+
+    @Test("Managed target reads return actual payload, version, and provenance")
+    func managedRead() async throws {
+        let client = GoogleCalendarClient(
+            transport: RecordingTransport { request in
+                let query = request.url?.query ?? ""
+                #expect(query.contains("timeMin="))
+                #expect(query.contains("timeMax="))
+                #expect(query.contains("singleEvents=true"))
+                return HTTPResponse(
+                    statusCode: 200,
+                    body: Data(
+                        #"{"timeZone":"UTC","items":[{"id":"provider-event","etag":"v2","start":{"dateTime":"2026-09-25T12:30:00Z"},"end":{"dateTime":"2026-09-25T13:00:00Z"},"summary":"Busy","transparency":"opaque","extendedProperties":{"private":{"calopodSchema":"1","configurationID":"synthetic-configuration","armID":"synthetic-arm","mirrorKey":"synthetic-mirror","sourceKeyHash":"synthetic-source","ruleMode":"busy","ownershipKeyID":"synthetic-key","authenticationTag":"synthetic-tag"}}}]}"#.utf8
+                    )
+                )
+            }
+        )
+
+        let snapshots = try await client.managedEvents(
+            accessToken: "token",
+            calendarID: "target",
+            from: Date(timeIntervalSince1970: 1_000),
+            through: Date(timeIntervalSince1970: 5_000)
+        )
+        let snapshot = try #require(snapshots.first)
+
+        #expect(snapshot.providerEventID == "provider-event")
+        #expect(snapshot.providerVersion == "v2")
+        #expect(snapshot.payload?.title == "Busy")
+        #expect(snapshot.payload?.isPrivate == nil)
+        #expect(snapshot.markerStatus == .parsed)
+        #expect(snapshot.provenance?.mirrorKey == "synthetic-mirror")
+    }
 }
 
 private func googleManagedRequest() -> ManagedEventWriteRequest {

@@ -421,6 +421,21 @@ public final class LocalStateRepository: @unchecked Sendable {
         return try arm(id: id)
     }
 
+    @discardableResult
+    public func setArmRuleMode(
+        id: String,
+        ruleMode: ArmRuleMode,
+        now: Date = Date()
+    ) throws -> StoredArm? {
+        try database.write { database in
+            try database.execute(
+                sql: "UPDATE arms SET rule_mode = ?, updated_at = ? WHERE id = ?",
+                arguments: [ruleMode.rawValue, now, id]
+            )
+        }
+        return try arm(id: id)
+    }
+
     public func removeArm(id: String) throws {
         try database.write { database in
             try database.execute(sql: "DELETE FROM arms WHERE id = ?", arguments: [id])

@@ -140,6 +140,21 @@ public struct MicrosoftConnectionService: Sendable {
         )
     }
 
+    public func managedEvents(
+        connectionID: String,
+        binding: StoredCalendarBinding,
+        from start: Date,
+        through end: Date
+    ) async throws -> [ManagedEventSnapshot] {
+        let tokens = try await validTokens(connectionID: connectionID)
+        return try await graph.managedEvents(
+            accessToken: tokens.accessToken,
+            calendarID: binding.providerCalendarID,
+            from: start,
+            through: end
+        )
+    }
+
     public func updateManagedEvent(
         connectionID: String,
         binding: StoredCalendarBinding,

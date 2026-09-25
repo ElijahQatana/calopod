@@ -217,6 +217,171 @@ struct SyncPlannerTests {
         #expect(incompletePlan.items.map(\.action) == [.repair])
         #expect(incompletePlan.items.map(\.reason) == [.sourceSnapshotIncomplete])
     }
+
+    @Test("A missing target is recoverable only after a complete target read")
+    func missingTargetRequiresCompleteRead() throws {
+        let arm = storedArm(ruleMode: .busy)
+        let source = instance(id: "missing-target")
+        let desired = try #require(
+            SyncPlanner.plan(
+                arm: arm,
+                sources: [source],
+                mappings: [],
+                targetEvents: [],
+                window: try window(),
+                sourceSnapshotComplete: true
+            ).items.first
+        )
+        let mapping = StoredMirrorMapping(
+            mirrorKey: desired.mirrorKey,
+            armID: arm.id,
+            sourceKeyHash: source.sourceKeyHash,
+            providerEventID: "provider-missing",
+            providerVersion: "v1",
+            desiredFingerprint: desired.desiredFingerprint!,
+            ownershipKeyID: "synthetic-key",
+            updatedAt: Date(timeIntervalSince1970: 1)
+        )
+
+        let complete = SyncPlanner.plan(
+            arm: arm,
+            sources: [source],
+            mappings: [mapping],
+            targetEvents: [],
+            window: try window(),
+            sourceSnapshotComplete: true,
+            targetSnapshotComplete: true
+        )
+        let incomplete = SyncPlanner.plan(
+            arm: arm,
+            sources: [source],
+            mappings: [mapping],
+            targetEvents: [],
+            window: try window(),
+            sourceSnapshotComplete: true,
+            targetSnapshotComplete: false
+        )
+
+        #expect(complete.items.map(\.reason) == [.targetMissing])
+        #expect(incomplete.items.map(\.reason) == [.targetSnapshotIncomplete])
+    }
+
+    @Test("An incomplete target read cannot create an unmapped event")
+    func incompleteTargetReadCannotCreate() throws {
+        let plan = SyncPlanner.plan(
+            arm: storedArm(ruleMode: .busy),
+            sources: [instance(id: "unmapped-incomplete-target")],
+            mappings: [],
+            targetEvents: [],
+            window: try window(),
+            sourceSnapshotComplete: true,
+            targetSnapshotComplete: false
+        )
+
+        #expect(plan.items.map(\.action) == [.repair])
+        #expect(plan.items.map(\.reason) == [.targetSnapshotIncomplete])
+    }
+
+    @Test("An unverified duplicate blocks a verified target mutation")
+    func unverifiedDuplicateBlocksMutation() throws {
+        let arm = storedArm(ruleMode: .busy)
+        let source = instance(id: "mixed-ownership")
+        let initial = try #require(
+            SyncPlanner.plan(
+                arm: arm,
+                sources: [source],
+                mappings: [],
+                targetEvents: [],
+                window: try window(),
+                sourceSnapshotComplete: true
+            ).items.first
+        )
+        let mapping = StoredMirrorMapping(
+            mirrorKey: initial.mirrorKey,
+            armID: arm.id,
+            sourceKeyHash: source.sourceKeyHash,
+            providerEventID: "provider-mixed",
+            providerVersion: "v1",
+            desiredFingerprint: "previous",
+            ownershipKeyID: "synthetic-key",
+            updatedAt: Date(timeIntervalSince1970: 1)
+        )
+        let plan = SyncPlanner.plan(
+            arm: arm,
+            sources: [source],
+            mappings: [mapping],
+            targetEvents: [
+                TargetEventObservation(
+                    calendarBindingID: arm.targetBindingID,
+                    providerEventID: mapping.providerEventID,
+                    mirrorKey: mapping.mirrorKey,
+                    contentFingerprint: "previous",
+                    ownershipStatus: .verified
+                ),
+                TargetEventObservation(
+                    calendarBindingID: arm.targetBindingID,
+                    providerEventID: "provider-unverified-duplicate",
+                    mirrorKey: mapping.mirrorKey,
+                    contentFingerprint: nil,
+                    ownershipStatus: .missingMarker
+                ),
+            ],
+            window: try window(),
+            sourceSnapshotComplete: true
+        )
+
+        #expect(plan.items.map(\.action) == [.repair])
+        #expect(plan.items.map(\.reason) == [.ownershipUnverified])
+    }
+
+    @Test("Changing a Rule updates the existing verified target")
+    func ruleChange() throws {
+        let source = instance(id: "rule-change", title: "Synthetic approved detail")
+        let busyArm = storedArm(ruleMode: .busy)
+        let busy = try #require(
+            SyncPlanner.plan(
+                arm: busyArm,
+                sources: [source],
+                mappings: [],
+                targetEvents: [],
+                window: try window(),
+                sourceSnapshotComplete: true
+            ).items.first
+        )
+        let mapping = StoredMirrorMapping(
+            mirrorKey: busy.mirrorKey,
+            armID: busyArm.id,
+            sourceKeyHash: source.sourceKeyHash,
+            providerEventID: "provider-rule-change",
+            providerVersion: "v1",
+            desiredFingerprint: busy.desiredFingerprint!,
+            ownershipKeyID: "synthetic-key",
+            updatedAt: Date(timeIntervalSince1970: 1)
+        )
+        let fullDetailsArm = storedArm(ruleMode: .fullDetails)
+
+        let plan = SyncPlanner.plan(
+            arm: fullDetailsArm,
+            sources: [source],
+            mappings: [mapping],
+            targetEvents: [
+                TargetEventObservation(
+                    calendarBindingID: busyArm.targetBindingID,
+                    providerEventID: mapping.providerEventID,
+                    providerVersion: mapping.providerVersion,
+                    mirrorKey: mapping.mirrorKey,
+                    contentFingerprint: busy.desiredFingerprint,
+                    ownershipKeyID: mapping.ownershipKeyID,
+                    ownershipStatus: .verified
+                ),
+            ],
+            window: try window(),
+            sourceSnapshotComplete: true
+        )
+
+        #expect(plan.items.map(\.action) == [.update])
+        #expect(plan.items.first?.payload?.title == "Synthetic approved detail")
+    }
 }
 
 private func storedArm(ruleMode: ArmRuleMode) -> StoredArm {

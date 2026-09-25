@@ -87,6 +87,31 @@ struct EventKitClientTests {
         #expect(gateway.lastManagedRequest == request)
         #expect(gateway.deletedProviderEventID == updated.providerEventID)
     }
+
+    @Test("Managed target reads stay scoped to the selected target")
+    func managedReads() throws {
+        let gateway = StubEventKitGateway(status: .fullAccess)
+        gateway.managedSnapshots = [
+            ManagedEventSnapshot(
+                providerEventID: "synthetic-event",
+                providerVersion: "v1",
+                payload: eventKitManagedRequest().payload,
+                markerStatus: .parsed,
+                provenance: eventKitManagedRequest().provenance
+            ),
+        ]
+        let client = EventKitClient(gateway: gateway)
+        let start = Date(timeIntervalSince1970: 1_000)
+
+        let snapshots = try client.managedEvents(
+            calendarID: "target",
+            from: start,
+            through: start.addingTimeInterval(3_600)
+        )
+
+        #expect(gateway.lastManagedCalendarID == "target")
+        #expect(snapshots == gateway.managedSnapshots)
+    }
 }
 
 @Suite("EventKit connection state")
@@ -196,6 +221,7 @@ private final class StubEventKitGateway: EventKitGateway {
     var lastManagedCalendarID: String?
     var lastManagedRequest: ManagedEventWriteRequest?
     var deletedProviderEventID: String?
+    var managedSnapshots: [ManagedEventSnapshot] = []
     private var continuation: AsyncStream<Void>.Continuation?
 
     init(status: EventKitAccessStatus) {
@@ -219,6 +245,15 @@ private final class StubEventKitGateway: EventKitGateway {
     ) -> [ProviderEvent] {
         lastCalendarIDs = calendarIDs
         return []
+    }
+
+    func managedEvents(
+        calendarID: String,
+        from start: Date,
+        through end: Date
+    ) -> [ManagedEventSnapshot] {
+        lastManagedCalendarID = calendarID
+        return managedSnapshots
     }
 
     func createManagedEvent(

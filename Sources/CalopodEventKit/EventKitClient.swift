@@ -1,3 +1,4 @@
+import CalopodDomain
 import CalopodProviders
 import EventKit
 import Foundation
@@ -12,6 +13,11 @@ public protocol EventKitGateway: AnyObject {
         from start: Date,
         through end: Date
     ) -> [ProviderEvent]
+    func managedEvents(
+        calendarID: String,
+        from start: Date,
+        through end: Date
+    ) -> [ManagedEventSnapshot]
     func createManagedEvent(
         calendarID: String,
         request: ManagedEventWriteRequest
@@ -72,6 +78,15 @@ public final class EventKitClient {
 
     public func changeNotifications() -> AsyncStream<Void> {
         gateway.changeNotifications()
+    }
+
+    public func managedEvents(
+        calendarID: String,
+        from start: Date,
+        through end: Date
+    ) throws -> [ManagedEventSnapshot] {
+        try requireFullAccess()
+        return gateway.managedEvents(calendarID: calendarID, from: start, through: end)
     }
 
     public func createManagedEvent(
@@ -181,6 +196,22 @@ private final class LiveEventKitGateway: EventKitGateway {
                 updatedAt: $0.lastModifiedDate
             )
         }
+    }
+
+    func managedEvents(
+        calendarID: String,
+        from start: Date,
+        through end: Date
+    ) -> [ManagedEventSnapshot] {
+        guard let calendar = store.calendars(for: .event).first(where: {
+            $0.calendarIdentifier == calendarID
+        }) else { return [] }
+        let predicate = store.predicateForEvents(
+            withStart: start,
+            end: end,
+            calendars: [calendar]
+        )
+        return store.events(matching: predicate).map(managedSnapshot)
     }
 
     func createManagedEvent(
@@ -295,6 +326,39 @@ private final class LiveEventKitGateway: EventKitGateway {
         event.isAllDay = request.payload.isAllDay
         event.availability = eventKitAvailability(request.payload.availability)
         event.url = try OwnershipMarkerCodec.markerURL(request.provenance)
+    }
+
+    private func managedSnapshot(_ event: EKEvent) -> ManagedEventSnapshot {
+        let decoded: (ManagedEventMarkerStatus, ManagedEventProvenance?)
+        if let url = event.url, url.scheme == "calopod", url.host == "managed" {
+            if let marker = try? OwnershipMarkerCodec.marker(from: url) {
+                decoded = (.parsed, marker)
+            } else {
+                decoded = (.invalid, nil)
+            }
+        } else {
+            decoded = (.absent, nil)
+        }
+        let payload: DesiredEventPayload?
+        if event.startDate < event.endDate {
+            payload = DesiredEventPayload(
+                startsAt: event.startDate,
+                endsAt: event.endDate,
+                isAllDay: event.isAllDay,
+                availability: availability(event.availability).rawValue,
+                title: event.title,
+                isPrivate: decoded.1?.ruleMode == .busy ? nil : false
+            )
+        } else {
+            payload = nil
+        }
+        return ManagedEventSnapshot(
+            providerEventID: event.eventIdentifier ?? event.calendarItemIdentifier,
+            providerVersion: eventVersion(event),
+            payload: payload,
+            markerStatus: decoded.0,
+            provenance: decoded.1
+        )
     }
 
     private func eventKitAvailability(_ value: String) -> EKEventAvailability {

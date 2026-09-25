@@ -1,3 +1,4 @@
+import CalopodDomain
 import CalopodProviders
 import Foundation
 #if canImport(FoundationNetworking)
@@ -108,6 +109,36 @@ public struct MicrosoftGraphClient: Sendable {
         }
 
         return ProviderEventPage(events: events, nextSyncToken: nextDeltaLink)
+    }
+
+    public func managedEvents(
+        accessToken: String,
+        calendarID: String,
+        from start: Date,
+        through end: Date
+    ) async throws -> [ManagedEventSnapshot] {
+        let endpoint = baseURL
+            .appendingPathComponent("me", isDirectory: true)
+            .appendingPathComponent("calendars", isDirectory: true)
+            .appendingPathComponent(calendarID, isDirectory: true)
+            .appendingPathComponent("calendarView")
+        var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)
+        components?.queryItems = [
+            URLQueryItem(name: "startDateTime", value: MicrosoftDate.string(from: start)),
+            URLQueryItem(name: "endDateTime", value: MicrosoftDate.string(from: end)),
+            URLQueryItem(name: "$expand", value: "extensions"),
+        ]
+        guard let initialURL = components?.url else { throw ProviderFailure.invalidResponse }
+
+        var snapshots: [ManagedEventSnapshot] = []
+        var nextURL: URL? = initialURL
+        while let url = nextURL {
+            let response = try await send(url: url, accessToken: accessToken, followsCursor: false)
+            let page: MicrosoftEventList = try decode(response)
+            snapshots.append(contentsOf: page.value.map(\.managedSnapshot))
+            nextURL = try page.nextLink.map(validatedLink)
+        }
+        return snapshots
     }
 
     public func createManagedEvent(
@@ -362,6 +393,8 @@ private struct MicrosoftEventList: Decodable {
 
 private struct MicrosoftEvent: Decodable {
     let id: String
+    let changeKey: String?
+    let etag: String?
     let seriesMasterID: String?
     let originalStart: String?
     let start: MicrosoftEventTime?
@@ -373,9 +406,12 @@ private struct MicrosoftEvent: Decodable {
     let subject: String?
     let lastModifiedDateTime: String?
     let removed: MicrosoftRemoved?
+    let extensions: [MicrosoftManagedExtension]?
 
     enum CodingKeys: String, CodingKey {
         case id
+        case changeKey
+        case etag = "@odata.etag"
         case seriesMasterID = "seriesMasterId"
         case originalStart
         case start
@@ -387,6 +423,7 @@ private struct MicrosoftEvent: Decodable {
         case subject
         case lastModifiedDateTime
         case removed = "@removed"
+        case extensions
     }
 
     func providerEvent(connectionID: String, calendarID: String) -> ProviderEvent {
@@ -410,6 +447,40 @@ private struct MicrosoftEvent: Decodable {
         )
     }
 
+    var managedSnapshot: ManagedEventSnapshot {
+        let extensionFields = extensions?
+            .first(where: { $0.isCalopodMarker })?
+            .markerFields
+        let decoded = OwnershipMarkerCodec.marker(fields: extensionFields)
+        let startsAt = start?.date
+        let endsAt = end?.date
+        let payload: DesiredEventPayload?
+        if removed == nil, isCancelled != true,
+           let startsAt, let endsAt, startsAt < endsAt {
+            payload = DesiredEventPayload(
+                startsAt: startsAt,
+                endsAt: endsAt,
+                isAllDay: isAllDay ?? false,
+                availability: availability.rawValue,
+                title: subject,
+                isPrivate: decoded.provenance?.ruleMode == .busy
+                    ? nil
+                    : sensitivity == "private"
+                        || sensitivity == "personal"
+                        || sensitivity == "confidential"
+            )
+        } else {
+            payload = nil
+        }
+        return ManagedEventSnapshot(
+            providerEventID: id,
+            providerVersion: changeKey ?? etag,
+            payload: payload,
+            markerStatus: decoded.status,
+            provenance: decoded.provenance
+        )
+    }
+
     private var availability: ProviderAvailability {
         switch showAs {
         case "free": .free
@@ -418,6 +489,37 @@ private struct MicrosoftEvent: Decodable {
         case "busy": .busy
         default: .busy
         }
+    }
+}
+
+private struct MicrosoftManagedExtension: Decodable {
+    let id: String?
+    let extensionName: String?
+    let schemaVersion: String?
+    let configurationID: String?
+    let armID: String?
+    let mirrorKey: String?
+    let sourceKeyHash: String?
+    let ruleMode: String?
+    let ownershipKeyID: String?
+    let authenticationTag: String?
+
+    var isCalopodMarker: Bool {
+        extensionName == "com.calopod.managed"
+            || id?.hasSuffix(".com.calopod.managed") == true
+    }
+
+    var markerFields: [String: String] {
+        [
+            "calopodSchema": schemaVersion,
+            "configurationID": configurationID,
+            "armID": armID,
+            "mirrorKey": mirrorKey,
+            "sourceKeyHash": sourceKeyHash,
+            "ruleMode": ruleMode,
+            "ownershipKeyID": ownershipKeyID,
+            "authenticationTag": authenticationTag,
+        ].compactMapValues { $0 }
     }
 }
 

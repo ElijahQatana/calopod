@@ -60,6 +60,34 @@ public struct ManagedEventWriteResult: Codable, Equatable, Sendable {
     }
 }
 
+public enum ManagedEventMarkerStatus: String, Codable, Equatable, Sendable {
+    case absent
+    case invalid
+    case parsed
+}
+
+public struct ManagedEventSnapshot: Codable, Equatable, Sendable {
+    public let providerEventID: String
+    public let providerVersion: String?
+    public let payload: DesiredEventPayload?
+    public let markerStatus: ManagedEventMarkerStatus
+    public let provenance: ManagedEventProvenance?
+
+    public init(
+        providerEventID: String,
+        providerVersion: String?,
+        payload: DesiredEventPayload?,
+        markerStatus: ManagedEventMarkerStatus,
+        provenance: ManagedEventProvenance?
+    ) {
+        self.providerEventID = providerEventID
+        self.providerVersion = providerVersion
+        self.payload = payload
+        self.markerStatus = markerStatus
+        self.provenance = provenance
+    }
+}
+
 public struct OwnershipKeyMaterial: Equatable, Sendable {
     public let id: String
     public let bytes: Data
@@ -77,6 +105,57 @@ public enum OwnershipMarkerError: Error, Equatable, Sendable {
 }
 
 public enum OwnershipMarkerCodec {
+    public static func marker(fields: [String: String]?) -> (
+        status: ManagedEventMarkerStatus,
+        provenance: ManagedEventProvenance?
+    ) {
+        guard let fields else { return (.absent, nil) }
+        let names = [
+            "calopodSchema",
+            "configurationID",
+            "armID",
+            "mirrorKey",
+            "sourceKeyHash",
+            "ruleMode",
+            "ownershipKeyID",
+            "authenticationTag",
+        ]
+        guard names.contains(where: { fields[$0] != nil }) else {
+            return (.absent, nil)
+        }
+        guard let schemaValue = fields["calopodSchema"],
+              let schemaVersion = Int(schemaValue),
+              let configurationID = fields["configurationID"],
+              let armID = fields["armID"],
+              let mirrorKey = fields["mirrorKey"],
+              let sourceKeyHash = fields["sourceKeyHash"],
+              let ruleValue = fields["ruleMode"],
+              let ruleMode = ArmRuleMode(rawValue: ruleValue),
+              let ownershipKeyID = fields["ownershipKeyID"],
+              let authenticationTag = fields["authenticationTag"],
+              !configurationID.isEmpty,
+              !armID.isEmpty,
+              !mirrorKey.isEmpty,
+              !sourceKeyHash.isEmpty,
+              !ownershipKeyID.isEmpty,
+              !authenticationTag.isEmpty else {
+            return (.invalid, nil)
+        }
+        return (
+            .parsed,
+            ManagedEventProvenance(
+                schemaVersion: schemaVersion,
+                configurationID: configurationID,
+                armID: armID,
+                mirrorKey: mirrorKey,
+                sourceKeyHash: sourceKeyHash,
+                ruleMode: ruleMode,
+                ownershipKeyID: ownershipKeyID,
+                authenticationTag: authenticationTag
+            )
+        )
+    }
+
     public static func sign(
         configurationID: String,
         armID: String,
@@ -199,20 +278,24 @@ public struct OwnershipKeyVault: Sendable {
         self.secretStore = secretStore
     }
 
-    public func loadOrCreate(configurationID: String) throws -> OwnershipKeyMaterial {
+    public func load(configurationID: String) throws -> OwnershipKeyMaterial? {
         let reference = SecretReference(account: "ownership.\(configurationID).current")
-        if let stored = try secretStore.value(for: reference) {
-            guard let envelope = try? JSONDecoder().decode(OwnershipKeyEnvelope.self, from: stored),
-                  let bytes = Data(base64Encoded: envelope.key), bytes.count >= 32 else {
-                throw SecretStoreError.unexpectedValue
-            }
-            return OwnershipKeyMaterial(id: envelope.id, bytes: bytes)
+        guard let stored = try secretStore.value(for: reference) else { return nil }
+        guard let envelope = try? JSONDecoder().decode(OwnershipKeyEnvelope.self, from: stored),
+              let bytes = Data(base64Encoded: envelope.key), bytes.count >= 32 else {
+            throw SecretStoreError.unexpectedValue
         }
+        return OwnershipKeyMaterial(id: envelope.id, bytes: bytes)
+    }
+
+    public func loadOrCreate(configurationID: String) throws -> OwnershipKeyMaterial {
+        if let existing = try load(configurationID: configurationID) { return existing }
 
         var generator = SystemRandomNumberGenerator()
         let bytes = Data((0..<32).map { _ in UInt8.random(in: .min ... .max, using: &generator) })
         let material = OwnershipKeyMaterial(id: UUID().uuidString.lowercased(), bytes: bytes)
         let envelope = OwnershipKeyEnvelope(id: material.id, key: bytes.base64EncodedString())
+        let reference = SecretReference(account: "ownership.\(configurationID).current")
         try secretStore.save(try JSONEncoder().encode(envelope), for: reference)
         return material
     }

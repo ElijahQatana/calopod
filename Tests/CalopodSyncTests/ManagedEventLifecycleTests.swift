@@ -1,0 +1,517 @@
+import CalopodDomain
+import CalopodProviders
+import CalopodStore
+import CalopodSync
+import Foundation
+import Testing
+
+@Suite("Managed event lifecycle")
+struct ManagedEventLifecycleTests {
+    @Test("Target observations require a valid signed marker")
+    func observesVerifiedOwnership() throws {
+        let fixture = try LifecycleFixture()
+        let key = try OwnershipKeyVault(secretStore: fixture.secrets)
+            .loadOrCreate(configurationID: fixture.arm.configurationID)
+        let item = lifecyclePlanItem(id: "one", action: .create)
+        let marker = try OwnershipMarkerCodec.sign(
+            configurationID: fixture.arm.configurationID,
+            armID: fixture.arm.id,
+            mirrorKey: item.mirrorKey,
+            sourceKeyHash: item.sourceKeyHash!,
+            ruleMode: fixture.arm.ruleMode,
+            key: key
+        )
+        let snapshot = ManagedEventSnapshot(
+            providerEventID: "provider-one",
+            providerVersion: "v1",
+            payload: item.payload,
+            markerStatus: .parsed,
+            provenance: marker
+        )
+
+        let observation = try #require(
+            ManagedTargetObserver(secretStore: fixture.secrets)
+                .observations(snapshots: [snapshot], arm: fixture.arm, mappings: [])
+                .first
+        )
+
+        #expect(observation.ownershipStatus == .verified)
+        #expect(observation.mirrorKey == item.mirrorKey)
+        #expect(observation.providerVersion == "v1")
+        #expect(observation.contentFingerprint == item.desiredFingerprint)
+        #expect(observation.ownershipKeyID == key.id)
+    }
+
+    @Test("Missing markers on mapped targets are never treated as owned")
+    func rejectsMissingMarker() throws {
+        let fixture = try LifecycleFixture()
+        let mapping = lifecycleMapping(id: "one")
+        try fixture.repository.saveMirrorMapping(mapping)
+        let snapshot = ManagedEventSnapshot(
+            providerEventID: mapping.providerEventID,
+            providerVersion: "v2",
+            payload: lifecyclePayload(),
+            markerStatus: .absent,
+            provenance: nil
+        )
+
+        let observation = try #require(
+            ManagedTargetObserver(secretStore: fixture.secrets)
+                .observations(snapshots: [snapshot], arm: fixture.arm, mappings: [mapping])
+                .first
+        )
+
+        #expect(observation.ownershipStatus == .missingMarker)
+        #expect(observation.mirrorKey == mapping.mirrorKey)
+    }
+
+    @Test("A mapped event claiming another Arm is reported instead of replaced")
+    func rejectsMismatchedArmMarker() throws {
+        let fixture = try LifecycleFixture()
+        let mapping = lifecycleMapping(id: "one")
+        try fixture.repository.saveMirrorMapping(mapping)
+        let key = try OwnershipKeyVault(secretStore: fixture.secrets)
+            .loadOrCreate(configurationID: fixture.arm.configurationID)
+        let marker = try OwnershipMarkerCodec.sign(
+            configurationID: fixture.arm.configurationID,
+            armID: "different-arm",
+            mirrorKey: "different-mirror",
+            sourceKeyHash: "different-source",
+            ruleMode: .busy,
+            key: key
+        )
+        let snapshot = ManagedEventSnapshot(
+            providerEventID: mapping.providerEventID,
+            providerVersion: "v2",
+            payload: lifecyclePayload(),
+            markerStatus: .parsed,
+            provenance: marker
+        )
+
+        let observation = try #require(
+            ManagedTargetObserver(secretStore: fixture.secrets)
+                .observations(snapshots: [snapshot], arm: fixture.arm, mappings: [mapping])
+                .first
+        )
+
+        #expect(observation.mirrorKey == mapping.mirrorKey)
+        #expect(observation.ownershipStatus == .unknownArm)
+    }
+
+    @Test("Updates retain provider identity and removals require verified ownership")
+    func updatesAndRemoves() async throws {
+        let fixture = try LifecycleFixture()
+        let mapping = lifecycleMapping(id: "one")
+        try fixture.repository.saveMirrorMapping(mapping)
+        let update = lifecyclePlanItem(id: "one", action: .update)
+        let observation = lifecycleObservation(id: "one", fingerprint: "old")
+        let recorder = LifecycleMutationRecorder()
+        let service = ManagedEventLifecycleService(
+            repository: fixture.repository,
+            secretStore: fixture.secrets
+        )
+
+        let updateSummary = try await service.apply(
+            items: [update],
+            arm: fixture.arm,
+            observations: [observation],
+            now: { Date(timeIntervalSince1970: 20) }
+        ) { mutation in
+            await recorder.record(mutation)
+            return .written(
+                ManagedEventWriteResult(
+                    providerEventID: mapping.providerEventID,
+                    providerVersion: "v2"
+                )
+            )
+        }
+        let updated = try #require(fixture.repository.mirrorMappings(armID: fixture.arm.id).first)
+
+        #expect(updateSummary.providerWriteCount == 1)
+        #expect(updated.providerEventID == mapping.providerEventID)
+        #expect(updated.providerVersion == "v2")
+        #expect(updated.desiredFingerprint == update.desiredFingerprint)
+
+        let remove = lifecyclePlanItem(id: "one", action: .remove, payload: nil)
+        let refreshedObservation = TargetEventObservation(
+            calendarBindingID: fixture.arm.targetBindingID,
+            providerEventID: mapping.providerEventID,
+            providerVersion: "v2",
+            mirrorKey: mapping.mirrorKey,
+            contentFingerprint: update.desiredFingerprint,
+            ownershipKeyID: updated.ownershipKeyID,
+            ownershipStatus: .verified
+        )
+        let removeSummary = try await service.apply(
+            items: [remove],
+            arm: fixture.arm,
+            observations: [refreshedObservation]
+        ) { mutation in
+            await recorder.record(mutation)
+            return .deleted
+        }
+
+        #expect(removeSummary.providerWriteCount == 1)
+        #expect(try fixture.repository.mirrorMappings(armID: fixture.arm.id).isEmpty)
+        let mutations = await recorder.mutations
+        guard case let .update(providerEventID, expectedVersion, _) = mutations[0] else {
+            Issue.record("Expected an update mutation")
+            return
+        }
+        #expect(providerEventID == mapping.providerEventID)
+        #expect(expectedVersion == "v1")
+        guard case let .delete(deletedID, expectedVersion) = mutations[1] else {
+            Issue.record("Expected a delete mutation")
+            return
+        }
+        #expect(deletedID == mapping.providerEventID)
+        #expect(expectedVersion == "v2")
+    }
+
+    @Test("A provider write interrupted before the batch ends resumes without duplicate creates")
+    func resumesInterruptedBatch() async throws {
+        let fixture = try LifecycleFixture()
+        let firstSource = lifecycleSource(id: "one", startsAt: 2_000)
+        let secondSource = lifecycleSource(id: "two", startsAt: 4_000)
+        let window = try SyncWindow(
+            start: Date(timeIntervalSince1970: 1_000),
+            end: Date(timeIntervalSince1970: 8_000)
+        )
+        let initial = SyncPlanner.plan(
+            arm: fixture.arm,
+            sources: [firstSource, secondSource],
+            mappings: [],
+            targetEvents: [],
+            window: window,
+            sourceSnapshotComplete: true
+        )
+        let recorder = InterruptedCreateRecorder()
+        let service = ManagedEventLifecycleService(
+            repository: fixture.repository,
+            secretStore: fixture.secrets
+        )
+
+        await #expect(throws: LifecycleSyntheticFailure.self) {
+            try await service.apply(
+                items: initial.items,
+                arm: fixture.arm,
+                observations: []
+            ) { mutation in
+                try await recorder.perform(mutation)
+            }
+        }
+        let persisted = try fixture.repository.mirrorMappings(armID: fixture.arm.id)
+        let firstWrite = try #require(await recorder.firstWrite)
+        #expect(persisted.count == 1)
+
+        let snapshot = ManagedEventSnapshot(
+            providerEventID: firstWrite.result.providerEventID,
+            providerVersion: firstWrite.result.providerVersion,
+            payload: firstWrite.request.payload,
+            markerStatus: .parsed,
+            provenance: firstWrite.request.provenance
+        )
+        let observations = try ManagedTargetObserver(secretStore: fixture.secrets).observations(
+            snapshots: [snapshot],
+            arm: fixture.arm,
+            mappings: persisted
+        )
+        let resumed = SyncPlanner.plan(
+            arm: fixture.arm,
+            sources: [firstSource, secondSource],
+            mappings: persisted,
+            targetEvents: observations,
+            window: window,
+            sourceSnapshotComplete: true
+        )
+
+        #expect(resumed.items.map(\.action).filter { $0 == .noOp }.count == 1)
+        #expect(resumed.items.map(\.action).filter { $0 == .create }.count == 1)
+    }
+
+    @Test("A verified orphan is adopted, while ambiguous ownership blocks the whole apply")
+    func repairsOrRejects() async throws {
+        let fixture = try LifecycleFixture()
+        let item = lifecyclePlanItem(id: "one", action: .repair, reason: .mappingMissing)
+        let observation = lifecycleObservation(id: "one", fingerprint: item.desiredFingerprint)
+        let recorder = LifecycleMutationRecorder()
+        let service = ManagedEventLifecycleService(
+            repository: fixture.repository,
+            secretStore: fixture.secrets
+        )
+
+        let summary = try await service.apply(
+            items: [item],
+            arm: fixture.arm,
+            observations: [observation]
+        ) { mutation in
+            await recorder.record(mutation)
+            return .deleted
+        }
+
+        #expect(summary.providerWriteCount == 0)
+        #expect(summary.mappingReconciliationCount == 1)
+        #expect(await recorder.mutations.isEmpty)
+        #expect(try fixture.repository.mirrorMappings(armID: fixture.arm.id).count == 1)
+
+        let ambiguous = lifecyclePlanItem(
+            id: "two",
+            action: .repair,
+            reason: .ownershipUnverified
+        )
+        await #expect(throws: ManagedEventLifecycleError.ambiguousRepair(.ownershipUnverified)) {
+            try await service.apply(
+                items: [lifecyclePlanItem(id: "three", action: .create), ambiguous],
+                arm: fixture.arm,
+                observations: []
+            ) { mutation in
+                await recorder.record(mutation)
+                return .written(
+                    ManagedEventWriteResult(providerEventID: "unexpected", providerVersion: nil)
+                )
+            }
+        }
+        #expect(await recorder.mutations.isEmpty)
+    }
+
+    @Test("A confirmed missing target is recreated or cleared without guessing")
+    func reconcilesMissingTarget() async throws {
+        let fixture = try LifecycleFixture()
+        let mapping = lifecycleMapping(id: "one")
+        try fixture.repository.saveMirrorMapping(mapping)
+        let service = ManagedEventLifecycleService(
+            repository: fixture.repository,
+            secretStore: fixture.secrets
+        )
+        let recreate = lifecyclePlanItem(
+            id: "one",
+            action: .repair,
+            reason: .targetMissing
+        )
+
+        let recreated = try await service.apply(
+            items: [recreate],
+            arm: fixture.arm,
+            observations: []
+        ) { mutation in
+            guard case .create = mutation else {
+                throw LifecycleSyntheticFailure()
+            }
+            return .written(
+                ManagedEventWriteResult(
+                    providerEventID: "provider-recreated",
+                    providerVersion: "v2"
+                )
+            )
+        }
+        let recreatedMapping = try #require(
+            fixture.repository.mirrorMappings(armID: fixture.arm.id).first
+        )
+
+        #expect(recreated.providerWriteCount == 1)
+        #expect(recreated.mappingReconciliationCount == 1)
+        #expect(recreatedMapping.providerEventID == "provider-recreated")
+
+        let clear = lifecyclePlanItem(
+            id: "one",
+            action: .repair,
+            reason: .targetMissing,
+            payload: nil
+        )
+        let cleared = try await service.apply(
+            items: [clear],
+            arm: fixture.arm,
+            observations: []
+        ) { _ in
+            throw LifecycleSyntheticFailure()
+        }
+
+        #expect(cleared.providerWriteCount == 0)
+        #expect(cleared.mappingReconciliationCount == 1)
+        #expect(try fixture.repository.mirrorMappings(armID: fixture.arm.id).isEmpty)
+    }
+}
+
+private struct LifecycleFixture {
+    let repository: LocalStateRepository
+    let arm: StoredArm
+    let secrets = LifecycleMemorySecretStore()
+
+    init() throws {
+        repository = LocalStateRepository(database: try CalopodDatabase.inMemory())
+        let connection = StoredConnection(
+            id: "synthetic-connection",
+            configurationID: "synthetic-configuration",
+            provider: "eventkit",
+            displayLabel: "Synthetic provider",
+            isEnabled: true
+        )
+        try repository.saveConnection(connection)
+        try repository.replaceCalendarBindings(
+            connectionID: connection.id,
+            bindings: [
+                StoredCalendarBinding(
+                    id: "source-calendar",
+                    connectionID: connection.id,
+                    providerCalendarID: "provider-source",
+                    displayLabel: "Synthetic source",
+                    isSelected: true,
+                    isReadOnly: false
+                ),
+                StoredCalendarBinding(
+                    id: "target-calendar",
+                    connectionID: connection.id,
+                    providerCalendarID: "provider-target",
+                    displayLabel: "Synthetic target",
+                    isSelected: false,
+                    isReadOnly: false
+                ),
+            ]
+        )
+        arm = StoredArm(
+            id: "synthetic-arm",
+            configurationID: connection.configurationID,
+            sourceBindingIDs: ["source-calendar"],
+            targetBindingID: "target-calendar",
+            ruleMode: .busy
+        )
+        try repository.saveArm(arm)
+    }
+}
+
+private func lifecyclePayload(startsAt: TimeInterval = 2_000) -> DesiredEventPayload {
+    DesiredEventPayload(
+        startsAt: Date(timeIntervalSince1970: startsAt),
+        endsAt: Date(timeIntervalSince1970: startsAt + 600),
+        isAllDay: false,
+        availability: "busy",
+        title: "Busy",
+        isPrivate: nil
+    )
+}
+
+private func lifecyclePlanItem(
+    id: String,
+    action: SyncPlanAction,
+    reason: SyncPlanReason? = nil,
+    payload: DesiredEventPayload? = lifecyclePayload()
+) -> SyncPlanItem {
+    let sourceKey = "source-\(id)"
+    let mirror = SyncPlanner.mirrorKey(armID: "synthetic-arm", sourceKeyHash: sourceKey)
+    return SyncPlanItem(
+        id: "operation-\(id)-\(action.rawValue)",
+        armID: "synthetic-arm",
+        mirrorKey: mirror,
+        sourceKeyHash: sourceKey,
+        action: action,
+        reason: reason ?? {
+            switch action {
+            case .create: .targetMissing
+            case .update: .targetDiffers
+            case .remove: .sourceMissing
+            case .repair: .ownershipUnverified
+            case .noOp: .targetMatches
+            }
+        }(),
+        desiredFingerprint: payload.map {
+            SyncPlanner.desiredFingerprint(payload: $0, ruleMode: .busy)
+        },
+        payload: payload
+    )
+}
+
+private func lifecycleMapping(id: String) -> StoredMirrorMapping {
+    let item = lifecyclePlanItem(id: id, action: .update)
+    return StoredMirrorMapping(
+        mirrorKey: item.mirrorKey,
+        armID: item.armID,
+        sourceKeyHash: item.sourceKeyHash!,
+        providerEventID: "provider-\(id)",
+        providerVersion: "v1",
+        desiredFingerprint: "old",
+        ownershipKeyID: "synthetic-key",
+        updatedAt: Date(timeIntervalSince1970: 1)
+    )
+}
+
+private func lifecycleObservation(id: String, fingerprint: String?) -> TargetEventObservation {
+    let mapping = lifecycleMapping(id: id)
+    return TargetEventObservation(
+        calendarBindingID: "target-calendar",
+        providerEventID: mapping.providerEventID,
+        providerVersion: mapping.providerVersion,
+        mirrorKey: mapping.mirrorKey,
+        contentFingerprint: fingerprint,
+        ownershipKeyID: mapping.ownershipKeyID,
+        ownershipStatus: .verified
+    )
+}
+
+private func lifecycleSource(id: String, startsAt: TimeInterval) -> StoredNormalizedInstance {
+    StoredNormalizedInstance(
+        sourceKeyHash: "source-\(id)",
+        connectionID: "synthetic-connection",
+        calendarBindingID: "source-calendar",
+        providerEventID: "provider-source-\(id)",
+        recurrenceID: nil,
+        startsAt: Date(timeIntervalSince1970: startsAt),
+        endsAt: Date(timeIntervalSince1970: startsAt + 600),
+        isAllDay: false,
+        availability: "busy",
+        isCancelled: false,
+        isPrivate: false,
+        title: "Synthetic source event",
+        contentFingerprint: "source-fingerprint-\(id)",
+        providerUpdatedAt: nil
+    )
+}
+
+private actor LifecycleMutationRecorder {
+    private(set) var mutations: [ManagedEventMutation] = []
+
+    func record(_ mutation: ManagedEventMutation) {
+        mutations.append(mutation)
+    }
+}
+
+private struct LifecycleSyntheticFailure: Error {}
+
+private actor InterruptedCreateRecorder {
+    struct FirstWrite: Sendable {
+        let request: ManagedEventWriteRequest
+        let result: ManagedEventWriteResult
+    }
+
+    private var count = 0
+    private(set) var firstWrite: FirstWrite?
+
+    func perform(_ mutation: ManagedEventMutation) throws -> ManagedEventMutationResult {
+        count += 1
+        guard count == 1, case let .create(request) = mutation else {
+            throw LifecycleSyntheticFailure()
+        }
+        let result = ManagedEventWriteResult(
+            providerEventID: "provider-created-first",
+            providerVersion: "v1"
+        )
+        firstWrite = FirstWrite(request: request, result: result)
+        return .written(result)
+    }
+}
+
+private final class LifecycleMemorySecretStore: SecretStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [SecretReference: Data] = [:]
+
+    func save(_ value: Data, for reference: SecretReference) throws {
+        lock.withLock { values[reference] = value }
+    }
+
+    func value(for reference: SecretReference) throws -> Data? {
+        lock.withLock { values[reference] }
+    }
+
+    func removeValue(for reference: SecretReference) throws {
+        lock.withLock { _ = values.removeValue(forKey: reference) }
+    }
+}

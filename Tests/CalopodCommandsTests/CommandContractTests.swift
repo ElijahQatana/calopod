@@ -39,6 +39,15 @@ func armsUseAnExplicitBusyDefaultAndAcceptFullDetails() throws {
     #expect(defaultRule.source == ["source-one"])
     #expect(fullDetails.rule == .fullDetails)
     #expect(fullDetails.source == ["source-one", "source-two"])
+
+    let update = try ArmUpdateCommand.parse([
+        "synthetic-arm",
+        "--rule", "busy",
+        "--format", "json",
+    ])
+    #expect(update.armID == "synthetic-arm")
+    #expect(update.rule == .busy)
+    #expect(update.output.format == .json)
 }
 
 @Test

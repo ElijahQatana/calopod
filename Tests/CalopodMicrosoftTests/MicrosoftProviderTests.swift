@@ -320,6 +320,40 @@ struct MicrosoftManagedWriteTests {
         #expect(created.providerVersion == "version-one")
         #expect(updated.providerVersion == "version-two")
     }
+
+    @Test("Managed target reads expand ownership markers and provider versions")
+    func managedRead() async throws {
+        let client = MicrosoftGraphClient(
+            transport: ClosureTransport { request in
+                let queryItems = URLComponents(
+                    url: try #require(request.url),
+                    resolvingAgainstBaseURL: false
+                )?.queryItems ?? []
+                #expect(queryItems.contains { $0.name == "$expand" && $0.value == "extensions" })
+                return HTTPResponse(
+                    statusCode: 200,
+                    body: Data(
+                        #"{"value":[{"id":"provider-event","changeKey":"v2","start":{"dateTime":"2026-09-25T12:30:00.0000000","timeZone":"UTC"},"end":{"dateTime":"2026-09-25T13:00:00.0000000","timeZone":"UTC"},"isAllDay":false,"showAs":"busy","subject":"Busy","extensions":[{"extensionName":"com.calopod.managed","schemaVersion":"1","configurationID":"synthetic-configuration","armID":"synthetic-arm","mirrorKey":"synthetic-mirror","sourceKeyHash":"synthetic-source","ruleMode":"busy","ownershipKeyID":"synthetic-key","authenticationTag":"synthetic-tag"}]}]}"#.utf8
+                    )
+                )
+            }
+        )
+
+        let snapshots = try await client.managedEvents(
+            accessToken: "token",
+            calendarID: "target",
+            from: Date(timeIntervalSince1970: 1_000),
+            through: Date(timeIntervalSince1970: 5_000)
+        )
+        let snapshot = try #require(snapshots.first)
+
+        #expect(snapshot.providerEventID == "provider-event")
+        #expect(snapshot.providerVersion == "v2")
+        #expect(snapshot.payload?.title == "Busy")
+        #expect(snapshot.payload?.isPrivate == nil)
+        #expect(snapshot.markerStatus == .parsed)
+        #expect(snapshot.provenance?.mirrorKey == "synthetic-mirror")
+    }
 }
 
 private func microsoftManagedRequest() -> ManagedEventWriteRequest {
