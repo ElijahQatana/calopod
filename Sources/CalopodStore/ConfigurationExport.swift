@@ -47,22 +47,17 @@ public struct ExportedCalendarBinding: Codable, Equatable, Sendable {
 }
 
 public struct ExportedArm: Codable, Equatable, Sendable {
-    public enum RuleMode: String, Codable, Sendable {
-        case busy
-        case fullDetails = "full-details"
-    }
-
     public let id: UUID
     public let sourceBindingIDs: [UUID]
     public let targetBindingID: UUID
-    public let ruleMode: RuleMode
+    public let ruleMode: ArmRuleMode
     public let preferredWriterDeviceID: UUID?
 
     public init(
         id: UUID,
         sourceBindingIDs: [UUID],
         targetBindingID: UUID,
-        ruleMode: RuleMode,
+        ruleMode: ArmRuleMode,
         preferredWriterDeviceID: UUID?
     ) {
         self.id = id

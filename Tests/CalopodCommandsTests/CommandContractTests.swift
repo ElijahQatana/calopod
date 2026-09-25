@@ -13,12 +13,32 @@ func rootExposesThePlannedCommandGroups() {
     #expect(names == [
         "connection",
         "calendars",
+        "arm",
         "events",
         "availability",
         "sync",
         "doctor",
         "agent",
     ])
+}
+
+@Test
+func armsUseAnExplicitBusyDefaultAndAcceptFullDetails() throws {
+    let defaultRule = try ArmAddCommand.parse([
+        "--source", "source-one",
+        "--target", "target",
+    ])
+    let fullDetails = try ArmAddCommand.parse([
+        "--source", "source-one",
+        "--source", "source-two",
+        "--target", "target",
+        "--rule", "full-details",
+    ])
+
+    #expect(defaultRule.rule == .busy)
+    #expect(defaultRule.source == ["source-one"])
+    #expect(fullDetails.rule == .fullDetails)
+    #expect(fullDetails.source == ["source-one", "source-two"])
 }
 
 @Test

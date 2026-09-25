@@ -1,5 +1,10 @@
+import CalopodDomain
 import Foundation
 import GRDB
+
+public enum LocalStateError: Error, Equatable, Sendable {
+    case invalidArmRuleMode(String)
+}
 
 public struct StoredConnection: Equatable, Sendable {
     public let id: String
@@ -54,6 +59,34 @@ public struct StoredCalendarBinding: Equatable, Sendable {
         self.providerSourceID = providerSourceID
         self.providerSourceType = providerSourceType
         self.providerSourceLabel = providerSourceLabel
+    }
+}
+
+public struct StoredArm: Equatable, Sendable {
+    public let id: String
+    public let configurationID: String
+    public let sourceBindingIDs: [String]
+    public let targetBindingID: String
+    public let ruleMode: ArmRuleMode
+    public let preferredWriterDeviceID: String?
+    public let isEnabled: Bool
+
+    public init(
+        id: String,
+        configurationID: String,
+        sourceBindingIDs: [String],
+        targetBindingID: String,
+        ruleMode: ArmRuleMode,
+        preferredWriterDeviceID: String? = nil,
+        isEnabled: Bool = true
+    ) {
+        self.id = id
+        self.configurationID = configurationID
+        self.sourceBindingIDs = sourceBindingIDs
+        self.targetBindingID = targetBindingID
+        self.ruleMode = ruleMode
+        self.preferredWriterDeviceID = preferredWriterDeviceID
+        self.isEnabled = isEnabled
     }
 }
 
@@ -300,6 +333,100 @@ public final class LocalStateRepository: @unchecked Sendable {
         return try calendarBinding(id: id)
     }
 
+    public func saveArm(_ arm: StoredArm, now: Date = Date()) throws {
+        try database.writeTransaction { database in
+            try database.execute(
+                sql: """
+                    INSERT INTO arms
+                        (id, configuration_id, target_binding_id, rule_mode,
+                         preferred_writer_device_id, is_enabled, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                arguments: [
+                    arm.id,
+                    arm.configurationID,
+                    arm.targetBindingID,
+                    arm.ruleMode.rawValue,
+                    arm.preferredWriterDeviceID,
+                    arm.isEnabled,
+                    now,
+                    now,
+                ]
+            )
+            for sourceBindingID in arm.sourceBindingIDs {
+                try database.execute(
+                    sql: "INSERT INTO arm_sources (arm_id, calendar_binding_id) VALUES (?, ?)",
+                    arguments: [arm.id, sourceBindingID]
+                )
+            }
+        }
+    }
+
+    public func arms(configurationID: String? = nil) throws -> [StoredArm] {
+        try database.read { database in
+            let rows: [Row]
+            if let configurationID {
+                rows = try Row.fetchAll(
+                    database,
+                    sql: """
+                        SELECT id, configuration_id, target_binding_id, rule_mode,
+                               preferred_writer_device_id, is_enabled
+                        FROM arms
+                        WHERE configuration_id = ?
+                        ORDER BY created_at, id
+                        """,
+                    arguments: [configurationID]
+                )
+            } else {
+                rows = try Row.fetchAll(
+                    database,
+                    sql: """
+                        SELECT id, configuration_id, target_binding_id, rule_mode,
+                               preferred_writer_device_id, is_enabled
+                        FROM arms
+                        ORDER BY created_at, id
+                        """
+                )
+            }
+            return try rows.map { try storedArm(row: $0, database: database) }
+        }
+    }
+
+    public func arm(id: String) throws -> StoredArm? {
+        try database.read { database in
+            guard let row = try Row.fetchOne(
+                database,
+                sql: """
+                    SELECT id, configuration_id, target_binding_id, rule_mode,
+                           preferred_writer_device_id, is_enabled
+                    FROM arms
+                    WHERE id = ?
+                    """,
+                arguments: [id]
+            ) else {
+                return nil
+            }
+            return try storedArm(row: row, database: database)
+        }
+    }
+
+    @discardableResult
+    public func setArmEnabled(id: String, isEnabled: Bool, now: Date = Date()) throws -> StoredArm? {
+        try database.write { database in
+            try database.execute(
+                sql: "UPDATE arms SET is_enabled = ?, updated_at = ? WHERE id = ?",
+                arguments: [isEnabled, now, id]
+            )
+        }
+        return try arm(id: id)
+    }
+
+    public func removeArm(id: String) throws {
+        try database.write { database in
+            try database.execute(sql: "DELETE FROM arms WHERE id = ?", arguments: [id])
+        }
+    }
+
     public func saveCursor(
         connectionID: String,
         calendarBindingID: String,
@@ -369,6 +496,33 @@ public final class LocalStateRepository: @unchecked Sendable {
             }
         }
     }
+}
+
+private func storedArm(row: Row, database: Database) throws -> StoredArm {
+    let id: String = row["id"]
+    let ruleValue: String = row["rule_mode"]
+    guard let ruleMode = ArmRuleMode(rawValue: ruleValue) else {
+        throw LocalStateError.invalidArmRuleMode(ruleValue)
+    }
+    let sourceBindingIDs = try String.fetchAll(
+        database,
+        sql: """
+            SELECT calendar_binding_id
+            FROM arm_sources
+            WHERE arm_id = ?
+            ORDER BY calendar_binding_id
+            """,
+        arguments: [id]
+    )
+    return StoredArm(
+        id: id,
+        configurationID: row["configuration_id"],
+        sourceBindingIDs: sourceBindingIDs,
+        targetBindingID: row["target_binding_id"],
+        ruleMode: ruleMode,
+        preferredWriterDeviceID: row["preferred_writer_device_id"],
+        isEnabled: row["is_enabled"]
+    )
 }
 
 private func databaseQuestionMarks(count: Int) -> String {

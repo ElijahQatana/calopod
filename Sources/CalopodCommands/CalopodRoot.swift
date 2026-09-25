@@ -8,6 +8,7 @@ public struct CalopodRoot: AsyncParsableCommand {
         subcommands: [
             ConnectionCommand.self,
             CalendarsCommand.self,
+            ArmCommand.self,
             EventsCommand.self,
             AvailabilityCommand.self,
             SyncCommand.self,

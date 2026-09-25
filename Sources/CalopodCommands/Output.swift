@@ -96,6 +96,10 @@ public struct CommandItem: Codable, Equatable, Sendable {
     public let availability: String?
     public let sourceType: String?
     public let sourceLabel: String?
+    public let sourceIDs: [String]?
+    public let targetID: String?
+    public let rule: String?
+    public let enabled: Bool?
 
     public init(
         id: String,
@@ -110,7 +114,11 @@ public struct CommandItem: Codable, Equatable, Sendable {
         cancelled: Bool? = nil,
         availability: String? = nil,
         sourceType: String? = nil,
-        sourceLabel: String? = nil
+        sourceLabel: String? = nil,
+        sourceIDs: [String]? = nil,
+        targetID: String? = nil,
+        rule: String? = nil,
+        enabled: Bool? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -125,6 +133,10 @@ public struct CommandItem: Codable, Equatable, Sendable {
         self.availability = availability
         self.sourceType = sourceType
         self.sourceLabel = sourceLabel
+        self.sourceIDs = sourceIDs
+        self.targetID = targetID
+        self.rule = rule
+        self.enabled = enabled
     }
 }
 
@@ -181,6 +193,10 @@ public enum OutputRenderer {
                     if let availability = item.availability { details.append(availability) }
                     if let sourceType = item.sourceType { details.append(sourceType) }
                     if let sourceLabel = item.sourceLabel { details.append(sourceLabel) }
+                    if let sourceIDs = item.sourceIDs { details.append("sources: \(sourceIDs.joined(separator: ", "))") }
+                    if let targetID = item.targetID { details.append("target: \(targetID)") }
+                    if let rule = item.rule { details.append("rule: \(rule)") }
+                    if let enabled = item.enabled { details.append(enabled ? "enabled" : "disabled") }
                     return details.joined(separator: "  ")
                 })
             }
