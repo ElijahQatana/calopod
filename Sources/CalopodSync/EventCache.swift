@@ -92,6 +92,10 @@ public enum EventNormalizer {
         var discardedCount = 0
 
         for event in events {
+            guard !event.isManagedMirror else {
+                discardedCount += 1
+                continue
+            }
             guard event.provider == connection.provider,
                   event.connectionID == connection.id,
                   event.calendarID == calendar.providerCalendarID,

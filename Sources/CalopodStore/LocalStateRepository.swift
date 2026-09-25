@@ -90,11 +90,61 @@ public struct StoredArm: Equatable, Sendable {
     }
 }
 
+public struct StoredDevice: Equatable, Sendable {
+    public let id: String
+    public let configurationID: String
+    public let isCurrent: Bool
+
+    public init(id: String, configurationID: String, isCurrent: Bool) {
+        self.id = id
+        self.configurationID = configurationID
+        self.isCurrent = isCurrent
+    }
+}
+
 public final class LocalStateRepository: @unchecked Sendable {
     let database: CalopodDatabase
 
     public init(database: CalopodDatabase) {
         self.database = database
+    }
+
+    public func currentDevice(
+        configurationID: String,
+        proposedID: String = UUID().uuidString.lowercased(),
+        now: Date = Date()
+    ) throws -> StoredDevice {
+        try database.write { database in
+            if let row = try Row.fetchOne(
+                database,
+                sql: """
+                    SELECT id, configuration_id, is_current
+                    FROM devices
+                    WHERE configuration_id = ? AND is_current = 1
+                    ORDER BY created_at, id
+                    LIMIT 1
+                    """,
+                arguments: [configurationID]
+            ) {
+                return StoredDevice(
+                    id: row["id"],
+                    configurationID: row["configuration_id"],
+                    isCurrent: row["is_current"]
+                )
+            }
+            try database.execute(
+                sql: """
+                    INSERT INTO devices (id, configuration_id, is_current, created_at)
+                    VALUES (?, ?, 1, ?)
+                    """,
+                arguments: [proposedID, configurationID, now]
+            )
+            return StoredDevice(
+                id: proposedID,
+                configurationID: configurationID,
+                isCurrent: true
+            )
+        }
     }
 
     public func saveConnection(_ connection: StoredConnection, now: Date = Date()) throws {
@@ -431,6 +481,21 @@ public final class LocalStateRepository: @unchecked Sendable {
             try database.execute(
                 sql: "UPDATE arms SET rule_mode = ?, updated_at = ? WHERE id = ?",
                 arguments: [ruleMode.rawValue, now, id]
+            )
+        }
+        return try arm(id: id)
+    }
+
+    @discardableResult
+    public func setArmPreferredWriter(
+        id: String,
+        deviceID: String,
+        now: Date = Date()
+    ) throws -> StoredArm? {
+        try database.write { database in
+            try database.execute(
+                sql: "UPDATE arms SET preferred_writer_device_id = ?, updated_at = ? WHERE id = ?",
+                arguments: [deviceID, now, id]
             )
         }
         return try arm(id: id)

@@ -72,19 +72,25 @@ public struct ManagedEventSnapshot: Codable, Equatable, Sendable {
     public let payload: DesiredEventPayload?
     public let markerStatus: ManagedEventMarkerStatus
     public let provenance: ManagedEventProvenance?
+    public let createdAt: Date?
+    public let isProviderPreferredIdentity: Bool
 
     public init(
         providerEventID: String,
         providerVersion: String?,
         payload: DesiredEventPayload?,
         markerStatus: ManagedEventMarkerStatus,
-        provenance: ManagedEventProvenance?
+        provenance: ManagedEventProvenance?,
+        createdAt: Date? = nil,
+        isProviderPreferredIdentity: Bool = false
     ) {
         self.providerEventID = providerEventID
         self.providerVersion = providerVersion
         self.payload = payload
         self.markerStatus = markerStatus
         self.provenance = provenance
+        self.createdAt = createdAt
+        self.isProviderPreferredIdentity = isProviderPreferredIdentity
     }
 }
 

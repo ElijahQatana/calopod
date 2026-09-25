@@ -108,6 +108,22 @@ public struct MicrosoftConnectionService: Sendable {
             refreshMode = .full
         }
 
+        let managedEventIDs = Set(
+            try await graph.managedEvents(
+                accessToken: tokens.accessToken,
+                calendarID: binding.providerCalendarID,
+                from: start,
+                through: end
+            )
+            .filter { $0.markerStatus != .absent }
+            .map(\.providerEventID)
+        )
+        let events = page.events.map { event in
+            managedEventIDs.contains(event.eventID)
+                ? event.markingManagedMirror()
+                : event
+        }
+
         var cursorUpdates: [ProviderCursorUpdate] = []
         if let nextDeltaLink = page.nextSyncToken {
             cursorUpdates.append(
@@ -120,7 +136,7 @@ public struct MicrosoftConnectionService: Sendable {
             )
         }
         return ProviderEventPage(
-            events: page.events,
+            events: events,
             nextSyncToken: page.nextSyncToken,
             refreshMode: refreshMode,
             cursorUpdates: cursorUpdates

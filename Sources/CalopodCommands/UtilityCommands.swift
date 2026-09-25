@@ -39,11 +39,30 @@ public struct SyncCommand: AsyncParsableCommand {
             var observationsByArm: [String: [TargetEventObservation]] = [:]
             var targetFailureCount = 0
             var targetWarnings: [String] = []
+            var writerBlockedArmIDs = Set<String>()
             let secretStore = KeychainSecretStore()
             let observer = ManagedTargetObserver(secretStore: secretStore)
             for arm in arms {
                 guard let target = try repository.calendarBinding(id: arm.targetBindingID) else {
                     throw ValidationError("An Arm target calendar is no longer available.")
+                }
+                guard let targetConnection = try repository.connection(id: target.connectionID) else {
+                    throw ValidationError("An Arm target Connection is no longer available.")
+                }
+                if targetConnection.provider == "eventkit" {
+                    let currentDevice = try repository.currentDevice(
+                        configurationID: arm.configurationID
+                    )
+                    if !ArmWriterPolicy.allowsApply(
+                        arm: arm,
+                        targetProvider: .eventKit,
+                        currentDeviceID: currentDevice.id
+                    ) {
+                        writerBlockedArmIDs.insert(arm.id)
+                        targetWarnings.append(
+                            "An EventKit Arm is read-only on this device until it is selected as the preferred writer."
+                        )
+                    }
                 }
                 let events = try repository.normalizedInstances(
                     calendarBindingIDs: arm.sourceBindingIDs,
@@ -119,6 +138,11 @@ public struct SyncCommand: AsyncParsableCommand {
             guard targetFailureCount == 0 else {
                 throw ValidationError("Apply stopped because at least one target calendar could not refresh.")
             }
+            guard writerBlockedArmIDs.isEmpty else {
+                throw ValidationError(
+                    "Apply stopped because this device is not the preferred writer for an EventKit Arm."
+                )
+            }
             let ambiguous = planItems.first {
                 $0.action == .repair && !isDeterministicRepair($0)
             }
@@ -129,7 +153,7 @@ public struct SyncCommand: AsyncParsableCommand {
             }
 
             let armsByID = Dictionary(uniqueKeysWithValues: arms.map { ($0.id, $0) })
-            let lifecycle = ManagedEventLifecycleService(
+            let convergence = ManagedEventConvergenceService(
                 repository: repository,
                 secretStore: secretStore
             )
@@ -141,15 +165,30 @@ public struct SyncCommand: AsyncParsableCommand {
                       let target = try repository.calendarBinding(id: arm.targetBindingID) else {
                     throw ValidationError("The planned Arm or target calendar is no longer available.")
                 }
-                let summary = try await lifecycle.apply(
-                    items: planItems,
-                    arm: arm,
-                    observations: observationsByArm[arm.id] ?? []
-                ) { mutation in
-                    try await performManagedMutation(
-                        mutation,
-                        target: target,
-                        repository: repository
+                let summary: ManagedEventLifecycleSummary
+                do {
+                    summary = try await convergence.converge(
+                        initialItems: planItems,
+                        arm: arm,
+                        initialObservations: observationsByArm[arm.id] ?? [],
+                        window: resolved.window
+                    ) {
+                        try await managedTargetSnapshots(
+                            target: target,
+                            from: resolved.window.start,
+                            through: resolved.window.end,
+                            repository: repository
+                        )
+                    } perform: { mutation in
+                        try await performManagedMutation(
+                            mutation,
+                            target: target,
+                            repository: repository
+                        )
+                    }
+                } catch ManagedEventConvergenceError.didNotConverge {
+                    throw ValidationError(
+                        "Apply stopped because managed target changes did not converge after repeated reads."
                     )
                 }
                 appliedCount += summary.providerWriteCount
@@ -192,6 +231,8 @@ private func isDeterministicRepair(_ item: SyncPlanItem) -> Bool {
         item.sourceKeyHash != nil && item.desiredFingerprint != nil
     case .targetMissing:
         true
+    case .verifiedDuplicates:
+        item.sourceKeyHash != nil && item.desiredFingerprint != nil
     default:
         false
     }

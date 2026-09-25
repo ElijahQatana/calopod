@@ -330,6 +330,148 @@ struct ManagedEventLifecycleTests {
         #expect(cleared.mappingReconciliationCount == 1)
         #expect(try fixture.repository.mirrorMappings(armID: fixture.arm.id).isEmpty)
     }
+
+    @Test("Verified duplicates keep the deterministic survivor and delete the rest")
+    func repairsVerifiedDuplicates() async throws {
+        let fixture = try LifecycleFixture()
+        let mapping = lifecycleMapping(id: "one")
+        try fixture.repository.saveMirrorMapping(mapping)
+        let item = lifecyclePlanItem(
+            id: "one",
+            action: .repair,
+            reason: .verifiedDuplicates
+        )
+        let observations = [
+            TargetEventObservation(
+                calendarBindingID: fixture.arm.targetBindingID,
+                providerEventID: mapping.providerEventID,
+                providerVersion: "mapped-version",
+                mirrorKey: item.mirrorKey,
+                contentFingerprint: "old",
+                ownershipKeyID: mapping.ownershipKeyID,
+                ownershipStatus: .verified,
+                createdAt: Date(timeIntervalSince1970: 10)
+            ),
+            TargetEventObservation(
+                calendarBindingID: fixture.arm.targetBindingID,
+                providerEventID: "provider-deterministic",
+                providerVersion: "deterministic-version",
+                mirrorKey: item.mirrorKey,
+                contentFingerprint: "old",
+                ownershipKeyID: mapping.ownershipKeyID,
+                ownershipStatus: .verified,
+                createdAt: Date(timeIntervalSince1970: 20),
+                isProviderPreferredIdentity: true
+            ),
+            TargetEventObservation(
+                calendarBindingID: fixture.arm.targetBindingID,
+                providerEventID: "provider-later",
+                providerVersion: "later-version",
+                mirrorKey: item.mirrorKey,
+                contentFingerprint: "old",
+                ownershipKeyID: mapping.ownershipKeyID,
+                ownershipStatus: .verified,
+                createdAt: Date(timeIntervalSince1970: 30)
+            ),
+        ]
+        let recorder = LifecycleMutationRecorder()
+        let service = ManagedEventLifecycleService(
+            repository: fixture.repository,
+            secretStore: fixture.secrets
+        )
+
+        let summary = try await service.apply(
+            items: [item],
+            arm: fixture.arm,
+            observations: observations
+        ) { mutation in
+            await recorder.record(mutation)
+            switch mutation {
+            case let .update(providerEventID, _, _):
+                return .written(
+                    ManagedEventWriteResult(
+                        providerEventID: providerEventID,
+                        providerVersion: "survivor-version"
+                    )
+                )
+            case .delete:
+                return .deleted
+            case .create:
+                throw LifecycleSyntheticFailure()
+            }
+        }
+
+        #expect(summary.providerWriteCount == 3)
+        let mutations = await recorder.mutations
+        guard case let .update(survivorID, expectedVersion, _) = mutations[0] else {
+            Issue.record("Expected the survivor update first")
+            return
+        }
+        #expect(survivorID == "provider-deterministic")
+        #expect(expectedVersion == "deterministic-version")
+        let deletedIDs = mutations.dropFirst().compactMap { mutation -> String? in
+            guard case let .delete(providerEventID, _) = mutation else { return nil }
+            return providerEventID
+        }
+        #expect(deletedIDs == ["provider-later", mapping.providerEventID].sorted())
+        let stored = try #require(
+            fixture.repository.mirrorMappings(armID: fixture.arm.id).first
+        )
+        #expect(stored.providerEventID == "provider-deterministic")
+        #expect(stored.providerVersion == "survivor-version")
+    }
+
+    @Test("Post-write reads repair a concurrent duplicate and converge")
+    func convergesAfterConcurrentCreate() async throws {
+        let fixture = try LifecycleFixture()
+        let source = lifecycleSource(id: "one", startsAt: 2_000)
+        let window = try SyncWindow(
+            start: Date(timeIntervalSince1970: 1_000),
+            end: Date(timeIntervalSince1970: 8_000)
+        )
+        try fixture.repository.applyEventRefresh(
+            connectionID: source.connectionID,
+            calendarBindingID: source.calendarBindingID,
+            windowStart: window.start,
+            windowEnd: window.end,
+            instances: [source],
+            cancelledSourceKeyHashes: [],
+            isFullRefresh: true,
+            cursorUpdates: []
+        )
+        let initial = SyncPlanner.plan(
+            arm: fixture.arm,
+            sources: [source],
+            mappings: [],
+            targetEvents: [],
+            window: window,
+            sourceSnapshotComplete: true
+        )
+        let provider = DuplicateConvergenceProvider()
+        let service = ManagedEventConvergenceService(
+            repository: fixture.repository,
+            secretStore: fixture.secrets
+        )
+
+        let summary = try await service.converge(
+            initialItems: initial.items,
+            arm: fixture.arm,
+            initialObservations: [],
+            window: window
+        ) {
+            await provider.readSnapshots()
+        } perform: { mutation in
+            try await provider.perform(mutation)
+        }
+
+        #expect(summary.providerWriteCount == 3)
+        #expect(await provider.readCount == 2)
+        #expect(await provider.snapshotCount == 1)
+        let mapping = try #require(
+            fixture.repository.mirrorMappings(armID: fixture.arm.id).first
+        )
+        #expect(mapping.providerEventID == "provider-deterministic")
+    }
 }
 
 private struct LifecycleFixture {
@@ -496,6 +638,74 @@ private actor InterruptedCreateRecorder {
         )
         firstWrite = FirstWrite(request: request, result: result)
         return .written(result)
+    }
+}
+
+private actor DuplicateConvergenceProvider {
+    private var snapshots: [ManagedEventSnapshot] = []
+    private(set) var readCount = 0
+
+    var snapshotCount: Int { snapshots.count }
+
+    func readSnapshots() -> [ManagedEventSnapshot] {
+        readCount += 1
+        return snapshots
+    }
+
+    func perform(_ mutation: ManagedEventMutation) throws -> ManagedEventMutationResult {
+        switch mutation {
+        case let .create(request):
+            snapshots = [
+                ManagedEventSnapshot(
+                    providerEventID: "provider-deterministic",
+                    providerVersion: "deterministic-v1",
+                    payload: request.payload,
+                    markerStatus: .parsed,
+                    provenance: request.provenance,
+                    createdAt: Date(timeIntervalSince1970: 2),
+                    isProviderPreferredIdentity: true
+                ),
+                ManagedEventSnapshot(
+                    providerEventID: "provider-duplicate",
+                    providerVersion: "duplicate-v1",
+                    payload: request.payload,
+                    markerStatus: .parsed,
+                    provenance: request.provenance,
+                    createdAt: Date(timeIntervalSince1970: 1)
+                ),
+            ]
+            return .written(
+                ManagedEventWriteResult(
+                    providerEventID: "provider-duplicate",
+                    providerVersion: "duplicate-v1"
+                )
+            )
+        case let .update(providerEventID, _, request):
+            guard let index = snapshots.firstIndex(where: {
+                $0.providerEventID == providerEventID
+            }) else {
+                throw LifecycleSyntheticFailure()
+            }
+            let existing = snapshots[index]
+            snapshots[index] = ManagedEventSnapshot(
+                providerEventID: existing.providerEventID,
+                providerVersion: "survivor-v2",
+                payload: request.payload,
+                markerStatus: .parsed,
+                provenance: request.provenance,
+                createdAt: existing.createdAt,
+                isProviderPreferredIdentity: existing.isProviderPreferredIdentity
+            )
+            return .written(
+                ManagedEventWriteResult(
+                    providerEventID: providerEventID,
+                    providerVersion: "survivor-v2"
+                )
+            )
+        case let .delete(providerEventID, _):
+            snapshots.removeAll { $0.providerEventID == providerEventID }
+            return .deleted
+        }
     }
 }
 

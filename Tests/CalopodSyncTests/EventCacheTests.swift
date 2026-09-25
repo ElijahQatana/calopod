@@ -32,6 +32,12 @@ struct EventCacheTests {
                 title: "Synthetic recurrence"
             ),
             event(id: "cancelled", isCancelled: true),
+            event(
+                id: "managed-mirror",
+                start: start.addingTimeInterval(7_200),
+                end: start.addingTimeInterval(9_000),
+                isManagedMirror: true
+            ),
             event(id: "missing-end", start: start, end: nil),
             event(
                 id: "outside",
@@ -50,7 +56,7 @@ struct EventCacheTests {
 
         #expect(result.instances.count == 2)
         #expect(result.cancelledSourceKeyHashes.count == 1)
-        #expect(result.discardedCount == 2)
+        #expect(result.discardedCount == 3)
         #expect(result.instances[0].isAllDay)
         #expect(result.instances[0].availability == "free")
         #expect(result.instances[0].isPrivate)
@@ -263,7 +269,8 @@ struct EventCacheTests {
         availability: ProviderAvailability = .busy,
         isCancelled: Bool = false,
         isPrivate: Bool = false,
-        title: String? = "Synthetic event"
+        title: String? = "Synthetic event",
+        isManagedMirror: Bool = false
     ) -> ProviderEvent {
         ProviderEvent(
             provider: "eventkit",
@@ -279,7 +286,8 @@ struct EventCacheTests {
             isCancelled: isCancelled,
             isPrivate: isPrivate,
             title: title,
-            updatedAt: nil
+            updatedAt: nil,
+            isManagedMirror: isManagedMirror
         )
     }
 }

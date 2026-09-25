@@ -31,7 +31,9 @@ public struct ManagedTargetObserver: Sendable {
                     mirrorKey: mapped?.mirrorKey,
                     contentFingerprint: nil,
                     ownershipKeyID: mapped?.ownershipKeyID,
-                    ownershipStatus: mapped == nil ? .unmanaged : .missingMarker
+                    ownershipStatus: mapped == nil ? .unmanaged : .missingMarker,
+                    createdAt: snapshot.createdAt,
+                    isProviderPreferredIdentity: snapshot.isProviderPreferredIdentity
                 )
             case .invalid:
                 return TargetEventObservation(
@@ -41,7 +43,9 @@ public struct ManagedTargetObserver: Sendable {
                     mirrorKey: mapped?.mirrorKey,
                     contentFingerprint: nil,
                     ownershipKeyID: mapped?.ownershipKeyID,
-                    ownershipStatus: .invalidMarker
+                    ownershipStatus: .invalidMarker,
+                    createdAt: snapshot.createdAt,
+                    isProviderPreferredIdentity: snapshot.isProviderPreferredIdentity
                 )
             case .parsed:
                 guard let marker = snapshot.provenance else {
@@ -52,7 +56,9 @@ public struct ManagedTargetObserver: Sendable {
                         mirrorKey: mapped?.mirrorKey,
                         contentFingerprint: nil,
                         ownershipKeyID: mapped?.ownershipKeyID,
-                        ownershipStatus: .invalidMarker
+                        ownershipStatus: .invalidMarker,
+                        createdAt: snapshot.createdAt,
+                        isProviderPreferredIdentity: snapshot.isProviderPreferredIdentity
                     )
                 }
                 guard marker.configurationID == arm.configurationID else {
@@ -64,7 +70,9 @@ public struct ManagedTargetObserver: Sendable {
                         mirrorKey: mapped.mirrorKey,
                         contentFingerprint: nil,
                         ownershipKeyID: marker.ownershipKeyID,
-                        ownershipStatus: .unknownConfiguration
+                        ownershipStatus: .unknownConfiguration,
+                        createdAt: snapshot.createdAt,
+                        isProviderPreferredIdentity: snapshot.isProviderPreferredIdentity
                     )
                 }
                 guard marker.armID == arm.id else {
@@ -76,7 +84,9 @@ public struct ManagedTargetObserver: Sendable {
                         mirrorKey: mapped.mirrorKey,
                         contentFingerprint: nil,
                         ownershipKeyID: marker.ownershipKeyID,
-                        ownershipStatus: .unknownArm
+                        ownershipStatus: .unknownArm,
+                        createdAt: snapshot.createdAt,
+                        isProviderPreferredIdentity: snapshot.isProviderPreferredIdentity
                     )
                 }
                 let expectedMirror = SyncPlanner.mirrorKey(
@@ -110,7 +120,9 @@ public struct ManagedTargetObserver: Sendable {
                     mirrorKey: mapped?.mirrorKey ?? marker.mirrorKey,
                     contentFingerprint: fingerprint,
                     ownershipKeyID: marker.ownershipKeyID,
-                    ownershipStatus: status
+                    ownershipStatus: status,
+                    createdAt: snapshot.createdAt,
+                    isProviderPreferredIdentity: snapshot.isProviderPreferredIdentity
                 )
             }
         }.sorted {

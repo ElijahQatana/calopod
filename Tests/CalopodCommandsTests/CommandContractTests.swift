@@ -48,6 +48,14 @@ func armsUseAnExplicitBusyDefaultAndAcceptFullDetails() throws {
     #expect(update.armID == "synthetic-arm")
     #expect(update.rule == .busy)
     #expect(update.output.format == .json)
+
+    let preferredWriter = try ArmUpdateCommand.parse([
+        "synthetic-arm",
+        "--prefer-current-device",
+        "--format", "json",
+    ])
+    #expect(preferredWriter.rule == nil)
+    #expect(preferredWriter.preferCurrentDevice)
 }
 
 @Test

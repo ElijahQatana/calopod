@@ -19,6 +19,7 @@ struct ArmConfigurationServiceTests {
         #expect(arm.ruleMode == .busy)
         #expect(arm.sourceBindingIDs == ["source-one", "source-two"])
         #expect(arm.isEnabled)
+        #expect(arm.preferredWriterDeviceID != nil)
         #expect(try setup.repository.arm(id: arm.id) == arm)
     }
 
@@ -53,6 +54,55 @@ struct ArmConfigurationServiceTests {
         #expect(updated.id == arm.id)
         #expect(updated.ruleMode == .fullDetails)
         #expect(try setup.repository.arm(id: arm.id) == updated)
+    }
+
+    @Test("An EventKit Arm can explicitly select the current preferred writer")
+    func preferredWriter() throws {
+        let setup = try armTestSetup()
+        let legacy = StoredArm(
+            id: "legacy-arm",
+            configurationID: "synthetic-configuration",
+            sourceBindingIDs: ["source-one"],
+            targetBindingID: "target",
+            ruleMode: .busy
+        )
+        try setup.repository.saveArm(legacy)
+
+        let updated = try setup.service.preferCurrentDevice(armID: legacy.id)
+        let current = try setup.repository.currentDevice(
+            configurationID: legacy.configurationID
+        )
+
+        #expect(updated.preferredWriterDeviceID == current.id)
+        #expect(try setup.repository.arm(id: legacy.id) == updated)
+    }
+
+    @Test("Only the preferred device may apply to an EventKit target")
+    func writerPolicy() {
+        let eventKitArm = StoredArm(
+            id: "synthetic-arm",
+            configurationID: "synthetic-configuration",
+            sourceBindingIDs: ["source"],
+            targetBindingID: "target",
+            ruleMode: .busy,
+            preferredWriterDeviceID: "preferred-device"
+        )
+
+        #expect(ArmWriterPolicy.allowsApply(
+            arm: eventKitArm,
+            targetProvider: .eventKit,
+            currentDeviceID: "preferred-device"
+        ))
+        #expect(!ArmWriterPolicy.allowsApply(
+            arm: eventKitArm,
+            targetProvider: .eventKit,
+            currentDeviceID: "other-device"
+        ))
+        #expect(ArmWriterPolicy.allowsApply(
+            arm: eventKitArm,
+            targetProvider: .google,
+            currentDeviceID: "other-device"
+        ))
     }
 
     @Test("Rejects an unselected source")

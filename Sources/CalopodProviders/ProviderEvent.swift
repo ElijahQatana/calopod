@@ -22,6 +22,7 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
     public let isPrivate: Bool
     public let title: String?
     public let updatedAt: Date?
+    public let isManagedMirror: Bool
 
     public init(
         provider: String,
@@ -37,7 +38,8 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
         isCancelled: Bool,
         isPrivate: Bool,
         title: String?,
-        updatedAt: Date?
+        updatedAt: Date?,
+        isManagedMirror: Bool = false
     ) {
         self.provider = provider
         self.connectionID = connectionID
@@ -53,6 +55,27 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
         self.isPrivate = isPrivate
         self.title = title
         self.updatedAt = updatedAt
+        self.isManagedMirror = isManagedMirror
+    }
+
+    public func markingManagedMirror() -> ProviderEvent {
+        ProviderEvent(
+            provider: provider,
+            connectionID: connectionID,
+            calendarID: calendarID,
+            eventID: eventID,
+            seriesID: seriesID,
+            originalStart: originalStart,
+            start: start,
+            end: end,
+            isAllDay: isAllDay,
+            availability: availability,
+            isCancelled: isCancelled,
+            isPrivate: isPrivate,
+            title: title,
+            updatedAt: updatedAt,
+            isManagedMirror: true
+        )
     }
 }
 

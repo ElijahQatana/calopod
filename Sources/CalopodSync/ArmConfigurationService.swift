@@ -71,6 +71,27 @@ public struct ArmConfigurationService: Sendable {
         return arm
     }
 
+    public func preferCurrentDevice(
+        armID: String,
+        now: Date = Date()
+    ) throws -> StoredArm {
+        guard let existing = try repository.arm(id: armID) else {
+            throw ArmConfigurationError.armNotFound(armID)
+        }
+        let device = try repository.currentDevice(
+            configurationID: existing.configurationID,
+            now: now
+        )
+        guard let arm = try repository.setArmPreferredWriter(
+            id: armID,
+            deviceID: device.id,
+            now: now
+        ) else {
+            throw ArmConfigurationError.armNotFound(armID)
+        }
+        return arm
+    }
+
     @discardableResult
     public func createArm(
         id: String = UUID().uuidString.lowercased(),
@@ -136,12 +157,22 @@ public struct ArmConfigurationService: Sendable {
             routes[sourceID, default: []].insert(targetBindingID)
         }
 
+        let preferredWriterDeviceID: String?
+        if targetConnection.provider == ProviderKind.eventKit.rawValue {
+            preferredWriterDeviceID = try repository.currentDevice(
+                configurationID: targetConnection.configurationID,
+                now: now
+            ).id
+        } else {
+            preferredWriterDeviceID = nil
+        }
         let arm = StoredArm(
             id: id,
             configurationID: targetConnection.configurationID,
             sourceBindingIDs: sourceBindingIDs.sorted(),
             targetBindingID: targetBindingID,
-            ruleMode: ruleMode
+            ruleMode: ruleMode,
+            preferredWriterDeviceID: preferredWriterDeviceID
         )
         try repository.saveArm(arm, now: now)
         return arm
@@ -174,5 +205,15 @@ public struct ArmConfigurationService: Sendable {
             pending.append(contentsOf: routes[current] ?? [])
         }
         return false
+    }
+}
+
+public enum ArmWriterPolicy {
+    public static func allowsApply(
+        arm: StoredArm,
+        targetProvider: ProviderKind,
+        currentDeviceID: String
+    ) -> Bool {
+        targetProvider != .eventKit || arm.preferredWriterDeviceID == currentDeviceID
     }
 }

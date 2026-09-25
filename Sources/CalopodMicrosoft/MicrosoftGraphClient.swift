@@ -404,6 +404,7 @@ private struct MicrosoftEvent: Decodable {
     let showAs: String?
     let sensitivity: String?
     let subject: String?
+    let createdDateTime: String?
     let lastModifiedDateTime: String?
     let removed: MicrosoftRemoved?
     let extensions: [MicrosoftManagedExtension]?
@@ -421,6 +422,7 @@ private struct MicrosoftEvent: Decodable {
         case showAs
         case sensitivity
         case subject
+        case createdDateTime
         case lastModifiedDateTime
         case removed = "@removed"
         case extensions
@@ -443,15 +445,20 @@ private struct MicrosoftEvent: Decodable {
                 || sensitivity == "personal"
                 || sensitivity == "confidential",
             title: subject,
-            updatedAt: lastModifiedDateTime.flatMap { MicrosoftDate.date(from: $0) }
+            updatedAt: lastModifiedDateTime.flatMap { MicrosoftDate.date(from: $0) },
+            isManagedMirror: extensions?.contains(where: \.isCalopodMarker) == true
         )
     }
 
     var managedSnapshot: ManagedEventSnapshot {
-        let extensionFields = extensions?
-            .first(where: { $0.isCalopodMarker })?
-            .markerFields
-        let decoded = OwnershipMarkerCodec.marker(fields: extensionFields)
+        let markerExtension = extensions?.first(where: { $0.isCalopodMarker })
+        let decoded = OwnershipMarkerCodec.marker(fields: markerExtension?.markerFields)
+        let markerStatus: ManagedEventMarkerStatus = if markerExtension != nil,
+                                                        decoded.status == .absent {
+            .invalid
+        } else {
+            decoded.status
+        }
         let startsAt = start?.date
         let endsAt = end?.date
         let payload: DesiredEventPayload?
@@ -476,8 +483,9 @@ private struct MicrosoftEvent: Decodable {
             providerEventID: id,
             providerVersion: changeKey ?? etag,
             payload: payload,
-            markerStatus: decoded.status,
-            provenance: decoded.provenance
+            markerStatus: markerStatus,
+            provenance: decoded.provenance,
+            createdAt: createdDateTime.flatMap { MicrosoftDate.date(from: $0) }
         )
     }
 

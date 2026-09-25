@@ -21,6 +21,8 @@ public struct TargetEventObservation: Codable, Equatable, Sendable {
     public let contentFingerprint: String?
     public let ownershipKeyID: String?
     public let ownershipStatus: TargetOwnershipStatus
+    public let createdAt: Date?
+    public let isProviderPreferredIdentity: Bool
 
     public init(
         calendarBindingID: String,
@@ -29,7 +31,9 @@ public struct TargetEventObservation: Codable, Equatable, Sendable {
         mirrorKey: String?,
         contentFingerprint: String?,
         ownershipKeyID: String? = nil,
-        ownershipStatus: TargetOwnershipStatus
+        ownershipStatus: TargetOwnershipStatus,
+        createdAt: Date? = nil,
+        isProviderPreferredIdentity: Bool = false
     ) {
         self.calendarBindingID = calendarBindingID
         self.providerEventID = providerEventID
@@ -38,6 +42,8 @@ public struct TargetEventObservation: Codable, Equatable, Sendable {
         self.contentFingerprint = contentFingerprint
         self.ownershipKeyID = ownershipKeyID
         self.ownershipStatus = ownershipStatus
+        self.createdAt = createdAt
+        self.isProviderPreferredIdentity = isProviderPreferredIdentity
     }
 }
 
@@ -90,12 +96,12 @@ public enum SyncPlanner {
 
             let action: SyncPlanAction
             let reason: SyncPlanReason
-            if verified.count > 1 {
-                action = .repair
-                reason = .verifiedDuplicates
-            } else if !unverified.isEmpty {
+            if !unverified.isEmpty {
                 action = .repair
                 reason = .ownershipUnverified
+            } else if verified.count > 1 {
+                action = .repair
+                reason = .verifiedDuplicates
             } else if let target = verified.first {
                 guard let mapping else {
                     items.append(
@@ -152,14 +158,14 @@ public enum SyncPlanner {
             if !sourceSnapshotComplete {
                 action = .repair
                 reason = .sourceSnapshotIncomplete
-            } else if verified.count > 1 {
-                action = .repair
-                reason = .verifiedDuplicates
             } else if observations.contains(where: {
                 $0.ownershipStatus != .verified && $0.ownershipStatus != .unmanaged
             }) {
                 action = .repair
                 reason = .ownershipUnverified
+            } else if verified.count > 1 {
+                action = .repair
+                reason = .verifiedDuplicates
             } else if let target = verified.first,
                       target.providerEventID == mapping.providerEventID {
                 action = .remove

@@ -134,6 +134,10 @@ struct MicrosoftGraphClientTests {
             #expect(request.url?.path.contains("/me/calendars/calendar/calendarView/delta") == true)
             #expect(request.url?.query?.contains("startDateTime=") == true)
             #expect(request.url?.query?.contains("endDateTime=") == true)
+            let queryItems = request.url.flatMap {
+                URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems
+            } ?? []
+            #expect(!queryItems.contains { $0.name == "$expand" })
             return HTTPResponse(
                 statusCode: 200,
                 body: Data(
@@ -155,6 +159,7 @@ struct MicrosoftGraphClientTests {
         #expect(page.events[0].seriesID == "series")
         #expect(page.events[0].availability == .tentative)
         #expect(page.events[0].isPrivate)
+        #expect(!page.events[0].isManagedMirror)
         #expect(page.events[0].start != nil)
         #expect(page.events[1].isCancelled)
         #expect(page.events[1].start == nil)
@@ -244,9 +249,11 @@ struct MicrosoftConnectionServiceTests {
         )
 
         let urls = await transport.urls
-        #expect(urls.count == 2)
+        #expect(urls.count == 4)
         #expect(urls[0].contains("startDateTime="))
-        #expect(urls[1].contains("$deltatoken=durable"))
+        #expect(urls[1].contains("$expand=extensions"))
+        #expect(urls[2].contains("$deltatoken=durable"))
+        #expect(urls[3].contains("$expand=extensions"))
         let cursors = try state.cursorValues(
             connectionID: connection.id,
             calendarBindingID: binding.id
@@ -256,6 +263,56 @@ struct MicrosoftConnectionServiceTests {
         try reopened.disconnect(connectionID: connection.id)
         #expect(try state.connections(provider: "microsoft").isEmpty)
         #expect(try vault.tokens(provider: "microsoft", connectionID: connection.id) == nil)
+    }
+
+    @Test("Bounded marker lookup identifies managed mirrors without delta expansion")
+    func managedMirrorLookup() async throws {
+        let database = try CalopodDatabase.inMemory()
+        let state = LocalStateRepository(database: database)
+        let connection = StoredConnection(
+            id: "connection",
+            configurationID: "default",
+            provider: "microsoft",
+            displayLabel: "Microsoft Calendar",
+            isEnabled: true
+        )
+        let binding = StoredCalendarBinding(
+            id: "binding",
+            connectionID: connection.id,
+            providerCalendarID: "calendar",
+            displayLabel: "Synthetic calendar",
+            isSelected: true,
+            isReadOnly: false
+        )
+        try state.saveConnection(connection)
+        try state.replaceCalendarBindings(connectionID: connection.id, bindings: [binding])
+        let vault = OAuthTokenVault(secretStore: MemorySecretStore())
+        try vault.save(
+            OAuthTokens(
+                accessToken: "access",
+                refreshToken: "refresh",
+                tokenType: "Bearer",
+                scope: nil,
+                expiresAt: .distantFuture
+            ),
+            provider: "microsoft",
+            connectionID: connection.id
+        )
+        let provider = service(
+            state: state,
+            vault: vault,
+            transport: MicrosoftMirrorLookupTransport()
+        )
+
+        let page = try await provider.events(
+            connectionID: connection.id,
+            binding: binding,
+            from: Date(timeIntervalSince1970: 1_000),
+            through: Date(timeIntervalSince1970: 5_000)
+        )
+
+        #expect(page.events.map(\.eventID) == ["managed", "source"])
+        #expect(page.events.map(\.isManagedMirror) == [true, false])
     }
 
     private func service(
@@ -354,6 +411,32 @@ struct MicrosoftManagedWriteTests {
         #expect(snapshot.markerStatus == .parsed)
         #expect(snapshot.provenance?.mirrorKey == "synthetic-mirror")
     }
+
+    @Test("Near-simultaneous creates share one transaction identity")
+    func concurrentCreates() async throws {
+        let transport = MicrosoftIdempotentCreateTransport()
+        let first = MicrosoftGraphClient(transport: transport)
+        let second = MicrosoftGraphClient(transport: transport)
+        let managed = microsoftManagedRequest()
+
+        async let firstResult = first.createManagedEvent(
+            accessToken: "token-one",
+            calendarID: "target",
+            request: managed
+        )
+        async let secondResult = second.createManagedEvent(
+            accessToken: "token-two",
+            calendarID: "target",
+            request: managed
+        )
+        let results = try await [firstResult, secondResult]
+
+        #expect(results.map(\.providerEventID) == ["provider-event", "provider-event"])
+        #expect(await transport.transactionIDs == [
+            managed.provenance.mirrorKey,
+            managed.provenance.mirrorKey,
+        ])
+    }
 }
 
 private func microsoftManagedRequest() -> ManagedEventWriteRequest {
@@ -432,10 +515,32 @@ private actor DeltaRecordingTransport: HTTPTransport {
     func send(_ request: URLRequest) async throws -> HTTPResponse {
         let url = request.url?.absoluteString ?? ""
         urls.append(url)
+        if request.url?.path.hasSuffix("/calendarView") == true {
+            return HTTPResponse(statusCode: 200, body: Data(#"{"value":[]}"#.utf8))
+        }
         let link = "https://graph.microsoft.com/v1.0/me/calendars/calendar/calendarView/delta?$deltatoken=durable"
         return HTTPResponse(
             statusCode: 200,
             body: Data("{\"value\":[],\"@odata.deltaLink\":\"\(link)\"}".utf8)
+        )
+    }
+}
+
+private actor MicrosoftMirrorLookupTransport: HTTPTransport {
+    func send(_ request: URLRequest) async throws -> HTTPResponse {
+        if request.url?.path.hasSuffix("/calendarView") == true {
+            return HTTPResponse(
+                statusCode: 200,
+                body: Data(
+                    #"{"value":[{"id":"managed","start":{"dateTime":"2026-09-25T12:30:00.0000000","timeZone":"UTC"},"end":{"dateTime":"2026-09-25T13:00:00.0000000","timeZone":"UTC"},"extensions":[{"extensionName":"com.calopod.managed"}]}]}"#.utf8
+                )
+            )
+        }
+        return HTTPResponse(
+            statusCode: 200,
+            body: Data(
+                #"{"value":[{"id":"managed","start":{"dateTime":"2026-09-25T12:30:00.0000000","timeZone":"UTC"},"end":{"dateTime":"2026-09-25T13:00:00.0000000","timeZone":"UTC"}},{"id":"source","start":{"dateTime":"2026-09-25T14:00:00.0000000","timeZone":"UTC"},"end":{"dateTime":"2026-09-25T15:00:00.0000000","timeZone":"UTC"}}]}"#.utf8
+            )
         )
     }
 }
@@ -471,6 +576,21 @@ private actor MicrosoftManagedWriteTransport: HTTPTransport {
         return HTTPResponse(
             statusCode: 200,
             body: Data("{\"id\":\"provider-event\",\"changeKey\":\"\(version)\"}".utf8)
+        )
+    }
+}
+
+private actor MicrosoftIdempotentCreateTransport: HTTPTransport {
+    private(set) var transactionIDs: [String] = []
+
+    func send(_ request: URLRequest) async throws -> HTTPResponse {
+        let object = try JSONSerialization.jsonObject(
+            with: request.httpBody ?? Data()
+        ) as? [String: Any]
+        transactionIDs.append(object?["transactionId"] as? String ?? "")
+        return HTTPResponse(
+            statusCode: 200,
+            body: Data(#"{"id":"provider-event","changeKey":"shared-version"}"#.utf8)
         )
     }
 }

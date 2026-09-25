@@ -36,14 +36,17 @@ public struct ArmCommand: ParsableCommand {
 public struct ArmUpdateCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "update",
-        abstract: "Change an Arm Rule without writing calendar events."
+        abstract: "Change an Arm Rule or preferred writer without writing calendar events."
     )
 
     @Argument(help: "Arm identifier.")
     public var armID: String
 
     @Option(name: .long, help: "Disclosure Rule: busy or full-details.")
-    public var rule: ArmRuleArgument
+    public var rule: ArmRuleArgument?
+
+    @Flag(name: .customLong("prefer-current-device"), help: "Make this device the preferred writer.")
+    public var preferCurrentDevice = false
 
     @OptionGroup public var output: OutputOptions
 
@@ -51,14 +54,29 @@ public struct ArmUpdateCommand: ParsableCommand {
 
     public func run() throws {
         do {
-            let arm = try ArmConfigurationService(
-                repository: CommandEnvironment.repository()
-            ).updateRule(armID: armID, ruleMode: rule.ruleMode)
+            guard rule != nil || preferCurrentDevice else {
+                throw ValidationError(
+                    "Choose --rule or --prefer-current-device."
+                )
+            }
+            let repository = try CommandEnvironment.repository()
+            let service = ArmConfigurationService(repository: repository)
+            var arm: StoredArm
+            if let rule {
+                arm = try service.updateRule(armID: armID, ruleMode: rule.ruleMode)
+            } else if let existing = try repository.arm(id: armID) {
+                arm = existing
+            } else {
+                throw ArmConfigurationError.armNotFound(armID)
+            }
+            if preferCurrentDevice {
+                arm = try service.preferCurrentDevice(armID: arm.id)
+            }
             try OutputRenderer.write(
                 command: "arm.update",
                 payload: CommandPayload(
                     status: "ok",
-                    message: "Updated the Arm Rule. No calendar events were changed.",
+                    message: "Updated the Arm configuration. No calendar events were changed.",
                     count: 1,
                     items: [armItem(arm)]
                 ),

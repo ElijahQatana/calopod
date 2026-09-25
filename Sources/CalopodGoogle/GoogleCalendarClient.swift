@@ -160,16 +160,36 @@ public struct GoogleCalendarClient: Sendable {
         calendarID: String,
         request managed: ManagedEventWriteRequest
     ) async throws -> ManagedEventWriteResult {
+        let eventID = try deterministicGoogleEventID(
+            mirrorKey: managed.provenance.mirrorKey
+        )
         let endpoint = eventCollectionURL(calendarID: calendarID)
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try managedEventBody(
             managed,
-            eventID: try deterministicEventID(mirrorKey: managed.provenance.mirrorKey)
+            eventID: eventID
         )
-        let response = try await send(request: request, accessToken: accessToken)
-        return try managedWriteResult(response)
+        do {
+            let response = try await send(request: request, accessToken: accessToken)
+            return try managedWriteResult(response)
+        } catch ProviderFailure.httpStatus(409) {
+            let existingURL = endpoint.appendingPathComponent(eventID)
+            let response = try await send(url: existingURL, accessToken: accessToken)
+            let existing: GoogleEvent = try decode(response)
+            let marker = OwnershipMarkerCodec.marker(
+                fields: existing.extendedProperties?.privateValues
+            )
+            guard marker.status == .parsed,
+                  marker.provenance == managed.provenance else {
+                throw ProviderFailure.invalidResponse
+            }
+            return ManagedEventWriteResult(
+                providerEventID: existing.id,
+                providerVersion: existing.etag ?? response.headers["etag"]
+            )
+        }
     }
 
     public func updateManagedEvent(
@@ -295,12 +315,6 @@ public struct GoogleCalendarClient: Sendable {
         )
     }
 
-    private func deterministicEventID(mirrorKey: String) throws -> String {
-        guard let bytes = decodeBase32(mirrorKey) else {
-            throw ProviderFailure.invalidResponse
-        }
-        return encodeBase32Hex(bytes)
-    }
 }
 
 private struct GoogleManagedEventResponse: Decodable {
@@ -415,6 +429,7 @@ private struct GoogleEvent: Decodable {
     let transparency: String?
     let visibility: String?
     let summary: String?
+    let created: String?
     let updated: String?
     let extendedProperties: GoogleExtendedProperties?
 
@@ -429,6 +444,7 @@ private struct GoogleEvent: Decodable {
         case transparency
         case visibility
         case summary
+        case created
         case updated
         case extendedProperties
     }
@@ -452,7 +468,10 @@ private struct GoogleEvent: Decodable {
             isCancelled: status == "cancelled",
             isPrivate: visibility == "private" || visibility == "confidential",
             title: summary,
-            updatedAt: updated.flatMap(RFC3339.date(from:))
+            updatedAt: updated.flatMap(RFC3339.date(from:)),
+            isManagedMirror: OwnershipMarkerCodec.marker(
+                fields: extendedProperties?.privateValues
+            ).status != .absent
         )
     }
 
@@ -480,9 +499,20 @@ private struct GoogleEvent: Decodable {
             providerVersion: etag,
             payload: payload,
             markerStatus: decoded.status,
-            provenance: decoded.provenance
+            provenance: decoded.provenance,
+            createdAt: created.flatMap(RFC3339.date(from:)),
+            isProviderPreferredIdentity: decoded.provenance.flatMap {
+                try? deterministicGoogleEventID(mirrorKey: $0.mirrorKey)
+            } == id
         )
     }
+}
+
+private func deterministicGoogleEventID(mirrorKey: String) throws -> String {
+    guard let bytes = decodeBase32(mirrorKey) else {
+        throw ProviderFailure.invalidResponse
+    }
+    return encodeBase32Hex(bytes)
 }
 
 private struct GoogleExtendedProperties: Decodable {

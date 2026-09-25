@@ -207,6 +207,51 @@ public struct ManagedEventLifecycleService: Sendable {
                         mappings[item.mirrorKey] = mapping
                         providerWrites += 1
                     }
+                case .verifiedDuplicates:
+                    guard verified.count > 1,
+                          item.sourceKeyHash != nil,
+                          item.desiredFingerprint != nil else {
+                        throw ManagedEventLifecycleError.missingVerifiedTarget
+                    }
+                    let mapping = mappings[item.mirrorKey]
+                    let survivor = verified.sorted {
+                        duplicateOrder($0, $1, mappedProviderEventID: mapping?.providerEventID)
+                    }[0]
+                    let request = try writeRequest(item: item, arm: arm)
+                    let updateResult = try await perform(
+                        .update(
+                            providerEventID: survivor.providerEventID,
+                            expectedVersion: survivor.providerVersion,
+                            request: request
+                        )
+                    )
+                    guard case let .written(written) = updateResult else {
+                        throw ManagedEventLifecycleError.unexpectedProviderResult
+                    }
+                    let updated = try mappingAfterWrite(
+                        item: item,
+                        arm: arm,
+                        result: written,
+                        now: now()
+                    )
+                    try repository.saveMirrorMapping(updated)
+                    mappings[item.mirrorKey] = updated
+                    providerWrites += 1
+
+                    for duplicate in verified
+                        .filter({ $0.providerEventID != survivor.providerEventID })
+                        .sorted(by: { $0.providerEventID < $1.providerEventID }) {
+                        let deleteResult = try await perform(
+                            .delete(
+                                providerEventID: duplicate.providerEventID,
+                                expectedVersion: duplicate.providerVersion
+                            )
+                        )
+                        guard case .deleted = deleteResult else {
+                            throw ManagedEventLifecycleError.unexpectedProviderResult
+                        }
+                        providerWrites += 1
+                    }
                 default:
                     throw ManagedEventLifecycleError.ambiguousRepair(item.reason)
                 }
@@ -233,9 +278,37 @@ public struct ManagedEventLifecycleService: Sendable {
                 && item.desiredFingerprint != nil
         case .targetMissing:
             return (observationsByMirror[item.mirrorKey] ?? []).isEmpty
+        case .verifiedDuplicates:
+            return verified.count > 1
+                && item.sourceKeyHash != nil
+                && item.desiredFingerprint != nil
         default:
             return false
         }
+    }
+
+    private func duplicateOrder(
+        _ left: TargetEventObservation,
+        _ right: TargetEventObservation,
+        mappedProviderEventID: String?
+    ) -> Bool {
+        let leftRank = (
+            left.isProviderPreferredIdentity ? 0 : 1,
+            left.providerEventID == mappedProviderEventID ? 0 : 1,
+            left.createdAt == nil ? 1 : 0
+        )
+        let rightRank = (
+            right.isProviderPreferredIdentity ? 0 : 1,
+            right.providerEventID == mappedProviderEventID ? 0 : 1,
+            right.createdAt == nil ? 1 : 0
+        )
+        if leftRank != rightRank { return leftRank < rightRank }
+        if let leftCreated = left.createdAt,
+           let rightCreated = right.createdAt,
+           leftCreated != rightCreated {
+            return leftCreated < rightCreated
+        }
+        return left.providerEventID < right.providerEventID
     }
 
     private func create(

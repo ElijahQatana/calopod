@@ -193,7 +193,9 @@ private final class LiveEventKitGateway: EventKitGateway {
                 isCancelled: $0.status == .canceled,
                 isPrivate: false,
                 title: $0.title,
-                updatedAt: $0.lastModifiedDate
+                updatedAt: $0.lastModifiedDate,
+                isManagedMirror: $0.url?.scheme == "calopod"
+                    && $0.url?.host == "managed"
             )
         }
     }
@@ -357,7 +359,8 @@ private final class LiveEventKitGateway: EventKitGateway {
             providerVersion: eventVersion(event),
             payload: payload,
             markerStatus: decoded.0,
-            provenance: decoded.1
+            provenance: decoded.1,
+            createdAt: event.creationDate
         )
     }
 

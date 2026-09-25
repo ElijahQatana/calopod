@@ -111,7 +111,7 @@ struct GoogleCalendarClientTests {
             return HTTPResponse(
                 statusCode: 200,
                 body: Data(
-                    #"{"timeZone":"America/New_York","items":[{"id":"instance","recurringEventId":"series","originalStartTime":{"dateTime":"2026-03-08T09:00:00-04:00"},"start":{"dateTime":"2026-03-08T09:00:00-04:00"},"end":{"dateTime":"2026-03-08T10:00:00-04:00"},"status":"confirmed","visibility":"private","summary":"Synthetic meeting","updated":"2026-03-01T12:00:00Z"},{"id":"all-day","start":{"date":"2026-03-09"},"end":{"date":"2026-03-10"},"transparency":"transparent"},{"id":"cancelled","recurringEventId":"series","originalStartTime":{"dateTime":"2026-03-10T09:00:00-04:00"},"status":"cancelled"}],"nextSyncToken":"stored-only"}"#.utf8
+                    #"{"timeZone":"America/New_York","items":[{"id":"instance","recurringEventId":"series","originalStartTime":{"dateTime":"2026-03-08T09:00:00-04:00"},"start":{"dateTime":"2026-03-08T09:00:00-04:00"},"end":{"dateTime":"2026-03-08T10:00:00-04:00"},"status":"confirmed","visibility":"private","summary":"Synthetic meeting","updated":"2026-03-01T12:00:00Z"},{"id":"all-day","start":{"date":"2026-03-09"},"end":{"date":"2026-03-10"},"transparency":"transparent"},{"id":"managed","start":{"dateTime":"2026-03-09T09:00:00-04:00"},"end":{"dateTime":"2026-03-09T10:00:00-04:00"},"extendedProperties":{"private":{"calopodSchema":"1"}}},{"id":"cancelled","recurringEventId":"series","originalStartTime":{"dateTime":"2026-03-10T09:00:00-04:00"},"status":"cancelled"}],"nextSyncToken":"stored-only"}"#.utf8
                 )
             )
         }
@@ -128,14 +128,15 @@ struct GoogleCalendarClientTests {
             updatedSince: start.addingTimeInterval(-3600)
         )
 
-        #expect(page.events.count == 3)
+        #expect(page.events.count == 4)
         #expect(page.events[0].seriesID == "series")
         #expect(page.events[0].originalStart == "2026-03-08T09:00:00-04:00")
         #expect(page.events[0].isPrivate)
         #expect(page.events[1].isAllDay)
         #expect(page.events[1].availability == .free)
-        #expect(page.events[2].isCancelled)
-        #expect(page.events[2].start == nil)
+        #expect(page.events[2].isManagedMirror)
+        #expect(page.events[3].isCancelled)
+        #expect(page.events[3].start == nil)
         #expect(page.nextSyncToken == "stored-only")
     }
 
@@ -393,6 +394,48 @@ struct GoogleManagedWriteTests {
         )
 
         #expect(updated.providerVersion == "next-etag")
+    }
+
+    @Test("A concurrent deterministic create adopts the existing owned event")
+    func concurrentCreate() async throws {
+        let managed = googleManagedRequest()
+        let client = GoogleCalendarClient(
+            transport: RecordingTransport { request in
+                if request.httpMethod == "POST" {
+                    return HTTPResponse(statusCode: 409, body: Data())
+                }
+                let eventID = try #require(request.url?.lastPathComponent)
+                let object: [String: Any] = [
+                    "id": eventID,
+                    "etag": "existing-etag",
+                    "extendedProperties": [
+                        "private": [
+                            "calopodSchema": "1",
+                            "configurationID": managed.provenance.configurationID,
+                            "armID": managed.provenance.armID,
+                            "mirrorKey": managed.provenance.mirrorKey,
+                            "sourceKeyHash": managed.provenance.sourceKeyHash,
+                            "ruleMode": managed.provenance.ruleMode.rawValue,
+                            "ownershipKeyID": managed.provenance.ownershipKeyID,
+                            "authenticationTag": managed.provenance.authenticationTag,
+                        ],
+                    ],
+                ]
+                return HTTPResponse(
+                    statusCode: 200,
+                    body: try JSONSerialization.data(withJSONObject: object)
+                )
+            }
+        )
+
+        let result = try await client.createManagedEvent(
+            accessToken: "token",
+            calendarID: "target",
+            request: managed
+        )
+
+        #expect(result.providerEventID.count == 52)
+        #expect(result.providerVersion == "existing-etag")
     }
 
     @Test("Managed target reads return actual payload, version, and provenance")
