@@ -1,3 +1,4 @@
+import CalopodDomain
 import CalopodGoogle
 import CalopodProviders
 import CalopodStore
@@ -9,7 +10,7 @@ import Testing
 
 @Suite("Google OAuth")
 struct GoogleOAuthTests {
-    @Test("Authorization uses PKCE and read-only scopes")
+    @Test("Authorization uses PKCE and calendar write scope")
     func authorizationRequest() async throws {
         let transport = RecordingTransport { request in
             let body = String(decoding: request.httpBody ?? Data(), as: UTF8.self)
@@ -32,7 +33,8 @@ struct GoogleOAuthTests {
             #expect(values["code_challenge_method"] == "S256")
             #expect(values["state"] == "fixed-state")
             #expect(values["scope"]?.contains("calendar.calendarlist.readonly") == true)
-            #expect(values["scope"]?.contains("calendar.events.readonly") == true)
+            #expect(values["scope"]?.contains("calendar.events") == true)
+            #expect(values["scope"]?.contains("calendar.events.readonly") == false)
         }
 
         let tokens = try await client.authorize(using: browser)
@@ -319,6 +321,102 @@ struct GoogleConnectionServiceTests {
             now: { now }
         )
     }
+}
+
+@Suite("Google managed writes")
+struct GoogleManagedWriteTests {
+    @Test("Create uses deterministic identity, redacted fields, and private provenance")
+    func create() async throws {
+        let managed = googleManagedRequest()
+        let client = GoogleCalendarClient(
+            transport: RecordingTransport { request in
+                #expect(request.httpMethod == "POST")
+                #expect(request.url?.path.contains("/calendars/target/events") == true)
+                let object = try #require(
+                    JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any]
+                )
+                let identifier = try #require(object["id"] as? String)
+                #expect(identifier.count == 52)
+                #expect(identifier.allSatisfy { $0.isNumber || ("a" ... "v").contains(String($0)) })
+                #expect(object["summary"] as? String == "Busy")
+                #expect(object["description"] == nil)
+                #expect(object["location"] == nil)
+                #expect(object["attendees"] == nil)
+                let properties = try #require(object["extendedProperties"] as? [String: Any])
+                let marker = try #require(properties["private"] as? [String: String])
+                #expect(marker["mirrorKey"] == managed.provenance.mirrorKey)
+                #expect(marker["desiredFingerprint"] == managed.desiredFingerprint)
+                let body = try JSONSerialization.data(
+                    withJSONObject: ["id": identifier, "etag": "synthetic-etag"]
+                )
+                return HTTPResponse(statusCode: 200, body: body)
+            }
+        )
+
+        let result = try await client.createManagedEvent(
+            accessToken: "token",
+            calendarID: "target",
+            request: managed
+        )
+
+        #expect(result.providerVersion == "synthetic-etag")
+    }
+
+    @Test("Update and delete carry provider version preconditions")
+    func updateAndDelete() async throws {
+        let client = GoogleCalendarClient(
+            transport: RecordingTransport { request in
+                #expect(request.value(forHTTPHeaderField: "If-Match") == "synthetic-etag")
+                if request.httpMethod == "DELETE" {
+                    return HTTPResponse(statusCode: 204, body: Data())
+                }
+                #expect(request.httpMethod == "PUT")
+                return HTTPResponse(
+                    statusCode: 200,
+                    body: Data(#"{"id":"provider-event","etag":"next-etag"}"#.utf8)
+                )
+            }
+        )
+
+        let updated = try await client.updateManagedEvent(
+            accessToken: "token",
+            calendarID: "target",
+            providerEventID: "provider-event",
+            expectedVersion: "synthetic-etag",
+            request: googleManagedRequest()
+        )
+        try await client.deleteManagedEvent(
+            accessToken: "token",
+            calendarID: "target",
+            providerEventID: "provider-event",
+            expectedVersion: "synthetic-etag"
+        )
+
+        #expect(updated.providerVersion == "next-etag")
+    }
+}
+
+private func googleManagedRequest() -> ManagedEventWriteRequest {
+    ManagedEventWriteRequest(
+        desiredFingerprint: "synthetic-fingerprint",
+        payload: DesiredEventPayload(
+            startsAt: Date(timeIntervalSince1970: 2_000),
+            endsAt: Date(timeIntervalSince1970: 3_000),
+            isAllDay: false,
+            availability: "busy",
+            title: "Busy",
+            isPrivate: nil
+        ),
+        provenance: ManagedEventProvenance(
+            configurationID: "synthetic-configuration",
+            armID: "synthetic-arm",
+            mirrorKey: String(repeating: "a", count: 52),
+            sourceKeyHash: "synthetic-source",
+            ruleMode: .busy,
+            ownershipKeyID: "synthetic-key",
+            authenticationTag: "synthetic-tag"
+        )
+    )
 }
 
 private func saveCursorUpdates(

@@ -1,3 +1,4 @@
+import CalopodDomain
 import CalopodMicrosoft
 import CalopodProviders
 import CalopodStore
@@ -9,13 +10,13 @@ import Testing
 
 @Suite("Microsoft OAuth")
 struct MicrosoftOAuthTests {
-    @Test("Authorization supports personal and work accounts with read-only scopes")
+    @Test("Authorization supports personal and work accounts with calendar write scope")
     func authorization() async throws {
         let transport = ClosureTransport { request in
             let body = String(decoding: request.httpBody ?? Data(), as: UTF8.self)
             #expect(body.contains("code_verifier="))
             #expect(body.contains("offline_access"))
-            #expect(body.contains("Calendars.Read"))
+            #expect(body.contains("Calendars.ReadWrite"))
             return HTTPResponse(
                 statusCode: 200,
                 body: Data(#"{"access_token":"access","refresh_token":"refresh","expires_in":3600,"token_type":"Bearer"}"#.utf8)
@@ -34,7 +35,7 @@ struct MicrosoftOAuthTests {
             #expect(values["response_mode"] == "query")
             #expect(values["code_challenge_method"] == "S256")
             #expect(values["state"] == "fixed-state")
-            #expect(values["scope"]?.contains("Calendars.Read") == true)
+            #expect(values["scope"]?.contains("Calendars.ReadWrite") == true)
         }
 
         let tokens = try await client.authorize(using: browser)
@@ -274,6 +275,76 @@ struct MicrosoftConnectionServiceTests {
     }
 }
 
+@Suite("Microsoft managed writes")
+struct MicrosoftManagedWriteTests {
+    @Test("Create, update, and delete preserve provenance and version state")
+    func lifecycle() async throws {
+        let transport = MicrosoftManagedWriteTransport()
+        let client = MicrosoftGraphClient(transport: transport)
+        let managed = microsoftManagedRequest()
+
+        let created = try await client.createManagedEvent(
+            accessToken: "token",
+            calendarID: "target",
+            request: managed
+        )
+        let updated = try await client.updateManagedEvent(
+            accessToken: "token",
+            calendarID: "target",
+            providerEventID: created.providerEventID,
+            expectedVersion: created.providerVersion,
+            request: managed
+        )
+        try await client.deleteManagedEvent(
+            accessToken: "token",
+            calendarID: "target",
+            providerEventID: updated.providerEventID,
+            expectedVersion: updated.providerVersion
+        )
+
+        let requests = await transport.requests
+        #expect(requests.map(\.method) == ["POST", "PATCH", "PATCH", "DELETE"])
+        #expect(requests[1].ifMatch == "version-one")
+        #expect(requests[2].path.hasSuffix("/extensions/com.calopod.managed"))
+        #expect(requests[3].ifMatch == "version-two")
+        let createObject = try #require(
+            JSONSerialization.jsonObject(with: requests[0].body) as? [String: Any]
+        )
+        #expect(createObject["subject"] as? String == "Busy")
+        #expect(createObject["body"] == nil)
+        #expect(createObject["location"] == nil)
+        #expect(createObject["attendees"] == nil)
+        #expect(createObject["transactionId"] as? String == managed.provenance.mirrorKey)
+        let extensions = try #require(createObject["extensions"] as? [[String: Any]])
+        #expect(extensions.first?["mirrorKey"] as? String == managed.provenance.mirrorKey)
+        #expect(created.providerVersion == "version-one")
+        #expect(updated.providerVersion == "version-two")
+    }
+}
+
+private func microsoftManagedRequest() -> ManagedEventWriteRequest {
+    ManagedEventWriteRequest(
+        desiredFingerprint: "synthetic-fingerprint",
+        payload: DesiredEventPayload(
+            startsAt: Date(timeIntervalSince1970: 2_000),
+            endsAt: Date(timeIntervalSince1970: 3_000),
+            isAllDay: false,
+            availability: "busy",
+            title: "Busy",
+            isPrivate: nil
+        ),
+        provenance: ManagedEventProvenance(
+            configurationID: "synthetic-configuration",
+            armID: "synthetic-arm",
+            mirrorKey: "synthetic-mirror",
+            sourceKeyHash: "synthetic-source",
+            ruleMode: .busy,
+            ownershipKeyID: "synthetic-key",
+            authenticationTag: "synthetic-tag"
+        )
+    )
+}
+
 private func saveCursorUpdates(
     _ page: ProviderEventPage,
     repository: LocalStateRepository,
@@ -331,6 +402,41 @@ private actor DeltaRecordingTransport: HTTPTransport {
         return HTTPResponse(
             statusCode: 200,
             body: Data("{\"value\":[],\"@odata.deltaLink\":\"\(link)\"}".utf8)
+        )
+    }
+}
+
+private struct MicrosoftRecordedRequest: Sendable {
+    let method: String
+    let path: String
+    let ifMatch: String?
+    let body: Data
+}
+
+private actor MicrosoftManagedWriteTransport: HTTPTransport {
+    private(set) var requests: [MicrosoftRecordedRequest] = []
+
+    func send(_ request: URLRequest) async throws -> HTTPResponse {
+        let method = request.httpMethod ?? "GET"
+        let path = request.url?.path ?? ""
+        requests.append(
+            MicrosoftRecordedRequest(
+                method: method,
+                path: path,
+                ifMatch: request.value(forHTTPHeaderField: "If-Match"),
+                body: request.httpBody ?? Data()
+            )
+        )
+        if method == "DELETE" {
+            return HTTPResponse(statusCode: 204, body: Data())
+        }
+        if path.contains("/extensions/") {
+            return HTTPResponse(statusCode: 200, body: Data(#"{"id":"com.calopod.managed"}"#.utf8))
+        }
+        let version = method == "POST" ? "version-one" : "version-two"
+        return HTTPResponse(
+            statusCode: 200,
+            body: Data("{\"id\":\"provider-event\",\"changeKey\":\"\(version)\"}".utf8)
         )
     }
 }

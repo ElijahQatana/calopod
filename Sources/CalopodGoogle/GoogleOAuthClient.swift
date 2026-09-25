@@ -23,7 +23,7 @@ public struct GoogleOAuthConfiguration: Sendable {
 public struct GoogleOAuthClient: Sendable {
     public static let scopes = [
         "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
-        "https://www.googleapis.com/auth/calendar.events.readonly",
+        "https://www.googleapis.com/auth/calendar.events",
     ]
 
     private let configuration: GoogleOAuthConfiguration

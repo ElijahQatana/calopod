@@ -118,8 +118,62 @@ public struct GoogleCalendarClient: Sendable {
         return ProviderEventPage(events: events, nextSyncToken: nextSyncToken)
     }
 
+    public func createManagedEvent(
+        accessToken: String,
+        calendarID: String,
+        request managed: ManagedEventWriteRequest
+    ) async throws -> ManagedEventWriteResult {
+        let endpoint = eventCollectionURL(calendarID: calendarID)
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try managedEventBody(
+            managed,
+            eventID: try deterministicEventID(mirrorKey: managed.provenance.mirrorKey)
+        )
+        let response = try await send(request: request, accessToken: accessToken)
+        return try managedWriteResult(response)
+    }
+
+    public func updateManagedEvent(
+        accessToken: String,
+        calendarID: String,
+        providerEventID: String,
+        expectedVersion: String?,
+        request managed: ManagedEventWriteRequest
+    ) async throws -> ManagedEventWriteResult {
+        let endpoint = eventCollectionURL(calendarID: calendarID)
+            .appendingPathComponent(providerEventID)
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        expectedVersion.map { request.setValue($0, forHTTPHeaderField: "If-Match") }
+        request.httpBody = try managedEventBody(managed, eventID: nil)
+        let response = try await send(request: request, accessToken: accessToken)
+        return try managedWriteResult(response)
+    }
+
+    public func deleteManagedEvent(
+        accessToken: String,
+        calendarID: String,
+        providerEventID: String,
+        expectedVersion: String?
+    ) async throws {
+        let endpoint = eventCollectionURL(calendarID: calendarID)
+            .appendingPathComponent(providerEventID)
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "DELETE"
+        expectedVersion.map { request.setValue($0, forHTTPHeaderField: "If-Match") }
+        _ = try await send(request: request, accessToken: accessToken)
+    }
+
     private func send(url: URL, accessToken: String) async throws -> HTTPResponse {
-        var request = URLRequest(url: url)
+        let request = URLRequest(url: url)
+        return try await send(request: request, accessToken: accessToken)
+    }
+
+    private func send(request original: URLRequest, accessToken: String) async throws -> HTTPResponse {
+        var request = original
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         let response = try await transport.send(request)
         switch response.statusCode {
@@ -145,6 +199,126 @@ public struct GoogleCalendarClient: Sendable {
             throw ProviderFailure.invalidResponse
         }
     }
+
+    private func eventCollectionURL(calendarID: String) -> URL {
+        baseURL
+            .appendingPathComponent("calendars", isDirectory: true)
+            .appendingPathComponent(calendarID, isDirectory: true)
+            .appendingPathComponent("events")
+    }
+
+    private func managedEventBody(
+        _ managed: ManagedEventWriteRequest,
+        eventID: String?
+    ) throws -> Data {
+        let payload = managed.payload
+        let start: [String: String]
+        let end: [String: String]
+        if payload.isAllDay {
+            start = ["date": GoogleDate.dateOnly(payload.startsAt)]
+            end = ["date": GoogleDate.dateOnly(payload.endsAt)]
+        } else {
+            start = ["dateTime": RFC3339.string(from: payload.startsAt)]
+            end = ["dateTime": RFC3339.string(from: payload.endsAt)]
+        }
+        let provenance = managed.provenance
+        var object: [String: Any] = [
+            "summary": payload.title ?? "",
+            "start": start,
+            "end": end,
+            "transparency": payload.availability == "free" ? "transparent" : "opaque",
+            "extendedProperties": [
+                "private": [
+                    "calopodSchema": String(provenance.schemaVersion),
+                    "configurationID": provenance.configurationID,
+                    "armID": provenance.armID,
+                    "mirrorKey": provenance.mirrorKey,
+                    "sourceKeyHash": provenance.sourceKeyHash,
+                    "ruleMode": provenance.ruleMode.rawValue,
+                    "ownershipKeyID": provenance.ownershipKeyID,
+                    "authenticationTag": provenance.authenticationTag,
+                    "desiredFingerprint": managed.desiredFingerprint,
+                ],
+            ],
+        ]
+        if let eventID {
+            object["id"] = eventID
+        }
+        if let isPrivate = payload.isPrivate {
+            object["visibility"] = isPrivate ? "private" : "default"
+        }
+        return try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+    }
+
+    private func managedWriteResult(_ response: HTTPResponse) throws -> ManagedEventWriteResult {
+        let event: GoogleManagedEventResponse = try decode(response)
+        return ManagedEventWriteResult(
+            providerEventID: event.id,
+            providerVersion: event.etag ?? response.headers["etag"]
+        )
+    }
+
+    private func deterministicEventID(mirrorKey: String) throws -> String {
+        guard let bytes = decodeBase32(mirrorKey) else {
+            throw ProviderFailure.invalidResponse
+        }
+        return encodeBase32Hex(bytes)
+    }
+}
+
+private struct GoogleManagedEventResponse: Decodable {
+    let id: String
+    let etag: String?
+}
+
+private enum GoogleDate {
+    static func dateOnly(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+}
+
+private func decodeBase32(_ value: String) -> Data? {
+    let alphabet = Array("abcdefghijklmnopqrstuvwxyz234567")
+    let indices = Dictionary(uniqueKeysWithValues: alphabet.enumerated().map { ($0.element, $0.offset) })
+    var bytes: [UInt8] = []
+    var buffer: UInt32 = 0
+    var bitCount = 0
+    for character in value.lowercased() {
+        guard let index = indices[character] else { return nil }
+        buffer = (buffer << 5) | UInt32(index)
+        bitCount += 5
+        if bitCount >= 8 {
+            bitCount -= 8
+            bytes.append(UInt8((buffer >> UInt32(bitCount)) & 0xff))
+            buffer &= bitCount == 0 ? 0 : (1 << UInt32(bitCount)) - 1
+        }
+    }
+    return Data(bytes)
+}
+
+private func encodeBase32Hex(_ data: Data) -> String {
+    let alphabet = Array("0123456789abcdefghijklmnopqrstuv")
+    var result = ""
+    var buffer: UInt32 = 0
+    var bitCount = 0
+    for byte in data {
+        buffer = (buffer << 8) | UInt32(byte)
+        bitCount += 8
+        while bitCount >= 5 {
+            bitCount -= 5
+            result.append(alphabet[Int((buffer >> UInt32(bitCount)) & 31)])
+        }
+        buffer &= bitCount == 0 ? 0 : (1 << UInt32(bitCount)) - 1
+    }
+    if bitCount > 0 {
+        result.append(alphabet[Int((buffer << UInt32(5 - bitCount)) & 31)])
+    }
+    return result
 }
 
 private struct CalendarListResponse: Decodable {

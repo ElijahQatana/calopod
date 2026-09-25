@@ -1,5 +1,7 @@
 import ArgumentParser
 import CalopodDomain
+import CalopodEventKit
+import CalopodProviders
 import CalopodStore
 import CalopodSync
 import Foundation
@@ -19,22 +21,10 @@ public struct SyncCommand: AsyncParsableCommand {
     public init() {}
 
     public func run() async throws {
-        guard dryRun else {
-            try OutputRenderer.write(
-                command: "sync",
-                payload: CommandPayload(
-                    status: "unavailable",
-                    message: "Apply is not available yet. Run sync with --dry-run."
-                ),
-                format: output.format
-            )
-            throw ExitCode(CalopodExitCode.unavailable.rawValue)
-        }
-
         do {
             let resolved = try resolveRange(range, default: .none)
             guard let resolved else {
-                throw ValidationError("Pass --day or both --from and --through for a bounded dry run.")
+                throw ValidationError("Pass --day or both --from and --through for a bounded sync.")
             }
             let repository = try CommandEnvironment.repository()
             let arms = try repository.arms().filter(\.isEnabled)
@@ -67,16 +57,64 @@ public struct SyncCommand: AsyncParsableCommand {
                     < ($1.armID, $1.mirrorKey, $1.action.rawValue)
             }
 
+            if dryRun {
+                try OutputRenderer.write(
+                    command: "sync",
+                    payload: CommandPayload(
+                        status: refresh.failedSourceCount == 0 ? "ok" : "partial",
+                        message: planItems.isEmpty
+                            ? "The dry run found no planned operations."
+                            : "Dry-run synchronization plan.",
+                        count: planItems.count,
+                        range: RangeOutput(range: resolved),
+                        mode: SyncMode.dryRun.rawValue,
+                        items: planItems.map(planItem)
+                    ),
+                    warnings: refresh.warnings,
+                    format: output.format
+                )
+                return
+            }
+
+            guard refresh.failedSourceCount == 0 else {
+                throw ValidationError("Apply stopped because at least one source calendar could not refresh.")
+            }
+            guard planItems.allSatisfy({ $0.action == .create }) else {
+                throw ValidationError(
+                    "Apply currently accepts only create actions. Resolve update, removal, or repair items first."
+                )
+            }
+            let armsByID = Dictionary(uniqueKeysWithValues: arms.map { ($0.id, $0) })
+            let creator = ManagedEventCreateService(
+                repository: repository,
+                secretStore: KeychainSecretStore()
+            )
+            var appliedCount = 0
+            for item in planItems {
+                guard let arm = armsByID[item.armID],
+                      let target = try repository.calendarBinding(id: arm.targetBindingID) else {
+                    throw ValidationError("The planned Arm or target calendar is no longer available.")
+                }
+                try await creator.applyCreate(item, arm: arm) { request in
+                    try await createManagedEvent(
+                        target: target,
+                        request: request,
+                        repository: repository
+                    )
+                }
+                appliedCount += 1
+            }
+
             try OutputRenderer.write(
                 command: "sync",
                 payload: CommandPayload(
-                    status: refresh.failedSourceCount == 0 ? "ok" : "partial",
-                    message: planItems.isEmpty
-                        ? "The dry run found no planned operations."
-                        : "Dry-run synchronization plan.",
-                    count: planItems.count,
+                    status: "ok",
+                    message: appliedCount == 0
+                        ? "The sync found no create operations to apply."
+                        : "Applied managed event creates.",
+                    count: appliedCount,
                     range: RangeOutput(range: resolved),
-                    mode: SyncMode.dryRun.rawValue,
+                    mode: SyncMode.apply.rawValue,
                     items: planItems.map(planItem)
                 ),
                 warnings: refresh.warnings,
@@ -85,6 +123,52 @@ public struct SyncCommand: AsyncParsableCommand {
         } catch {
             try failCommand(error)
         }
+    }
+}
+
+private func createManagedEvent(
+    target: StoredCalendarBinding,
+    request: ManagedEventWriteRequest,
+    repository: LocalStateRepository
+) async throws -> ManagedEventWriteResult {
+    guard !target.isReadOnly,
+          let connection = try repository.connection(id: target.connectionID),
+          connection.isEnabled else {
+        throw ValidationError("The Arm target calendar is not writable or its Connection is disabled.")
+    }
+    switch connection.provider {
+    case "google":
+        return try await CommandEnvironment.googleService().createManagedEvent(
+            connectionID: connection.id,
+            binding: target,
+            request: request
+        )
+    case "microsoft":
+        return try await CommandEnvironment.microsoftService().createManagedEvent(
+            connectionID: connection.id,
+            binding: target,
+            request: request
+        )
+    case "eventkit":
+        #if os(macOS)
+        let response = try EventKitHostRunner().perform(
+            EventKitHostRequest(
+                operation: .createManagedEvent,
+                calendarIDs: [target.providerCalendarID],
+                managedEvent: request
+            )
+        )
+        guard response.status == .fullAccess,
+              response.errorCode == nil,
+              let result = response.managedEvent else {
+            throw ProviderFailure.invalidResponse
+        }
+        return result
+        #else
+        throw CommandEnvironmentError.unsupportedPlatform
+        #endif
+    default:
+        throw ValidationError("The Arm target provider does not support managed writes.")
     }
 }
 

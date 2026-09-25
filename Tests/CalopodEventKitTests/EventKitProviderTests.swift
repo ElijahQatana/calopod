@@ -63,6 +63,30 @@ struct EventKitClientTests {
 
         _ = await iterator.next()
     }
+
+    @Test("Managed writes stay scoped to the selected target")
+    func managedWrites() throws {
+        let gateway = StubEventKitGateway(status: .fullAccess)
+        let client = EventKitClient(gateway: gateway)
+        let request = eventKitManagedRequest()
+
+        let created = try client.createManagedEvent(calendarID: "target", request: request)
+        let updated = try client.updateManagedEvent(
+            calendarID: "target",
+            providerEventID: created.providerEventID,
+            expectedVersion: created.providerVersion,
+            request: request
+        )
+        try client.deleteManagedEvent(
+            calendarID: "target",
+            providerEventID: updated.providerEventID,
+            expectedVersion: updated.providerVersion
+        )
+
+        #expect(gateway.lastManagedCalendarID == "target")
+        #expect(gateway.lastManagedRequest == request)
+        #expect(gateway.deletedProviderEventID == updated.providerEventID)
+    }
 }
 
 @Suite("EventKit connection state")
@@ -169,6 +193,9 @@ private final class StubEventKitGateway: EventKitGateway {
     var statusAfterRequest: EventKitAccessStatus
     var requestCount = 0
     var lastCalendarIDs: [String] = []
+    var lastManagedCalendarID: String?
+    var lastManagedRequest: ManagedEventWriteRequest?
+    var deletedProviderEventID: String?
     private var continuation: AsyncStream<Void>.Continuation?
 
     init(status: EventKitAccessStatus) {
@@ -194,6 +221,35 @@ private final class StubEventKitGateway: EventKitGateway {
         return []
     }
 
+    func createManagedEvent(
+        calendarID: String,
+        request: ManagedEventWriteRequest
+    ) throws -> ManagedEventWriteResult {
+        lastManagedCalendarID = calendarID
+        lastManagedRequest = request
+        return ManagedEventWriteResult(providerEventID: "synthetic-created", providerVersion: "v1")
+    }
+
+    func updateManagedEvent(
+        calendarID: String,
+        providerEventID: String,
+        expectedVersion: String?,
+        request: ManagedEventWriteRequest
+    ) throws -> ManagedEventWriteResult {
+        lastManagedCalendarID = calendarID
+        lastManagedRequest = request
+        return ManagedEventWriteResult(providerEventID: providerEventID, providerVersion: "v2")
+    }
+
+    func deleteManagedEvent(
+        calendarID: String,
+        providerEventID: String,
+        expectedVersion: String?
+    ) throws {
+        lastManagedCalendarID = calendarID
+        deletedProviderEventID = providerEventID
+    }
+
     func changeNotifications() -> AsyncStream<Void> {
         AsyncStream { continuation in
             self.continuation = continuation
@@ -203,4 +259,27 @@ private final class StubEventKitGateway: EventKitGateway {
     func signalChange() {
         continuation?.yield()
     }
+}
+
+private func eventKitManagedRequest() -> ManagedEventWriteRequest {
+    ManagedEventWriteRequest(
+        desiredFingerprint: "synthetic-fingerprint",
+        payload: DesiredEventPayload(
+            startsAt: Date(timeIntervalSince1970: 2_000),
+            endsAt: Date(timeIntervalSince1970: 3_000),
+            isAllDay: false,
+            availability: "busy",
+            title: "Busy",
+            isPrivate: nil
+        ),
+        provenance: ManagedEventProvenance(
+            configurationID: "synthetic-configuration",
+            armID: "synthetic-arm",
+            mirrorKey: "synthetic-mirror",
+            sourceKeyHash: "synthetic-source",
+            ruleMode: .busy,
+            ownershipKeyID: "synthetic-key",
+            authenticationTag: "synthetic-tag"
+        )
+    )
 }

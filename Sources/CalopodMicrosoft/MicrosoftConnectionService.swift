@@ -127,6 +127,51 @@ public struct MicrosoftConnectionService: Sendable {
         )
     }
 
+    public func createManagedEvent(
+        connectionID: String,
+        binding: StoredCalendarBinding,
+        request: ManagedEventWriteRequest
+    ) async throws -> ManagedEventWriteResult {
+        let tokens = try await validTokens(connectionID: connectionID)
+        return try await graph.createManagedEvent(
+            accessToken: tokens.accessToken,
+            calendarID: binding.providerCalendarID,
+            request: request
+        )
+    }
+
+    public func updateManagedEvent(
+        connectionID: String,
+        binding: StoredCalendarBinding,
+        providerEventID: String,
+        expectedVersion: String?,
+        request: ManagedEventWriteRequest
+    ) async throws -> ManagedEventWriteResult {
+        let tokens = try await validTokens(connectionID: connectionID)
+        return try await graph.updateManagedEvent(
+            accessToken: tokens.accessToken,
+            calendarID: binding.providerCalendarID,
+            providerEventID: providerEventID,
+            expectedVersion: expectedVersion,
+            request: request
+        )
+    }
+
+    public func deleteManagedEvent(
+        connectionID: String,
+        binding: StoredCalendarBinding,
+        providerEventID: String,
+        expectedVersion: String?
+    ) async throws {
+        let tokens = try await validTokens(connectionID: connectionID)
+        try await graph.deleteManagedEvent(
+            accessToken: tokens.accessToken,
+            calendarID: binding.providerCalendarID,
+            providerEventID: providerEventID,
+            expectedVersion: expectedVersion
+        )
+    }
+
     public func disconnect(connectionID: String) throws {
         try tokenVault.remove(provider: Self.provider, connectionID: connectionID)
         try state.removeConnection(id: connectionID)

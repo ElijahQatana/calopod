@@ -110,15 +110,97 @@ public struct MicrosoftGraphClient: Sendable {
         return ProviderEventPage(events: events, nextSyncToken: nextDeltaLink)
     }
 
+    public func createManagedEvent(
+        accessToken: String,
+        calendarID: String,
+        request managed: ManagedEventWriteRequest
+    ) async throws -> ManagedEventWriteResult {
+        var request = URLRequest(url: eventCollectionURL(calendarID: calendarID))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try managedEventBody(managed, includeExtension: true)
+        let response = try await send(
+            request: request,
+            accessToken: accessToken,
+            followsCursor: false
+        )
+        return try managedWriteResult(response)
+    }
+
+    public func updateManagedEvent(
+        accessToken: String,
+        calendarID: String,
+        providerEventID: String,
+        expectedVersion: String?,
+        request managed: ManagedEventWriteRequest
+    ) async throws -> ManagedEventWriteResult {
+        let eventURL = eventCollectionURL(calendarID: calendarID)
+            .appendingPathComponent(providerEventID)
+        var eventRequest = URLRequest(url: eventURL)
+        eventRequest.httpMethod = "PATCH"
+        eventRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        expectedVersion.map { eventRequest.setValue($0, forHTTPHeaderField: "If-Match") }
+        eventRequest.httpBody = try managedEventBody(managed, includeExtension: false)
+        let eventResponse = try await send(
+            request: eventRequest,
+            accessToken: accessToken,
+            followsCursor: false
+        )
+
+        let extensionURL = eventURL
+            .appendingPathComponent("extensions")
+            .appendingPathComponent("com.calopod.managed")
+        var extensionRequest = URLRequest(url: extensionURL)
+        extensionRequest.httpMethod = "PATCH"
+        extensionRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        extensionRequest.httpBody = try JSONSerialization.data(
+            withJSONObject: managedExtension(managed),
+            options: [.sortedKeys]
+        )
+        _ = try await send(
+            request: extensionRequest,
+            accessToken: accessToken,
+            followsCursor: false
+        )
+        return try managedWriteResult(eventResponse)
+    }
+
+    public func deleteManagedEvent(
+        accessToken: String,
+        calendarID: String,
+        providerEventID: String,
+        expectedVersion: String?
+    ) async throws {
+        let eventURL = eventCollectionURL(calendarID: calendarID)
+            .appendingPathComponent(providerEventID)
+        var request = URLRequest(url: eventURL)
+        request.httpMethod = "DELETE"
+        expectedVersion.map { request.setValue($0, forHTTPHeaderField: "If-Match") }
+        _ = try await send(request: request, accessToken: accessToken, followsCursor: false)
+    }
+
     private func send(
         url: URL,
         accessToken: String,
         followsCursor: Bool
     ) async throws -> HTTPResponse {
-        var request = URLRequest(url: url)
+        let request = URLRequest(url: url)
+        return try await send(
+            request: request,
+            accessToken: accessToken,
+            followsCursor: followsCursor
+        )
+    }
+
+    private func send(
+        request original: URLRequest,
+        accessToken: String,
+        followsCursor: Bool
+    ) async throws -> HTTPResponse {
+        var request = original
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue(
-            "outlook.timezone=\"UTC\", odata.maxpagesize=1000",
+            "IdType=\"ImmutableId\", outlook.timezone=\"UTC\", odata.maxpagesize=1000",
             forHTTPHeaderField: "Prefer"
         )
         let response = try await transport.send(request)
@@ -162,6 +244,90 @@ public struct MicrosoftGraphClient: Sendable {
         } catch {
             throw ProviderFailure.invalidResponse
         }
+    }
+
+    private func eventCollectionURL(calendarID: String) -> URL {
+        baseURL
+            .appendingPathComponent("me", isDirectory: true)
+            .appendingPathComponent("calendars", isDirectory: true)
+            .appendingPathComponent(calendarID, isDirectory: true)
+            .appendingPathComponent("events")
+    }
+
+    private func managedEventBody(
+        _ managed: ManagedEventWriteRequest,
+        includeExtension: Bool
+    ) throws -> Data {
+        let payload = managed.payload
+        var object: [String: Any] = [
+            "subject": payload.title ?? "",
+            "start": [
+                "dateTime": MicrosoftDate.string(from: payload.startsAt),
+                "timeZone": "UTC",
+            ],
+            "end": [
+                "dateTime": MicrosoftDate.string(from: payload.endsAt),
+                "timeZone": "UTC",
+            ],
+            "isAllDay": payload.isAllDay,
+            "showAs": microsoftAvailability(payload.availability),
+        ]
+        if includeExtension {
+            object["transactionId"] = managed.provenance.mirrorKey
+        }
+        if let isPrivate = payload.isPrivate {
+            object["sensitivity"] = isPrivate ? "private" : "normal"
+        }
+        if includeExtension {
+            object["extensions"] = [managedExtension(managed)]
+        }
+        return try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+    }
+
+    private func managedExtension(_ managed: ManagedEventWriteRequest) -> [String: Any] {
+        let provenance = managed.provenance
+        return [
+            "@odata.type": "microsoft.graph.openTypeExtension",
+            "extensionName": "com.calopod.managed",
+            "schemaVersion": String(provenance.schemaVersion),
+            "configurationID": provenance.configurationID,
+            "armID": provenance.armID,
+            "mirrorKey": provenance.mirrorKey,
+            "sourceKeyHash": provenance.sourceKeyHash,
+            "ruleMode": provenance.ruleMode.rawValue,
+            "ownershipKeyID": provenance.ownershipKeyID,
+            "authenticationTag": provenance.authenticationTag,
+            "desiredFingerprint": managed.desiredFingerprint,
+        ]
+    }
+
+    private func managedWriteResult(_ response: HTTPResponse) throws -> ManagedEventWriteResult {
+        let event: MicrosoftManagedEventResponse = try decode(response)
+        return ManagedEventWriteResult(
+            providerEventID: event.id,
+            providerVersion: event.changeKey ?? event.etag ?? response.headers["etag"]
+        )
+    }
+
+    private func microsoftAvailability(_ value: String) -> String {
+        switch value {
+        case "free": "free"
+        case "tentative": "tentative"
+        case "unavailable", "out-of-office": "oof"
+        default: "busy"
+        }
+    }
+}
+
+private struct MicrosoftManagedEventResponse: Decodable {
+    let id: String
+    let changeKey: String?
+    let etag: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case changeKey
+        case etag = "@odata.etag"
     }
 }
 

@@ -12,6 +12,21 @@ public protocol EventKitGateway: AnyObject {
         from start: Date,
         through end: Date
     ) -> [ProviderEvent]
+    func createManagedEvent(
+        calendarID: String,
+        request: ManagedEventWriteRequest
+    ) throws -> ManagedEventWriteResult
+    func updateManagedEvent(
+        calendarID: String,
+        providerEventID: String,
+        expectedVersion: String?,
+        request: ManagedEventWriteRequest
+    ) throws -> ManagedEventWriteResult
+    func deleteManagedEvent(
+        calendarID: String,
+        providerEventID: String,
+        expectedVersion: String?
+    ) throws
     func changeNotifications() -> AsyncStream<Void>
 }
 
@@ -57,6 +72,42 @@ public final class EventKitClient {
 
     public func changeNotifications() -> AsyncStream<Void> {
         gateway.changeNotifications()
+    }
+
+    public func createManagedEvent(
+        calendarID: String,
+        request: ManagedEventWriteRequest
+    ) throws -> ManagedEventWriteResult {
+        try requireFullAccess()
+        return try gateway.createManagedEvent(calendarID: calendarID, request: request)
+    }
+
+    public func updateManagedEvent(
+        calendarID: String,
+        providerEventID: String,
+        expectedVersion: String?,
+        request: ManagedEventWriteRequest
+    ) throws -> ManagedEventWriteResult {
+        try requireFullAccess()
+        return try gateway.updateManagedEvent(
+            calendarID: calendarID,
+            providerEventID: providerEventID,
+            expectedVersion: expectedVersion,
+            request: request
+        )
+    }
+
+    public func deleteManagedEvent(
+        calendarID: String,
+        providerEventID: String,
+        expectedVersion: String?
+    ) throws {
+        try requireFullAccess()
+        try gateway.deleteManagedEvent(
+            calendarID: calendarID,
+            providerEventID: providerEventID,
+            expectedVersion: expectedVersion
+        )
     }
 
     private func requireFullAccess() throws {
@@ -132,6 +183,65 @@ private final class LiveEventKitGateway: EventKitGateway {
         }
     }
 
+    func createManagedEvent(
+        calendarID: String,
+        request: ManagedEventWriteRequest
+    ) throws -> ManagedEventWriteResult {
+        guard let calendar = writableCalendar(id: calendarID) else {
+            throw ProviderFailure.permissionDenied
+        }
+        let event = EKEvent(eventStore: store)
+        event.calendar = calendar
+        try apply(request, to: event)
+        try store.save(event, span: .thisEvent, commit: true)
+        let providerEventID = event.eventIdentifier ?? event.calendarItemIdentifier
+        return ManagedEventWriteResult(
+            providerEventID: providerEventID,
+            providerVersion: eventVersion(event)
+        )
+    }
+
+    func updateManagedEvent(
+        calendarID: String,
+        providerEventID: String,
+        expectedVersion: String?,
+        request: ManagedEventWriteRequest
+    ) throws -> ManagedEventWriteResult {
+        guard let calendar = writableCalendar(id: calendarID),
+              let event = store.event(withIdentifier: providerEventID),
+              event.calendar.calendarIdentifier == calendar.calendarIdentifier else {
+            throw ProviderFailure.invalidResponse
+        }
+        if let expectedVersion,
+           eventVersion(event) != expectedVersion {
+            throw ProviderFailure.httpStatus(412)
+        }
+        try apply(request, to: event)
+        try store.save(event, span: .thisEvent, commit: true)
+        let savedID = event.eventIdentifier ?? event.calendarItemIdentifier
+        return ManagedEventWriteResult(
+            providerEventID: savedID,
+            providerVersion: eventVersion(event)
+        )
+    }
+
+    func deleteManagedEvent(
+        calendarID: String,
+        providerEventID: String,
+        expectedVersion: String?
+    ) throws {
+        guard let calendar = writableCalendar(id: calendarID),
+              let event = store.event(withIdentifier: providerEventID),
+              event.calendar.calendarIdentifier == calendar.calendarIdentifier else {
+            throw ProviderFailure.invalidResponse
+        }
+        if let expectedVersion,
+           eventVersion(event) != expectedVersion {
+            throw ProviderFailure.httpStatus(412)
+        }
+        try store.remove(event, span: .thisEvent, commit: true)
+    }
+
     func changeNotifications() -> AsyncStream<Void> {
         AsyncStream { continuation in
             let token = ObserverToken(
@@ -170,6 +280,35 @@ private final class LiveEventKitGateway: EventKitGateway {
         case .notSupported: .busy
         @unknown default: .busy
         }
+    }
+
+    private func writableCalendar(id: String) -> EKCalendar? {
+        store.calendars(for: .event).first {
+            $0.calendarIdentifier == id && $0.allowsContentModifications
+        }
+    }
+
+    private func apply(_ request: ManagedEventWriteRequest, to event: EKEvent) throws {
+        event.title = request.payload.title ?? ""
+        event.startDate = request.payload.startsAt
+        event.endDate = request.payload.endsAt
+        event.isAllDay = request.payload.isAllDay
+        event.availability = eventKitAvailability(request.payload.availability)
+        event.url = try OwnershipMarkerCodec.markerURL(request.provenance)
+    }
+
+    private func eventKitAvailability(_ value: String) -> EKEventAvailability {
+        switch value {
+        case "free": .free
+        case "tentative": .tentative
+        case "unavailable", "out-of-office": .unavailable
+        default: .busy
+        }
+    }
+
+    private func eventVersion(_ event: EKEvent) -> String {
+        event.lastModifiedDate.map(eventIdentityDate)
+            ?? "eventkit-local:\(event.calendarItemIdentifier)"
     }
 
     private func eventIdentityDate(_ date: Date) -> String {

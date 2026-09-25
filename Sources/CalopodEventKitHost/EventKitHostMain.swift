@@ -73,6 +73,43 @@ struct EventKitHostMain {
                     through: end
                 )
             )
+        case .createManagedEvent:
+            guard request.calendarIDs.count == 1, let managed = request.managedEvent else {
+                throw ProviderFailure.invalidResponse
+            }
+            return EventKitHostResponse(
+                status: client.authorizationStatus,
+                managedEvent: try client.createManagedEvent(
+                    calendarID: request.calendarIDs[0],
+                    request: managed
+                )
+            )
+        case .updateManagedEvent:
+            guard request.calendarIDs.count == 1,
+                  let providerEventID = request.providerEventID,
+                  let managed = request.managedEvent else {
+                throw ProviderFailure.invalidResponse
+            }
+            return EventKitHostResponse(
+                status: client.authorizationStatus,
+                managedEvent: try client.updateManagedEvent(
+                    calendarID: request.calendarIDs[0],
+                    providerEventID: providerEventID,
+                    expectedVersion: request.expectedProviderVersion,
+                    request: managed
+                )
+            )
+        case .deleteManagedEvent:
+            guard request.calendarIDs.count == 1,
+                  let providerEventID = request.providerEventID else {
+                throw ProviderFailure.invalidResponse
+            }
+            try client.deleteManagedEvent(
+                calendarID: request.calendarIDs[0],
+                providerEventID: providerEventID,
+                expectedVersion: request.expectedProviderVersion
+            )
+            return EventKitHostResponse(status: client.authorizationStatus)
         }
     }
 

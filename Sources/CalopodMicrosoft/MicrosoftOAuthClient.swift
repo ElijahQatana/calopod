@@ -29,7 +29,7 @@ public struct MicrosoftOAuthConfiguration: Sendable {
 public struct MicrosoftOAuthClient: Sendable {
     public static let scopes = [
         "offline_access",
-        "https://graph.microsoft.com/Calendars.Read",
+        "https://graph.microsoft.com/Calendars.ReadWrite",
     ]
 
     private let configuration: MicrosoftOAuthConfiguration
