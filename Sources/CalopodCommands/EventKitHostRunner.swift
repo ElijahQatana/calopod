@@ -46,10 +46,13 @@ struct EventKitHostRunner {
 
         let stdoutURL = temporaryDirectory.appendingPathComponent("stdout.json")
         let stderrURL = temporaryDirectory.appendingPathComponent("stderr.log")
+        let launcherStderrURL = temporaryDirectory.appendingPathComponent("launcher-stderr.log")
         _ = FileManager.default.createFile(atPath: stdoutURL.path, contents: nil)
         _ = FileManager.default.createFile(atPath: stderrURL.path, contents: nil)
+        _ = FileManager.default.createFile(atPath: launcherStderrURL.path, contents: nil)
         try setPrivatePermissions(on: stdoutURL)
         try setPrivatePermissions(on: stderrURL)
+        try setPrivatePermissions(on: launcherStderrURL)
 
         var appArguments = arguments
         if let requestData {
@@ -69,8 +72,16 @@ struct EventKitHostRunner {
             "--args",
         ]
         process.arguments?.append(contentsOf: appArguments)
-        try process.run()
+        let launcherStderr = try FileHandle(forWritingTo: launcherStderrURL)
+        process.standardError = launcherStderr
+        do {
+            try process.run()
+        } catch {
+            try? launcherStderr.close()
+            throw CommandEnvironmentError.eventKitHostFailed
+        }
         process.waitUntilExit()
+        try? launcherStderr.close()
 
         let data = try Data(contentsOf: stdoutURL)
         guard let response = try? JSONDecoder().decode(EventKitHostResponse.self, from: data) else {
