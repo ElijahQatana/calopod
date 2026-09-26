@@ -241,6 +241,8 @@ public enum SyncPlanner {
                 payload.availability,
                 payload.title ?? "",
                 payload.isPrivate.map { $0 ? "1" : "0" } ?? "",
+                payload.location ?? "",
+                payload.notes ?? "",
             ]
         )
     }
@@ -257,7 +259,9 @@ public enum SyncPlanner {
                 isAllDay: source.isAllDay,
                 availability: source.availability,
                 title: "Busy",
-                isPrivate: nil
+                isPrivate: nil,
+                location: nil,
+                notes: nil
             )
         case .fullDetails:
             DesiredEventPayload(
@@ -266,9 +270,57 @@ public enum SyncPlanner {
                 isAllDay: source.isAllDay,
                 availability: source.availability,
                 title: source.title,
-                isPrivate: source.isPrivate
+                isPrivate: source.isPrivate,
+                location: source.location,
+                notes: fullDetailsNotes(source)
             )
         }
+    }
+
+    private static func fullDetailsNotes(_ source: StoredNormalizedInstance) -> String? {
+        var sections: [String] = []
+        if let notes = normalizedText(source.notes) {
+            sections.append(notes)
+        }
+        if let url = normalizedText(source.url),
+           !sections.contains(where: { $0.contains(url) }) {
+            sections.append("Link: \(url)")
+        }
+        if let organizer = participantSummary(source.organizer) {
+            sections.append("Organizer: \(organizer)")
+        }
+        let attendees = source.attendees.compactMap(participantSummary).sorted()
+        if !attendees.isEmpty {
+            sections.append("Attendees:\n" + attendees.map { "- \($0)" }.joined(separator: "\n"))
+        }
+        return sections.isEmpty ? nil : sections.joined(separator: "\n\n")
+    }
+
+    private static func participantSummary(_ participant: EventParticipant?) -> String? {
+        guard let participant else { return nil }
+        let name = normalizedText(participant.name)
+        let email = normalizedText(participant.emailAddress)
+        var identity: String
+        switch (name, email) {
+        case let (.some(name), .some(email)):
+            identity = "\(name) <\(email)>"
+        case let (.some(name), .none):
+            identity = name
+        case let (.none, .some(email)):
+            identity = email
+        case (.none, .none):
+            identity = "Unknown"
+        }
+        if let status = normalizedText(participant.status) {
+            identity += " (\(status))"
+        }
+        return identity
+    }
+
+    private static func normalizedText(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else { return nil }
+        return trimmed
     }
 
     private static func item(

@@ -14,12 +14,27 @@ func rootExposesThePlannedCommandGroups() {
         "connection",
         "calendars",
         "arm",
+        "main",
         "events",
         "availability",
         "sync",
         "doctor",
         "agent",
     ])
+}
+
+@Test
+func mainCalendarUsesExplicitSourcesAndTarget() throws {
+    let command = try MainConfigureCommand.parse([
+        "--source", "source-one",
+        "--source", "source-two",
+        "--target", "main-target",
+        "--format", "json",
+    ])
+
+    #expect(command.source == ["source-one", "source-two"])
+    #expect(command.target == "main-target")
+    #expect(command.output.format == .json)
 }
 
 @Test

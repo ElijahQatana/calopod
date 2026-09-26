@@ -16,6 +16,8 @@ public enum ArmConfigurationError: Error, Equatable, Sendable, CustomStringConve
     case sourceMatchesTarget(String)
     case duplicateRoute(source: String, target: String)
     case unsafeCycle
+    case mainCalendarAlreadyConfigured
+    case mainCalendarRuleFixed
 
     public var description: String {
         switch self {
@@ -45,6 +47,10 @@ public enum ArmConfigurationError: Error, Equatable, Sendable, CustomStringConve
             "An Arm already routes source '\(source)' to target '\(target)'."
         case .unsafeCycle:
             "That Arm would create an unsafe source and target cycle."
+        case .mainCalendarAlreadyConfigured:
+            "A Main calendar is already configured."
+        case .mainCalendarRuleFixed:
+            "The Main calendar always uses the Full details Rule."
         }
     }
 }
@@ -61,6 +67,12 @@ public struct ArmConfigurationService: Sendable {
         ruleMode: ArmRuleMode,
         now: Date = Date()
     ) throws -> StoredArm {
+        guard let existing = try repository.arm(id: armID) else {
+            throw ArmConfigurationError.armNotFound(armID)
+        }
+        if existing.isMain && ruleMode != .fullDetails {
+            throw ArmConfigurationError.mainCalendarRuleFixed
+        }
         guard let arm = try repository.setArmRuleMode(
             id: armID,
             ruleMode: ruleMode,
@@ -69,6 +81,23 @@ public struct ArmConfigurationService: Sendable {
             throw ArmConfigurationError.armNotFound(armID)
         }
         return arm
+    }
+
+    @discardableResult
+    public func configureMainCalendar(
+        id: String = UUID().uuidString.lowercased(),
+        sourceBindingIDs: [String],
+        targetBindingID: String,
+        now: Date = Date()
+    ) throws -> StoredArm {
+        try createArm(
+            id: id,
+            sourceBindingIDs: sourceBindingIDs,
+            targetBindingID: targetBindingID,
+            ruleMode: .fullDetails,
+            isMain: true,
+            now: now
+        )
     }
 
     public func preferCurrentDevice(
@@ -98,8 +127,12 @@ public struct ArmConfigurationService: Sendable {
         sourceBindingIDs: [String],
         targetBindingID: String,
         ruleMode: ArmRuleMode = .busy,
+        isMain: Bool = false,
         now: Date = Date()
     ) throws -> StoredArm {
+        if isMain && ruleMode != .fullDetails {
+            throw ArmConfigurationError.mainCalendarRuleFixed
+        }
         guard !sourceBindingIDs.isEmpty else {
             throw ArmConfigurationError.noSources
         }
@@ -137,6 +170,12 @@ public struct ArmConfigurationService: Sendable {
             }
         }
 
+        if isMain {
+            let hasMainCalendar = try repository.arms().contains(where: \.isMain)
+            if hasMainCalendar {
+                throw ArmConfigurationError.mainCalendarAlreadyConfigured
+            }
+        }
         let existing = try repository.arms(configurationID: targetConnection.configurationID)
         var routes: [String: Set<String>] = [:]
         for arm in existing {
@@ -172,7 +211,8 @@ public struct ArmConfigurationService: Sendable {
             sourceBindingIDs: sourceBindingIDs.sorted(),
             targetBindingID: targetBindingID,
             ruleMode: ruleMode,
-            preferredWriterDeviceID: preferredWriterDeviceID
+            preferredWriterDeviceID: preferredWriterDeviceID,
+            isMain: isMain
         )
         try repository.saveArm(arm, now: now)
         return arm

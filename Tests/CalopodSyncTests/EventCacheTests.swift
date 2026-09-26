@@ -1,3 +1,4 @@
+import CalopodDomain
 import CalopodProviders
 import CalopodStore
 import CalopodSync
@@ -20,7 +21,21 @@ struct EventCacheTests {
                 allDay: true,
                 availability: .free,
                 isPrivate: true,
-                title: "Synthetic private day"
+                title: "Synthetic private day",
+                location: "Synthetic room",
+                notes: "Synthetic agenda",
+                url: "https://calendar.example.test/events/all-day",
+                organizer: EventParticipant(
+                    name: "Synthetic Organizer",
+                    emailAddress: "organizer@example.com"
+                ),
+                attendees: [
+                    EventParticipant(
+                        name: "Synthetic Attendee",
+                        emailAddress: "attendee@example.com",
+                        status: "accepted"
+                    ),
+                ]
             ),
             event(
                 id: "occurrence",
@@ -60,6 +75,11 @@ struct EventCacheTests {
         #expect(result.instances[0].isAllDay)
         #expect(result.instances[0].availability == "free")
         #expect(result.instances[0].isPrivate)
+        #expect(result.instances[0].location == "Synthetic room")
+        #expect(result.instances[0].notes == "Synthetic agenda")
+        #expect(result.instances[0].url == "https://calendar.example.test/events/all-day")
+        #expect(result.instances[0].organizer?.emailAddress == "organizer@example.com")
+        #expect(result.instances[0].attendees.first?.status == "accepted")
         #expect(result.instances[1].availability == "tentative")
         #expect(result.instances[1].recurrenceID == "2026-03-08T09:00:00-04:00")
         #expect(result.instances.allSatisfy { $0.sourceKeyHash.count == 64 })
@@ -82,7 +102,14 @@ struct EventCacheTests {
 
         let initial = ProviderEventPage(
             events: [
-                event(id: "one", start: start, end: start.addingTimeInterval(1_800)),
+                event(
+                    id: "one",
+                    start: start,
+                    end: start.addingTimeInterval(1_800),
+                    location: "Synthetic room",
+                    notes: "Synthetic agenda",
+                    attendees: [EventParticipant(name: "Synthetic Guest", status: "tentative")]
+                ),
                 event(
                     id: "two",
                     start: start.addingTimeInterval(1_800),
@@ -108,13 +135,15 @@ struct EventCacheTests {
             through: end
         )
         #expect(initialResult.storedCount == 2)
-        #expect(
-            try repository.normalizedInstances(
-                calendarBindingIDs: [calendar.id],
-                from: start,
-                through: end
-            ).count == 2
+        let initialStored = try repository.normalizedInstances(
+            calendarBindingIDs: [calendar.id],
+            from: start,
+            through: end
         )
+        #expect(initialStored.count == 2)
+        #expect(initialStored[0].location == "Synthetic room")
+        #expect(initialStored[0].notes == "Synthetic agenda")
+        #expect(initialStored[0].attendees.first?.status == "tentative")
         #expect(
             try repository.cursor(
                 connectionID: connection.id,
@@ -185,6 +214,9 @@ struct EventCacheTests {
         #expect(remaining.count == 1)
         #expect(remaining[0].title == "Synthetic update")
         #expect(remaining[0].endsAt == start.addingTimeInterval(2_400))
+        #expect(remaining[0].location == nil)
+        #expect(remaining[0].notes == nil)
+        #expect(remaining[0].attendees.isEmpty)
         #expect(
             try repository.cursor(
                 connectionID: connection.id,
@@ -270,7 +302,12 @@ struct EventCacheTests {
         isCancelled: Bool = false,
         isPrivate: Bool = false,
         title: String? = "Synthetic event",
-        isManagedMirror: Bool = false
+        isManagedMirror: Bool = false,
+        location: String? = nil,
+        notes: String? = nil,
+        url: String? = nil,
+        organizer: EventParticipant? = nil,
+        attendees: [EventParticipant] = []
     ) -> ProviderEvent {
         ProviderEvent(
             provider: "eventkit",
@@ -287,7 +324,12 @@ struct EventCacheTests {
             isPrivate: isPrivate,
             title: title,
             updatedAt: nil,
-            isManagedMirror: isManagedMirror
+            isManagedMirror: isManagedMirror,
+            location: location,
+            notes: notes,
+            url: url,
+            organizer: organizer,
+            attendees: attendees
         )
     }
 }

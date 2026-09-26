@@ -70,6 +70,7 @@ public struct StoredArm: Equatable, Sendable {
     public let ruleMode: ArmRuleMode
     public let preferredWriterDeviceID: String?
     public let isEnabled: Bool
+    public let isMain: Bool
 
     public init(
         id: String,
@@ -78,7 +79,8 @@ public struct StoredArm: Equatable, Sendable {
         targetBindingID: String,
         ruleMode: ArmRuleMode,
         preferredWriterDeviceID: String? = nil,
-        isEnabled: Bool = true
+        isEnabled: Bool = true,
+        isMain: Bool = false
     ) {
         self.id = id
         self.configurationID = configurationID
@@ -87,6 +89,7 @@ public struct StoredArm: Equatable, Sendable {
         self.ruleMode = ruleMode
         self.preferredWriterDeviceID = preferredWriterDeviceID
         self.isEnabled = isEnabled
+        self.isMain = isMain
     }
 }
 
@@ -389,8 +392,8 @@ public final class LocalStateRepository: @unchecked Sendable {
                 sql: """
                     INSERT INTO arms
                         (id, configuration_id, target_binding_id, rule_mode,
-                         preferred_writer_device_id, is_enabled, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                         preferred_writer_device_id, is_enabled, is_main, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                 arguments: [
                     arm.id,
@@ -399,6 +402,7 @@ public final class LocalStateRepository: @unchecked Sendable {
                     arm.ruleMode.rawValue,
                     arm.preferredWriterDeviceID,
                     arm.isEnabled,
+                    arm.isMain,
                     now,
                     now,
                 ]
@@ -420,7 +424,7 @@ public final class LocalStateRepository: @unchecked Sendable {
                     database,
                     sql: """
                         SELECT id, configuration_id, target_binding_id, rule_mode,
-                               preferred_writer_device_id, is_enabled
+                               preferred_writer_device_id, is_enabled, is_main
                         FROM arms
                         WHERE configuration_id = ?
                         ORDER BY created_at, id
@@ -432,7 +436,7 @@ public final class LocalStateRepository: @unchecked Sendable {
                     database,
                     sql: """
                         SELECT id, configuration_id, target_binding_id, rule_mode,
-                               preferred_writer_device_id, is_enabled
+                               preferred_writer_device_id, is_enabled, is_main
                         FROM arms
                         ORDER BY created_at, id
                         """
@@ -448,7 +452,7 @@ public final class LocalStateRepository: @unchecked Sendable {
                 database,
                 sql: """
                     SELECT id, configuration_id, target_binding_id, rule_mode,
-                           preferred_writer_device_id, is_enabled
+                           preferred_writer_device_id, is_enabled, is_main
                     FROM arms
                     WHERE id = ?
                     """,
@@ -601,7 +605,8 @@ private func storedArm(row: Row, database: Database) throws -> StoredArm {
         targetBindingID: row["target_binding_id"],
         ruleMode: ruleMode,
         preferredWriterDeviceID: row["preferred_writer_device_id"],
-        isEnabled: row["is_enabled"]
+        isEnabled: row["is_enabled"],
+        isMain: row["is_main"]
     )
 }
 

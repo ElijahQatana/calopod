@@ -1,3 +1,4 @@
+import CalopodDomain
 import Foundation
 
 public enum ProviderAvailability: String, Codable, Sendable {
@@ -23,6 +24,11 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
     public let title: String?
     public let updatedAt: Date?
     public let isManagedMirror: Bool
+    public let location: String?
+    public let notes: String?
+    public let url: String?
+    public let organizer: EventParticipant?
+    public let attendees: [EventParticipant]
 
     public init(
         provider: String,
@@ -39,7 +45,12 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
         isPrivate: Bool,
         title: String?,
         updatedAt: Date?,
-        isManagedMirror: Bool = false
+        isManagedMirror: Bool = false,
+        location: String? = nil,
+        notes: String? = nil,
+        url: String? = nil,
+        organizer: EventParticipant? = nil,
+        attendees: [EventParticipant] = []
     ) {
         self.provider = provider
         self.connectionID = connectionID
@@ -56,6 +67,11 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
         self.title = title
         self.updatedAt = updatedAt
         self.isManagedMirror = isManagedMirror
+        self.location = location
+        self.notes = notes
+        self.url = url
+        self.organizer = organizer
+        self.attendees = attendees
     }
 
     public func markingManagedMirror() -> ProviderEvent {
@@ -74,7 +90,12 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
             isPrivate: isPrivate,
             title: title,
             updatedAt: updatedAt,
-            isManagedMirror: true
+            isManagedMirror: true,
+            location: location,
+            notes: notes,
+            url: url,
+            organizer: organizer,
+            attendees: attendees
         )
     }
 }

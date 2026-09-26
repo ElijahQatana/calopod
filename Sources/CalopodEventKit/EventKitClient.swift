@@ -195,7 +195,12 @@ private final class LiveEventKitGateway: EventKitGateway {
                 title: $0.title,
                 updatedAt: $0.lastModifiedDate,
                 isManagedMirror: $0.url?.scheme == "calopod"
-                    && $0.url?.host == "managed"
+                    && $0.url?.host == "managed",
+                location: $0.location ?? $0.structuredLocation?.title,
+                notes: $0.notes,
+                url: $0.url?.absoluteString,
+                organizer: participant($0.organizer),
+                attendees: ($0.attendees ?? []).compactMap(participant)
             )
         }
     }
@@ -327,6 +332,8 @@ private final class LiveEventKitGateway: EventKitGateway {
         event.endDate = request.payload.endsAt
         event.isAllDay = request.payload.isAllDay
         event.availability = eventKitAvailability(request.payload.availability)
+        event.location = request.payload.location
+        event.notes = request.payload.notes
         event.url = try OwnershipMarkerCodec.markerURL(request.provenance)
     }
 
@@ -349,7 +356,9 @@ private final class LiveEventKitGateway: EventKitGateway {
                 isAllDay: event.isAllDay,
                 availability: availability(event.availability).rawValue,
                 title: event.title,
-                isPrivate: decoded.1?.ruleMode == .busy ? nil : false
+                isPrivate: decoded.1?.ruleMode == .busy ? nil : false,
+                location: event.location,
+                notes: event.notes
             )
         } else {
             payload = nil
@@ -370,6 +379,39 @@ private final class LiveEventKitGateway: EventKitGateway {
         case "tentative": .tentative
         case "unavailable", "out-of-office": .unavailable
         default: .busy
+        }
+    }
+
+    private func participant(_ value: EKParticipant?) -> EventParticipant? {
+        guard let value else { return nil }
+        return EventParticipant(
+            name: value.name,
+            emailAddress: participantEmail(value.url),
+            status: participantStatus(value.participantStatus)
+        )
+    }
+
+    private func participantEmail(_ url: URL?) -> String? {
+        guard let url, url.scheme?.lowercased() == "mailto" else { return nil }
+        let encoded = String(url.absoluteString.dropFirst("mailto:".count))
+            .split(separator: "?", maxSplits: 1)
+            .first
+            .map(String.init) ?? ""
+        let value = encoded.removingPercentEncoding ?? encoded
+        return value.isEmpty ? nil : value
+    }
+
+    private func participantStatus(_ status: EKParticipantStatus) -> String? {
+        switch status {
+        case .unknown: nil
+        case .pending: "pending"
+        case .accepted: "accepted"
+        case .declined: "declined"
+        case .tentative: "tentative"
+        case .delegated: "delegated"
+        case .completed: "completed"
+        case .inProcess: "in-process"
+        @unknown default: nil
         }
     }
 

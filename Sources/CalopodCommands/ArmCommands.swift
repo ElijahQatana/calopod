@@ -259,7 +259,7 @@ public struct ArmRemoveCommand: ParsableCommand {
 private func armItem(_ arm: StoredArm) -> CommandItem {
     CommandItem(
         id: arm.id,
-        kind: "arm",
+        kind: arm.isMain ? "main-calendar" : "arm",
         sourceIDs: arm.sourceBindingIDs,
         targetID: arm.targetBindingID,
         rule: arm.ruleMode.rawValue,

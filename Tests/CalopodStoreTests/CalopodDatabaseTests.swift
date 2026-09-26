@@ -38,6 +38,20 @@ func foundationMigrationCreatesEveryStateTable() throws {
     }
 
     try store.migrate()
+
+    let armColumns = try store.read { database in
+        try Row.fetchAll(database, sql: "PRAGMA table_info(arms)")
+            .map { row in row["name"] as String }
+    }
+    #expect(armColumns.contains("is_main"))
+
+    let eventColumns = try store.read { database in
+        try Row.fetchAll(database, sql: "PRAGMA table_info(normalized_instances)")
+            .map { row in row["name"] as String }
+    }
+    for column in ["location", "notes", "url", "organizer_json", "attendees_json"] {
+        #expect(eventColumns.contains(column))
+    }
 }
 
 @Test

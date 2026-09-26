@@ -304,6 +304,12 @@ public struct GoogleCalendarClient: Sendable {
         if let isPrivate = payload.isPrivate {
             object["visibility"] = isPrivate ? "private" : "default"
         }
+        if let location = payload.location {
+            object["location"] = location
+        }
+        if let notes = payload.notes {
+            object["description"] = notes
+        }
         return try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
     }
 
@@ -429,6 +435,13 @@ private struct GoogleEvent: Decodable {
     let transparency: String?
     let visibility: String?
     let summary: String?
+    let description: String?
+    let location: String?
+    let htmlLink: String?
+    let hangoutLink: String?
+    let conferenceData: GoogleConferenceData?
+    let organizer: GooglePerson?
+    let attendees: [GoogleAttendee]?
     let created: String?
     let updated: String?
     let extendedProperties: GoogleExtendedProperties?
@@ -444,6 +457,13 @@ private struct GoogleEvent: Decodable {
         case transparency
         case visibility
         case summary
+        case description
+        case location
+        case htmlLink
+        case hangoutLink
+        case conferenceData
+        case organizer
+        case attendees
         case created
         case updated
         case extendedProperties
@@ -471,7 +491,12 @@ private struct GoogleEvent: Decodable {
             updatedAt: updated.flatMap(RFC3339.date(from:)),
             isManagedMirror: OwnershipMarkerCodec.marker(
                 fields: extendedProperties?.privateValues
-            ).status != .absent
+            ).status != .absent,
+            location: location,
+            notes: description,
+            url: hangoutLink ?? conferenceData?.videoURI ?? htmlLink,
+            organizer: organizer?.participant,
+            attendees: (attendees ?? []).map(\.participant)
         )
     }
 
@@ -489,7 +514,9 @@ private struct GoogleEvent: Decodable {
                 title: summary,
                 isPrivate: decoded.provenance?.ruleMode == .busy
                     ? nil
-                    : visibility == "private" || visibility == "confidential"
+                    : visibility == "private" || visibility == "confidential",
+                location: location,
+                notes: description
             )
         } else {
             payload = nil
@@ -506,6 +533,42 @@ private struct GoogleEvent: Decodable {
             } == id
         )
     }
+}
+
+private struct GooglePerson: Decodable {
+    let email: String?
+    let displayName: String?
+
+    var participant: EventParticipant {
+        EventParticipant(name: displayName, emailAddress: email)
+    }
+}
+
+private struct GoogleAttendee: Decodable {
+    let email: String?
+    let displayName: String?
+    let responseStatus: String?
+
+    var participant: EventParticipant {
+        EventParticipant(
+            name: displayName,
+            emailAddress: email,
+            status: responseStatus
+        )
+    }
+}
+
+private struct GoogleConferenceData: Decodable {
+    let entryPoints: [GoogleConferenceEntryPoint]?
+
+    var videoURI: String? {
+        entryPoints?.first(where: { $0.entryPointType == "video" })?.uri
+    }
+}
+
+private struct GoogleConferenceEntryPoint: Decodable {
+    let entryPointType: String?
+    let uri: String?
 }
 
 private func deterministicGoogleEventID(mirrorKey: String) throws -> String {

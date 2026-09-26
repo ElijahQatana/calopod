@@ -8,7 +8,16 @@ import Testing
 struct SyncPlannerTests {
     @Test("Busy plans are stable and contain no protected detail")
     func busyRedaction() throws {
-        let source = instance(id: "source-one", title: "Synthetic confidential session", isPrivate: true)
+        let source = instance(
+            id: "source-one",
+            title: "Synthetic confidential session",
+            isPrivate: true,
+            location: "Synthetic private room",
+            notes: "Synthetic private agenda",
+            url: "https://calendar.example.test/private",
+            organizer: EventParticipant(name: "Synthetic Organizer", emailAddress: "private@example.com"),
+            attendees: [EventParticipant(name: "Synthetic Attendee", status: "accepted")]
+        )
         let arm = storedArm(ruleMode: .busy)
         let first = SyncPlanner.plan(
             arm: arm,
@@ -35,16 +44,41 @@ struct SyncPlannerTests {
         #expect(item.reason == .targetMissing)
         #expect(item.payload?.title == "Busy")
         #expect(item.payload?.isPrivate == nil)
+        #expect(item.payload?.location == nil)
+        #expect(item.payload?.notes == nil)
         #expect(item.mirrorKey.count == 52)
         #expect(item.mirrorKey.allSatisfy { $0.isLowercase || $0.isNumber })
         #expect(!text.contains("Synthetic confidential session"))
+        #expect(!text.contains("Synthetic private room"))
+        #expect(!text.contains("Synthetic private agenda"))
+        #expect(!text.contains("calendar.example.test"))
+        #expect(!text.contains("private@example.com"))
+        #expect(!text.contains("Synthetic Attendee"))
     }
 
-    @Test("Full details plans retain supported source detail")
-    func fullDetails() throws {
-        let source = instance(id: "source-one", title: "Synthetic planning session", isPrivate: true)
+    @Test("Main calendar plans retain supported source detail")
+    func mainCalendarDetails() throws {
+        let source = instance(
+            id: "source-one",
+            title: "Synthetic planning session",
+            isPrivate: true,
+            location: "Synthetic room",
+            notes: "Synthetic agenda",
+            url: "https://calendar.example.test/events/planning",
+            organizer: EventParticipant(
+                name: "Synthetic Organizer",
+                emailAddress: "organizer@example.com"
+            ),
+            attendees: [
+                EventParticipant(
+                    name: "Synthetic Guest",
+                    emailAddress: "guest@example.com",
+                    status: "accepted"
+                ),
+            ]
+        )
         let plan = SyncPlanner.plan(
-            arm: storedArm(ruleMode: .fullDetails),
+            arm: storedArm(ruleMode: .fullDetails, isMain: true),
             sources: [source],
             mappings: [],
             targetEvents: [],
@@ -54,6 +88,36 @@ struct SyncPlannerTests {
 
         #expect(plan.items.first?.payload?.title == "Synthetic planning session")
         #expect(plan.items.first?.payload?.isPrivate == true)
+        #expect(plan.items.first?.payload?.location == "Synthetic room")
+        #expect(
+            plan.items.first?.payload?.notes
+                == """
+                Synthetic agenda
+
+                Link: https://calendar.example.test/events/planning
+
+                Organizer: Synthetic Organizer <organizer@example.com>
+
+                Attendees:
+                - Synthetic Guest <guest@example.com> (accepted)
+                """
+        )
+
+        let changed = instance(
+            id: "source-one",
+            title: "Synthetic planning session",
+            isPrivate: true,
+            location: "Different synthetic room"
+        )
+        let changedPlan = SyncPlanner.plan(
+            arm: storedArm(ruleMode: .fullDetails, isMain: true),
+            sources: [changed],
+            mappings: [],
+            targetEvents: [],
+            window: try window(),
+            sourceSnapshotComplete: true
+        )
+        #expect(plan.items.first?.desiredFingerprint != changedPlan.items.first?.desiredFingerprint)
     }
 
     @Test("Calculates creates, updates, removals, repairs, and no-ops")
@@ -384,13 +448,14 @@ struct SyncPlannerTests {
     }
 }
 
-private func storedArm(ruleMode: ArmRuleMode) -> StoredArm {
+private func storedArm(ruleMode: ArmRuleMode, isMain: Bool = false) -> StoredArm {
     StoredArm(
         id: "arm-one",
         configurationID: "synthetic-configuration",
         sourceBindingIDs: ["source-calendar"],
         targetBindingID: "target-calendar",
-        ruleMode: ruleMode
+        ruleMode: ruleMode,
+        isMain: isMain
     )
 }
 
@@ -404,7 +469,12 @@ private func window() throws -> SyncWindow {
 private func instance(
     id: String,
     title: String? = "Synthetic event",
-    isPrivate: Bool = false
+    isPrivate: Bool = false,
+    location: String? = nil,
+    notes: String? = nil,
+    url: String? = nil,
+    organizer: EventParticipant? = nil,
+    attendees: [EventParticipant] = []
 ) -> StoredNormalizedInstance {
     StoredNormalizedInstance(
         sourceKeyHash: "source-\(id)",
@@ -420,7 +490,12 @@ private func instance(
         isPrivate: isPrivate,
         title: title,
         contentFingerprint: "source-fingerprint-\(id)",
-        providerUpdatedAt: nil
+        providerUpdatedAt: nil,
+        location: location,
+        notes: notes,
+        url: url,
+        organizer: organizer,
+        attendees: attendees
     )
 }
 

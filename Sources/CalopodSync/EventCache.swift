@@ -1,3 +1,4 @@
+import CalopodDomain
 import CalopodProviders
 import CalopodStore
 import CryptoKit
@@ -134,6 +135,11 @@ public enum EventNormalizer {
                     event.availability.rawValue,
                     event.isPrivate ? "1" : "0",
                     event.title ?? "",
+                    event.location ?? "",
+                    event.notes ?? "",
+                    event.url ?? "",
+                    participantIdentity(event.organizer),
+                    event.attendees.map { participantIdentity($0) }.sorted().joined(separator: "\n"),
                 ]
             )
             instances.append(
@@ -151,7 +157,12 @@ public enum EventNormalizer {
                     isPrivate: event.isPrivate,
                     title: event.title,
                     contentFingerprint: fingerprint,
-                    providerUpdatedAt: event.updatedAt
+                    providerUpdatedAt: event.updatedAt,
+                    location: event.location,
+                    notes: event.notes,
+                    url: event.url,
+                    organizer: event.organizer,
+                    attendees: event.attendees
                 )
             )
         }
@@ -168,6 +179,13 @@ public enum EventNormalizer {
 
     private static func dateIdentity(_ date: Date) -> String {
         String(date.timeIntervalSinceReferenceDate.bitPattern)
+    }
+
+    private static func participantIdentity(_ participant: EventParticipant?) -> String {
+        guard let participant else { return "" }
+        return [participant.name ?? "", participant.emailAddress ?? "", participant.status ?? ""]
+            .map { "\($0.utf8.count):\($0)" }
+            .joined(separator: "|")
     }
 
     private static func digest(fields: [String]) -> String {

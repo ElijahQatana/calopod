@@ -1,3 +1,4 @@
+import CalopodDomain
 import Foundation
 import GRDB
 
@@ -16,6 +17,11 @@ public struct StoredNormalizedInstance: Equatable, Sendable {
     public let title: String?
     public let contentFingerprint: String
     public let providerUpdatedAt: Date?
+    public let location: String?
+    public let notes: String?
+    public let url: String?
+    public let organizer: EventParticipant?
+    public let attendees: [EventParticipant]
 
     public init(
         sourceKeyHash: String,
@@ -31,7 +37,12 @@ public struct StoredNormalizedInstance: Equatable, Sendable {
         isPrivate: Bool,
         title: String?,
         contentFingerprint: String,
-        providerUpdatedAt: Date?
+        providerUpdatedAt: Date?,
+        location: String? = nil,
+        notes: String? = nil,
+        url: String? = nil,
+        organizer: EventParticipant? = nil,
+        attendees: [EventParticipant] = []
     ) {
         self.sourceKeyHash = sourceKeyHash
         self.connectionID = connectionID
@@ -47,6 +58,11 @@ public struct StoredNormalizedInstance: Equatable, Sendable {
         self.title = title
         self.contentFingerprint = contentFingerprint
         self.providerUpdatedAt = providerUpdatedAt
+        self.location = location
+        self.notes = notes
+        self.url = url
+        self.organizer = organizer
+        self.attendees = attendees
     }
 }
 
@@ -104,8 +120,9 @@ extension LocalStateRepository {
                             (source_key_hash, connection_id, calendar_binding_id,
                              provider_event_id, recurrence_id, starts_at, ends_at,
                              is_all_day, availability, is_cancelled, content_fingerprint,
-                             seen_generation, title, is_private, provider_updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             seen_generation, title, is_private, provider_updated_at,
+                             location, notes, url, organizer_json, attendees_json)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(source_key_hash) DO UPDATE SET
                             connection_id = excluded.connection_id,
                             calendar_binding_id = excluded.calendar_binding_id,
@@ -120,7 +137,12 @@ extension LocalStateRepository {
                             seen_generation = excluded.seen_generation,
                             title = excluded.title,
                             is_private = excluded.is_private,
-                            provider_updated_at = excluded.provider_updated_at
+                            provider_updated_at = excluded.provider_updated_at,
+                            location = excluded.location,
+                            notes = excluded.notes,
+                            url = excluded.url,
+                            organizer_json = excluded.organizer_json,
+                            attendees_json = excluded.attendees_json
                         """,
                     arguments: [
                         instance.sourceKeyHash,
@@ -138,6 +160,11 @@ extension LocalStateRepository {
                         instance.title,
                         instance.isPrivate,
                         instance.providerUpdatedAt,
+                        instance.location,
+                        instance.notes,
+                        instance.url,
+                        try encodeOptionalEventDetails(instance.organizer),
+                        try encodeEventDetails(instance.attendees),
                     ]
                 )
             }
@@ -216,7 +243,8 @@ extension LocalStateRepository {
                     SELECT source_key_hash, connection_id, calendar_binding_id,
                            provider_event_id, recurrence_id, starts_at, ends_at,
                            is_all_day, availability, is_cancelled, content_fingerprint,
-                           title, is_private, provider_updated_at
+                           title, is_private, provider_updated_at,
+                           location, notes, url, organizer_json, attendees_json
                     FROM normalized_instances
                     WHERE calendar_binding_id IN (\(normalizedEventQuestionMarks(count: calendarBindingIDs.count)))
                       AND ends_at > ?
@@ -294,6 +322,27 @@ private func normalizedInstance(_ row: Row) -> StoredNormalizedInstance {
         isPrivate: row["is_private"],
         title: row["title"],
         contentFingerprint: row["content_fingerprint"],
-        providerUpdatedAt: row["provider_updated_at"]
+        providerUpdatedAt: row["provider_updated_at"],
+        location: row["location"],
+        notes: row["notes"],
+        url: row["url"],
+        organizer: decodeEventDetails(row["organizer_json"]),
+        attendees: decodeEventDetails(row["attendees_json"]) ?? []
     )
+}
+
+private func encodeEventDetails<Value: Encodable>(_ value: Value) throws -> Data {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    return try encoder.encode(value)
+}
+
+private func encodeOptionalEventDetails<Value: Encodable>(_ value: Value?) throws -> Data? {
+    guard let value else { return nil }
+    return try encodeEventDetails(value)
+}
+
+private func decodeEventDetails<Value: Decodable>(_ data: Data?) -> Value? {
+    guard let data else { return nil }
+    return try? JSONDecoder().decode(Value.self, from: data)
 }

@@ -191,6 +191,29 @@ extension CalopodDatabase {
             }
         }
 
+        migrator.registerMigration("v4_main_calendar") { database in
+            try database.alter(table: "arms") { table in
+                table.add(column: "is_main", .boolean).notNull().defaults(to: false)
+            }
+            try database.execute(
+                sql: """
+                    CREATE UNIQUE INDEX arms_one_main_calendar
+                    ON arms (is_main)
+                    WHERE is_main = 1
+                    """
+            )
+        }
+
+        migrator.registerMigration("v5_full_event_details") { database in
+            try database.alter(table: "normalized_instances") { table in
+                table.add(column: "location", .text)
+                table.add(column: "notes", .text)
+                table.add(column: "url", .text)
+                table.add(column: "organizer_json", .blob)
+                table.add(column: "attendees_json", .blob)
+            }
+        }
+
         return migrator
     }
 }

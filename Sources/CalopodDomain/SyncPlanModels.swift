@@ -28,6 +28,8 @@ public struct DesiredEventPayload: Codable, Equatable, Sendable {
     public let availability: String
     public let title: String?
     public let isPrivate: Bool?
+    public let location: String?
+    public let notes: String?
 
     public init(
         startsAt: Date,
@@ -35,7 +37,9 @@ public struct DesiredEventPayload: Codable, Equatable, Sendable {
         isAllDay: Bool,
         availability: String,
         title: String?,
-        isPrivate: Bool?
+        isPrivate: Bool?,
+        location: String? = nil,
+        notes: String? = nil
     ) {
         self.startsAt = startsAt
         self.endsAt = endsAt
@@ -43,6 +47,8 @@ public struct DesiredEventPayload: Codable, Equatable, Sendable {
         self.availability = availability
         self.title = title
         self.isPrivate = isPrivate
+        self.location = location
+        self.notes = notes
     }
 }
 

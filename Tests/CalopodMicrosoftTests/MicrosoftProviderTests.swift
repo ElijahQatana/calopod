@@ -141,7 +141,7 @@ struct MicrosoftGraphClientTests {
             return HTTPResponse(
                 statusCode: 200,
                 body: Data(
-                    #"{"value":[{"id":"instance","seriesMasterId":"series","originalStart":"2026-09-24T13:00:00Z","start":{"dateTime":"2026-09-24T13:00:00.0000000","timeZone":"UTC"},"end":{"dateTime":"2026-09-24T14:00:00.0000000","timeZone":"UTC"},"isAllDay":false,"showAs":"tentative","sensitivity":"private","subject":"Synthetic meeting","lastModifiedDateTime":"2026-09-20T10:00:00Z"}],"@odata.nextLink":"https://graph.microsoft.com/v1.0/me/calendars/calendar/calendarView/delta?page=2"}"#.utf8
+                    #"{"value":[{"id":"instance","seriesMasterId":"series","originalStart":"2026-09-24T13:00:00Z","start":{"dateTime":"2026-09-24T13:00:00.0000000","timeZone":"UTC"},"end":{"dateTime":"2026-09-24T14:00:00.0000000","timeZone":"UTC"},"isAllDay":false,"showAs":"tentative","sensitivity":"private","subject":"Synthetic meeting","bodyPreview":"Synthetic agenda","location":{"displayName":"Synthetic room"},"onlineMeeting":{"joinUrl":"https://meet.example.test/synthetic"},"organizer":{"emailAddress":{"name":"Synthetic Organizer","address":"organizer@example.com"}},"attendees":[{"emailAddress":{"name":"Synthetic Guest","address":"guest@example.com"},"status":{"response":"accepted"}}],"lastModifiedDateTime":"2026-09-20T10:00:00Z"}],"@odata.nextLink":"https://graph.microsoft.com/v1.0/me/calendars/calendar/calendarView/delta?page=2"}"#.utf8
                 )
             )
         }
@@ -159,6 +159,11 @@ struct MicrosoftGraphClientTests {
         #expect(page.events[0].seriesID == "series")
         #expect(page.events[0].availability == .tentative)
         #expect(page.events[0].isPrivate)
+        #expect(page.events[0].location == "Synthetic room")
+        #expect(page.events[0].notes == "Synthetic agenda")
+        #expect(page.events[0].url == "https://meet.example.test/synthetic")
+        #expect(page.events[0].organizer?.emailAddress == "organizer@example.com")
+        #expect(page.events[0].attendees.first?.status == "accepted")
         #expect(!page.events[0].isManagedMirror)
         #expect(page.events[0].start != nil)
         #expect(page.events[1].isCancelled)
@@ -378,6 +383,29 @@ struct MicrosoftManagedWriteTests {
         #expect(updated.providerVersion == "version-two")
     }
 
+    @Test("Full details writes location and notes without creating invitees")
+    func fullDetails() async throws {
+        let transport = MicrosoftManagedWriteTransport()
+        let client = MicrosoftGraphClient(transport: transport)
+
+        _ = try await client.createManagedEvent(
+            accessToken: "token",
+            calendarID: "target",
+            request: microsoftFullDetailsRequest()
+        )
+
+        let request = try #require(await transport.requests.first)
+        let object = try #require(
+            JSONSerialization.jsonObject(with: request.body) as? [String: Any]
+        )
+        let location = try #require(object["location"] as? [String: String])
+        let body = try #require(object["body"] as? [String: String])
+        #expect(location["displayName"] == "Synthetic room")
+        #expect(body["contentType"] == "text")
+        #expect(body["content"] == "Synthetic agenda and participant context")
+        #expect(object["attendees"] == nil)
+    }
+
     @Test("Managed target reads expand ownership markers and provider versions")
     func managedRead() async throws {
         let client = MicrosoftGraphClient(
@@ -456,6 +484,31 @@ private func microsoftManagedRequest() -> ManagedEventWriteRequest {
             mirrorKey: "synthetic-mirror",
             sourceKeyHash: "synthetic-source",
             ruleMode: .busy,
+            ownershipKeyID: "synthetic-key",
+            authenticationTag: "synthetic-tag"
+        )
+    )
+}
+
+private func microsoftFullDetailsRequest() -> ManagedEventWriteRequest {
+    ManagedEventWriteRequest(
+        desiredFingerprint: "synthetic-full-fingerprint",
+        payload: DesiredEventPayload(
+            startsAt: Date(timeIntervalSince1970: 2_000),
+            endsAt: Date(timeIntervalSince1970: 3_000),
+            isAllDay: false,
+            availability: "busy",
+            title: "Synthetic planning session",
+            isPrivate: false,
+            location: "Synthetic room",
+            notes: "Synthetic agenda and participant context"
+        ),
+        provenance: ManagedEventProvenance(
+            configurationID: "synthetic-configuration",
+            armID: "synthetic-arm",
+            mirrorKey: "synthetic-full-mirror",
+            sourceKeyHash: "synthetic-source",
+            ruleMode: .fullDetails,
             ownershipKeyID: "synthetic-key",
             authenticationTag: "synthetic-tag"
         )

@@ -231,7 +231,7 @@ public struct MicrosoftGraphClient: Sendable {
         var request = original
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue(
-            "IdType=\"ImmutableId\", outlook.timezone=\"UTC\", odata.maxpagesize=1000",
+            "IdType=\"ImmutableId\", outlook.timezone=\"UTC\", outlook.body-content-type=\"text\", odata.maxpagesize=1000",
             forHTTPHeaderField: "Prefer"
         )
         let response = try await transport.send(request)
@@ -308,6 +308,16 @@ public struct MicrosoftGraphClient: Sendable {
         }
         if let isPrivate = payload.isPrivate {
             object["sensitivity"] = isPrivate ? "private" : "normal"
+        }
+        if let location = payload.location {
+            object["location"] = ["displayName": location]
+        } else if !includeExtension {
+            object["location"] = ["displayName": ""]
+        }
+        if let notes = payload.notes {
+            object["body"] = ["contentType": "text", "content": notes]
+        } else if !includeExtension {
+            object["body"] = ["contentType": "text", "content": ""]
         }
         if includeExtension {
             object["extensions"] = [managedExtension(managed)]
@@ -404,6 +414,14 @@ private struct MicrosoftEvent: Decodable {
     let showAs: String?
     let sensitivity: String?
     let subject: String?
+    let bodyPreview: String?
+    let body: MicrosoftEventBody?
+    let location: MicrosoftLocation?
+    let webLink: String?
+    let onlineMeetingUrl: String?
+    let onlineMeeting: MicrosoftOnlineMeeting?
+    let organizer: MicrosoftRecipient?
+    let attendees: [MicrosoftAttendee]?
     let createdDateTime: String?
     let lastModifiedDateTime: String?
     let removed: MicrosoftRemoved?
@@ -422,6 +440,14 @@ private struct MicrosoftEvent: Decodable {
         case showAs
         case sensitivity
         case subject
+        case bodyPreview
+        case body
+        case location
+        case webLink
+        case onlineMeetingUrl
+        case onlineMeeting
+        case organizer
+        case attendees
         case createdDateTime
         case lastModifiedDateTime
         case removed = "@removed"
@@ -446,7 +472,12 @@ private struct MicrosoftEvent: Decodable {
                 || sensitivity == "confidential",
             title: subject,
             updatedAt: lastModifiedDateTime.flatMap { MicrosoftDate.date(from: $0) },
-            isManagedMirror: extensions?.contains(where: \.isCalopodMarker) == true
+            isManagedMirror: extensions?.contains(where: \.isCalopodMarker) == true,
+            location: location?.displayName,
+            notes: plainTextBody,
+            url: onlineMeeting?.joinUrl ?? onlineMeetingUrl ?? webLink,
+            organizer: organizer?.participant,
+            attendees: (attendees ?? []).map(\.participant)
         )
     }
 
@@ -474,7 +505,9 @@ private struct MicrosoftEvent: Decodable {
                     ? nil
                     : sensitivity == "private"
                         || sensitivity == "personal"
-                        || sensitivity == "confidential"
+                        || sensitivity == "confidential",
+                location: location?.displayName,
+                notes: plainTextBody
             )
         } else {
             payload = nil
@@ -498,6 +531,62 @@ private struct MicrosoftEvent: Decodable {
         default: .busy
         }
     }
+
+    private var plainTextBody: String? {
+        if body?.contentType?.lowercased() == "text",
+           let content = body?.content,
+           !content.isEmpty {
+            return content
+        }
+        guard let bodyPreview, !bodyPreview.isEmpty else { return nil }
+        return bodyPreview
+    }
+}
+
+private struct MicrosoftEventBody: Decodable {
+    let contentType: String?
+    let content: String?
+}
+
+private struct MicrosoftLocation: Decodable {
+    let displayName: String?
+}
+
+private struct MicrosoftOnlineMeeting: Decodable {
+    let joinUrl: String?
+}
+
+private struct MicrosoftRecipient: Decodable {
+    let emailAddress: MicrosoftEmailAddress?
+
+    var participant: EventParticipant {
+        EventParticipant(
+            name: emailAddress?.name,
+            emailAddress: emailAddress?.address
+        )
+    }
+}
+
+private struct MicrosoftAttendee: Decodable {
+    let emailAddress: MicrosoftEmailAddress?
+    let status: MicrosoftResponseStatus?
+
+    var participant: EventParticipant {
+        EventParticipant(
+            name: emailAddress?.name,
+            emailAddress: emailAddress?.address,
+            status: status?.response
+        )
+    }
+}
+
+private struct MicrosoftEmailAddress: Decodable {
+    let name: String?
+    let address: String?
+}
+
+private struct MicrosoftResponseStatus: Decodable {
+    let response: String?
 }
 
 private struct MicrosoftManagedExtension: Decodable {

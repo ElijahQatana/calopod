@@ -111,7 +111,7 @@ struct GoogleCalendarClientTests {
             return HTTPResponse(
                 statusCode: 200,
                 body: Data(
-                    #"{"timeZone":"America/New_York","items":[{"id":"instance","recurringEventId":"series","originalStartTime":{"dateTime":"2026-03-08T09:00:00-04:00"},"start":{"dateTime":"2026-03-08T09:00:00-04:00"},"end":{"dateTime":"2026-03-08T10:00:00-04:00"},"status":"confirmed","visibility":"private","summary":"Synthetic meeting","updated":"2026-03-01T12:00:00Z"},{"id":"all-day","start":{"date":"2026-03-09"},"end":{"date":"2026-03-10"},"transparency":"transparent"},{"id":"managed","start":{"dateTime":"2026-03-09T09:00:00-04:00"},"end":{"dateTime":"2026-03-09T10:00:00-04:00"},"extendedProperties":{"private":{"calopodSchema":"1"}}},{"id":"cancelled","recurringEventId":"series","originalStartTime":{"dateTime":"2026-03-10T09:00:00-04:00"},"status":"cancelled"}],"nextSyncToken":"stored-only"}"#.utf8
+                    #"{"timeZone":"America/New_York","items":[{"id":"instance","recurringEventId":"series","originalStartTime":{"dateTime":"2026-03-08T09:00:00-04:00"},"start":{"dateTime":"2026-03-08T09:00:00-04:00"},"end":{"dateTime":"2026-03-08T10:00:00-04:00"},"status":"confirmed","visibility":"private","summary":"Synthetic meeting","description":"Synthetic agenda","location":"Synthetic room","hangoutLink":"https://meet.example.test/synthetic","organizer":{"email":"organizer@example.com","displayName":"Synthetic Organizer"},"attendees":[{"email":"guest@example.com","displayName":"Synthetic Guest","responseStatus":"accepted"}],"updated":"2026-03-01T12:00:00Z"},{"id":"all-day","start":{"date":"2026-03-09"},"end":{"date":"2026-03-10"},"transparency":"transparent"},{"id":"managed","start":{"dateTime":"2026-03-09T09:00:00-04:00"},"end":{"dateTime":"2026-03-09T10:00:00-04:00"},"extendedProperties":{"private":{"calopodSchema":"1"}}},{"id":"cancelled","recurringEventId":"series","originalStartTime":{"dateTime":"2026-03-10T09:00:00-04:00"},"status":"cancelled"}],"nextSyncToken":"stored-only"}"#.utf8
                 )
             )
         }
@@ -132,6 +132,11 @@ struct GoogleCalendarClientTests {
         #expect(page.events[0].seriesID == "series")
         #expect(page.events[0].originalStart == "2026-03-08T09:00:00-04:00")
         #expect(page.events[0].isPrivate)
+        #expect(page.events[0].location == "Synthetic room")
+        #expect(page.events[0].notes == "Synthetic agenda")
+        #expect(page.events[0].url == "https://meet.example.test/synthetic")
+        #expect(page.events[0].organizer?.emailAddress == "organizer@example.com")
+        #expect(page.events[0].attendees.first?.status == "accepted")
         #expect(page.events[1].isAllDay)
         #expect(page.events[1].availability == .free)
         #expect(page.events[2].isManagedMirror)
@@ -363,6 +368,31 @@ struct GoogleManagedWriteTests {
         #expect(result.providerVersion == "synthetic-etag")
     }
 
+    @Test("Full details writes location and notes without creating invitees")
+    func fullDetails() async throws {
+        let client = GoogleCalendarClient(
+            transport: RecordingTransport { request in
+                let object = try #require(
+                    JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any]
+                )
+                #expect(object["summary"] as? String == "Synthetic planning session")
+                #expect(object["location"] as? String == "Synthetic room")
+                #expect(object["description"] as? String == "Synthetic agenda and participant context")
+                #expect(object["attendees"] == nil)
+                return HTTPResponse(
+                    statusCode: 200,
+                    body: Data(#"{"id":"provider-event","etag":"synthetic-etag"}"#.utf8)
+                )
+            }
+        )
+
+        _ = try await client.createManagedEvent(
+            accessToken: "token",
+            calendarID: "target",
+            request: googleFullDetailsRequest()
+        )
+    }
+
     @Test("Update and delete carry provider version preconditions")
     func updateAndDelete() async throws {
         let client = GoogleCalendarClient(
@@ -489,6 +519,31 @@ private func googleManagedRequest() -> ManagedEventWriteRequest {
             mirrorKey: String(repeating: "a", count: 52),
             sourceKeyHash: "synthetic-source",
             ruleMode: .busy,
+            ownershipKeyID: "synthetic-key",
+            authenticationTag: "synthetic-tag"
+        )
+    )
+}
+
+private func googleFullDetailsRequest() -> ManagedEventWriteRequest {
+    ManagedEventWriteRequest(
+        desiredFingerprint: "synthetic-full-fingerprint",
+        payload: DesiredEventPayload(
+            startsAt: Date(timeIntervalSince1970: 2_000),
+            endsAt: Date(timeIntervalSince1970: 3_000),
+            isAllDay: false,
+            availability: "busy",
+            title: "Synthetic planning session",
+            isPrivate: false,
+            location: "Synthetic room",
+            notes: "Synthetic agenda and participant context"
+        ),
+        provenance: ManagedEventProvenance(
+            configurationID: "synthetic-configuration",
+            armID: "synthetic-arm",
+            mirrorKey: String(repeating: "b", count: 52),
+            sourceKeyHash: "synthetic-source",
+            ruleMode: .fullDetails,
             ownershipKeyID: "synthetic-key",
             authenticationTag: "synthetic-tag"
         )

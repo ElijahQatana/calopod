@@ -31,6 +31,7 @@ The CLI and agent targets share the same core:
 
 ```sh
 swift run calopod sync --dry-run --day 2026-09-25
+swift run calopod main inspect
 swift run calopod-agent
 ```
 

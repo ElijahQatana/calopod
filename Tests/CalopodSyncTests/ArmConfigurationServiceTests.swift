@@ -36,6 +36,31 @@ struct ArmConfigurationServiceTests {
         #expect(arm.ruleMode == .fullDetails)
     }
 
+    @Test("Configures one Main calendar with a fixed Full details Rule")
+    func configuresMainCalendar() throws {
+        let setup = try armTestSetup()
+        let main = try setup.service.configureMainCalendar(
+            id: "main-arm",
+            sourceBindingIDs: ["source-two", "source-one"],
+            targetBindingID: "target"
+        )
+
+        #expect(main.isMain)
+        #expect(main.ruleMode == .fullDetails)
+        #expect(main.sourceBindingIDs == ["source-one", "source-two"])
+        #expect(try setup.repository.arm(id: main.id) == main)
+        #expect(throws: ArmConfigurationError.mainCalendarAlreadyConfigured) {
+            try setup.service.configureMainCalendar(
+                id: "another-main",
+                sourceBindingIDs: ["source-one"],
+                targetBindingID: "source-two"
+            )
+        }
+        #expect(throws: ArmConfigurationError.mainCalendarRuleFixed) {
+            try setup.service.updateRule(armID: main.id, ruleMode: .busy)
+        }
+    }
+
     @Test("Changes an existing Rule without replacing the Arm")
     func updatesRule() throws {
         let setup = try armTestSetup()
