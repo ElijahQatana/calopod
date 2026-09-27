@@ -30,6 +30,18 @@ run_service() {
     "$repository_root/Scripts/calopod-service.sh" "$@"
 }
 
+run_service_with_failure() {
+  failure_point=$1
+  shift
+  env \
+    CALOPOD_SERVICE_TEST_MODE=1 \
+    CALOPOD_SERVICE_TEST_HOME="$test_home" \
+    CALOPOD_SERVICE_TEST_AGENT_SOURCE="$agent_source" \
+    CALOPOD_SERVICE_TEST_HOST_SOURCE="$host_source" \
+    CALOPOD_SERVICE_TEST_FAILURE_POINT="$failure_point" \
+    "$repository_root/Scripts/calopod-service.sh" "$@"
+}
+
 run_service install \
   --interval-seconds 600 \
   --jitter-seconds 30 \
@@ -68,6 +80,23 @@ run_service install \
 [ "$(tail -n 1 "$installed_agent")" = "exit 2" ]
 [ "$(plutil -extract EnvironmentVariables.CALOPOD_AGENT_INTERVAL_SECONDS raw "$plist_path")" = "900" ]
 [ "$(cat "$state_root/state.sqlite")" = "state-sentinel" ]
+
+for failure_point in after-staging after-backup after-service after-plist; do
+  printf '#!/bin/sh\nexit 3\n' > "$agent_source"
+  chmod 700 "$agent_source"
+  if run_service_with_failure "$failure_point" install \
+    --interval-seconds 1200 \
+    --jitter-seconds 60 \
+    --lookback-days 3 \
+    --horizon-days 90 >/dev/null 2>&1; then
+    echo "The installer ignored an injected failure." >&2
+    exit 1
+  fi
+  [ "$(tail -n 1 "$installed_agent")" = "exit 2" ]
+  [ "$(plutil -extract EnvironmentVariables.CALOPOD_AGENT_INTERVAL_SECONDS raw "$plist_path")" = "900" ]
+  [ "$(cat "$state_root/state.sqlite")" = "state-sentinel" ]
+  [ "$(cat "$state_root/keychain-sentinel")" = "keychain-sentinel" ]
+done
 
 if run_service install \
   --interval-seconds 0 \

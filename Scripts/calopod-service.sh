@@ -166,6 +166,12 @@ render_plist() {
   plutil -lint "$destination" >/dev/null
 }
 
+inject_test_failure() {
+  [ "$test_mode" = "1" ] || return 0
+  [ "${CALOPOD_SERVICE_TEST_FAILURE_POINT:-}" != "$1" ] \
+    || fail "Injected service installation failure." 74
+}
+
 install_service() {
   interval_seconds=""
   jitter_seconds=""
@@ -223,13 +229,24 @@ install_service() {
     || fail "Could not create the installation staging directory." 74
   backup_root=""
   moved_service=0
+  installed_plist=0
+  plist_temporary=""
   install_committed=0
   cleanup_install() {
     [ ! -e "$staging_root" ] || rm -rf "$staging_root"
-    if [ "$install_committed" -eq 0 ] && [ "$moved_service" -eq 1 ]; then
-      [ ! -e "$service_root" ] || rm -rf "$service_root"
+    [ -z "$plist_temporary" ] || [ ! -e "$plist_temporary" ] || rm -f "$plist_temporary"
+    if [ "$install_committed" -eq 0 ]; then
+      if [ "$moved_service" -eq 1 ]; then
+        [ ! -e "$service_root" ] || rm -rf "$service_root"
+      fi
       if [ -n "$backup_root" ] && [ -e "$backup_root/Service" ]; then
         mv "$backup_root/Service" "$service_root"
+      fi
+      if [ "$installed_plist" -eq 1 ]; then
+        [ ! -e "$plist_path" ] || rm -f "$plist_path"
+      fi
+      if [ -n "$backup_root" ] && [ -e "$backup_root/$label.plist" ]; then
+        mv "$backup_root/$label.plist" "$plist_path"
       fi
     fi
     if [ -n "$backup_root" ] && [ -d "$backup_root" ]; then
@@ -258,12 +275,19 @@ install_service() {
     "$lookback_days" \
     "$horizon_days"
   chmod 600 "$plist_staging"
+  inject_test_failure "after-staging"
 
-  if [ -e "$service_root" ]; then
+  if [ -e "$service_root" ] || [ -e "$plist_path" ]; then
     backup_root=$(mktemp -d "$support_root/.service-backup.XXXXXX") \
       || fail "Could not create the installation backup directory." 74
+  fi
+  if [ -e "$service_root" ]; then
     mv "$service_root" "$backup_root/Service"
   fi
+  if [ -e "$plist_path" ]; then
+    mv "$plist_path" "$backup_root/$label.plist"
+  fi
+  inject_test_failure "after-backup"
 
   mv "$staging_root" "$service_root" || {
     if [ -n "$backup_root" ] && [ -e "$backup_root/Service" ]; then
@@ -273,10 +297,14 @@ install_service() {
   }
   staging_root=""
   moved_service=1
+  inject_test_failure "after-service"
 
   plist_temporary="$launch_agents_root/.$label.plist.installing"
   install -m 600 "$service_root/$label.plist" "$plist_temporary"
   mv "$plist_temporary" "$plist_path"
+  plist_temporary=""
+  installed_plist=1
+  inject_test_failure "after-plist"
   rm -f "$service_root/$label.plist"
 
   install_committed=1
