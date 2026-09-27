@@ -301,6 +301,7 @@ load_service() {
     echo "The Calopod user service is already loaded."
     return
   fi
+  launchctl enable "$service_target"
   launchctl bootstrap "$launch_domain" "$plist_path"
   echo "Loaded the Calopod user service."
 }
@@ -320,6 +321,9 @@ unload_service() {
 remove_service() {
   unload_service
   validate_managed_paths
+  if [ "$test_mode" != "1" ]; then
+    launchctl enable "$service_target" >/dev/null 2>&1 || true
+  fi
   [ ! -e "$plist_path" ] || rm -f "$plist_path"
   [ ! -e "$service_root" ] || rm -rf "$service_root"
   echo "Removed the Calopod user service. SQLite state and Keychain items were preserved."
