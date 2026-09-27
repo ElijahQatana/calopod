@@ -1,6 +1,10 @@
 import Foundation
 import GRDB
 
+/// The persisted link between one source event's mirror and the target
+/// event that represents it, keyed by `mirrorKey`. This is the record
+/// `SyncPlanner` and `ManagedEventLifecycleService` read and write to know
+/// what has already been mirrored where.
 public struct StoredMirrorMapping: Equatable, Sendable {
     public let mirrorKey: String
     public let armID: String
@@ -33,6 +37,9 @@ public struct StoredMirrorMapping: Equatable, Sendable {
 }
 
 extension LocalStateRepository {
+    // Upserts by mirror_key in one statement rather than a read-then-write,
+    // so a concurrent save for the same mirror can't race between checking
+    // for an existing row and inserting a duplicate.
     public func saveMirrorMapping(_ mapping: StoredMirrorMapping) throws {
         try database.write { database in
             try database.execute(

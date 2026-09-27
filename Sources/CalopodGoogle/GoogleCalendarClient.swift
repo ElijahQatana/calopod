@@ -5,6 +5,7 @@ import Foundation
 import FoundationNetworking
 #endif
 
+/// A calendar as Google's Calendar List API reports it.
 public struct GoogleCalendar: Equatable, Sendable {
     public let id: String
     public let summary: String?
@@ -21,6 +22,10 @@ public struct GoogleCalendar: Equatable, Sendable {
     }
 }
 
+/// Thin, direct client over the Google Calendar v3 REST API. Holds no OAuth
+/// or connection state itself — `GoogleConnectionService` supplies a fresh
+/// access token on every call — so this only needs to know how to talk to
+/// Google, not how Calopod manages Google connections.
 public struct GoogleCalendarClient: Sendable {
     private let transport: any HTTPTransport
     private let baseURL: URL
@@ -155,6 +160,13 @@ public struct GoogleCalendarClient: Sendable {
         return snapshots
     }
 
+    /// Creates a managed event using a deterministic ID derived from the
+    /// mirror key rather than letting Google assign a random one. That makes
+    /// create idempotent: if a create already succeeded but the response was
+    /// lost (a network drop, a crash before the mapping was saved), retrying
+    /// hits a 409 for an ID that already exists — handled below by reading
+    /// that existing event back and confirming its marker matches, rather
+    /// than creating a duplicate.
     public func createManagedEvent(
         accessToken: String,
         calendarID: String,
@@ -181,6 +193,11 @@ public struct GoogleCalendarClient: Sendable {
             let marker = OwnershipMarkerCodec.marker(
                 fields: existing.extendedProperties?.privateValues
             )
+            // The ID collision only counts as "this create already
+            // happened" if the existing event's marker proves it's the same
+            // logical write — anything else (a genuine ID collision, or an
+            // event this create doesn't actually own) is treated as failure
+            // rather than silently adopted.
             guard marker.status == .parsed,
                   marker.provenance == managed.provenance else {
                 throw ProviderFailure.invalidResponse
@@ -229,6 +246,11 @@ public struct GoogleCalendarClient: Sendable {
         return try await send(request: request, accessToken: accessToken)
     }
 
+    // Maps Google's HTTP status codes to the shared `ProviderFailure`
+    // vocabulary once, here, so every call site above gets the same
+    // treatment of expired credentials (401), an expired sync token (410,
+    // Google's specific code for "your cursor is too old"), and throttling
+    // (429/5xx) without repeating this switch everywhere.
     private func send(request original: URLRequest, accessToken: String) async throws -> HTTPResponse {
         var request = original
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
@@ -264,6 +286,10 @@ public struct GoogleCalendarClient: Sendable {
             .appendingPathComponent("events")
     }
 
+    // The ownership marker's fields are written into Google's
+    // `extendedProperties.private` bag, which Google Calendar reserves for
+    // exactly this purpose (app-private metadata invisible to the user and
+    // to other apps) rather than overloading a user-facing field.
     private func managedEventBody(
         _ managed: ManagedEventWriteRequest,
         eventID: String?
@@ -494,6 +520,10 @@ private struct GoogleEvent: Decodable {
             ).status != .absent,
             location: location,
             notes: description,
+            // Prefers an actual video-call link over the generic event page,
+            // so EventKit's "join" affordance (which recognizes a meeting
+            // link in notes) has something useful to act on; htmlLink is
+            // only a fallback when the event has no conferencing at all.
             url: hangoutLink ?? conferenceData?.videoURI ?? htmlLink,
             organizer: organizer?.participant,
             attendees: (attendees ?? []).map(\.participant)
@@ -528,6 +558,11 @@ private struct GoogleEvent: Decodable {
             markerStatus: decoded.status,
             provenance: decoded.provenance,
             createdAt: created.flatMap(RFC3339.date(from:)),
+            // True when this event's actual ID matches the deterministic ID
+            // `createManagedEvent` would have used — i.e. it really is the
+            // event Calopod originally created for this mirror, not a
+            // provider-side copy with a different ID that happens to carry
+            // a matching marker.
             isProviderPreferredIdentity: decoded.provenance.flatMap {
                 try? deterministicGoogleEventID(mirrorKey: $0.mirrorKey)
             } == id

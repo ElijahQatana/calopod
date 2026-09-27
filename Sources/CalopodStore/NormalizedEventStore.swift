@@ -2,6 +2,10 @@ import CalopodDomain
 import Foundation
 import GRDB
 
+/// One source event as persisted after `EventNormalizer` has processed it —
+/// the shape every other part of the sync engine (planning, Availability)
+/// reads, so it never has to know which provider or connection an event
+/// actually came from.
 public struct StoredNormalizedInstance: Equatable, Sendable {
     public let sourceKeyHash: String
     public let connectionID: String
@@ -66,6 +70,8 @@ public struct StoredNormalizedInstance: Equatable, Sendable {
     }
 }
 
+/// Persisted form of a provider's incremental-sync cursor for one scope,
+/// read back on the next fetch so it can resume instead of re-scanning.
 public struct StoredCursorUpdate: Equatable, Sendable {
     public let scopeKey: String
     public let value: String
@@ -85,6 +91,9 @@ public struct StoredCursorUpdate: Equatable, Sendable {
     }
 }
 
+/// The last known health of a Connection: whether its most recent fetch
+/// succeeded, and if not, since when and why — the data behind `doctor`-style
+/// diagnostics without exposing anything about the calendar content itself.
 public struct StoredConnectionHealth: Equatable, Sendable {
     public let connectionID: String
     public let status: String
@@ -94,6 +103,10 @@ public struct StoredConnectionHealth: Equatable, Sendable {
 }
 
 extension LocalStateRepository {
+    /// Stores one page of normalized events and reconciles what a full
+    /// refresh implies was deleted — all inside one transaction, so a crash
+    /// mid-refresh can never leave stale and fresh event rows mixed
+    /// together.
     public func applyEventRefresh(
         connectionID: String,
         calendarBindingID: String,
@@ -106,6 +119,12 @@ extension LocalStateRepository {
         now: Date = Date()
     ) throws {
         try database.writeTransaction { database in
+            // Every instance written in this refresh is tagged with a new
+            // generation number. On a full refresh, any existing row in the
+            // window that *didn't* get this generation's tag was absent from
+            // the provider's page and is therefore gone — the cleanup below
+            // deletes exactly those rows instead of requiring the caller to
+            // diff old and new event lists itself.
             let previousGeneration = try Int64.fetchOne(
                 database,
                 sql: "SELECT MAX(seen_generation) FROM normalized_instances WHERE calendar_binding_id = ?",
@@ -176,6 +195,11 @@ extension LocalStateRepository {
                 )
             }
 
+            // Only a full refresh can safely infer deletions this way — an
+            // incremental page only ever reports what changed, so anything
+            // it doesn't mention says nothing about whether older events in
+            // the window still exist. Incremental deletions instead rely
+            // entirely on the explicit `cancelledSourceKeyHashes` above.
             if isFullRefresh {
                 try database.execute(
                     sql: """

@@ -4,6 +4,9 @@ import CalopodStore
 import CryptoKit
 import Foundation
 
+/// Manages one Microsoft Calendar Connection end to end: authorization,
+/// token refresh, calendar discovery, and event fetch/write — the Microsoft
+/// Graph counterpart to `GoogleConnectionService`.
 public struct MicrosoftConnectionService: Sendable {
     private static let provider = ProviderKind.microsoft.rawValue
     private static let deltaScope = "microsoft.events.delta-link.v1"
@@ -42,6 +45,8 @@ public struct MicrosoftConnectionService: Sendable {
         )
         let tokens = try await oauth.authorize(using: browser)
         try tokenVault.save(tokens, provider: Self.provider, connectionID: connection.id)
+        // Same rollback as GoogleConnectionService.authorize: don't leave
+        // Keychain tokens behind for a connection that never got persisted.
         do {
             try state.saveConnection(connection, now: now())
         } catch {
@@ -108,6 +113,11 @@ public struct MicrosoftConnectionService: Sendable {
             refreshMode = .full
         }
 
+        // The delta feed used above doesn't request extensions data (unlike
+        // `managedEvents`, which asks Graph to $expand it), so marker
+        // information isn't present on these events directly. Managed
+        // mirrors are instead identified with a second call that does
+        // request extensions, and cross-referenced here by event ID.
         let managedEventIDs = Set(
             try await graph.managedEvents(
                 accessToken: tokens.accessToken,

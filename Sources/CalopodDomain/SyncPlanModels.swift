@@ -1,5 +1,10 @@
 import Foundation
 
+/// What `SyncPlanner` decided to do about one mirrored event. `repair` is
+/// distinct from `create`/`update`/`remove`: it covers cases the planner
+/// could not resolve with full confidence (see `SyncPlanReason`) and that
+/// `ManagedEventLifecycleService` will only act on when the evidence is
+/// unambiguous.
 public enum SyncPlanAction: String, Codable, CaseIterable, Sendable {
     case create
     case update
@@ -8,6 +13,9 @@ public enum SyncPlanAction: String, Codable, CaseIterable, Sendable {
     case noOp = "no-op"
 }
 
+/// Why a plan item got the action it did — the human-readable justification
+/// behind every create/update/remove/repair, useful for diagnostics without
+/// needing to expose the underlying event content.
 public enum SyncPlanReason: String, Codable, Sendable {
     case targetMissing = "target-missing"
     case targetDiffers = "target-differs"
@@ -21,6 +29,9 @@ public enum SyncPlanReason: String, Codable, Sendable {
     case targetSnapshotIncomplete = "target-snapshot-incomplete"
 }
 
+/// The fields a mirrored event should have on the target, already shaped by
+/// the Arm's Rule (Busy strips everything but timing; Full details carries
+/// title, location, and notes too).
 public struct DesiredEventPayload: Codable, Equatable, Sendable {
     public let startsAt: Date
     public let endsAt: Date
@@ -52,6 +63,9 @@ public struct DesiredEventPayload: Codable, Equatable, Sendable {
     }
 }
 
+/// One decision from a `SyncPlan`: what to do for a single mirror, and the
+/// evidence (`desiredFingerprint`, `payload`) needed to carry it out without
+/// re-deriving it from the source again.
 public struct SyncPlanItem: Codable, Equatable, Sendable {
     public let id: String
     public let armID: String
@@ -83,6 +97,9 @@ public struct SyncPlanItem: Codable, Equatable, Sendable {
     }
 }
 
+/// The full, deterministic set of decisions for one Arm over one window —
+/// the output of `SyncPlanner.plan` and the input to
+/// `ManagedEventLifecycleService.apply`.
 public struct SyncPlan: Codable, Equatable, Sendable {
     public let window: SyncWindow
     public let items: [SyncPlanItem]

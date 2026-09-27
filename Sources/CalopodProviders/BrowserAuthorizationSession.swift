@@ -20,6 +20,10 @@ public struct BrowserAuthorizationResult: Sendable {
     }
 }
 
+/// Runs an OAuth authorization-code flow through the system browser rather
+/// than an embedded web view, so the user authenticates in their normal,
+/// already-signed-in browser session. `makeURL` builds the provider-specific
+/// authorize URL once this session has a redirect URI ready to receive it.
 public protocol BrowserAuthorizationSession: Sendable {
     func authorize(
         makeURL: @escaping @Sendable (BrowserAuthorizationContext) throws -> URL
@@ -30,6 +34,10 @@ public protocol BrowserAuthorizationSession: Sendable {
 import AppKit
 import Network
 
+/// Opens the default browser at the provider's authorize URL and receives
+/// the redirect on a one-shot local HTTP listener bound to an ephemeral
+/// loopback port — the standard "loopback redirect" pattern for native apps
+/// that can't register a fixed redirect URI in advance.
 public final class LoopbackBrowserAuthorizationSession: BrowserAuthorizationSession, @unchecked Sendable {
     private let timeoutSeconds: UInt64
     private let redirectHost: String
@@ -132,6 +140,10 @@ public final class LoopbackBrowserAuthorizationSession: BrowserAuthorizationSess
                             completion: .contentProcessed { _ in connection.cancel() }
                         )
 
+                        // The state value round-trips through the provider
+                        // unchanged; requiring it to match is what stops a
+                        // stray or malicious request to this loopback port
+                        // from being accepted as a real authorization result.
                         guard values["state"] == state else {
                             coordinator.finish(.failure(ProviderFailure.invalidResponse))
                             return
@@ -168,6 +180,9 @@ public final class LoopbackBrowserAuthorizationSession: BrowserAuthorizationSess
     }
 }
 
+/// Guards the listener's single continuation against being resumed twice —
+/// the redirect callback, a listener failure, and the timeout can all race
+/// to finish the flow, and only the first should count.
 private final class AuthorizationCoordinator: @unchecked Sendable {
     private let listener: NWListener
     private let continuation: CheckedContinuation<BrowserAuthorizationResult, any Error>

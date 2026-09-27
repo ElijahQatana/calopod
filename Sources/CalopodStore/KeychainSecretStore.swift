@@ -1,6 +1,10 @@
 import Foundation
 import Security
 
+/// The production `SecretStore`, backed by the macOS Keychain. Items are
+/// scoped `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`: readable only
+/// on this device, and only after the user has unlocked it at least once
+/// since boot — never synced or exportable.
 public struct KeychainSecretStore: SecretStore, Sendable {
     private let service: String
 
@@ -8,6 +12,10 @@ public struct KeychainSecretStore: SecretStore, Sendable {
         self.service = service
     }
 
+    // Keychain has no single "upsert" call, so a save always tries an
+    // update first and only falls back to adding a new item if none existed
+    // yet — the ordering that avoids a duplicate-item error on every write
+    // after the first.
     public func save(_ value: Data, for reference: SecretReference) throws {
         let query = baseQuery(for: reference)
         let attributes: [String: Any] = [

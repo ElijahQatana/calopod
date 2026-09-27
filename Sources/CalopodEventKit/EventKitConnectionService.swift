@@ -4,6 +4,10 @@ import CalopodStore
 import CryptoKit
 import Foundation
 
+/// Manages the single EventKit Connection ("Calendars on this Mac") and its
+/// calendar bindings. Unlike Google or Microsoft, there is exactly one
+/// EventKit connection per device, so this never has to route between
+/// multiple accounts on the same provider.
 public struct EventKitConnectionService: Sendable {
     private static let provider = ProviderKind.eventKit.rawValue
     private let state: LocalStateRepository
@@ -12,6 +16,10 @@ public struct EventKitConnectionService: Sendable {
         self.state = state
     }
 
+    /// Creates the EventKit connection on first use, or reuses the existing
+    /// one — calling this again after Calendars are already connected just
+    /// refreshes the calendar list rather than creating a duplicate
+    /// connection.
     public func connect(
         calendars: [EventKitCalendarSnapshot],
         configurationID: String = "default",
@@ -68,6 +76,10 @@ public struct EventKitConnectionService: Sendable {
         try state.replaceCalendarBindings(connectionID: connectionID, bindings: bindings, now: now)
     }
 
+    /// Derives a calendar binding's ID from its identity rather than
+    /// generating a random one, so re-connecting or refreshing the same
+    /// EventKit calendar always maps to the same binding row instead of
+    /// creating a duplicate.
     private func stableBindingID(
         connectionID: String,
         sourceID: String,

@@ -1,5 +1,9 @@
 import Foundation
 
+/// An organizer or attendee as reported by a provider. This is presentation
+/// data only — Calopod never writes native attendees, so a participant
+/// always ends up folded into safe fields like notes rather than a real
+/// calendar invite.
 public struct EventParticipant: Codable, Equatable, Sendable {
     public let name: String?
     public let emailAddress: String?

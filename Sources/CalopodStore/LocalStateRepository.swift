@@ -6,6 +6,9 @@ public enum LocalStateError: Error, Equatable, Sendable {
     case invalidArmRuleMode(String)
 }
 
+/// A configured calendar account or local provider (a "Connection" in
+/// product terms) — the thing Arms route events through, independent of
+/// which calendars within it are actually selected.
 public struct StoredConnection: Equatable, Sendable {
     public let id: String
     public let configurationID: String
@@ -28,6 +31,9 @@ public struct StoredConnection: Equatable, Sendable {
     }
 }
 
+/// One calendar within a Connection, and whether the user has selected it
+/// for sync. `providerSource*` fields carry EventKit's notion of the
+/// account a calendar belongs to, used for duplicate-source protection.
 public struct StoredCalendarBinding: Equatable, Sendable {
     public let id: String
     public let connectionID: String
@@ -62,6 +68,9 @@ public struct StoredCalendarBinding: Equatable, Sendable {
     }
 }
 
+/// The persisted form of an Arm: its routing (sources to target), its Rule,
+/// and — for an EventKit target — which device is the single preferred
+/// writer.
 public struct StoredArm: Equatable, Sendable {
     public let id: String
     public let configurationID: String
@@ -93,6 +102,9 @@ public struct StoredArm: Equatable, Sendable {
     }
 }
 
+/// One device (Mac, eventually iPhone) participating in a configuration.
+/// `isCurrent` marks this device's own row, used to resolve which device an
+/// EventKit Arm's preferred-writer lock refers to.
 public struct StoredDevice: Equatable, Sendable {
     public let id: String
     public let configurationID: String
@@ -105,6 +117,11 @@ public struct StoredDevice: Equatable, Sendable {
     }
 }
 
+/// The primary read/write interface over Calopod's operational SQLite
+/// ledger: Connections, calendar bindings, Arms, devices, and cursors.
+/// `EventCache`, `SyncPlanner`, and the lifecycle services all read and
+/// write through this rather than touching GRDB directly, which keeps SQL
+/// contained to one layer.
 public final class LocalStateRepository: @unchecked Sendable {
     let database: CalopodDatabase
 
@@ -112,6 +129,11 @@ public final class LocalStateRepository: @unchecked Sendable {
         self.database = database
     }
 
+    /// Returns this device's row for a configuration, creating one on first
+    /// use. `proposedID` is only used the first time; once a device row
+    /// exists, its stored ID is always what's returned, so a device's
+    /// identity for ownership and preferred-writer purposes never changes
+    /// after that first call.
     public func currentDevice(
         configurationID: String,
         proposedID: String = UUID().uuidString.lowercased(),
@@ -249,6 +271,11 @@ public final class LocalStateRepository: @unchecked Sendable {
         }
     }
 
+    /// Replaces a Connection's calendar list with what the provider reports
+    /// now — adding new calendars, dropping ones that vanished, and updating
+    /// display metadata — while explicitly preserving each calendar's
+    /// existing `is_selected` state, since a provider refresh should never
+    /// silently re-select or deselect a calendar the user chose themselves.
     public func replaceCalendarBindings(
         connectionID: String,
         bindings: [StoredCalendarBinding],
@@ -386,6 +413,10 @@ public final class LocalStateRepository: @unchecked Sendable {
         return try calendarBinding(id: id)
     }
 
+    /// Inserts an Arm and its source bindings together in one transaction —
+    /// `ArmConfigurationService` has already validated everything by the
+    /// time this is called, so this layer only needs to persist, not
+    /// re-check invariants.
     public func saveArm(_ arm: StoredArm, now: Date = Date()) throws {
         try database.writeTransaction { database in
             try database.execute(

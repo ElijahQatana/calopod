@@ -1,6 +1,10 @@
 import CryptoKit
 import Foundation
 
+/// PKCE (Proof Key for Code Exchange) pair for OAuth authorization code
+/// flows. The `verifier` stays local; only its hashed `challenge` is sent to
+/// the provider's authorize endpoint, so a captured redirect URL alone
+/// cannot be replayed to obtain tokens.
 public struct PKCEPair: Equatable, Sendable {
     public let verifier: String
     public let challenge: String
@@ -24,6 +28,9 @@ public struct PKCEPair: Equatable, Sendable {
     }
 }
 
+/// `application/x-www-form-urlencoded` body for OAuth token requests, with
+/// keys sorted so the encoded output (and any signature over it) is
+/// deterministic across calls.
 public func formEncoded(_ values: [String: String]) -> Data {
     var allowed = CharacterSet.alphanumerics
     allowed.insert(charactersIn: "-._~")

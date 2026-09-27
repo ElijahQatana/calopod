@@ -15,10 +15,14 @@ public struct HTTPResponse: Sendable {
     }
 }
 
+/// Thin seam between provider clients and the network, so a test can supply
+/// a fake transport instead of making real HTTP calls to Google or
+/// Microsoft.
 public protocol HTTPTransport: Sendable {
     func send(_ request: URLRequest) async throws -> HTTPResponse
 }
 
+/// The real, `URLSession`-backed `HTTPTransport` used in production.
 public struct URLSessionTransport: HTTPTransport, @unchecked Sendable {
     private let session: URLSession
 
@@ -42,6 +46,9 @@ public struct URLSessionTransport: HTTPTransport, @unchecked Sendable {
     }
 }
 
+/// Failure categories shared across every hosted provider client, kept
+/// generic enough to log and display without leaking a provider's raw error
+/// body or any calendar content.
 public enum ProviderFailure: Error, Equatable, Sendable {
     case accountPolicyRequired
     case authorizationRequired

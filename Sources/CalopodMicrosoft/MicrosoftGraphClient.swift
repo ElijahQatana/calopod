@@ -5,6 +5,7 @@ import Foundation
 import FoundationNetworking
 #endif
 
+/// A calendar as Microsoft Graph's calendars endpoint reports it.
 public struct MicrosoftCalendar: Equatable, Sendable {
     public let id: String
     public let name: String?
@@ -19,6 +20,9 @@ public struct MicrosoftCalendar: Equatable, Sendable {
     }
 }
 
+/// Thin, direct client over the Microsoft Graph v1.0 calendar API. Like
+/// `GoogleCalendarClient`, this holds no OAuth or connection state —
+/// `MicrosoftConnectionService` supplies a fresh access token per call.
 public struct MicrosoftGraphClient: Sendable {
     private let transport: any HTTPTransport
     private let baseURL: URL
@@ -59,6 +63,10 @@ public struct MicrosoftGraphClient: Sendable {
         through end: Date,
         deltaLink: String? = nil
     ) async throws -> ProviderEventPage {
+        // A stored delta link resumes exactly where the last fetch left off;
+        // a link that fails to even parse as a URL is treated the same as an
+        // expired cursor, so the caller falls back to a bounded full fetch
+        // rather than failing outright on corrupted cursor state.
         let initialURL: URL
         let followsCursor: Bool
         if let deltaLink {
@@ -178,6 +186,10 @@ public struct MicrosoftGraphClient: Sendable {
             followsCursor: false
         )
 
+        // Unlike create, an update sends the ownership marker as a second,
+        // separate PATCH to the extension resource rather than embedding it
+        // in the event body — open extensions can be created inline with an
+        // event but are updated through their own resource URL.
         let extensionURL = eventURL
             .appendingPathComponent("extensions")
             .appendingPathComponent("com.calopod.managed")
@@ -223,6 +235,12 @@ public struct MicrosoftGraphClient: Sendable {
         )
     }
 
+    // `IdType="ImmutableId"` asks Graph for event IDs that stay stable across
+    // calendar moves and updates — without it, an ID this client persisted
+    // as a mirror mapping's target could silently stop resolving. `followsCursor`
+    // matters for status mapping: a 404 only means "the delta cursor is
+    // gone" when this request was itself following one; a 404 on a plain
+    // lookup is a normal not-found.
     private func send(
         request original: URLRequest,
         accessToken: String,
@@ -253,6 +271,10 @@ public struct MicrosoftGraphClient: Sendable {
         }
     }
 
+    // Graph's pagination and delta links are opaque, provider-returned
+    // URLs; this confirms one still points at the expected Graph host before
+    // it's ever fetched, rather than blindly following a URL from a response
+    // body.
     private func validatedLink(_ url: URL) throws -> URL {
         guard url.scheme?.lowercased() == baseURL.scheme?.lowercased(),
               url.host?.lowercased() == baseURL.host?.lowercased(),
@@ -484,6 +506,10 @@ private struct MicrosoftEvent: Decodable {
     var managedSnapshot: ManagedEventSnapshot {
         let markerExtension = extensions?.first(where: { $0.isCalopodMarker })
         let decoded = OwnershipMarkerCodec.marker(fields: markerExtension?.markerFields)
+        // A Calopod extension that's present but decodes to `.absent` (every
+        // field empty or missing) is a corrupted marker, not truly no
+        // marker — reported as `.invalid` so it isn't mistaken for an
+        // ordinary unmanaged event.
         let markerStatus: ManagedEventMarkerStatus = if markerExtension != nil,
                                                         decoded.status == .absent {
             .invalid
