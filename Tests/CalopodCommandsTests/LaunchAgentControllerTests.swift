@@ -15,7 +15,7 @@ func launchAgentControllerReportsInstalledLaunchdState() throws {
         case "print": LaunchctlResult(exitCode: 0, output: "")
         case "print-disabled": LaunchctlResult(
             exitCode: 0,
-            output: #""com.calopod.agent" => true"#
+            output: #""com.calopod.agent" => disabled"#
         )
         default: LaunchctlResult(exitCode: 1, output: "")
         }
@@ -34,21 +34,38 @@ func enablingBootstrapsAnInstalledAgent() throws {
     let fixture = try LaunchAgentFixture()
     defer { fixture.remove() }
     var calls: [[String]] = []
+    var isLoaded = false
+    var isDisabled = true
     let controller = try LaunchAgentController(
         homeDirectory: fixture.homeDirectory,
         userID: 501
     ) { arguments in
         calls.append(arguments)
-        return LaunchctlResult(
-            exitCode: arguments.first == "print" ? 1 : 0,
-            output: ""
-        )
+        switch arguments.first {
+        case "enable":
+            isDisabled = false
+            return LaunchctlResult(exitCode: 0, output: "")
+        case "bootstrap":
+            isLoaded = true
+            return LaunchctlResult(exitCode: 0, output: "")
+        case "print":
+            return LaunchctlResult(exitCode: isLoaded ? 0 : 1, output: "")
+        case "print-disabled":
+            return LaunchctlResult(
+                exitCode: 0,
+                output: isDisabled ? #""com.calopod.agent" => disabled"# : ""
+            )
+        default:
+            return LaunchctlResult(exitCode: 1, output: "")
+        }
     }
 
     try controller.enable()
 
-    #expect(calls.map(\.first) == ["enable", "print", "bootstrap"])
-    #expect(calls.last == [
+    #expect(calls.map(\.first) == [
+        "enable", "print", "bootstrap", "print", "print-disabled",
+    ])
+    #expect(calls[2] == [
         "bootstrap",
         "gui/501",
         fixture.propertyListURL.path,
@@ -60,17 +77,37 @@ func disablingBootsOutBeforePersistingTheDisabledState() throws {
     let fixture = try LaunchAgentFixture()
     defer { fixture.remove() }
     var calls: [[String]] = []
+    var isLoaded = true
+    var isDisabled = false
     let controller = try LaunchAgentController(
         homeDirectory: fixture.homeDirectory,
         userID: 501
     ) { arguments in
         calls.append(arguments)
-        return LaunchctlResult(exitCode: 0, output: "")
+        switch arguments.first {
+        case "bootout":
+            isLoaded = false
+            return LaunchctlResult(exitCode: 0, output: "")
+        case "disable":
+            isDisabled = true
+            return LaunchctlResult(exitCode: 0, output: "")
+        case "print":
+            return LaunchctlResult(exitCode: isLoaded ? 0 : 1, output: "")
+        case "print-disabled":
+            return LaunchctlResult(
+                exitCode: 0,
+                output: isDisabled ? #""com.calopod.agent" => disabled"# : ""
+            )
+        default:
+            return LaunchctlResult(exitCode: 1, output: "")
+        }
     }
 
     try controller.disable()
 
-    #expect(calls.map(\.first) == ["print", "bootout", "disable"])
+    #expect(calls.map(\.first) == [
+        "print", "bootout", "disable", "print", "print-disabled",
+    ])
 }
 
 @Test

@@ -75,6 +75,9 @@ struct LaunchAgentController {
                 operation: "bootstrap"
             )
         }
+        guard try isLoaded(), try !isDisabled() else {
+            throw LaunchAgentControlError.operationFailed("enable")
+        }
     }
 
     func disable() throws {
@@ -83,6 +86,9 @@ struct LaunchAgentController {
             try requireSuccess(launchctl(["bootout", serviceTarget]), operation: "bootout")
         }
         try requireSuccess(launchctl(["disable", serviceTarget]), operation: "disable")
+        guard try !isLoaded(), try isDisabled() else {
+            throw LaunchAgentControlError.operationFailed("disable")
+        }
     }
 
     func restartIfEnabled() throws {
@@ -177,7 +183,14 @@ struct LaunchAgentController {
         guard result.exitCode == 0 else {
             throw LaunchAgentControlError.operationFailed("status")
         }
-        return result.output.contains("\"\(AgentServiceConfiguration.label)\" => true")
+        let label = "\"\(AgentServiceConfiguration.label)\""
+        guard let line = result.output.split(separator: "\n").first(where: {
+            $0.contains(label)
+        }), let separator = line.range(of: "=>") else {
+            return false
+        }
+        let value = line[separator.upperBound...].trimmingCharacters(in: .whitespaces)
+        return value == "true" || value == "disabled"
     }
 
     private func requireSuccess(
