@@ -317,7 +317,7 @@ func agentStatusPayload(
         }
         if let latest = try repository.latestSyncRun(trigger: "automatic"),
            latest.status == "failed" || latest.status == "interrupted" {
-            failureCategory = latest.errorCode ?? "local-state"
+            failureCategory = genericFailureCategory(latest.errorCode)
         }
     }
 

@@ -37,3 +37,32 @@ func doctorReplacesUnknownStoredFailuresWithAGenericCategory() {
     #expect(genericFailureCategory("private-provider-message") == "provider")
     #expect(genericFailureCategory(nil) == "provider")
 }
+
+@Test
+func doctorDistinguishesDisabledAndUnexpectedlyStoppedServices() {
+    let disabled = serviceHealthCheck(LaunchAgentSnapshot(
+        installed: true,
+        loaded: false,
+        disabled: true,
+        configuration: nil
+    ))
+    let stopped = serviceHealthCheck(LaunchAgentSnapshot(
+        installed: true,
+        loaded: false,
+        disabled: false,
+        configuration: nil
+    ))
+    let running = serviceHealthCheck(LaunchAgentSnapshot(
+        installed: true,
+        loaded: true,
+        disabled: false,
+        configuration: nil
+    ))
+
+    #expect(disabled.item.kind == "pending")
+    #expect(disabled.item.reason == "disabled")
+    #expect(stopped.item.kind == "failed")
+    #expect(stopped.item.reason == "stopped")
+    #expect(running.item.kind == "ok")
+    #expect(running.warning == nil)
+}

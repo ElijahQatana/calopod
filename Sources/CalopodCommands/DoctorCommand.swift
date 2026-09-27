@@ -85,6 +85,11 @@ private func doctorReport() throws -> DoctorReport {
         items.append(doctorItem("installation", "failed", "installation"))
         warnings.append("Rebuild and reinstall the user service.")
     }
+    let serviceCheck = serviceHealthCheck(snapshot)
+    items.append(serviceCheck.item)
+    if let warning = serviceCheck.warning {
+        warnings.append(warning)
+    }
 
     guard FileManager.default.fileExists(atPath: configuration.stateURL.path) else {
         items.append(doctorItem("state", "pending"))
@@ -111,6 +116,12 @@ private func doctorReport() throws -> DoctorReport {
         return doctorReport(items: items, warnings: warnings)
     }
     items.append(doctorItem("database", "ok"))
+    if try repository.agentControl().isPaused {
+        items.append(doctorItem("schedule", "pending", "paused"))
+        warnings.append("Resume automatic sync when scheduled runs should continue.")
+    } else {
+        items.append(doctorItem("schedule", "ok"))
+    }
 
     let connections = try repository.connections().filter(\.isEnabled)
     if connections.isEmpty {
@@ -182,6 +193,24 @@ func providerHealthCheck(
         }
     }
     return doctorItem("provider-health", sawUnchecked ? "pending" : "ok")
+}
+
+func serviceHealthCheck(
+    _ snapshot: LaunchAgentSnapshot
+) -> (item: CommandItem, warning: String?) {
+    if snapshot.disabled {
+        return (
+            doctorItem("service", "pending", "disabled"),
+            "Enable automatic sync when scheduled runs should continue."
+        )
+    }
+    if !snapshot.loaded {
+        return (
+            doctorItem("service", "failed", "stopped"),
+            "Enable automatic sync to start the installed service."
+        )
+    }
+    return (doctorItem("service", "ok"), nil)
 }
 
 func genericFailureCategory(_ value: String?) -> String {
