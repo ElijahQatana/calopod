@@ -1,5 +1,6 @@
 @testable import CalopodRuntime
 import CalopodDomain
+import CalopodProviders
 import CalopodStore
 import Foundation
 import Testing
@@ -341,6 +342,133 @@ func busyAgentAttemptWaitsForTheScheduledDelayBeforeStopping() async throws {
     #expect(delays.values == [615])
 }
 
+@Test
+func failedAgentAttemptsWaitForTheScheduledDelay() async throws {
+    try await verifyAgentFailureWaits(
+        ProviderFailure.authorizationRequired,
+        category: "authorization"
+    )
+    try await verifyAgentFailureWaits(
+        ProviderFailure.permissionDenied,
+        category: "permission"
+    )
+    try await verifyAgentFailureWaits(
+        ProviderFailure.temporaryFailure(retryAfterSeconds: 60),
+        category: "temporary"
+    )
+    try await verifyAgentFailureWaits(
+        CalopodRuntimeError.invalidStatePath,
+        category: "local-state"
+    )
+}
+
+@Test
+func wakeStartsOneFreshBoundedRunWithoutCatchUp() async throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("calopod-agent-wake-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let environment = try CalopodRuntimeEnvironment(
+        variables: [:],
+        stateLocation: try CalopodStateLocation(
+            environment: [
+                "CALOPOD_STATE_PATH": directory.appendingPathComponent("state.sqlite").path,
+            ]
+        ),
+        executableURL: directory.appendingPathComponent("calopod-agent")
+    )
+    let schedule = try AgentSchedule(
+        interval: 600,
+        maximumJitter: 30,
+        lookbackDays: 2,
+        horizonDays: 14
+    )
+    let dates = LockedSequence([
+        Date(timeIntervalSince1970: 1_788_566_400),
+        Date(timeIntervalSince1970: 1_788_912_000),
+    ])
+    let windows = LockedValues<SyncWindow>()
+    let delays = LockedValues<TimeInterval>()
+    let runner = CalopodAgentRunner(
+        environment: environment,
+        schedule: schedule,
+        now: { dates.next() },
+        randomUnit: { 0.5 },
+        sleep: { delay in
+            delays.append(delay)
+            if delays.values.count == 2 {
+                throw CancellationError()
+            }
+        },
+        runSync: { request in
+            let window = try #require(request.window)
+            windows.append(window)
+            return SyncExecutionResult(
+                status: "ok",
+                mode: .apply,
+                window: window,
+                items: [],
+                appliedCount: 0,
+                reconciledCount: 0,
+                noOpCount: 0,
+                warnings: []
+            )
+        }
+    )
+
+    await runner.runUntilCancelled { _ in }
+
+    let firstExpectedWindow = try schedule.window(containing: dates.values[0])
+    let secondExpectedWindow = try schedule.window(containing: dates.values[1])
+    #expect(windows.values.count == 2)
+    #expect(windows.values[0] == firstExpectedWindow)
+    #expect(windows.values[1] == secondExpectedWindow)
+    #expect(delays.values == [615, 615])
+}
+
+private func verifyAgentFailureWaits(
+    _ error: any Error & Sendable,
+    category: String
+) async throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("calopod-agent-failure-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let environment = try CalopodRuntimeEnvironment(
+        variables: [:],
+        stateLocation: try CalopodStateLocation(
+            environment: [
+                "CALOPOD_STATE_PATH": directory.appendingPathComponent("state.sqlite").path,
+            ]
+        ),
+        executableURL: directory.appendingPathComponent("calopod-agent")
+    )
+    let reports = LockedValues<AgentRunReport>()
+    let delays = LockedValues<TimeInterval>()
+    let runner = CalopodAgentRunner(
+        environment: environment,
+        schedule: try AgentSchedule(
+            interval: 600,
+            maximumJitter: 30,
+            lookbackDays: 2,
+            horizonDays: 14
+        ),
+        now: { Date(timeIntervalSince1970: 1_788_566_400) },
+        randomUnit: { 0.5 },
+        sleep: { delay in
+            delays.append(delay)
+            throw CancellationError()
+        },
+        runSync: { _ in throw error }
+    )
+
+    await runner.runUntilCancelled { reports.append($0) }
+
+    #expect(reports.values.map(\.status) == ["failed"])
+    #expect(reports.values.map(\.failureCategory) == [category])
+    #expect(delays.values == [615])
+}
+
 private final class LockedValues<Value: Sendable>: @unchecked Sendable {
     private let lock = NSLock()
     private var storage: [Value] = []
@@ -351,5 +479,24 @@ private final class LockedValues<Value: Sendable>: @unchecked Sendable {
 
     func append(_ value: Value) {
         lock.withLock { storage.append(value) }
+    }
+}
+
+private final class LockedSequence<Value: Sendable>: @unchecked Sendable {
+    let values: [Value]
+    private let lock = NSLock()
+    private var index = 0
+
+    init(_ values: [Value]) {
+        precondition(!values.isEmpty)
+        self.values = values
+    }
+
+    func next() -> Value {
+        lock.withLock {
+            let value = values[min(index, values.count - 1)]
+            index += 1
+            return value
+        }
     }
 }

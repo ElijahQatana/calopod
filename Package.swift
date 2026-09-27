@@ -123,7 +123,12 @@ let package = Package(
         ),
         .testTarget(
             name: "CalopodRuntimeTests",
-            dependencies: ["CalopodDomain", "CalopodRuntime", "CalopodStore"]
+            dependencies: [
+                "CalopodDomain",
+                "CalopodProviders",
+                "CalopodRuntime",
+                "CalopodStore",
+            ]
         ),
         .testTarget(
             name: "CalopodCommandsTests",

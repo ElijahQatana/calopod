@@ -102,6 +102,7 @@ public struct CalopodAgentRunner: Sendable {
     private let now: @Sendable () -> Date
     private let randomUnit: @Sendable () -> Double
     private let sleep: @Sendable (TimeInterval) async throws -> Void
+    private let runSync: @Sendable (SyncRequest) async throws -> SyncExecutionResult
 
     public init(
         environment: CalopodRuntimeEnvironment,
@@ -112,11 +113,34 @@ public struct CalopodAgentRunner: Sendable {
             try await Task.sleep(for: .seconds(seconds))
         }
     ) {
+        self.init(
+            environment: environment,
+            schedule: schedule,
+            now: now,
+            randomUnit: randomUnit,
+            sleep: sleep
+        ) { request in
+            try await SyncEngine(environment: environment).run(
+                request,
+                trigger: .automatic
+            )
+        }
+    }
+
+    init(
+        environment: CalopodRuntimeEnvironment,
+        schedule: AgentSchedule,
+        now: @escaping @Sendable () -> Date,
+        randomUnit: @escaping @Sendable () -> Double,
+        sleep: @escaping @Sendable (TimeInterval) async throws -> Void,
+        runSync: @escaping @Sendable (SyncRequest) async throws -> SyncExecutionResult
+    ) {
         self.environment = environment
         self.schedule = schedule
         self.now = now
         self.randomUnit = randomUnit
         self.sleep = sleep
+        self.runSync = runSync
     }
 
     public func runOnce(ignorePause: Bool = false) async -> AgentRunReport {
@@ -125,10 +149,7 @@ public struct CalopodAgentRunner: Sendable {
                 return AgentRunReport(status: "paused")
             }
             let window = try schedule.window(containing: now())
-            let result = try await SyncEngine(environment: environment).run(
-                SyncRequest(mode: .apply, window: window),
-                trigger: .automatic
-            )
+            let result = try await runSync(SyncRequest(mode: .apply, window: window))
             return AgentRunReport(
                 status: result.status,
                 planned: result.items.count,
