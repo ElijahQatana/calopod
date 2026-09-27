@@ -225,6 +225,14 @@ extension CalopodDatabase {
             }
         }
 
+        migrator.registerMigration("v7_agent_control") { database in
+            try database.create(table: "agent_control") { table in
+                table.column("id", .text).primaryKey()
+                table.column("is_paused", .boolean).notNull().defaults(to: false)
+                table.column("updated_at", .datetime).notNull()
+            }
+        }
+
         return migrator
     }
 }

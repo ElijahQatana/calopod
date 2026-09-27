@@ -11,6 +11,7 @@ private enum ExpectedFailure: Error {
 func foundationMigrationCreatesEveryStateTable() throws {
     let store = try CalopodDatabase.inMemory()
     let expectedTables = [
+        "agent_control",
         "arm_sources",
         "arms",
         "calendar_bindings",
