@@ -98,10 +98,35 @@ func restartLeavesADisabledAgentUnloaded() throws {
     #expect(calls.map(\.first) == ["print", "bootout", "print-disabled"])
 }
 
+@Test
+func agentStatusDoesNotCreateMissingState() throws {
+    let fixture = try LaunchAgentFixture()
+    defer { fixture.remove() }
+    let controller = try LaunchAgentController(
+        homeDirectory: fixture.homeDirectory,
+        userID: 501
+    ) { arguments in
+        LaunchctlResult(
+            exitCode: arguments.first == "print-disabled" || arguments.first == "print" ? 0 : 1,
+            output: ""
+        )
+    }
+
+    let payload = try agentStatusPayload(controller: controller)
+
+    #expect(payload.status == "ok")
+    #expect(payload.installed == true)
+    #expect(payload.enabled == true)
+    #expect(payload.runState == "running")
+    #expect(payload.stateReady == false)
+    #expect(!FileManager.default.fileExists(atPath: fixture.stateURL.path))
+}
+
 private struct LaunchAgentFixture {
     let root: URL
     let homeDirectory: URL
     let propertyListURL: URL
+    let stateURL: URL
 
     init() throws {
         root = FileManager.default.temporaryDirectory
@@ -110,6 +135,7 @@ private struct LaunchAgentFixture {
         propertyListURL = homeDirectory
             .appendingPathComponent("Library/LaunchAgents", isDirectory: true)
             .appendingPathComponent("com.calopod.agent.plist")
+        stateURL = root.appendingPathComponent("state.sqlite")
         try FileManager.default.createDirectory(
             at: propertyListURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -118,7 +144,7 @@ private struct LaunchAgentFixture {
             "Label": "com.calopod.agent",
             "ProgramArguments": ["/example/bin/calopod-agent"],
             "EnvironmentVariables": [
-                "CALOPOD_STATE_PATH": "/example/state.sqlite",
+                "CALOPOD_STATE_PATH": stateURL.path,
                 "CALOPOD_EVENTKIT_HOST_APP": "/example/EventKit Host.app",
                 "CALOPOD_AGENT_INTERVAL_SECONDS": "600",
                 "CALOPOD_AGENT_JITTER_SECONDS": "30",

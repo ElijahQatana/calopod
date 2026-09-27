@@ -11,6 +11,8 @@ public struct AgentCommand: AsyncParsableCommand {
             AgentDisableCommand.self,
             AgentPauseCommand.self,
             AgentResumeCommand.self,
+            AgentRunNowCommand.self,
+            AgentStatusCommand.self,
         ]
     )
 
@@ -141,6 +143,87 @@ public struct AgentResumeCommand: ParsableCommand {
     }
 }
 
+public struct AgentRunNowCommand: AsyncParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "run-now",
+        abstract: "Run one bounded synchronization immediately."
+    )
+
+    @OptionGroup public var output: OutputOptions
+
+    public init() {}
+
+    public func run() async throws {
+        #if os(macOS)
+        do {
+            let controller = try LaunchAgentController()
+            let environment = try installedAgentEnvironment(controller: controller)
+            let configuration = try requireInstalledConfiguration(controller)
+            let report = await CalopodAgentRunner(
+                environment: environment,
+                schedule: try AgentSchedule(environment: configuration.environment)
+            ).runOnce(ignorePause: true)
+            try OutputRenderer.write(
+                command: "agent.run-now",
+                payload: CommandPayload(
+                    status: report.status,
+                    message: agentRunMessage(status: report.status),
+                    failureCategory: report.failureCategory,
+                    planned: report.planned,
+                    applied: report.applied,
+                    creates: report.creates,
+                    updates: report.updates,
+                    removals: report.removals,
+                    repairs: report.repairs,
+                    noOps: report.noOps,
+                    warningCount: report.warningCount
+                ),
+                format: output.format
+            )
+            switch report.status {
+            case "ok": return
+            case "busy": throw ExitCode(CalopodExitCode.temporaryFailure.rawValue)
+            default: throw ExitCode(CalopodExitCode.unavailable.rawValue)
+            }
+        } catch let exitCode as ExitCode {
+            throw exitCode
+        } catch {
+            try failCommand(error)
+        }
+        #else
+        try failCommand(CalopodRuntimeError.unsupportedPlatform)
+        #endif
+    }
+}
+
+public struct AgentStatusCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "status",
+        abstract: "Show automatic-sync state and recent health."
+    )
+
+    @OptionGroup public var output: OutputOptions
+
+    public init() {}
+
+    public func run() throws {
+        #if os(macOS)
+        do {
+            let controller = try LaunchAgentController()
+            try OutputRenderer.write(
+                command: "agent.status",
+                payload: try agentStatusPayload(controller: controller),
+                format: output.format
+            )
+        } catch {
+            try failCommand(error)
+        }
+        #else
+        try failCommand(CalopodRuntimeError.unsupportedPlatform)
+        #endif
+    }
+}
+
 #if os(macOS)
 func installedAgentEnvironment(
     controller: LaunchAgentController
@@ -153,6 +236,95 @@ func installedAgentEnvironment(
         stateLocation: CalopodStateLocation(environment: configuration.environment),
         executableURL: configuration.programURL
     )
+}
+
+func agentStatusPayload(
+    controller: LaunchAgentController,
+    now: Date = Date()
+) throws -> CommandPayload {
+    let snapshot = try controller.snapshot()
+    guard let configuration = snapshot.configuration else {
+        return CommandPayload(
+            status: "not-installed",
+            message: "The automatic-sync service is not installed.",
+            installed: false,
+            enabled: false,
+            paused: false,
+            runState: "stopped",
+            stateReady: false
+        )
+    }
+
+    let stateReady = FileManager.default.fileExists(atPath: configuration.stateURL.path)
+    var paused = false
+    var lastSuccessAgeSeconds: Int?
+    var failureCategory: String?
+    if stateReady {
+        let repository = try installedAgentEnvironment(controller: controller).repository()
+        paused = try repository.agentControl().isPaused
+        if let success = try repository.latestSuccessfulSyncRun(trigger: "automatic") {
+            let reference = success.finishedAt ?? success.startedAt
+            lastSuccessAgeSeconds = max(0, Int(now.timeIntervalSince(reference)))
+        }
+        if let latest = try repository.latestSyncRun(trigger: "automatic"),
+           latest.status == "failed" || latest.status == "interrupted" {
+            failureCategory = latest.errorCode ?? "local-state"
+        }
+    }
+
+    let enabled = !snapshot.disabled
+    let status: String
+    let message: String
+    if !enabled {
+        status = "disabled"
+        message = "Automatic synchronization is disabled."
+    } else if paused {
+        status = "paused"
+        message = "Automatic synchronization is paused."
+    } else if failureCategory != nil {
+        status = "failed"
+        message = "The most recent automatic synchronization failed."
+    } else if snapshot.loaded {
+        status = "ok"
+        message = "Automatic synchronization is running."
+    } else {
+        status = "stopped"
+        message = "Automatic synchronization is enabled but not running."
+    }
+
+    return CommandPayload(
+        status: status,
+        message: message,
+        installed: true,
+        enabled: enabled,
+        paused: paused,
+        runState: snapshot.loaded ? "running" : "stopped",
+        stateReady: stateReady,
+        intervalSeconds: configuration.intervalSeconds,
+        jitterSeconds: configuration.jitterSeconds,
+        lookbackDays: configuration.lookbackDays,
+        horizonDays: configuration.horizonDays,
+        lastSuccessAgeSeconds: lastSuccessAgeSeconds,
+        failureCategory: failureCategory
+    )
+}
+
+private func requireInstalledConfiguration(
+    _ controller: LaunchAgentController
+) throws -> AgentServiceConfiguration {
+    guard let configuration = try controller.snapshot().configuration else {
+        throw LaunchAgentControlError.notInstalled
+    }
+    return configuration
+}
+
+private func agentRunMessage(status: String) -> String {
+    switch status {
+    case "ok": "The automatic synchronization run completed."
+    case "busy": "Another synchronization run already holds the process lock."
+    case "interrupted": "The automatic synchronization run was interrupted."
+    default: "The automatic synchronization run failed."
+    }
 }
 
 private func writeAgentControlResult(

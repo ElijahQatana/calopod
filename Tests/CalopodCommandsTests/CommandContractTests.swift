@@ -29,7 +29,12 @@ func agentExposesExplicitControlCommands() {
         $0.configuration.commandName ?? ""
     }
 
-    #expect(names == ["enable", "disable", "pause", "resume"])
+    #expect(names == ["enable", "disable", "pause", "resume", "run-now", "status"])
+
+    let status = try? AgentStatusCommand.parse(["--format", "json"])
+    let runNow = try? AgentRunNowCommand.parse(["--format", "json"])
+    #expect(status?.output.format == .json)
+    #expect(runNow?.output.format == .json)
 }
 
 @Test
