@@ -135,6 +135,40 @@ func jsonOutputUsesTheStableEnvelope() throws {
 }
 
 @Test
+func agentOutputContainsOnlyGenericControlAndRunFields() throws {
+    let output = try OutputRenderer.render(
+        command: "agent.status",
+        payload: CommandPayload(
+            status: "ok",
+            message: "Automatic sync is available.",
+            installed: true,
+            enabled: true,
+            paused: false,
+            runState: "running",
+            stateReady: true,
+            intervalSeconds: 600,
+            lastSuccessAgeSeconds: 30,
+            failureCategory: nil,
+            planned: 4,
+            applied: 1,
+            warningCount: 0
+        ),
+        format: .json
+    )
+    let data = try #require(output.data(using: .utf8))
+    let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let payload = try #require(object["data"] as? [String: Any])
+
+    #expect(payload["installed"] as? Bool == true)
+    #expect(payload["enabled"] as? Bool == true)
+    #expect(payload["paused"] as? Bool == false)
+    #expect(payload["runState"] as? String == "running")
+    #expect(payload["intervalSeconds"] as? Int == 600)
+    #expect(payload["planned"] as? Int == 4)
+    #expect(payload["failureCategory"] == nil)
+}
+
+@Test
 func calendarsAcceptExplicitSelectionActions() throws {
     let select = try CalendarsCommand.parse([
         "--connection", "connection",

@@ -48,6 +48,25 @@ public struct CommandPayload: Codable, Equatable, Sendable {
     public let mode: String?
     public let sources: [CommandSource]?
     public let items: [CommandItem]?
+    public let installed: Bool?
+    public let enabled: Bool?
+    public let paused: Bool?
+    public let runState: String?
+    public let stateReady: Bool?
+    public let intervalSeconds: Int?
+    public let jitterSeconds: Int?
+    public let lookbackDays: Int?
+    public let horizonDays: Int?
+    public let lastSuccessAgeSeconds: Int?
+    public let failureCategory: String?
+    public let planned: Int?
+    public let applied: Int?
+    public let creates: Int?
+    public let updates: Int?
+    public let removals: Int?
+    public let repairs: Int?
+    public let noOps: Int?
+    public let warningCount: Int?
 
     public init(
         status: String,
@@ -56,7 +75,26 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         range: RangeOutput? = nil,
         mode: String? = nil,
         sources: [CommandSource]? = nil,
-        items: [CommandItem]? = nil
+        items: [CommandItem]? = nil,
+        installed: Bool? = nil,
+        enabled: Bool? = nil,
+        paused: Bool? = nil,
+        runState: String? = nil,
+        stateReady: Bool? = nil,
+        intervalSeconds: Int? = nil,
+        jitterSeconds: Int? = nil,
+        lookbackDays: Int? = nil,
+        horizonDays: Int? = nil,
+        lastSuccessAgeSeconds: Int? = nil,
+        failureCategory: String? = nil,
+        planned: Int? = nil,
+        applied: Int? = nil,
+        creates: Int? = nil,
+        updates: Int? = nil,
+        removals: Int? = nil,
+        repairs: Int? = nil,
+        noOps: Int? = nil,
+        warningCount: Int? = nil
     ) {
         self.status = status
         self.message = message
@@ -65,6 +103,25 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         self.mode = mode
         self.sources = sources
         self.items = items
+        self.installed = installed
+        self.enabled = enabled
+        self.paused = paused
+        self.runState = runState
+        self.stateReady = stateReady
+        self.intervalSeconds = intervalSeconds
+        self.jitterSeconds = jitterSeconds
+        self.lookbackDays = lookbackDays
+        self.horizonDays = horizonDays
+        self.lastSuccessAgeSeconds = lastSuccessAgeSeconds
+        self.failureCategory = failureCategory
+        self.planned = planned
+        self.applied = applied
+        self.creates = creates
+        self.updates = updates
+        self.removals = removals
+        self.repairs = repairs
+        self.noOps = noOps
+        self.warningCount = warningCount
     }
 }
 
@@ -214,6 +271,31 @@ public enum OutputRenderer {
                     if let mirrorKey = item.mirrorKey { details.append("mirror: \(mirrorKey)") }
                     return details.joined(separator: "  ")
                 })
+            }
+            if let installed = payload.installed { lines.append("Installed: \(installed)") }
+            if let enabled = payload.enabled { lines.append("Enabled: \(enabled)") }
+            if let paused = payload.paused { lines.append("Paused: \(paused)") }
+            if let runState = payload.runState { lines.append("Run state: \(runState)") }
+            if let stateReady = payload.stateReady { lines.append("State ready: \(stateReady)") }
+            if let interval = payload.intervalSeconds { lines.append("Interval: \(interval) seconds") }
+            if let jitter = payload.jitterSeconds { lines.append("Jitter: \(jitter) seconds") }
+            if let lookback = payload.lookbackDays { lines.append("Lookback: \(lookback) days") }
+            if let horizon = payload.horizonDays { lines.append("Horizon: \(horizon) days") }
+            if let age = payload.lastSuccessAgeSeconds {
+                lines.append("Last success age: \(age) seconds")
+            }
+            if let failure = payload.failureCategory {
+                lines.append("Failure category: \(failure)")
+            }
+            if let planned = payload.planned { lines.append("Planned: \(planned)") }
+            if let applied = payload.applied { lines.append("Applied: \(applied)") }
+            if let creates = payload.creates { lines.append("Creates: \(creates)") }
+            if let updates = payload.updates { lines.append("Updates: \(updates)") }
+            if let removals = payload.removals { lines.append("Removals: \(removals)") }
+            if let repairs = payload.repairs { lines.append("Repairs: \(repairs)") }
+            if let noOps = payload.noOps { lines.append("No-ops: \(noOps)") }
+            if let warningCount = payload.warningCount {
+                lines.append("Warning count: \(warningCount)")
             }
             lines.append(contentsOf: warnings.map { "Warning: \($0)" })
             return lines.joined(separator: "\n")
