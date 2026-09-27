@@ -2,6 +2,11 @@
 import CalopodEventKit
 import Foundation
 
+/// Launches the separate EventKit Host app and exchanges one request/response
+/// with it. The host runs as its own signed app (not a library linked into
+/// this process) because it's the process macOS actually grants or denies
+/// Calendar access to — this runner just drives it and reads back the
+/// result.
 struct EventKitHostRunner {
     private let appURL: URL
 
@@ -17,6 +22,13 @@ struct EventKitHostRunner {
         }
     }
 
+    /// Finds the EventKit Host app: an explicit, validated absolute path
+    /// from `CALOPOD_EVENTKIT_HOST_APP` first (required for a LaunchAgent,
+    /// whose working directory can't be relied on), otherwise a search
+    /// upward from the running executable for a development build's
+    /// `eventkit-host` or `.build/eventkit-host` output — which only works
+    /// for a process launched from within (or under) the repository
+    /// checkout.
     static func resolveAppURL(
         variables: [String: String],
         executableURL: URL
@@ -56,6 +68,12 @@ struct EventKitHostRunner {
         return try runApp(arguments: [], requestData: data)
     }
 
+    // Communicates with the host over a private temp directory of files
+    // (request/response/logs) rather than pipes, since the host is launched
+    // through `open` as its own app rather than as a direct child process
+    // this code controls a pipe to. The directory is created fresh per call,
+    // permissioned to the owner only (it can carry calendar content), and
+    // always cleaned up afterward.
     private func runApp(
         arguments: [String],
         requestData: Data? = nil
@@ -93,6 +111,11 @@ struct EventKitHostRunner {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
         process.arguments = [
+            // -W waits for the launched app to exit before `open` returns
+            // (so the response file is guaranteed complete once this call
+            // continues); -n always launches a fresh instance rather than
+            // reusing one already running, since a lingering instance could
+            // otherwise serve a stale or concurrent request.
             "-W", "-n",
             "--stdout", stdoutURL.path,
             "--stderr", stderrURL.path,

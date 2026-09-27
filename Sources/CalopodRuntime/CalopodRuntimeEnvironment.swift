@@ -22,6 +22,12 @@ public enum CalopodRuntimeError: Error, Equatable, Sendable {
     case convergenceFailed
 }
 
+/// Resolves where Calopod's SQLite state and process lock live, and keeps
+/// their containing directory and file permissions locked down to the
+/// owner. A LaunchAgent has no interactive shell to inherit an environment
+/// variable from, so this must derive the same path whether it's asked by
+/// the CLI or the agent — an explicit `CALOPOD_STATE_PATH` override when
+/// present, otherwise the standard Application Support location.
 public struct CalopodStateLocation: Equatable, Sendable {
     public let databaseURL: URL
     private let protectsExistingDirectory: Bool
@@ -34,6 +40,10 @@ public struct CalopodStateLocation: Equatable, Sendable {
         environment: [String: String] = ProcessInfo.processInfo.environment,
         applicationSupportURL: URL? = nil
     ) throws {
+        // An override must be absolute: a relative path would resolve
+        // against whatever the current working directory happens to be,
+        // which is unpredictable for a LaunchAgent and would otherwise let a
+        // sparse environment silently redirect state somewhere unintended.
         if let override = environment["CALOPOD_STATE_PATH"], !override.isEmpty {
             guard override.hasPrefix("/") else {
                 throw CalopodRuntimeError.invalidStatePath
@@ -65,6 +75,12 @@ public struct CalopodStateLocation: Equatable, Sendable {
             at: directory,
             withIntermediateDirectories: true
         )
+        // The default Application Support location is always locked down;
+        // an explicit `CALOPOD_STATE_PATH` override is not, since it may
+        // point at a directory the caller (a test, a developer) manages
+        // permissions for themselves — this only tightens permissions on a
+        // directory it just created for that case, never one that already
+        // existed under someone else's control.
         if protectsExistingDirectory || !existed {
             try fileManager.setAttributes(
                 [.posixPermissions: 0o700],
@@ -73,6 +89,10 @@ public struct CalopodStateLocation: Equatable, Sendable {
         }
     }
 
+    // Always private (owner read/write only), regardless of override,
+    // because this file holds the operational ledger itself — unlike the
+    // containing directory, there's no legitimate case for a shared-access
+    // state database.
     public func prepareDatabaseFile(fileManager: FileManager = .default) throws {
         try prepareDirectory(fileManager: fileManager)
         var isDirectory: ObjCBool = false
@@ -92,6 +112,10 @@ public struct CalopodStateLocation: Equatable, Sendable {
     }
 }
 
+/// Everything a Calopod process (CLI or agent) needs to construct its
+/// repository and provider services from validated environment state, so
+/// neither depends on an interactive shell's exports, aliases, or working
+/// directory.
 public struct CalopodRuntimeEnvironment: Sendable {
     public let variables: [String: String]
     public let stateLocation: CalopodStateLocation

@@ -2,6 +2,15 @@
 import CalopodEventKit
 import Foundation
 
+/// Launches the EventKit Host app from an interactive CLI invocation.
+/// Without `CALOPOD_EVENTKIT_HOST_APP` set, the host path is resolved
+/// relative to the current working directory — fine for a developer running
+/// `calopod` from the repository root, but not something a LaunchAgent can
+/// rely on (its working directory is unpredictable and it has no shell to
+/// set the override for it). `CalopodRuntime`'s own `EventKitHostRunner`
+/// instead searches upward from the running executable and always requires
+/// an absolute path for the override, which is what the background agent
+/// actually uses.
 struct EventKitHostRunner {
     private let appURL: URL
 

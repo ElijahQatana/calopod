@@ -2,6 +2,15 @@ import CalopodEventKit
 import CalopodProviders
 import Foundation
 
+/// Entry point for the separate, signed EventKit Host app. This process
+/// exists only because macOS grants or denies Calendar access per-process:
+/// running here (rather than as a library inside the CLI or agent) lets the
+/// main `calopod` process request and use Calendar data without itself
+/// needing to carry that permission or its own Calendar usage description.
+/// Every response is written as one JSON object to stdout and the exit code
+/// signals success (0), an operation-specific failure (77), or an
+/// unexpected host failure (70), so `EventKitHostRunner` can tell those
+/// apart without parsing stderr.
 @main
 @MainActor
 struct EventKitHostMain {
@@ -49,6 +58,10 @@ struct EventKitHostMain {
         }
     }
 
+    /// Dispatches one decoded request to the matching `EventKitClient` call.
+    /// Each case validates exactly the fields that operation needs before
+    /// calling through, so a malformed request fails fast with
+    /// `.invalidResponse` rather than reaching EventKit with missing data.
     private static func handle(
         _ request: EventKitHostRequest,
         client: EventKitClient

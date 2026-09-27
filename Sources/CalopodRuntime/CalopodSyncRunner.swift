@@ -5,11 +5,18 @@ import CalopodStore
 import CalopodSync
 import Foundation
 
+/// Whether a run was started by a deliberate CLI invocation or the
+/// background agent's own schedule — recorded on every sync run so history
+/// and diagnostics can distinguish the two without changing how the run
+/// itself behaves.
 public enum SyncTrigger: String, Sendable {
     case manual
     case automatic
 }
 
+/// The outcome of one `SyncEngine.run` call: aggregate counts and warnings
+/// only, never per-event detail, so a caller (a CLI command, the agent's log)
+/// can report or persist it without handling private calendar content.
 public struct SyncExecutionResult: Sendable {
     public let status: String
     public let mode: SyncMode
@@ -41,6 +48,10 @@ public struct SyncExecutionResult: Sendable {
     }
 }
 
+/// The shared sync engine: the single entry point both the CLI's `sync`
+/// command and the background agent call to run a sync. Neither shells out
+/// to the other or duplicates this reconciliation logic — this is the one
+/// place dry-run and apply, manual and automatic, all funnel through.
 public struct SyncEngine: Sendable {
     private let environment: CalopodRuntimeEnvironment
 
@@ -48,6 +59,10 @@ public struct SyncEngine: Sendable {
         self.environment = environment
     }
 
+    /// Runs one sync end to end: acquires the process lock (so a manual and
+    /// an automatic run can never overlap), executes it, and always records
+    /// a run outcome — success, interruption, or failure — before returning
+    /// or rethrowing, so run history stays complete even on failure paths.
     public func run(
         _ request: SyncRequest,
         trigger: SyncTrigger
@@ -57,6 +72,9 @@ public struct SyncEngine: Sendable {
         }
         try environment.stateLocation.prepareDirectory()
         let lock = try ProcessLock.acquire(at: environment.stateLocation.lockURL)
+        // Held for the lifetime of the run purely by staying alive; `defer`
+        // here isn't cleanup logic, it's what keeps ARC from releasing (and
+        // thereby unlocking) `lock` before `execute` below has finished.
         defer { withExtendedLifetime(lock) {} }
 
         let repository = try environment.repository()
@@ -97,6 +115,10 @@ public struct SyncEngine: Sendable {
         }
     }
 
+    /// Builds a plan across every eligible Arm, then — for apply mode only —
+    /// converges each one. Dry-run stops after planning and never calls
+    /// `performManagedMutation`, which is what guarantees dry-run can never
+    /// write to a calendar no matter what the plan contains.
     private func execute(
         mode: SyncMode,
         window: SyncWindow,
@@ -123,6 +145,11 @@ public struct SyncEngine: Sendable {
                   let targetConnection = try repository.connection(id: target.connectionID) else {
                 throw CalopodRuntimeError.invalidConfiguration("arm-target")
             }
+            // Checked during planning (not just before applying) so a
+            // non-preferred device's dry-run plan and its eventual apply
+            // guard (below) agree on which Arms are blocked, rather than a
+            // dry-run implying writes are possible that apply would then
+            // refuse.
             if targetConnection.provider == "eventkit" {
                 let currentDevice = try repository.currentDevice(
                     configurationID: arm.configurationID
@@ -200,6 +227,10 @@ public struct SyncEngine: Sendable {
             )
         }
 
+        // Apply mode's actual safety gate: every one of these must hold
+        // before any provider write is attempted. A dry-run can still report
+        // a plan built on incomplete or ambiguous data (with a warning), but
+        // apply refuses outright rather than acting on it.
         guard refresh.failedSourceCount == 0 else {
             throw CalopodRuntimeError.sourceRefreshFailed
         }
@@ -269,6 +300,11 @@ public struct SyncEngine: Sendable {
         )
     }
 
+    /// Filters to Arms that are enabled and whose source and target
+    /// Connections are all enabled too — a disabled Connection or Arm is
+    /// skipped silently (with one summary warning) rather than treated as an
+    /// error, since disabling something is a deliberate, expected user
+    /// action.
     private func eligibleArms(
         repository: LocalStateRepository
     ) throws -> (arms: [StoredArm], warnings: [String]) {
@@ -330,6 +366,10 @@ public struct SyncEngine: Sendable {
         var failedCount = 0
         var discardedCount = 0
         var warnings: [String] = []
+        // Sources sharing a connection are fetched together — most
+        // importantly for EventKit, where this means one host-process
+        // launch handles every selected calendar on that connection instead
+        // of one launch per calendar.
         var groups: [(connection: StoredConnection, sources: [CalendarReadSource])] = []
         for source in sources {
             if let index = groups.firstIndex(where: { $0.connection.id == source.connection.id }) {
@@ -496,6 +536,11 @@ public struct SyncEngine: Sendable {
         }
     }
 
+    /// Routes one plan-driven mutation to the target's actual provider.
+    /// `ManagedEventLifecycleService` and `ManagedEventConvergenceService`
+    /// never know which provider they're talking to — this is the only
+    /// place that maps their abstract `create`/`update`/`delete` onto a real
+    /// Google, Microsoft, or EventKit write.
     private func performManagedMutation(
         _ mutation: ManagedEventMutation,
         target: StoredCalendarBinding,
@@ -630,6 +675,9 @@ private func isDeterministicRepair(_ item: SyncPlanItem) -> Bool {
     }
 }
 
+/// Maps any error a sync run can throw to a short, generic category safe to
+/// persist or display — never the underlying error's own message, which
+/// could echo back a raw provider response or other private detail.
 public func syncFailureCategory(_ error: Error) -> String {
     if let runtime = error as? CalopodRuntimeError {
         return switch runtime {

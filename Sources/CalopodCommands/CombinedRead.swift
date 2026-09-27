@@ -17,6 +17,12 @@ struct CalendarRefreshSummary: Sendable {
     let warnings: [String]
 }
 
+// This file backs the read-only `events`/`availability` commands: it
+// refreshes the local cache from selected source calendars, the same way
+// `CalopodRuntime`'s sync engine does, but stops there — there is no
+// planning or target-writing here, since these commands never touch a
+// managed target calendar at all.
+
 func selectedCalendarSources(
     connectionID: String?,
     calendarID: String?,
@@ -70,6 +76,9 @@ func refreshCalendarSources(
     var discardedCount = 0
     var warnings: [String] = []
 
+    // Grouped by connection so an EventKit refresh launches the host process
+    // once for every selected calendar on that connection, not once per
+    // calendar.
     var groups: [(connection: StoredConnection, sources: [CalendarReadSource])] = []
     for source in sources {
         if let index = groups.firstIndex(where: { $0.connection.id == source.connection.id }) {
