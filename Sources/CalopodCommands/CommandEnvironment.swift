@@ -85,6 +85,24 @@ func failCommand(_ error: Error) throws -> Never {
 }
 
 private func commandFailure(_ error: Error) -> (message: String, exitCode: CalopodExitCode) {
+    if let control = error as? LaunchAgentControlError {
+        return switch control {
+        case .notInstalled:
+            ("Install the user service before controlling automatic sync.", .unavailable)
+        case .rootUnsupported:
+            ("Run this command as the signed-in user, not root.", .permissionDenied)
+        case .unavailable:
+            ("The user service controller is unavailable.", .unavailable)
+        case .operationFailed:
+            ("The user service could not change state. Run doctor for details.", .temporaryFailure)
+        }
+    }
+    if error is AgentServiceConfigurationError {
+        return (
+            "The installed user service configuration is invalid. Reinstall it from source.",
+            .invalidConfiguration
+        )
+    }
     if let runtime = error as? CalopodRuntimeError {
         switch runtime {
         case .busy:

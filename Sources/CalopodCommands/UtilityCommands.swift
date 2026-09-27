@@ -111,26 +111,3 @@ public struct DoctorCommand: ParsableCommand {
         )
     }
 }
-
-public struct AgentCommand: ParsableCommand {
-    public static let configuration = CommandConfiguration(
-        commandName: "agent",
-        abstract: "Inspect or run the local background agent."
-    )
-
-    @OptionGroup public var output: OutputOptions
-
-    public init() {}
-
-    public func run() throws {
-        try OutputRenderer.write(
-            command: "agent",
-            payload: CommandPayload(
-                status: "unavailable",
-                message: "Agent installation and control are planned for the background-service milestone."
-            ),
-            format: output.format
-        )
-        throw ExitCode(CalopodExitCode.unavailable.rawValue)
-    }
-}

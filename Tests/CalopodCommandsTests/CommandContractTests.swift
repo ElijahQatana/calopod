@@ -24,6 +24,15 @@ func rootExposesThePlannedCommandGroups() {
 }
 
 @Test
+func agentExposesExplicitControlCommands() {
+    let names = AgentCommand.configuration.subcommands.map {
+        $0.configuration.commandName ?? ""
+    }
+
+    #expect(names == ["enable", "disable", "pause", "resume"])
+}
+
+@Test
 func mainCalendarUsesExplicitSourcesAndTarget() throws {
     let command = try MainConfigureCommand.parse([
         "--source", "source-one",
