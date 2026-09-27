@@ -40,3 +40,4 @@ Dry-run sync refreshes configured Arm sources and managed targets, then reports 
 The complete command tree, date-range behavior, output envelope, and exit codes are documented in [docs/COMMAND_LINE.md](docs/COMMAND_LINE.md).
 Combined Busy and Free interval behavior is documented in [docs/AVAILABILITY.md](docs/AVAILABILITY.md).
 The background runner contract is documented in [docs/BACKGROUND_AGENT.md](docs/BACKGROUND_AGENT.md).
+Source installation for the per-user service is documented in [docs/SOURCE_SERVICE_INSTALL.md](docs/SOURCE_SERVICE_INSTALL.md).
