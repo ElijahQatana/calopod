@@ -71,6 +71,27 @@ struct GoogleOAuthTests {
         #expect(refreshed.refreshToken == "keep-me")
         #expect(refreshed.expiresAt == Date(timeIntervalSince1970: 2_800))
     }
+
+    @Test("Expired refresh credentials require reconnection")
+    func expiredRefreshCredentials() async throws {
+        let client = GoogleOAuthClient(
+            configuration: GoogleOAuthConfiguration(clientID: "client-id"),
+            transport: RecordingTransport { _ in
+                HTTPResponse(statusCode: 400, body: Data(#"{"error":"invalid_grant"}"#.utf8))
+            }
+        )
+        let expired = OAuthTokens(
+            accessToken: "expired-access",
+            refreshToken: "expired-refresh",
+            tokenType: "Bearer",
+            scope: nil,
+            expiresAt: .distantPast
+        )
+
+        await #expect(throws: ProviderFailure.refreshRejected) {
+            try await client.refresh(expired)
+        }
+    }
 }
 
 @Suite("Google Calendar API")
@@ -159,6 +180,19 @@ struct GoogleCalendarClientTests {
                 from: Date(timeIntervalSince1970: 0),
                 through: Date(timeIntervalSince1970: 100)
             )
+        }
+    }
+
+    @Test("Throttling preserves the provider retry delay")
+    func throttling() async throws {
+        let client = GoogleCalendarClient(
+            transport: RecordingTransport { _ in
+                HTTPResponse(statusCode: 429, headers: ["retry-after": "120"], body: Data())
+            }
+        )
+
+        await #expect(throws: ProviderFailure.temporaryFailure(retryAfterSeconds: 120)) {
+            try await client.calendars(accessToken: "token")
         }
     }
 }

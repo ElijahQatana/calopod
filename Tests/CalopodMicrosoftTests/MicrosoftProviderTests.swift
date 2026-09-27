@@ -93,6 +93,30 @@ struct MicrosoftOAuthTests {
             try await client.refresh(old)
         }
     }
+
+    @Test("Expired refresh credentials require reconnection")
+    func expiredRefreshCredentials() async throws {
+        let client = MicrosoftOAuthClient(
+            configuration: MicrosoftOAuthConfiguration(clientID: "client-id"),
+            transport: ClosureTransport { _ in
+                HTTPResponse(
+                    statusCode: 400,
+                    body: Data(#"{"error":"invalid_grant"}"#.utf8)
+                )
+            }
+        )
+        let expired = OAuthTokens(
+            accessToken: "expired-access",
+            refreshToken: "expired-refresh",
+            tokenType: "Bearer",
+            scope: nil,
+            expiresAt: .distantPast
+        )
+
+        await #expect(throws: ProviderFailure.refreshRejected) {
+            try await client.refresh(expired)
+        }
+    }
 }
 
 @Suite("Microsoft Graph")
@@ -183,6 +207,19 @@ struct MicrosoftGraphClientTests {
         )
 
         await #expect(throws: ProviderFailure.invalidResponse) {
+            try await client.calendars(accessToken: "token")
+        }
+    }
+
+    @Test("Throttling preserves the provider retry delay")
+    func throttling() async throws {
+        let client = MicrosoftGraphClient(
+            transport: ClosureTransport { _ in
+                HTTPResponse(statusCode: 429, headers: ["retry-after": "120"], body: Data())
+            }
+        )
+
+        await #expect(throws: ProviderFailure.temporaryFailure(retryAfterSeconds: 120)) {
             try await client.calendars(accessToken: "token")
         }
     }
