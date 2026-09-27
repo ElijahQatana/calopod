@@ -193,3 +193,51 @@ func v6StateSurvivesTheAgentControlMigration() throws {
     #expect(try repository.latestSyncRun(trigger: "automatic")?.plannedCount == 4)
     #expect(try repository.agentControl().isPaused == false)
 }
+
+@Test
+func failedAgentControlMigrationLeavesV6StateRecoverable() throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("calopod-failed-migration-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let path = directory.appendingPathComponent("state.sqlite").path
+
+    do {
+        let database = try DatabaseQueue(path: path)
+        try CalopodDatabase.migrator.migrate(database, upTo: "v6_sync_run_summaries")
+        try database.write { database in
+            try database.execute(
+                sql: "INSERT INTO configurations VALUES (?, ?, ?)",
+                arguments: [
+                    "recoverable",
+                    Date(timeIntervalSince1970: 1_000),
+                    Date(timeIntervalSince1970: 1_000),
+                ]
+            )
+            try database.create(table: "agent_control") { table in
+                table.column("incompatible", .text)
+            }
+        }
+    }
+
+    var migrationFailed = false
+    do {
+        _ = try CalopodDatabase(path: path)
+    } catch {
+        migrationFailed = true
+    }
+
+    let database = try DatabaseQueue(path: path)
+    let evidence = try database.read { database in
+        (
+            try CalopodDatabase.migrator.appliedMigrations(database),
+            try String.fetchAll(database, sql: "SELECT id FROM configurations"),
+            try Row.fetchAll(database, sql: "PRAGMA table_info(agent_control)")
+                .map { row in row["name"] as String }
+        )
+    }
+    #expect(migrationFailed)
+    #expect(evidence.0.last == "v6_sync_run_summaries")
+    #expect(evidence.1 == ["recoverable"])
+    #expect(evidence.2 == ["incompatible"])
+}
