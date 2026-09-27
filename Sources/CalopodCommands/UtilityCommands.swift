@@ -89,25 +89,3 @@ private func planOutputDate(_ date: Date?) -> String? {
     formatter.timeZone = TimeZone(secondsFromGMT: 0)
     return formatter.string(from: date)
 }
-
-public struct DoctorCommand: ParsableCommand {
-    public static let configuration = CommandConfiguration(
-        commandName: "doctor",
-        abstract: "Inspect local configuration and provider health."
-    )
-
-    @OptionGroup public var output: OutputOptions
-
-    public init() {}
-
-    public func run() throws {
-        try OutputRenderer.write(
-            command: "doctor",
-            payload: CommandPayload(
-                status: "ok",
-                message: "The command shell and shared core are available."
-            ),
-            format: output.format
-        )
-    }
-}
