@@ -324,6 +324,9 @@ public struct MicrosoftGraphClient: Sendable {
             ],
             "isAllDay": payload.isAllDay,
             "showAs": microsoftAvailability(payload.availability),
+            "isReminderOn": false,
+            "isOnlineMeeting": false,
+            "responseRequested": false,
         ]
         if includeExtension {
             object["transactionId"] = managed.provenance.mirrorKey

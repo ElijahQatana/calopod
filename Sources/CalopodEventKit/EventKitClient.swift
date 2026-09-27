@@ -245,7 +245,7 @@ private final class LiveEventKitGateway: EventKitGateway {
         }
         let event = EKEvent(eventStore: store)
         event.calendar = calendar
-        try apply(request, to: event)
+        try EventKitManagedEventPresentation.apply(request, to: event)
         try store.save(event, span: .thisEvent, commit: true)
         let providerEventID = event.eventIdentifier ?? event.calendarItemIdentifier
         return ManagedEventWriteResult(
@@ -272,7 +272,7 @@ private final class LiveEventKitGateway: EventKitGateway {
            eventVersion(event) != expectedVersion {
             throw ProviderFailure.httpStatus(412)
         }
-        try apply(request, to: event)
+        try EventKitManagedEventPresentation.apply(request, to: event)
         try store.save(event, span: .thisEvent, commit: true)
         let savedID = event.eventIdentifier ?? event.calendarItemIdentifier
         return ManagedEventWriteResult(
@@ -344,20 +344,6 @@ private final class LiveEventKitGateway: EventKitGateway {
         }
     }
 
-    // Deliberately never touches organizer or attendees: EventKit exposes
-    // those as read-only, and even if it didn't, writing them could send
-    // real invitations or RSVP changes the user never asked for.
-    private func apply(_ request: ManagedEventWriteRequest, to event: EKEvent) throws {
-        event.title = request.payload.title ?? ""
-        event.startDate = request.payload.startsAt
-        event.endDate = request.payload.endsAt
-        event.isAllDay = request.payload.isAllDay
-        event.availability = eventKitAvailability(request.payload.availability)
-        event.location = request.payload.location
-        event.notes = request.payload.notes
-        event.url = try OwnershipMarkerCodec.markerURL(request.provenance)
-    }
-
     /// Reads back a managed event's current state as a snapshot, decoding
     /// whatever ownership marker its URL carries. This is the data
     /// `ManagedTargetObserver` classifies — `managedSnapshot` itself makes no
@@ -396,15 +382,6 @@ private final class LiveEventKitGateway: EventKitGateway {
             provenance: decoded.1,
             createdAt: event.creationDate
         )
-    }
-
-    private func eventKitAvailability(_ value: String) -> EKEventAvailability {
-        switch value {
-        case "free": .free
-        case "tentative": .tentative
-        case "unavailable", "out-of-office": .unavailable
-        default: .busy
-        }
     }
 
     private func participant(_ value: EKParticipant?) -> EventParticipant? {
@@ -455,6 +432,33 @@ private final class LiveEventKitGateway: EventKitGateway {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter.string(from: date)
+    }
+}
+
+/// Maps a managed payload onto the EventKit fields Calopod can safely own.
+/// Organizer and attendee fields remain untouched because EventKit exposes
+/// them as read-only and native participant writes could send invitations.
+@MainActor
+enum EventKitManagedEventPresentation {
+    static func apply(_ request: ManagedEventWriteRequest, to event: EKEvent) throws {
+        event.title = request.payload.title ?? ""
+        event.startDate = request.payload.startsAt
+        event.endDate = request.payload.endsAt
+        event.isAllDay = request.payload.isAllDay
+        event.availability = availability(request.payload.availability)
+        event.location = request.payload.location
+        event.notes = request.payload.notes
+        event.alarms = nil
+        event.url = try OwnershipMarkerCodec.markerURL(request.provenance)
+    }
+
+    private static func availability(_ value: String) -> EKEventAvailability {
+        switch value {
+        case "free": .free
+        case "tentative": .tentative
+        case "unavailable", "out-of-office": .unavailable
+        default: .busy
+        }
     }
 }
 

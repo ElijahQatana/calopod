@@ -310,6 +310,7 @@ public struct GoogleCalendarClient: Sendable {
             "start": start,
             "end": end,
             "transparency": payload.availability == "free" ? "transparent" : "opaque",
+            "reminders": ["useDefault": false],
             "extendedProperties": [
                 "private": [
                     "calopodSchema": String(provenance.schemaVersion),

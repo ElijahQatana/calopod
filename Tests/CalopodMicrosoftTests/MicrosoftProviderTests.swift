@@ -413,6 +413,9 @@ struct MicrosoftManagedWriteTests {
         #expect(createObject["body"] == nil)
         #expect(createObject["location"] == nil)
         #expect(createObject["attendees"] == nil)
+        #expect(createObject["isReminderOn"] as? Bool == false)
+        #expect(createObject["isOnlineMeeting"] as? Bool == false)
+        #expect(createObject["responseRequested"] as? Bool == false)
         #expect(createObject["transactionId"] as? String == managed.provenance.mirrorKey)
         let extensions = try #require(createObject["extensions"] as? [[String: Any]])
         #expect(extensions.first?["mirrorKey"] as? String == managed.provenance.mirrorKey)
@@ -441,6 +444,9 @@ struct MicrosoftManagedWriteTests {
         #expect(body["contentType"] == "text")
         #expect(body["content"] == "Synthetic agenda and participant context")
         #expect(object["attendees"] == nil)
+        #expect(object["isReminderOn"] as? Bool == false)
+        #expect(object["isOnlineMeeting"] as? Bool == false)
+        #expect(object["responseRequested"] as? Bool == false)
     }
 
     @Test("Managed target reads expand ownership markers and provider versions")
