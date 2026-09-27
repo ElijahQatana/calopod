@@ -11,6 +11,7 @@ public struct AgentCommand: AsyncParsableCommand {
             AgentDisableCommand.self,
             AgentPauseCommand.self,
             AgentResumeCommand.self,
+            AgentIntervalCommand.self,
             AgentRunNowCommand.self,
             AgentStatusCommand.self,
         ]
@@ -131,6 +132,54 @@ public struct AgentResumeCommand: ParsableCommand {
             try writeAgentControlResult(
                 command: "agent.resume",
                 message: "Automatic synchronization is resumed.",
+                controller: controller,
+                format: output.format
+            )
+        } catch {
+            try failCommand(error)
+        }
+        #else
+        try failCommand(CalopodRuntimeError.unsupportedPlatform)
+        #endif
+    }
+}
+
+public struct AgentIntervalCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "interval",
+        abstract: "Change the installed automatic-sync interval."
+    )
+
+    @Option(name: .long, help: "Seconds between scheduled runs.")
+    public var seconds: Int
+
+    @Option(name: .long, help: "Maximum random delay added to each interval.")
+    public var jitterSeconds: Int?
+
+    @OptionGroup public var output: OutputOptions
+
+    public init() {}
+
+    public func validate() throws {
+        guard seconds > 0 else {
+            throw ValidationError("--seconds must be greater than zero.")
+        }
+        if let jitterSeconds, jitterSeconds < 0 {
+            throw ValidationError("--jitter-seconds must not be negative.")
+        }
+    }
+
+    public func run() throws {
+        #if os(macOS)
+        do {
+            let controller = try LaunchAgentController()
+            try controller.updateSchedule(
+                intervalSeconds: seconds,
+                jitterSeconds: jitterSeconds
+            )
+            try writeAgentControlResult(
+                command: "agent.interval",
+                message: "The automatic-sync interval was updated.",
                 controller: controller,
                 format: output.format
             )

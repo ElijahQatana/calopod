@@ -29,12 +29,32 @@ func agentExposesExplicitControlCommands() {
         $0.configuration.commandName ?? ""
     }
 
-    #expect(names == ["enable", "disable", "pause", "resume", "run-now", "status"])
+    #expect(names == [
+        "enable",
+        "disable",
+        "pause",
+        "resume",
+        "interval",
+        "run-now",
+        "status",
+    ])
 
     let status = try? AgentStatusCommand.parse(["--format", "json"])
     let runNow = try? AgentRunNowCommand.parse(["--format", "json"])
+    let interval = try? AgentIntervalCommand.parse([
+        "--seconds", "900",
+        "--jitter-seconds", "45",
+        "--format", "json",
+    ])
     #expect(status?.output.format == .json)
     #expect(runNow?.output.format == .json)
+    #expect(interval?.seconds == 900)
+    #expect(interval?.jitterSeconds == 45)
+    #expect(interval?.output.format == .json)
+
+    #expect(throws: (any Error).self) {
+        try AgentIntervalCommand.parse(["--seconds", "0"])
+    }
 }
 
 @Test
