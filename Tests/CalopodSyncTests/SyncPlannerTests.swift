@@ -120,6 +120,56 @@ struct SyncPlannerTests {
         #expect(plan.items.first?.desiredFingerprint != changedPlan.items.first?.desiredFingerprint)
     }
 
+    @Test("Main calendar notes stay readable without repeated context")
+    func cleanMainCalendarNotes() throws {
+        let link = "https://meet.example.com/synthetic-room"
+        let source = instance(
+            id: "source-one",
+            notes: "\r\nSynthetic agenda  \r\n\r\n\r\nJoin: \(link)\r\n  - keep indentation  \r\n",
+            url: link,
+            organizer: EventParticipant(
+                name: "Synthetic Organizer",
+                emailAddress: "organizer@example.com"
+            ),
+            attendees: [
+                EventParticipant(
+                    name: "Synthetic Organizer",
+                    emailAddress: "ORGANIZER@example.com",
+                    status: "accepted"
+                ),
+                EventParticipant(
+                    name: "Synthetic Guest",
+                    emailAddress: "guest@example.com",
+                    status: "notResponded"
+                ),
+                EventParticipant(status: "accepted"),
+            ]
+        )
+        let plan = SyncPlanner.plan(
+            arm: storedArm(ruleMode: .fullDetails, isMain: true),
+            sources: [source],
+            mappings: [],
+            targetEvents: [],
+            window: try window(),
+            sourceSnapshotComplete: true
+        )
+
+        #expect(
+            plan.items.first?.payload?.notes
+                == """
+                Synthetic agenda
+
+                Join: https://meet.example.com/synthetic-room
+                  - keep indentation
+
+                Organizer: Synthetic Organizer <organizer@example.com>
+
+                Attendees:
+                - Synthetic Guest <guest@example.com> (no response)
+                """
+        )
+    }
+
     @Test("Full details omit privacy when the target cannot write it")
     func targetPrivacyCapabilities() throws {
         let source = instance(id: "source-one", isPrivate: true)

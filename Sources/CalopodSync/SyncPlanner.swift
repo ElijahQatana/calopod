@@ -342,27 +342,41 @@ public enum SyncPlanner {
     /// structured calendar fields.
     private static func fullDetailsNotes(_ source: StoredNormalizedInstance) -> String? {
         var sections: [String] = []
-        if let notes = normalizedText(source.notes) {
+        if let notes = normalizedNotes(source.notes) {
             sections.append(notes)
         }
         if let url = normalizedText(source.url),
            !sections.contains(where: { $0.contains(url) }) {
             sections.append("Link: \(url)")
         }
-        if let organizer = participantSummary(source.organizer) {
-            sections.append("Organizer: \(organizer)")
+        let organizer = participantPresentation(source.organizer)
+        if let organizer {
+            sections.append("Organizer: \(organizer.summary)")
         }
-        let attendees = source.attendees.compactMap(participantSummary).sorted()
+        var participantKeys = Set(organizer.map { [$0.identityKey] } ?? [])
+        let attendees = source.attendees
+            .compactMap(participantPresentation)
+            .filter { participantKeys.insert($0.identityKey).inserted }
+            .map(\.summary)
+            .sorted()
         if !attendees.isEmpty {
             sections.append("Attendees:\n" + attendees.map { "- \($0)" }.joined(separator: "\n"))
         }
         return sections.isEmpty ? nil : sections.joined(separator: "\n\n")
     }
 
-    private static func participantSummary(_ participant: EventParticipant?) -> String? {
+    private struct ParticipantPresentation {
+        let identityKey: String
+        let summary: String
+    }
+
+    private static func participantPresentation(
+        _ participant: EventParticipant?
+    ) -> ParticipantPresentation? {
         guard let participant else { return nil }
         let name = normalizedText(participant.name)
         let email = normalizedText(participant.emailAddress)
+        guard name != nil || email != nil else { return nil }
         var identity: String
         switch (name, email) {
         case let (.some(name), .some(email)):
@@ -372,12 +386,56 @@ public enum SyncPlanner {
         case let (.none, .some(email)):
             identity = email
         case (.none, .none):
-            identity = "Unknown"
+            return nil
         }
-        if let status = normalizedText(participant.status) {
+        if let status = participantStatus(participant.status) {
             identity += " (\(status))"
         }
-        return identity
+        return ParticipantPresentation(
+            identityKey: (email ?? name ?? "").lowercased(),
+            summary: identity
+        )
+    }
+
+    private static func participantStatus(_ value: String?) -> String? {
+        guard let value = normalizedText(value) else { return nil }
+        switch value.lowercased().replacingOccurrences(of: "_", with: "") {
+        case "needsaction": return "needs action"
+        case "notresponded": return "no response"
+        case "none", "unknown": return nil
+        default: return value
+        }
+    }
+
+    private static func normalizedNotes(_ value: String?) -> String? {
+        guard let value else { return nil }
+        var lines = value
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { line in
+                var line = String(line)
+                while line.last == " " || line.last == "\t" {
+                    line.removeLast()
+                }
+                return line
+            }
+        while lines.first?.allSatisfy(\.isWhitespace) == true {
+            lines.removeFirst()
+        }
+        while lines.last?.allSatisfy(\.isWhitespace) == true {
+            lines.removeLast()
+        }
+        var normalized: [String] = []
+        var previousWasBlank = false
+        for line in lines {
+            let isBlank = line.allSatisfy(\.isWhitespace)
+            if !isBlank || !previousWasBlank {
+                normalized.append(isBlank ? "" : line)
+            }
+            previousWasBlank = isBlank
+        }
+        return normalized.isEmpty ? nil : normalized.joined(separator: "\n")
     }
 
     private static func normalizedText(_ value: String?) -> String? {
