@@ -41,3 +41,4 @@ The complete command tree, date-range behavior, output envelope, and exit codes 
 Combined Busy and Free interval behavior is documented in [docs/AVAILABILITY.md](docs/AVAILABILITY.md).
 The background runner contract is documented in [docs/BACKGROUND_AGENT.md](docs/BACKGROUND_AGENT.md).
 Source installation for the per-user service is documented in [docs/SOURCE_SERVICE_INSTALL.md](docs/SOURCE_SERVICE_INSTALL.md).
+Automatic-sync controls and diagnostics are documented in [docs/AUTOMATIC_SYNC.md](docs/AUTOMATIC_SYNC.md).
