@@ -108,6 +108,35 @@ extension LocalStateRepository {
         }
     }
 
+    public func latestSuccessfulSyncRun(trigger: String? = nil) throws -> StoredSyncRun? {
+        try database.read { database in
+            let row: Row?
+            if let trigger {
+                row = try Row.fetchOne(
+                    database,
+                    sql: """
+                        SELECT * FROM sync_runs
+                        WHERE trigger = ? AND status = 'succeeded'
+                        ORDER BY started_at DESC, id DESC
+                        LIMIT 1
+                        """,
+                    arguments: [trigger]
+                )
+            } else {
+                row = try Row.fetchOne(
+                    database,
+                    sql: """
+                        SELECT * FROM sync_runs
+                        WHERE status = 'succeeded'
+                        ORDER BY started_at DESC, id DESC
+                        LIMIT 1
+                        """
+                )
+            }
+            return row.map(Self.storedSyncRun)
+        }
+    }
+
     private static func storedSyncRun(_ row: Row) -> StoredSyncRun {
         StoredSyncRun(
             id: row["id"],
