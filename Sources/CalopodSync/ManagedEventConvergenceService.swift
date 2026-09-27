@@ -7,6 +7,11 @@ public enum ManagedEventConvergenceError: Error, Equatable, Sendable {
     case didNotConverge
 }
 
+/// Drives a single Arm to a converged state: apply the current plan, re-read
+/// the target and re-plan, and repeat until nothing is left to do. A single
+/// `apply` pass can leave follow-up work behind (a repair that recreates an
+/// event still needs that new event picked up by the next plan), so
+/// convergence — not one pass — is the actual unit of "sync completed".
 public struct ManagedEventConvergenceService: Sendable {
     private let repository: LocalStateRepository
     private let lifecycle: ManagedEventLifecycleService
@@ -21,6 +26,11 @@ public struct ManagedEventConvergenceService: Sendable {
         observer = ManagedTargetObserver(secretStore: secretStore)
     }
 
+    /// Repeatedly applies and re-plans (up to `maximumMutationPasses`) until
+    /// a pass makes no provider writes or mapping changes, or the resulting
+    /// plan is all no-ops. The pass cap exists so a misbehaving provider or
+    /// an unexpected oscillation fails loudly with `.didNotConverge` instead
+    /// of retrying forever.
     public func converge(
         initialItems: [SyncPlanItem],
         arm: StoredArm,
@@ -36,6 +46,8 @@ public struct ManagedEventConvergenceService: Sendable {
         var reconciliations = 0
         var noOps = 0
 
+        // Already converged: nothing to apply, so skip straight to the
+        // no-op summary without spending a pass or touching the provider.
         if items.allSatisfy({ $0.action == .noOp }) {
             return ManagedEventLifecycleSummary(
                 providerWriteCount: 0,
@@ -55,6 +67,9 @@ public struct ManagedEventConvergenceService: Sendable {
             reconciliations += summary.mappingReconciliationCount
             noOps += summary.noOpCount
 
+            // A pass that changed nothing can't produce a different plan on
+            // the next iteration, so stop rather than re-reading the target
+            // for no reason.
             guard summary.providerWriteCount > 0
                     || summary.mappingReconciliationCount > 0 else {
                 return ManagedEventLifecycleSummary(
@@ -64,6 +79,10 @@ public struct ManagedEventConvergenceService: Sendable {
                 )
             }
 
+            // Re-read the target from scratch rather than trust in-memory
+            // state after writes, since the provider is the source of truth
+            // for what actually landed (IDs, versions, and any changes made
+            // concurrently by something else).
             let mappings = try repository.mirrorMappings(armID: arm.id)
             observations = try observer.observations(
                 snapshots: try await readSnapshots(),

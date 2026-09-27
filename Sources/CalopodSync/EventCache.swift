@@ -23,6 +23,10 @@ public struct EventCacheResult: Equatable, Sendable {
     }
 }
 
+/// Applies one page of provider events to the local normalized-event store.
+/// This is the boundary between "whatever a provider just returned" and the
+/// stable, provider-agnostic `StoredNormalizedInstance` shape the rest of
+/// the sync engine (planning, Availability) actually works with.
 public struct EventCache: Sendable {
     private let repository: LocalStateRepository
 
@@ -74,6 +78,10 @@ public struct EventCache: Sendable {
     }
 }
 
+/// Converts raw provider events into normalized instances keyed by a stable
+/// hash of provider, connection, calendar, and event ID, rather than by the
+/// event ID alone — so identity survives a provider reassigning IDs and
+/// doesn't collide across connections or calendars.
 public enum EventNormalizer {
     public struct Result: Equatable, Sendable {
         public let instances: [StoredNormalizedInstance]
@@ -93,10 +101,17 @@ public enum EventNormalizer {
         var discardedCount = 0
 
         for event in events {
+            // Calopod's own managed mirrors must never be ingested back in
+            // as a source event, or a sync loop would try to mirror its own
+            // output.
             guard !event.isManagedMirror else {
                 discardedCount += 1
                 continue
             }
+            // Defends against a page that somehow contains events for the
+            // wrong connection or calendar (a provider bug, or a stale
+            // cache); silently accepting them would attribute events to the
+            // wrong source.
             guard event.provider == connection.provider,
                   event.connectionID == connection.id,
                   event.calendarID == calendar.providerCalendarID,
@@ -111,6 +126,9 @@ public enum EventNormalizer {
                 cancellations.append(sourceKeyHash)
                 continue
             }
+            // A malformed timespan or one that falls entirely outside the
+            // requested window is dropped rather than stored, keeping every
+            // downstream pass bounded to the window it asked for.
             guard let startsAt = event.start,
                   let endsAt = event.end,
                   startsAt < endsAt,
@@ -121,6 +139,9 @@ public enum EventNormalizer {
             }
 
             let recurrenceID = event.originalStart ?? event.seriesID
+            // Fingerprints the full event content (not just identity) so a
+            // later refresh can tell a real edit apart from an unchanged
+            // event returned again by the provider.
             let fingerprint = digest(
                 fields: [
                     event.provider,

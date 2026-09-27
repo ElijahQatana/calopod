@@ -3,6 +3,11 @@ import CalopodStore
 import CryptoKit
 import Foundation
 
+/// How confidently a target-calendar event can be traced back to Calopod.
+/// `SyncPlanner` only ever creates, updates, or deletes an event whose
+/// ownership is `.verified`; every other status means the planner cannot
+/// prove the event is safe to touch, so it becomes a `.repair` decision
+/// instead of a silent mutation.
 public enum TargetOwnershipStatus: String, Codable, Equatable, Sendable {
     case verified
     case missingMarker = "missing-marker"
@@ -13,6 +18,10 @@ public enum TargetOwnershipStatus: String, Codable, Equatable, Sendable {
     case unmanaged
 }
 
+/// One event as it currently exists on the target calendar, classified by
+/// ownership. Produced by `ManagedTargetObserver` from a raw provider
+/// snapshot, and consumed by `SyncPlanner` alongside the desired source
+/// state to compute what (if anything) needs to change.
 public struct TargetEventObservation: Codable, Equatable, Sendable {
     public let calendarBindingID: String
     public let providerEventID: String
@@ -47,7 +56,25 @@ public struct TargetEventObservation: Codable, Equatable, Sendable {
     }
 }
 
+/// Computes the deterministic diff between what an Arm's sources say should
+/// exist on the target calendar and what is actually observed there. The
+/// result is a pure, side-effect-free `SyncPlan`; nothing here talks to a
+/// calendar provider, which is what makes dry-run and apply share the exact
+/// same decision logic.
 public enum SyncPlanner {
+    /// Three-way reconciliation, one arm at a time:
+    ///
+    /// 1. Walk every source event that belongs in the window and decide
+    ///    create / update / no-op / repair for its mirror.
+    /// 2. Walk every mapping this Arm already owns whose source disappeared
+    ///    (fell out of the window or was cancelled) and decide remove/repair.
+    /// 3. Walk any leftover target observations that match neither a desired
+    ///    source nor a known mapping, flagging genuinely orphaned events for
+    ///    repair.
+    ///
+    /// A `mirrorKey` (a stable hash of the Arm and source identity) is the
+    /// join key across all three passes, so this never depends on iteration
+    /// order or provider-assigned IDs remaining stable.
     public static func plan(
         arm: StoredArm,
         sources: [StoredNormalizedInstance],
@@ -82,6 +109,9 @@ public enum SyncPlanner {
         var items: [SyncPlanItem] = []
         var desiredMirrorKeys = Set<String>()
 
+        // Pass 1: every source event that should have a mirror on the
+        // target. Sorted deterministically so the resulting plan (and its
+        // item IDs) don't depend on the order sources came back in.
         for source in boundedSources.sorted(by: sourceOrder) {
             let mirrorKey = mirrorKey(armID: arm.id, sourceKeyHash: source.sourceKeyHash)
             desiredMirrorKeys.insert(mirrorKey)
@@ -94,6 +124,10 @@ public enum SyncPlanner {
                 $0.ownershipStatus != .verified && $0.ownershipStatus != .unmanaged
             }
 
+            // Ownership questions always come first: an event Calopod can't
+            // positively verify, or more than one verified event for the
+            // same mirror, is never auto-resolved here — it goes to `.repair`
+            // so a human (or a later, narrower rule) decides what happens.
             let action: SyncPlanAction
             let reason: SyncPlanReason
             if !unverified.isEmpty {
@@ -150,6 +184,10 @@ public enum SyncPlanner {
             )
         }
 
+        // Pass 2: mappings this Arm already owns whose source no longer
+        // wants a mirror (it left the window or was cancelled). These are
+        // candidates for `.remove`, but only once ownership on the target
+        // side is unambiguous — the same caution as pass 1 applies.
         for mapping in armMappings where !desiredMirrorKeys.contains(mapping.mirrorKey) {
             let observations = observationsByMirror[mapping.mirrorKey] ?? []
             let verified = observations.filter { $0.ownershipStatus == .verified }
@@ -196,6 +234,11 @@ public enum SyncPlanner {
             )
         }
 
+        // Pass 3: target events that match neither a desired source (pass 1)
+        // nor a mapping this Arm knows about (pass 2). An `.unmanaged` event
+        // is just someone else's calendar entry and is left alone; anything
+        // else carries a Calopod marker Calopod can no longer explain, which
+        // is always worth flagging.
         let mappedMirrorKeys = Set(armMappings.map(\.mirrorKey))
         for (mirrorKey, observations) in observationsByMirror
             where !desiredMirrorKeys.contains(mirrorKey) && !mappedMirrorKeys.contains(mirrorKey) {
@@ -223,10 +266,19 @@ public enum SyncPlanner {
         )
     }
 
+    /// Stable identity for "this source event, mirrored by this Arm" that
+    /// never depends on a provider-assigned event ID. Used as the join key
+    /// between sources, mappings, and target observations, and stored in the
+    /// ownership marker written onto every managed event so it can be
+    /// re-derived and checked later.
     public static func mirrorKey(armID: String, sourceKeyHash: String) -> String {
         base32(digest(fields: ["calopod-mirror-v1", armID, sourceKeyHash]))
     }
 
+    /// Hash of everything the target event's fields are derived from for a
+    /// given Rule. Comparing this against the fingerprint recorded the last
+    /// time Calopod wrote the event is how the planner tells a real content
+    /// change apart from a no-op, without re-reading or diffing every field.
     public static func desiredFingerprint(
         payload: DesiredEventPayload,
         ruleMode: ArmRuleMode
@@ -277,6 +329,11 @@ public enum SyncPlanner {
         }
     }
 
+    /// Builds the notes field for a Full details Rule. EventKit's organizer
+    /// and attendee fields are read-only and native attendee writes could
+    /// send real invitations or RSVP changes, so participant context and the
+    /// source's meeting link are folded into plain text notes instead of
+    /// structured calendar fields.
     private static func fullDetailsNotes(_ source: StoredNormalizedInstance) -> String? {
         var sections: [String] = []
         if let notes = normalizedText(source.notes) {

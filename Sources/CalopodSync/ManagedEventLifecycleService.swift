@@ -41,6 +41,11 @@ public struct ManagedEventLifecycleSummary: Equatable, Sendable {
     }
 }
 
+/// Executes a `SyncPlan`'s items against a calendar provider and keeps the
+/// local mirror-mapping table in sync with what was actually written. This
+/// is the only place that turns a plan decision into a real provider
+/// mutation; `perform` is injected so the same logic runs against a live
+/// provider in production and a fake one in tests.
 public struct ManagedEventLifecycleService: Sendable {
     private let repository: LocalStateRepository
     private let keyVault: OwnershipKeyVault
@@ -50,6 +55,11 @@ public struct ManagedEventLifecycleService: Sendable {
         keyVault = OwnershipKeyVault(secretStore: secretStore)
     }
 
+    /// Applies every plan item that belongs to `arm`, in the order the
+    /// planner produced them. Before doing anything, every `.repair` item is
+    /// checked for determinism: a repair whose target-side evidence is
+    /// ambiguous is refused outright rather than guessed at, since a wrong
+    /// guess here means mutating or deleting the wrong calendar event.
     public func apply(
         items: [SyncPlanItem],
         arm: StoredArm,
@@ -139,6 +149,11 @@ public struct ManagedEventLifecycleService: Sendable {
                 mappings.removeValue(forKey: item.mirrorKey)
                 providerWrites += 1
             case .noOp:
+                // A no-op still writes nothing to the provider, but the
+                // locally stored mapping is refreshed if any of its fields
+                // have drifted from what was actually observed (for example
+                // a provider version bump from an unrelated edit), so later
+                // planning passes compare against current, not stale, data.
                 noOps += 1
                 guard let mapping = mappings[item.mirrorKey],
                       verified.count == 1,
@@ -171,6 +186,10 @@ public struct ManagedEventLifecycleService: Sendable {
             case .repair:
                 switch item.reason {
                 case .mappingMissing, .providerIdentityChanged:
+                    // A single verified target exists but the local mapping
+                    // doesn't point at it (or points at a stale provider ID)
+                    // — adopt the verified event as the mapping's target
+                    // rather than creating a second one.
                     guard verified.count == 1,
                           let target = verified.first,
                           let sourceKeyHash = item.sourceKeyHash,
@@ -192,6 +211,10 @@ public struct ManagedEventLifecycleService: Sendable {
                     mappings[item.mirrorKey] = adopted
                     reconciliations += 1
                 case .targetMissing:
+                    // The mapped event is gone from the target. Drop the
+                    // stale mapping first, then recreate it if the source
+                    // still wants a mirror — this is what lets a manually
+                    // deleted managed event heal itself on the next sync.
                     if mappings[item.mirrorKey] != nil {
                         try repository.removeMirrorMapping(mirrorKey: item.mirrorKey)
                         mappings.removeValue(forKey: item.mirrorKey)
@@ -208,6 +231,11 @@ public struct ManagedEventLifecycleService: Sendable {
                         providerWrites += 1
                     }
                 case .verifiedDuplicates:
+                    // More than one verified event claims the same mirror.
+                    // Pick one deterministic survivor (see `duplicateOrder`),
+                    // update it to the desired content, and delete the rest —
+                    // never the other way around, so a duplicate never
+                    // resolves by silently discarding real content.
                     guard verified.count > 1,
                           item.sourceKeyHash != nil,
                           item.desiredFingerprint != nil else {
@@ -265,6 +293,11 @@ public struct ManagedEventLifecycleService: Sendable {
         )
     }
 
+    /// Whether a `.repair` item has exactly the evidence its reason expects,
+    /// so `apply` can act on it without guessing. Any repair reason not
+    /// listed here (`ownershipUnverified`, snapshot-incomplete states, and so
+    /// on) always falls through to `.ambiguousRepair` — those require a
+    /// clean re-read of the target, not an automatic decision.
     private func repairIsDeterministic(
         _ item: SyncPlanItem,
         observationsByMirror: [String: [TargetEventObservation]]
@@ -287,6 +320,12 @@ public struct ManagedEventLifecycleService: Sendable {
         }
     }
 
+    /// Ranks two duplicate verified events to pick which one survives:
+    /// prefer the provider's own preferred identity for a recurring series,
+    /// then the event the local mapping already points at, then the older
+    /// event, then a stable ID comparison as the final tiebreaker. Keeping
+    /// this purely deterministic means repeated runs always converge on the
+    /// same survivor instead of flapping between duplicates.
     private func duplicateOrder(
         _ left: TargetEventObservation,
         _ right: TargetEventObservation,
@@ -327,6 +366,10 @@ public struct ManagedEventLifecycleService: Sendable {
         return mapping
     }
 
+    /// Builds the provider write payload plus a signed ownership marker.
+    /// The marker is what lets a later sync (possibly on another device)
+    /// recognize this exact event as Calopod's own without relying on the
+    /// provider's event ID, which can change.
     private func writeRequest(
         item: SyncPlanItem,
         arm: StoredArm

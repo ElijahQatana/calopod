@@ -2,6 +2,11 @@ import CalopodProviders
 import CalopodStore
 import Foundation
 
+/// Turns raw target-calendar snapshots into ownership-classified
+/// `TargetEventObservation`s. This is where the signed ownership marker on
+/// each event is decoded and checked, so everything downstream (the planner,
+/// the lifecycle service) can trust `ownershipStatus` instead of
+/// re-inspecting provider data itself.
 public struct ManagedTargetObserver: Sendable {
     private let keyVault: OwnershipKeyVault
 
@@ -9,6 +14,14 @@ public struct ManagedTargetObserver: Sendable {
         keyVault = OwnershipKeyVault(secretStore: secretStore)
     }
 
+    /// Classifies each snapshot by what its marker (if any) proves:
+    /// - `.absent` — no marker at all; unmanaged unless a mapping already
+    ///   claims this provider event, in which case the marker was lost.
+    /// - `.invalid` — a marker exists but the provider couldn't return it
+    ///   uncorrupted.
+    /// - `.parsed` — a marker decoded successfully and is checked against
+    ///   this configuration, this Arm, its expected mirror key, and finally
+    ///   cryptographically verified against the stored ownership key.
     public func observations(
         snapshots: [ManagedEventSnapshot],
         arm: StoredArm,
@@ -61,6 +74,10 @@ public struct ManagedTargetObserver: Sendable {
                         isProviderPreferredIdentity: snapshot.isProviderPreferredIdentity
                     )
                 }
+                // A marker for a different configuration or Arm isn't this
+                // Arm's event to manage. It's only reported at all if a
+                // mapping already points at it — otherwise it's silently
+                // dropped since it belongs to someone else's setup.
                 guard marker.configurationID == arm.configurationID else {
                     guard let mapped else { return nil }
                     return TargetEventObservation(
@@ -93,6 +110,10 @@ public struct ManagedTargetObserver: Sendable {
                     armID: arm.id,
                     sourceKeyHash: marker.sourceKeyHash
                 )
+                // The marker must agree with both the mirror key recomputed
+                // from its own source hash and whatever the local mapping
+                // already recorded; any mismatch means the marker can't be
+                // trusted even though it decoded successfully.
                 let status: TargetOwnershipStatus
                 let mappedMarkerMismatch = mapped.map {
                     $0.mirrorKey != marker.mirrorKey || $0.sourceKeyHash != marker.sourceKeyHash

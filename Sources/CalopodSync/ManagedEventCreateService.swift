@@ -7,6 +7,11 @@ public enum ManagedEventCreateError: Error, Equatable, Sendable {
     case invalidPlanItem
 }
 
+/// Minimal, single-item counterpart to `ManagedEventLifecycleService`: signs
+/// and issues one `.create` mutation and records the resulting mapping. Kept
+/// separate so a caller that only ever creates managed events (rather than
+/// running the full plan-and-repair lifecycle) doesn't need to depend on the
+/// larger service.
 public struct ManagedEventCreateService: Sendable {
     private let repository: LocalStateRepository
     private let keyVault: OwnershipKeyVault
