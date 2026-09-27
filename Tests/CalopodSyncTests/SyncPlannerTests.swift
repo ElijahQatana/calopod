@@ -120,6 +120,38 @@ struct SyncPlannerTests {
         #expect(plan.items.first?.desiredFingerprint != changedPlan.items.first?.desiredFingerprint)
     }
 
+    @Test("Full details omit privacy when the target cannot write it")
+    func targetPrivacyCapabilities() throws {
+        let source = instance(id: "source-one", isPrivate: true)
+        let arm = storedArm(ruleMode: .fullDetails, isMain: true)
+
+        let eventKit = SyncPlanner.plan(
+            arm: arm,
+            targetProvider: .eventKit,
+            sources: [source],
+            mappings: [],
+            targetEvents: [],
+            window: try window(),
+            sourceSnapshotComplete: true
+        )
+        let google = SyncPlanner.plan(
+            arm: arm,
+            targetProvider: .google,
+            sources: [source],
+            mappings: [],
+            targetEvents: [],
+            window: try window(),
+            sourceSnapshotComplete: true
+        )
+
+        #expect(eventKit.items.first?.payload?.isPrivate == nil)
+        #expect(google.items.first?.payload?.isPrivate == true)
+        #expect(
+            eventKit.items.first?.desiredFingerprint
+                != google.items.first?.desiredFingerprint
+        )
+    }
+
     @Test("Calculates creates, updates, removals, repairs, and no-ops")
     func everyAction() throws {
         let arm = storedArm(ruleMode: .busy)

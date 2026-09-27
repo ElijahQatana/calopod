@@ -34,6 +34,7 @@ public struct ManagedEventConvergenceService: Sendable {
     public func converge(
         initialItems: [SyncPlanItem],
         arm: StoredArm,
+        targetProvider: ProviderKind,
         initialObservations: [TargetEventObservation],
         window: SyncWindow,
         maximumMutationPasses: Int = 3,
@@ -96,6 +97,7 @@ public struct ManagedEventConvergenceService: Sendable {
             )
             items = SyncPlanner.plan(
                 arm: arm,
+                targetProvider: targetProvider,
                 sources: sources,
                 mappings: mappings,
                 targetEvents: observations,

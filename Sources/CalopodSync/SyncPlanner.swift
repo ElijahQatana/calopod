@@ -77,6 +77,7 @@ public enum SyncPlanner {
     /// order or provider-assigned IDs remaining stable.
     public static func plan(
         arm: StoredArm,
+        targetProvider: ProviderKind? = nil,
         sources: [StoredNormalizedInstance],
         mappings: [StoredMirrorMapping],
         targetEvents: [TargetEventObservation],
@@ -115,7 +116,11 @@ public enum SyncPlanner {
         for source in boundedSources.sorted(by: sourceOrder) {
             let mirrorKey = mirrorKey(armID: arm.id, sourceKeyHash: source.sourceKeyHash)
             desiredMirrorKeys.insert(mirrorKey)
-            let payload = desiredPayload(source: source, ruleMode: arm.ruleMode)
+            let payload = desiredPayload(
+                source: source,
+                ruleMode: arm.ruleMode,
+                targetProvider: targetProvider
+            )
             let fingerprint = desiredFingerprint(payload: payload, ruleMode: arm.ruleMode)
             let mapping = mappingsByMirror[mirrorKey]
             let observations = observationsByMirror[mirrorKey] ?? []
@@ -301,7 +306,8 @@ public enum SyncPlanner {
 
     private static func desiredPayload(
         source: StoredNormalizedInstance,
-        ruleMode: ArmRuleMode
+        ruleMode: ArmRuleMode,
+        targetProvider: ProviderKind?
     ) -> DesiredEventPayload {
         switch ruleMode {
         case .busy:
@@ -322,7 +328,7 @@ public enum SyncPlanner {
                 isAllDay: source.isAllDay,
                 availability: source.availability,
                 title: source.title,
-                isPrivate: source.isPrivate,
+                isPrivate: targetProvider == .eventKit ? nil : source.isPrivate,
                 location: source.location,
                 notes: fullDetailsNotes(source)
             )

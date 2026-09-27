@@ -381,7 +381,7 @@ private final class LiveEventKitGateway: EventKitGateway {
                 isAllDay: event.isAllDay,
                 availability: availability(event.availability).rawValue,
                 title: event.title,
-                isPrivate: decoded.1?.ruleMode == .busy ? nil : false,
+                isPrivate: nil,
                 location: event.location,
                 notes: event.notes
             )
