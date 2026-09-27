@@ -426,6 +426,124 @@ func wakeStartsOneFreshBoundedRunWithoutCatchUp() async throws {
     #expect(delays.values == [615, 615])
 }
 
+@Test
+func cancellationDuringAnActiveRunStopsWithoutAnotherReport() async throws {
+    let (environment, directory) = try temporaryAgentEnvironment(prefix: "active-cancel")
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let reports = LockedValues<AgentRunReport>()
+    let delays = LockedValues<TimeInterval>()
+    let (started, startedContinuation) = AsyncStream<Void>.makeStream()
+    let runner = CalopodAgentRunner(
+        environment: environment,
+        schedule: try AgentSchedule(
+            interval: 600,
+            maximumJitter: 30,
+            lookbackDays: 2,
+            horizonDays: 14
+        ),
+        now: { Date(timeIntervalSince1970: 1_788_566_400) },
+        randomUnit: { 0.5 },
+        sleep: { delay in
+            delays.append(delay)
+        },
+        runSync: { request in
+            startedContinuation.yield()
+            startedContinuation.finish()
+            try await Task.sleep(for: .seconds(60))
+            return try successfulAgentResult(for: request)
+        }
+    )
+    let task = Task {
+        await runner.runUntilCancelled { reports.append($0) }
+    }
+
+    for await _ in started { break }
+    task.cancel()
+    await task.value
+
+    #expect(reports.values.isEmpty)
+    #expect(delays.values.isEmpty)
+}
+
+@Test
+func cancellationDuringTheScheduledWaitPreventsAnotherRun() async throws {
+    let (environment, directory) = try temporaryAgentEnvironment(prefix: "wait-cancel")
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let reports = LockedValues<AgentRunReport>()
+    let runs = LockedValues<Int>()
+    let delays = LockedValues<TimeInterval>()
+    let (waiting, waitingContinuation) = AsyncStream<Void>.makeStream()
+    let runner = CalopodAgentRunner(
+        environment: environment,
+        schedule: try AgentSchedule(
+            interval: 600,
+            maximumJitter: 30,
+            lookbackDays: 2,
+            horizonDays: 14
+        ),
+        now: { Date(timeIntervalSince1970: 1_788_566_400) },
+        randomUnit: { 0.5 },
+        sleep: { delay in
+            delays.append(delay)
+            waitingContinuation.yield()
+            waitingContinuation.finish()
+            try await Task.sleep(for: .seconds(60))
+        },
+        runSync: { request in
+            runs.append(1)
+            return try successfulAgentResult(for: request)
+        }
+    )
+    let task = Task {
+        await runner.runUntilCancelled { reports.append($0) }
+    }
+
+    for await _ in waiting { break }
+    task.cancel()
+    await task.value
+
+    #expect(reports.values.map(\.status) == ["ok"])
+    #expect(runs.values.count == 1)
+    #expect(delays.values == [615])
+}
+
+private func temporaryAgentEnvironment(
+    prefix: String
+) throws -> (CalopodRuntimeEnvironment, URL) {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("calopod-agent-\(prefix)-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let state = try CalopodStateLocation(
+        environment: [
+            "CALOPOD_STATE_PATH": directory.appendingPathComponent("state.sqlite").path,
+        ]
+    )
+    return (
+        try CalopodRuntimeEnvironment(
+            variables: [:],
+            stateLocation: state,
+            executableURL: directory.appendingPathComponent("calopod-agent")
+        ),
+        directory
+    )
+}
+
+private func successfulAgentResult(
+    for request: SyncRequest
+) throws -> SyncExecutionResult {
+    let window = try #require(request.window)
+    return SyncExecutionResult(
+        status: "ok",
+        mode: .apply,
+        window: window,
+        items: [],
+        appliedCount: 0,
+        reconciledCount: 0,
+        noOpCount: 0,
+        warnings: []
+    )
+}
+
 private func verifyAgentFailureWaits(
     _ error: any Error & Sendable,
     category: String
