@@ -3,28 +3,17 @@ import CalopodEventKit
 import CalopodGoogle
 import CalopodMicrosoft
 import CalopodProviders
+import CalopodRuntime
 import CalopodStore
 import Foundation
 
 enum CommandEnvironment {
+    static func runtimeEnvironment() throws -> CalopodRuntimeEnvironment {
+        try CalopodRuntimeEnvironment()
+    }
+
     static func repository() throws -> LocalStateRepository {
-        let environment = ProcessInfo.processInfo.environment
-        let path: String
-        if let override = environment["CALOPOD_STATE_PATH"], !override.isEmpty {
-            path = override
-        } else {
-            let base = FileManager.default.urls(
-                for: .applicationSupportDirectory,
-                in: .userDomainMask
-            ).first!
-            let directory = base.appendingPathComponent("Calopod", isDirectory: true)
-            try FileManager.default.createDirectory(
-                at: directory,
-                withIntermediateDirectories: true
-            )
-            path = directory.appendingPathComponent("state.sqlite").path
-        }
-        return LocalStateRepository(database: try CalopodDatabase(path: path))
+        try runtimeEnvironment().repository()
     }
 
     static func googleService(requireClientID: Bool = true) throws -> GoogleConnectionService {
@@ -96,6 +85,38 @@ func failCommand(_ error: Error) throws -> Never {
 }
 
 private func commandFailure(_ error: Error) -> (message: String, exitCode: CalopodExitCode) {
+    if let runtime = error as? CalopodRuntimeError {
+        switch runtime {
+        case .busy:
+            return ("Another sync is already running.", .temporaryFailure)
+        case .invalidStatePath:
+            return ("The local state path must be an absolute writable path.", .invalidConfiguration)
+        case .invalidEventKitHostPath:
+            return ("The EventKit host path must be absolute.", .invalidConfiguration)
+        case .missingEventKitHost:
+            return ("Build the EventKit host with Scripts/build-eventkit-host.sh, then try again.", .invalidConfiguration)
+        case .eventKitHostFailed:
+            return ("The EventKit host did not return a valid response. Rebuild it, then try again.", .unavailable)
+        case .missingGoogleClientID:
+            return ("Set CALOPOD_GOOGLE_CLIENT_ID to the desktop OAuth client ID, then try again.", .invalidConfiguration)
+        case .missingMicrosoftClientID:
+            return ("Set CALOPOD_MICROSOFT_CLIENT_ID to the public client ID, then try again.", .invalidConfiguration)
+        case .unsupportedPlatform:
+            return ("This operation is not available on the current platform.", .unavailable)
+        case .noEnabledArms, .invalidConfiguration:
+            return ("The sync configuration is incomplete or no longer available.", .invalidConfiguration)
+        case .sourceRefreshFailed:
+            return ("Apply stopped because at least one source calendar could not refresh.", .unavailable)
+        case .targetRefreshFailed:
+            return ("Apply stopped because at least one target calendar could not refresh.", .unavailable)
+        case .writerNotPreferred:
+            return ("Apply stopped because this device is not the preferred writer for an EventKit Arm.", .invalidConfiguration)
+        case .ambiguousRepair:
+            return ("Apply stopped at an ambiguous repair. Inspect the dry run before retrying.", .invalidConfiguration)
+        case .convergenceFailed:
+            return ("Apply stopped because managed target changes did not converge after repeated reads.", .temporaryFailure)
+        }
+    }
     if let provider = error as? ProviderFailure {
         switch provider {
         case .accountPolicyRequired:

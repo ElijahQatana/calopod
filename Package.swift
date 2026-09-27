@@ -16,6 +16,7 @@ let package = Package(
         .library(name: "CalopodMicrosoft", targets: ["CalopodMicrosoft"]),
         .library(name: "CalopodStore", targets: ["CalopodStore"]),
         .library(name: "CalopodSync", targets: ["CalopodSync"]),
+        .library(name: "CalopodRuntime", targets: ["CalopodRuntime"]),
         .executable(name: "calopod", targets: ["CalopodCLI"]),
         .executable(name: "calopod-agent", targets: ["CalopodAgent"]),
         .executable(name: "calopod-eventkit-host", targets: ["CalopodEventKitHost"]),
@@ -48,6 +49,18 @@ let package = Package(
             dependencies: ["CalopodDomain", "CalopodProviders", "CalopodStore"]
         ),
         .target(
+            name: "CalopodRuntime",
+            dependencies: [
+                "CalopodDomain",
+                "CalopodEventKit",
+                "CalopodGoogle",
+                "CalopodMicrosoft",
+                "CalopodProviders",
+                "CalopodStore",
+                "CalopodSync",
+            ]
+        ),
+        .target(
             name: "CalopodGoogle",
             dependencies: ["CalopodDomain", "CalopodProviders", "CalopodStore"]
         ),
@@ -67,6 +80,7 @@ let package = Package(
                 "CalopodGoogle",
                 "CalopodMicrosoft",
                 "CalopodProviders",
+                "CalopodRuntime",
                 "CalopodStore",
                 "CalopodSync",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
@@ -78,7 +92,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "CalopodAgent",
-            dependencies: ["CalopodDomain", "CalopodSync"]
+            dependencies: ["CalopodRuntime"]
         ),
         .executableTarget(
             name: "CalopodEventKitHost",
@@ -106,6 +120,10 @@ let package = Package(
         .testTarget(
             name: "CalopodStoreTests",
             dependencies: ["CalopodDomain", "CalopodStore"]
+        ),
+        .testTarget(
+            name: "CalopodRuntimeTests",
+            dependencies: ["CalopodDomain", "CalopodRuntime", "CalopodStore"]
         ),
         .testTarget(
             name: "CalopodCommandsTests",

@@ -1,18 +1,94 @@
-import CalopodDomain
-import CalopodSync
+import CalopodRuntime
+import Darwin
+import Dispatch
 import Foundation
 
 @main
 struct CalopodAgent {
     static func main() async {
         do {
-            let summary = try await SyncEngine().run(SyncRequest(mode: .apply))
-            print("mode=\(summary.mode.rawValue)")
-            print("planned=\(summary.plannedOperationCount)")
-            print("applied=\(summary.appliedOperationCount)")
+            let arguments = Array(CommandLine.arguments.dropFirst())
+            guard arguments.isEmpty || arguments == ["--once"] else {
+                writeError("Usage: calopod-agent [--once]\n")
+                exit(64)
+            }
+            let environment = try CalopodRuntimeEnvironment()
+            let runner = CalopodAgentRunner(
+                environment: environment,
+                schedule: try AgentSchedule(environment: ProcessInfo.processInfo.environment)
+            )
+            if arguments == ["--once"] {
+                let report = await runner.runOnce()
+                write(report)
+                switch report.status {
+                case "ok": exit(0)
+                case "busy": exit(75)
+                default: exit(1)
+                }
+            }
+
+            let signals = TerminationSignals()
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    await runner.runUntilCancelled(report: write)
+                }
+                group.addTask {
+                    await signals.wait()
+                }
+                await group.next()
+                group.cancelAll()
+            }
         } catch {
-            fputs("Sync failed.\n", stderr)
+            write(
+                AgentRunReport(
+                    status: "failed",
+                    failureCategory: syncFailureCategory(error)
+                )
+            )
             exit(1)
         }
+    }
+
+    private static func write(_ report: AgentRunReport) {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        guard let data = try? encoder.encode(report) else { return }
+        FileHandle.standardOutput.write(data)
+        FileHandle.standardOutput.write(Data("\n".utf8))
+    }
+
+    private static func writeError(_ message: String) {
+        FileHandle.standardError.write(Data(message.utf8))
+    }
+}
+
+private final class TerminationSignals: @unchecked Sendable {
+    private let stream: AsyncStream<Void>
+    private var sources: [DispatchSourceSignal] = []
+
+    init() {
+        var continuation: AsyncStream<Void>.Continuation?
+        stream = AsyncStream { continuation = $0 }
+        for signalNumber in [SIGTERM, SIGINT] {
+            signal(signalNumber, SIG_IGN)
+            let source = DispatchSource.makeSignalSource(
+                signal: signalNumber,
+                queue: .global(qos: .utility)
+            )
+            source.setEventHandler {
+                continuation?.yield(())
+                continuation?.finish()
+            }
+            source.resume()
+            sources.append(source)
+        }
+    }
+
+    func wait() async {
+        for await _ in stream { return }
+    }
+
+    deinit {
+        sources.forEach { $0.cancel() }
     }
 }

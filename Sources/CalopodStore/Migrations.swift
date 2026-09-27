@@ -214,6 +214,17 @@ extension CalopodDatabase {
             }
         }
 
+        migrator.registerMigration("v6_sync_run_summaries") { database in
+            try database.alter(table: "sync_runs") { table in
+                table.add(column: "trigger", .text).notNull().defaults(to: "manual")
+                table.add(column: "planned_count", .integer).notNull().defaults(to: 0)
+                table.add(column: "applied_count", .integer).notNull().defaults(to: 0)
+                table.add(column: "reconciled_count", .integer).notNull().defaults(to: 0)
+                table.add(column: "no_op_count", .integer).notNull().defaults(to: 0)
+                table.add(column: "warning_count", .integer).notNull().defaults(to: 0)
+            }
+        }
+
         return migrator
     }
 }
