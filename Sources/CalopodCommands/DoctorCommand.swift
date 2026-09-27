@@ -129,12 +129,15 @@ private func doctorReport() throws -> DoctorReport {
         warnings.append("Configure and enable at least one calendar Connection.")
     } else {
         items.append(doctorItem("connections", "ok"))
+        let providerConnections = try automaticSyncSourceConnections(repository: repository)
         let providerCheck = try providerHealthCheck(
-            connections: connections,
+            connections: providerConnections,
             repository: repository
         )
         items.append(providerCheck)
-        if providerCheck.kind == "pending" {
+        if providerConnections.isEmpty {
+            warnings.append("Enable an Arm with selected source calendars to check provider health.")
+        } else if providerCheck.kind == "pending" {
             warnings.append("Run automatic sync once to check provider health.")
         } else if providerCheck.kind == "failed" {
             warnings.append(actionForFailure(providerCheck.reason))
@@ -178,6 +181,9 @@ func providerHealthCheck(
     connections: [StoredConnection],
     repository: LocalStateRepository
 ) throws -> CommandItem {
+    guard !connections.isEmpty else {
+        return doctorItem("provider-health", "pending", "inactive")
+    }
     var sawUnchecked = false
     for connection in connections {
         guard let health = try repository.connectionHealth(connectionID: connection.id) else {
@@ -193,6 +199,35 @@ func providerHealthCheck(
         }
     }
     return doctorItem("provider-health", sawUnchecked ? "pending" : "ok")
+}
+
+func automaticSyncSourceConnections(
+    repository: LocalStateRepository
+) throws -> [StoredConnection] {
+    var connectionsByID: [String: StoredConnection] = [:]
+    for arm in try repository.arms() where arm.isEnabled {
+        guard let target = try repository.calendarBinding(id: arm.targetBindingID),
+              let targetConnection = try repository.connection(id: target.connectionID),
+              targetConnection.isEnabled else {
+            continue
+        }
+
+        var sourceConnections: [StoredConnection] = []
+        for sourceID in arm.sourceBindingIDs {
+            guard let source = try repository.calendarBinding(id: sourceID),
+                  source.isSelected,
+                  let connection = try repository.connection(id: source.connectionID),
+                  connection.isEnabled else {
+                sourceConnections.removeAll()
+                break
+            }
+            sourceConnections.append(connection)
+        }
+        for connection in sourceConnections {
+            connectionsByID[connection.id] = connection
+        }
+    }
+    return connectionsByID.values.sorted { $0.id < $1.id }
 }
 
 func serviceHealthCheck(
