@@ -265,6 +265,42 @@ func agentBusyReportContainsOnlyAGenericCategory() async throws {
 }
 
 @Test
+func pausedAgentSkipsAutomaticWorkUntilAnExplicitRun() async throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("calopod-agent-paused-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let state = try CalopodStateLocation(
+        environment: ["CALOPOD_STATE_PATH": directory.appendingPathComponent("state.sqlite").path]
+    )
+    let environment = try CalopodRuntimeEnvironment(
+        variables: [:],
+        stateLocation: state,
+        executableURL: directory.appendingPathComponent("calopod-agent")
+    )
+    let repository = try environment.repository()
+    try repository.setAgentPaused(true)
+    let runner = CalopodAgentRunner(
+        environment: environment,
+        schedule: try AgentSchedule(
+            interval: 600,
+            maximumJitter: 30,
+            lookbackDays: 2,
+            horizonDays: 14
+        ),
+        now: { Date(timeIntervalSince1970: 1_788_566_400) }
+    )
+
+    let paused = await runner.runOnce()
+    #expect(paused.status == "paused")
+    #expect(try repository.latestSyncRun(trigger: "automatic") == nil)
+
+    let explicit = await runner.runOnce(ignorePause: true)
+    #expect(explicit.status == "ok")
+    #expect(try repository.latestSyncRun(trigger: "automatic")?.status == "succeeded")
+}
+
+@Test
 func busyAgentAttemptWaitsForTheScheduledDelayBeforeStopping() async throws {
     let directory = FileManager.default.temporaryDirectory
         .appendingPathComponent("calopod-agent-delay-\(UUID().uuidString)", isDirectory: true)

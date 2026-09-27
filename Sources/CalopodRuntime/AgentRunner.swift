@@ -119,8 +119,11 @@ public struct CalopodAgentRunner: Sendable {
         self.sleep = sleep
     }
 
-    public func runOnce() async -> AgentRunReport {
+    public func runOnce(ignorePause: Bool = false) async -> AgentRunReport {
         do {
+            if !ignorePause, try environment.repository().agentControl().isPaused {
+                return AgentRunReport(status: "paused")
+            }
             let window = try schedule.window(containing: now())
             let result = try await SyncEngine(environment: environment).run(
                 SyncRequest(mode: .apply, window: window),
