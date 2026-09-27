@@ -122,6 +122,34 @@ func agentStatusDoesNotCreateMissingState() throws {
     #expect(!FileManager.default.fileExists(atPath: fixture.stateURL.path))
 }
 
+@Test
+func scheduleUpdatePreservesPathsAndRestartsALoadedAgent() throws {
+    let fixture = try LaunchAgentFixture()
+    defer { fixture.remove() }
+    var calls: [[String]] = []
+    let controller = try LaunchAgentController(
+        homeDirectory: fixture.homeDirectory,
+        userID: 501
+    ) { arguments in
+        calls.append(arguments)
+        return LaunchctlResult(exitCode: 0, output: "")
+    }
+
+    try controller.updateSchedule(intervalSeconds: 900, jitterSeconds: 45)
+
+    let updated = try AgentServiceConfiguration.load(from: fixture.propertyListURL)
+    #expect(updated.intervalSeconds == 900)
+    #expect(updated.jitterSeconds == 45)
+    #expect(updated.stateURL == fixture.stateURL.standardizedFileURL)
+    #expect(updated.programURL.path == "/example/bin/calopod-agent")
+    #expect(calls.map(\.first) == ["print", "print-disabled", "bootout", "bootstrap"])
+    let mode = try #require(
+        FileManager.default.attributesOfItem(atPath: fixture.propertyListURL.path)[.posixPermissions]
+            as? NSNumber
+    )
+    #expect(mode.intValue == 0o600)
+}
+
 private struct LaunchAgentFixture {
     let root: URL
     let homeDirectory: URL

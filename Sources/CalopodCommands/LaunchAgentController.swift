@@ -98,6 +98,61 @@ struct LaunchAgentController {
         }
     }
 
+    func updateSchedule(intervalSeconds: Int, jitterSeconds: Int?) throws {
+        guard intervalSeconds > 0, jitterSeconds.map({ $0 >= 0 }) ?? true else {
+            throw AgentServiceConfigurationError.invalidSchedule
+        }
+        _ = try installedConfiguration()
+        let originalData = try Data(contentsOf: propertyListURL)
+        guard var propertyList = try PropertyListSerialization.propertyList(
+            from: originalData,
+            options: [],
+            format: nil
+        ) as? [String: Any],
+        var environment = propertyList["EnvironmentVariables"] as? [String: String] else {
+            throw AgentServiceConfigurationError.invalidPropertyList
+        }
+        environment["CALOPOD_AGENT_INTERVAL_SECONDS"] = String(intervalSeconds)
+        if let jitterSeconds {
+            environment["CALOPOD_AGENT_JITTER_SECONDS"] = String(jitterSeconds)
+        }
+        propertyList["EnvironmentVariables"] = environment
+        let replacementData = try PropertyListSerialization.data(
+            fromPropertyList: propertyList,
+            format: .xml,
+            options: 0
+        )
+        let wasLoaded = try isLoaded()
+        let wasDisabled = try isDisabled()
+        if wasLoaded {
+            try requireSuccess(launchctl(["bootout", serviceTarget]), operation: "bootout")
+        }
+        do {
+            try replacementData.write(to: propertyListURL, options: .atomic)
+            try fileManager.setAttributes(
+                [.posixPermissions: 0o600],
+                ofItemAtPath: propertyListURL.path
+            )
+            _ = try installedConfiguration()
+        } catch {
+            try? originalData.write(to: propertyListURL, options: .atomic)
+            try? fileManager.setAttributes(
+                [.posixPermissions: 0o600],
+                ofItemAtPath: propertyListURL.path
+            )
+            if wasLoaded, !wasDisabled {
+                _ = try? launchctl(["bootstrap", launchDomain, propertyListURL.path])
+            }
+            throw error
+        }
+        if wasLoaded, !wasDisabled {
+            try requireSuccess(
+                launchctl(["bootstrap", launchDomain, propertyListURL.path]),
+                operation: "bootstrap"
+            )
+        }
+    }
+
     private var launchDomain: String {
         "gui/\(userID)"
     }
