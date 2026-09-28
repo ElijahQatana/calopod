@@ -292,7 +292,7 @@ done
 run_json "$calendars_file" calendars --connection eventkit-device
 
 if [ "$main_count" -eq 0 ]; then
-  main_target=$(choose_target "$calendars_file" Main)
+  main_target=$(choose_target "$calendars_file" Main "$busy_target")
   set -- main configure
   for source_id in $source_ids; do
     set -- "$@" --source "$source_id"

@@ -55,6 +55,17 @@ grep -q 'Existing Busy configuration found; preserving it.' "$second_output"
 grep -q 'Automatic sync was stopped while setup changes configuration.' "$second_output"
 [ -f "$fixture_root/enabled" ]
 
+/bin/rm -f "$fixture_root/main-configured"
+busy_only_input="$fixture_root/busy-only-input"
+busy_only_output="$fixture_root/busy-only-output"
+printf '2\ny\n\n\n\n\nn\n' > "$busy_only_input"
+run_setup "$busy_only_input" "$busy_only_output"
+
+[ -f "$fixture_root/main-configured" ]
+[ "$(grep -c '^main configure ' "$call_log")" -eq 2 ]
+grep -q 'Existing Busy configuration found; preserving its sources.' "$busy_only_output"
+grep -q 'Main calendar configured.' "$busy_only_output"
+
 : > "$fixture_root/source-unavailable"
 third_output="$fixture_root/third-output"
 if run_setup /dev/null "$third_output"; then
