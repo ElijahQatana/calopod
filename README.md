@@ -16,6 +16,13 @@ The first release is a local command-line utility for macOS. It starts with the 
 
 The complete product boundary is in [PROJECT_CHARTER.md](PROJECT_CHARTER.md).
 
+## CLI preview bundle
+
+The terminal-first preview is packaged as a versioned per-user bundle for
+Apple Silicon Macs running macOS 14 or newer. Build, verification, installation,
+upgrade, and removal are documented in
+[docs/CLI_PREVIEW_INSTALL.md](docs/CLI_PREVIEW_INSTALL.md).
+
 ## Development
 
 Calopod requires Swift 6.1 or newer. Build and test the shared workspace from the repository root:
@@ -41,5 +48,6 @@ The complete command tree, date-range behavior, output envelope, and exit codes 
 Combined Busy and Free interval behavior is documented in [docs/AVAILABILITY.md](docs/AVAILABILITY.md).
 The background runner contract is documented in [docs/BACKGROUND_AGENT.md](docs/BACKGROUND_AGENT.md).
 Source installation for the per-user service is documented in [docs/SOURCE_SERVICE_INSTALL.md](docs/SOURCE_SERVICE_INSTALL.md).
+The versioned CLI preview bundle is documented in [docs/CLI_PREVIEW_INSTALL.md](docs/CLI_PREVIEW_INSTALL.md).
 Automatic-sync controls and diagnostics are documented in [docs/AUTOMATIC_SYNC.md](docs/AUTOMATIC_SYNC.md).
 Background service recovery and upgrade checks are documented in [docs/SERVICE_RECOVERY.md](docs/SERVICE_RECOVERY.md).
