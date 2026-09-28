@@ -1,7 +1,8 @@
 import CalopodDomain
-import CalopodEventKit
+@testable import CalopodEventKit
 import CalopodProviders
 import CalopodStore
+import EventKit
 import Foundation
 import Testing
 
@@ -111,6 +112,23 @@ struct EventKitClientTests {
 
         #expect(gateway.lastManagedCalendarID == "target")
         #expect(snapshots == gateway.managedSnapshots)
+    }
+
+    @Test("Full details use native fields without alerts or invitees")
+    func fullDetailsPresentation() throws {
+        let event = EKEvent(eventStore: EKEventStore())
+        event.addAlarm(EKAlarm(relativeOffset: -300))
+        let request = eventKitFullDetailsRequest()
+
+        try EventKitManagedEventPresentation.apply(request, to: event)
+
+        #expect(event.title == request.payload.title)
+        #expect(event.location == request.payload.location)
+        #expect(event.notes == request.payload.notes)
+        #expect(event.alarms?.isEmpty != false)
+        #expect(event.attendees == nil)
+        #expect(event.url?.scheme == "calopod")
+        #expect(event.url?.host == "managed")
     }
 }
 
@@ -313,6 +331,31 @@ private func eventKitManagedRequest() -> ManagedEventWriteRequest {
             mirrorKey: "synthetic-mirror",
             sourceKeyHash: "synthetic-source",
             ruleMode: .busy,
+            ownershipKeyID: "synthetic-key",
+            authenticationTag: "synthetic-tag"
+        )
+    )
+}
+
+private func eventKitFullDetailsRequest() -> ManagedEventWriteRequest {
+    ManagedEventWriteRequest(
+        desiredFingerprint: "synthetic-full-details-fingerprint",
+        payload: DesiredEventPayload(
+            startsAt: Date(timeIntervalSince1970: 2_000),
+            endsAt: Date(timeIntervalSince1970: 3_000),
+            isAllDay: false,
+            availability: "busy",
+            title: "Synthetic planning session",
+            isPrivate: nil,
+            location: "Synthetic room",
+            notes: "Synthetic agenda and participant context"
+        ),
+        provenance: ManagedEventProvenance(
+            configurationID: "synthetic-configuration",
+            armID: "synthetic-arm",
+            mirrorKey: "synthetic-mirror",
+            sourceKeyHash: "synthetic-source",
+            ruleMode: .fullDetails,
             ownershipKeyID: "synthetic-key",
             authenticationTag: "synthetic-tag"
         )

@@ -195,8 +195,12 @@ public struct SyncEngine: Sendable {
                 )
             }
             observationsByArm[arm.id] = observations
+            guard let targetProvider = ProviderKind(rawValue: targetConnection.provider) else {
+                throw CalopodRuntimeError.invalidConfiguration("target-provider")
+            }
             let plan = SyncPlanner.plan(
                 arm: arm,
+                targetProvider: targetProvider,
                 sources: events,
                 mappings: mappings,
                 targetEvents: observations,
@@ -256,7 +260,9 @@ public struct SyncEngine: Sendable {
         var noOpCount = 0
         for armID in armsByID.keys.sorted() {
             guard let arm = armsByID[armID],
-                  let target = try repository.calendarBinding(id: arm.targetBindingID) else {
+                  let target = try repository.calendarBinding(id: arm.targetBindingID),
+                  let targetConnection = try repository.connection(id: target.connectionID),
+                  let targetProvider = ProviderKind(rawValue: targetConnection.provider) else {
                 throw CalopodRuntimeError.invalidConfiguration("arm-target")
             }
             let summary: ManagedEventLifecycleSummary
@@ -264,6 +270,7 @@ public struct SyncEngine: Sendable {
                 summary = try await convergence.converge(
                     initialItems: planItems,
                     arm: arm,
+                    targetProvider: targetProvider,
                     initialObservations: observationsByArm[arm.id] ?? [],
                     window: window
                 ) {

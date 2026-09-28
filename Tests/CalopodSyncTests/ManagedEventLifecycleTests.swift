@@ -456,6 +456,7 @@ struct ManagedEventLifecycleTests {
         let summary = try await service.converge(
             initialItems: initial.items,
             arm: fixture.arm,
+            targetProvider: .google,
             initialObservations: [],
             window: window
         ) {

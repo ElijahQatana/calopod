@@ -382,6 +382,8 @@ struct GoogleManagedWriteTests {
                 #expect(object["description"] == nil)
                 #expect(object["location"] == nil)
                 #expect(object["attendees"] == nil)
+                let reminders = try #require(object["reminders"] as? [String: Bool])
+                #expect(reminders["useDefault"] == false)
                 let properties = try #require(object["extendedProperties"] as? [String: Any])
                 let marker = try #require(properties["private"] as? [String: String])
                 #expect(marker["mirrorKey"] == managed.provenance.mirrorKey)
@@ -413,6 +415,9 @@ struct GoogleManagedWriteTests {
                 #expect(object["location"] as? String == "Synthetic room")
                 #expect(object["description"] as? String == "Synthetic agenda and participant context")
                 #expect(object["attendees"] == nil)
+                #expect(object["conferenceData"] == nil)
+                let reminders = try #require(object["reminders"] as? [String: Bool])
+                #expect(reminders["useDefault"] == false)
                 return HTTPResponse(
                     statusCode: 200,
                     body: Data(#"{"id":"provider-event","etag":"synthetic-etag"}"#.utf8)
