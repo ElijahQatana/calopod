@@ -24,7 +24,7 @@ resolve_home() {
     test_home=${CALOPOD_SERVICE_TEST_HOME:-}
     require_absolute_path "$test_home"
     case "$test_home" in
-      */calopod-service-test.*/home) ;;
+      */calopod-service-test.*/home|*/calopod-release-test.*/home) ;;
       *) fail "The test home is outside the expected temporary directory." 78 ;;
     esac
     [ -d "$test_home" ] || fail "The test home does not exist." 78
@@ -50,7 +50,9 @@ service_target="$launch_domain/$label"
 support_root="$home_root/Library/Application Support/Calopod"
 service_root="$support_root/Service"
 installed_binary="$service_root/bin/calopod-agent"
+installed_cli="$service_root/bin/calopod"
 installed_host="$service_root/eventkit-host/Calopod EventKit Host.app"
+installed_release="$service_root/release"
 state_path="$support_root/state.sqlite"
 log_root="$service_root/logs"
 stdout_path="$log_root/agent.stdout.log"
@@ -61,7 +63,9 @@ plist_path="$launch_agents_root/$label.plist"
 validate_managed_paths() {
   require_absolute_path "$service_root"
   require_absolute_path "$installed_binary"
+  require_absolute_path "$installed_cli"
   require_absolute_path "$installed_host"
+  require_absolute_path "$installed_release"
   require_absolute_path "$state_path"
   require_absolute_path "$stdout_path"
   require_absolute_path "$stderr_path"
@@ -110,6 +114,10 @@ require_positive_integer() {
 }
 
 source_agent_binary() {
+  if [ -n "${CALOPOD_SERVICE_AGENT_SOURCE:-}" ]; then
+    printf '%s\n' "$CALOPOD_SERVICE_AGENT_SOURCE"
+    return
+  fi
   if [ "$test_mode" = "1" ]; then
     printf '%s\n' "${CALOPOD_SERVICE_TEST_AGENT_SOURCE:-}"
     return
@@ -121,7 +129,27 @@ source_agent_binary() {
   printf '%s\n' "$binary_root/calopod-agent"
 }
 
+source_cli_binary() {
+  if [ -n "${CALOPOD_SERVICE_CLI_SOURCE:-}" ]; then
+    printf '%s\n' "$CALOPOD_SERVICE_CLI_SOURCE"
+    return
+  fi
+  if [ "$test_mode" = "1" ]; then
+    printf '%s\n' "${CALOPOD_SERVICE_TEST_CLI_SOURCE:-}"
+    return
+  fi
+  binary_root=$(swift build \
+    --package-path "$repository_root" \
+    --configuration release \
+    --show-bin-path) || exit $?
+  printf '%s\n' "$binary_root/calopod"
+}
+
 source_eventkit_host() {
+  if [ -n "${CALOPOD_SERVICE_HOST_SOURCE:-}" ]; then
+    printf '%s\n' "$CALOPOD_SERVICE_HOST_SOURCE"
+    return
+  fi
   if [ "$test_mode" = "1" ]; then
     printf '%s\n' "${CALOPOD_SERVICE_TEST_HOST_SOURCE:-}"
     return
@@ -129,14 +157,23 @@ source_eventkit_host() {
   printf '%s\n' "$repository_root/.build/eventkit-host/Calopod EventKit Host.app"
 }
 
+source_release_root() {
+  printf '%s\n' "${CALOPOD_SERVICE_RELEASE_SOURCE:-}"
+}
+
 build_service() {
   [ "$test_mode" != "1" ] || fail "Build is unavailable in test mode." 64
   swift build \
     --package-path "$repository_root" \
     --configuration release \
+    --product calopod
+  swift build \
+    --package-path "$repository_root" \
+    --configuration release \
     --product calopod-agent
-  "$repository_root/Scripts/build-eventkit-host.sh"
-  echo "Built the agent and EventKit host."
+  CALOPOD_BUILD_CONFIGURATION=release \
+    "$repository_root/Scripts/build-eventkit-host.sh"
+  echo "Built the CLI, agent, and EventKit host."
 }
 
 render_plist() {
@@ -211,16 +248,28 @@ install_service() {
   is_loaded && fail "Unload the service before installing or upgrading it." 75
 
   agent_source=$(source_agent_binary) || exit $?
+  cli_source=$(source_cli_binary) || exit $?
   host_source=$(source_eventkit_host)
+  release_source=$(source_release_root)
   require_absolute_path "$agent_source"
+  require_absolute_path "$cli_source"
   require_absolute_path "$host_source"
   [ -x "$agent_source" ] || fail "Build the release agent before installing it." 66
+  [ -x "$cli_source" ] || fail "Build the release CLI before installing it." 66
   [ -d "$host_source" ] || fail "Build the EventKit host before installing it." 66
   [ -x "$host_source/Contents/MacOS/CalopodEventKitHost" ] \
     || fail "The EventKit host executable is missing." 66
   if [ "$test_mode" != "1" ]; then
     codesign --verify --deep --strict "$host_source" >/dev/null 2>&1 \
       || fail "The EventKit host signature is invalid." 65
+  fi
+  if [ -n "$release_source" ]; then
+    require_absolute_path "$release_source"
+    [ -f "$release_source/VERSION" ] || fail "The release version is missing." 66
+    [ -f "$release_source/SHA256SUMS" ] || fail "The release checksums are missing." 66
+    [ -x "$release_source/uninstall" ] || fail "The release uninstaller is missing." 66
+    [ -x "$release_source/Scripts/calopod-service.sh" ] \
+      || fail "The release service installer is missing." 66
   fi
 
   umask 077
@@ -259,6 +308,7 @@ install_service() {
     "$staging_root/bin" \
     "$staging_root/eventkit-host" \
     "$staging_root/logs"
+  install -m 700 "$cli_source" "$staging_root/bin/calopod"
   install -m 700 "$agent_source" "$staging_root/bin/calopod-agent"
   ditto "$host_source" "$staging_root/eventkit-host/Calopod EventKit Host.app"
   : > "$staging_root/logs/agent.stdout.log"
@@ -266,6 +316,15 @@ install_service() {
   chmod 600 \
     "$staging_root/logs/agent.stdout.log" \
     "$staging_root/logs/agent.stderr.log"
+  if [ -n "$release_source" ]; then
+    install -d -m 700 "$staging_root/release"
+    install -m 600 "$release_source/VERSION" "$staging_root/release/VERSION"
+    install -m 600 "$release_source/SHA256SUMS" "$staging_root/release/SHA256SUMS"
+    install -m 700 "$release_source/uninstall" "$staging_root/release/uninstall"
+    install -m 700 \
+      "$release_source/Scripts/calopod-service.sh" \
+      "$staging_root/release/calopod-service.sh"
+  fi
 
   plist_staging="$staging_root/$label.plist"
   render_plist \
