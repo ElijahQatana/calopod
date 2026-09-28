@@ -19,12 +19,12 @@ if [ "$test_mode" = "1" ]; then
 else
   [ "$(/usr/bin/id -u)" -ne 0 ] || fail "Run setup as the signed-in user, not root." 77
   case "${HOME:-}" in /*) ;; *) fail "The user home directory is unavailable." 78 ;; esac
+  [ -z "${CALOPOD_STATE_PATH:-}" ] \
+    || fail "Unset CALOPOD_STATE_PATH so setup and the installed service use the same state." 78
+  [ -z "${CALOPOD_EVENTKIT_HOST_APP:-}" ] \
+    || fail "Unset CALOPOD_EVENTKIT_HOST_APP so setup uses the installed Calendar host." 78
   cli="$script_root/../bin/calopod"
-  case "${CALOPOD_STATE_PATH:-}" in
-    "") state_path="$HOME/Library/Application Support/Calopod/state.sqlite" ;;
-    /*) state_path=$CALOPOD_STATE_PATH ;;
-    *) fail "CALOPOD_STATE_PATH must be absolute." 78 ;;
-  esac
+  state_path="$HOME/Library/Application Support/Calopod/state.sqlite"
 fi
 
 [ -x "$cli" ] || fail "The installed Calopod CLI is unavailable. Reinstall Calopod." 66
