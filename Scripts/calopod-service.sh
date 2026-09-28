@@ -272,6 +272,8 @@ install_service() {
     [ -x "$release_source/uninstall" ] || fail "The release uninstaller is missing." 66
     [ -x "$release_source/Scripts/calopod-service.sh" ] \
       || fail "The release service installer is missing." 66
+    [ -x "$release_source/Scripts/calopod-setup.sh" ] \
+      || fail "The guided setup command is missing." 66
   fi
 
   umask 077
@@ -326,6 +328,9 @@ install_service() {
     install -m 700 \
       "$release_source/Scripts/calopod-service.sh" \
       "$staging_root/release/calopod-service.sh"
+    install -m 700 \
+      "$release_source/Scripts/calopod-setup.sh" \
+      "$staging_root/release/calopod-setup.sh"
   fi
 
   plist_staging="$staging_root/$label.plist"

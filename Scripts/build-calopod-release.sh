@@ -92,6 +92,9 @@ install -m 700 "$repository_root/Support/Release/uninstall" "$staged_bundle/unin
 install -m 700 \
   "$repository_root/Scripts/calopod-service.sh" \
   "$staged_bundle/Scripts/calopod-service.sh"
+install -m 700 \
+  "$repository_root/Scripts/calopod-setup.sh" \
+  "$staged_bundle/Scripts/calopod-setup.sh"
 install -m 600 "$repository_root/Support/Release/README.md" "$staged_bundle/README.md"
 install -m 600 "$repository_root/VERSION" "$staged_bundle/VERSION"
 

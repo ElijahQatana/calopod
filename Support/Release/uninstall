@@ -53,12 +53,15 @@ remove_managed_link() {
 home_root=$(resolve_home)
 service_root="$home_root/Library/Application Support/Calopod/Service"
 installed_cli="$service_root/bin/calopod"
+installed_setup="$service_root/release/calopod-setup.sh"
 installed_uninstaller="$service_root/release/uninstall"
 installed_service_script="$service_root/release/calopod-service.sh"
 cli_link="$home_root/.local/bin/calopod"
+setup_link="$home_root/.local/bin/calopod-setup"
 uninstall_link="$home_root/.local/bin/calopod-uninstall"
 require_absolute_path "$service_root"
 require_absolute_path "$installed_cli"
+require_absolute_path "$installed_setup"
 require_absolute_path "$installed_uninstaller"
 require_absolute_path "$installed_service_script"
 
@@ -75,6 +78,7 @@ env \
   CALOPOD_SERVICE_TEST_HOME="${CALOPOD_RELEASE_TEST_HOME:-}" \
   "$service_script" remove
 remove_managed_link "$cli_link" "$installed_cli"
+remove_managed_link "$setup_link" "$installed_setup"
 remove_managed_link "$uninstall_link" "$installed_uninstaller"
 
 echo "Removed the Calopod release. SQLite state and Keychain items were preserved."

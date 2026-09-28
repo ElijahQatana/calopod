@@ -17,10 +17,12 @@ mkdir -p \
 cp "$repository_root/Support/Release/install" "$bundle_root/install"
 cp "$repository_root/Support/Release/uninstall" "$bundle_root/uninstall"
 cp "$repository_root/Scripts/calopod-service.sh" "$bundle_root/Scripts/calopod-service.sh"
+cp "$repository_root/Scripts/calopod-setup.sh" "$bundle_root/Scripts/calopod-setup.sh"
 chmod 700 \
   "$bundle_root/install" \
   "$bundle_root/uninstall" \
-  "$bundle_root/Scripts/calopod-service.sh"
+  "$bundle_root/Scripts/calopod-service.sh" \
+  "$bundle_root/Scripts/calopod-setup.sh"
 
 write_payload() {
   exit_code=$1
@@ -75,6 +77,7 @@ run_installer >/dev/null
 service_root="$state_root/Service"
 plist_path="$test_home/Library/LaunchAgents/com.calopod.agent.plist"
 cli_link="$test_home/.local/bin/calopod"
+setup_link="$test_home/.local/bin/calopod-setup"
 uninstall_link="$test_home/.local/bin/calopod-uninstall"
 [ -x "$service_root/bin/calopod" ]
 [ -x "$service_root/bin/calopod-agent" ]
@@ -82,6 +85,8 @@ uninstall_link="$test_home/.local/bin/calopod-uninstall"
 [ "$(cat "$service_root/release/VERSION")" = "0.1.0" ]
 [ -L "$cli_link" ]
 [ "$(readlink "$cli_link")" = "$service_root/bin/calopod" ]
+[ -L "$setup_link" ]
+[ "$(readlink "$setup_link")" = "$service_root/release/calopod-setup.sh" ]
 [ -L "$uninstall_link" ]
 [ "$(readlink "$uninstall_link")" = "$service_root/release/uninstall" ]
 [ "$(stat -f '%Lp' "$service_root")" = "700" ]
@@ -120,6 +125,7 @@ env \
 [ ! -e "$service_root" ]
 [ ! -e "$plist_path" ]
 [ ! -e "$cli_link" ]
+[ ! -e "$setup_link" ]
 [ ! -e "$uninstall_link" ]
 [ "$(cat "$state_root/state.sqlite")" = "state-sentinel" ]
 [ "$(cat "$state_root/keychain-sentinel")" = "keychain-sentinel" ]
