@@ -62,7 +62,7 @@ private func doctorReport() throws -> DoctorReport {
             status: "failed",
             message: "The automatic-sync installation needs attention.",
             items: [doctorItem("installation", "failed", "configuration")],
-            warnings: ["Reinstall the user service from the repository checkout."]
+            warnings: ["Reinstall the Calopod user service."]
         )
     }
     guard let configuration = snapshot.configuration else {
@@ -70,7 +70,7 @@ private func doctorReport() throws -> DoctorReport {
             status: "failed",
             message: "The automatic-sync service is not installed.",
             items: [doctorItem("installation", "failed", "not-installed")],
-            warnings: ["Install the user service from the repository checkout."]
+            warnings: ["Install the Calopod user service."]
         )
     }
 

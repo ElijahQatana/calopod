@@ -3,29 +3,58 @@ import CalopodEventKit
 import Foundation
 
 /// Launches the EventKit Host app from an interactive CLI invocation.
-/// Without `CALOPOD_EVENTKIT_HOST_APP` set, the host path is resolved
-/// relative to the current working directory — fine for a developer running
-/// `calopod` from the repository root, but not something a LaunchAgent can
-/// rely on (its working directory is unpredictable and it has no shell to
-/// set the override for it). `CalopodRuntime`'s own `EventKitHostRunner`
-/// instead searches upward from the running executable and always requires
-/// an absolute path for the override, which is what the background agent
-/// actually uses.
+/// Without `CALOPOD_EVENTKIT_HOST_APP` set, the host path is resolved from
+/// the running executable. That supports both repository builds and the
+/// packaged per-user layout without depending on the current directory.
 struct EventKitHostRunner {
     private let appURL: URL
 
-    init(environment: [String: String] = ProcessInfo.processInfo.environment) throws {
-        if let configured = environment["CALOPOD_EVENTKIT_HOST_APP"], !configured.isEmpty {
-            appURL = URL(fileURLWithPath: configured, isDirectory: true)
-        } else {
-            appURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-                .appendingPathComponent(".build/eventkit-host/Calopod EventKit Host.app")
-        }
+    init(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        executableURL: URL = Bundle.main.executableURL
+            ?? URL(fileURLWithPath: CommandLine.arguments[0])
+    ) throws {
+        appURL = try Self.resolveAppURL(
+            environment: environment,
+            executableURL: executableURL
+        )
         let executableURL = appURL
             .appendingPathComponent("Contents/MacOS/CalopodEventKitHost")
         guard FileManager.default.isExecutableFile(atPath: executableURL.path) else {
             throw CommandEnvironmentError.missingEventKitHost
         }
+    }
+
+    static func resolveAppURL(
+        environment: [String: String],
+        executableURL: URL
+    ) throws -> URL {
+        if let configured = environment["CALOPOD_EVENTKIT_HOST_APP"], !configured.isEmpty {
+            guard configured.hasPrefix("/") else {
+                throw CommandEnvironmentError.invalidEventKitHostPath
+            }
+            return URL(fileURLWithPath: configured, isDirectory: true).standardizedFileURL
+        }
+
+        var ancestor = executableURL.standardizedFileURL
+            .resolvingSymlinksInPath()
+            .deletingLastPathComponent()
+        while ancestor.path != "/" {
+            let packaged = ancestor
+                .appendingPathComponent("eventkit-host", isDirectory: true)
+                .appendingPathComponent("Calopod EventKit Host.app", isDirectory: true)
+            if FileManager.default.fileExists(atPath: packaged.path) {
+                return packaged.standardizedFileURL
+            }
+            let development = ancestor
+                .appendingPathComponent(".build/eventkit-host", isDirectory: true)
+                .appendingPathComponent("Calopod EventKit Host.app", isDirectory: true)
+            if FileManager.default.fileExists(atPath: development.path) {
+                return development.standardizedFileURL
+            }
+            ancestor.deleteLastPathComponent()
+        }
+        throw CommandEnvironmentError.missingEventKitHost
     }
 
     func requestPermission() throws -> EventKitHostResponse {

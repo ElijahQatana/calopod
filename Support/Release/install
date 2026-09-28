@@ -1,0 +1,195 @@
+#!/bin/sh
+
+set -eu
+
+test_mode=${CALOPOD_RELEASE_TEST_MODE:-0}
+script_root=$(CDPATH= cd -- "$(dirname "$0")" && pwd -P)
+bundle_root=$script_root
+
+fail() {
+  echo "$1" >&2
+  exit "${2:-1}"
+}
+
+require_absolute_path() {
+  case "$1" in
+    /*) ;;
+    *) fail "A required path is not absolute." 78 ;;
+  esac
+}
+
+resolve_home() {
+  if [ "$test_mode" = "1" ]; then
+    test_home=${CALOPOD_RELEASE_TEST_HOME:-}
+    require_absolute_path "$test_home"
+    case "$test_home" in
+      */calopod-release-test.*/home) ;;
+      *) fail "The test home is outside the expected temporary directory." 78 ;;
+    esac
+    [ -d "$test_home" ] || fail "The test home does not exist." 78
+    CDPATH= cd -- "$test_home" && pwd -P
+    return
+  fi
+
+  [ "$(id -u)" -ne 0 ] || fail "Run this installer as the signed-in user, not root." 77
+  case "${HOME:-}" in
+    /*) ;;
+    *) fail "The user home directory is not an absolute path." 78 ;;
+  esac
+  [ -d "$HOME" ] || fail "The user home directory is unavailable." 78
+  [ "$(stat -f '%u' "$HOME")" = "$(id -u)" ] \
+    || fail "The user home directory is not owned by the current user." 77
+  CDPATH= cd -- "$HOME" && pwd -P
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ./install \
+    --interval-seconds N --jitter-seconds N \
+    --lookback-days N --horizon-days N
+EOF
+}
+
+validate_link_slot() {
+  link_path=$1
+  expected_target=$2
+  if [ -L "$link_path" ]; then
+    [ "$(readlink "$link_path")" = "$expected_target" ] \
+      || fail "A managed command link would replace an unrelated link." 73
+  elif [ -e "$link_path" ]; then
+    fail "A managed command link would replace an unrelated file." 73
+  fi
+}
+
+interval_seconds=""
+jitter_seconds=""
+lookback_days=""
+horizon_days=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --interval-seconds)
+      [ "$#" -ge 2 ] || fail "--interval-seconds requires a value." 64
+      interval_seconds=$2
+      shift 2
+      ;;
+    --jitter-seconds)
+      [ "$#" -ge 2 ] || fail "--jitter-seconds requires a value." 64
+      jitter_seconds=$2
+      shift 2
+      ;;
+    --lookback-days)
+      [ "$#" -ge 2 ] || fail "--lookback-days requires a value." 64
+      lookback_days=$2
+      shift 2
+      ;;
+    --horizon-days)
+      [ "$#" -ge 2 ] || fail "--horizon-days requires a value." 64
+      horizon_days=$2
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *) fail "Unknown install option: $1" 64 ;;
+  esac
+done
+
+require_absolute_path "$bundle_root"
+version_file="$bundle_root/VERSION"
+checksums_file="$bundle_root/SHA256SUMS"
+cli_source="$bundle_root/bin/calopod"
+agent_source="$bundle_root/bin/calopod-agent"
+host_source="$bundle_root/eventkit-host/Calopod EventKit Host.app"
+service_script="$bundle_root/Scripts/calopod-service.sh"
+uninstaller="$bundle_root/uninstall"
+
+[ -f "$version_file" ] || fail "The release version is missing." 66
+[ -f "$checksums_file" ] || fail "The release checksums are missing." 66
+[ -x "$cli_source" ] || fail "The release CLI is missing." 66
+[ -x "$agent_source" ] || fail "The release agent is missing." 66
+[ -x "$host_source/Contents/MacOS/CalopodEventKitHost" ] \
+  || fail "The release EventKit host is incomplete." 66
+[ -x "$service_script" ] || fail "The release service installer is missing." 66
+[ -x "$uninstaller" ] || fail "The release uninstaller is missing." 66
+
+version=$(sed -n '1p' "$version_file")
+[ -n "$version" ] || fail "The release version is invalid." 65
+[ "$(wc -l < "$version_file" | tr -d ' ')" = "1" ] \
+  || fail "The release version is invalid." 65
+printf '%s\n' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$' \
+  || fail "The release version is invalid." 65
+
+(CDPATH= cd -- "$bundle_root" && shasum -a 256 -c SHA256SUMS >/dev/null) \
+  || fail "The release checksum verification failed." 65
+
+if [ "$test_mode" != "1" ]; then
+  [ "$(uname -m)" = "arm64" ] || fail "This preview requires an Apple Silicon Mac." 69
+  macos_major=$(sw_vers -productVersion | cut -d. -f1)
+  case "$macos_major" in
+    ''|*[!0-9]*) fail "The macOS version could not be verified." 69 ;;
+  esac
+  [ "$macos_major" -ge 14 ] || fail "This preview requires macOS 14 or newer." 69
+  [ "$(lipo -archs "$cli_source")" = "arm64" ] \
+    || fail "The release CLI architecture is invalid." 65
+  [ "$(lipo -archs "$agent_source")" = "arm64" ] \
+    || fail "The release agent architecture is invalid." 65
+  [ "$(lipo -archs "$host_source/Contents/MacOS/CalopodEventKitHost")" = "arm64" ] \
+    || fail "The release EventKit host architecture is invalid." 65
+  codesign --verify --strict "$cli_source" >/dev/null 2>&1 \
+    || fail "The release CLI signature is invalid." 65
+  codesign --verify --strict "$agent_source" >/dev/null 2>&1 \
+    || fail "The release agent signature is invalid." 65
+  codesign --verify --deep --strict "$host_source" >/dev/null 2>&1 \
+    || fail "The release EventKit host signature is invalid." 65
+fi
+[ "$("$cli_source" --version)" = "$version" ] \
+  || fail "The CLI version does not match the release." 65
+
+home_root=$(resolve_home)
+service_root="$home_root/Library/Application Support/Calopod/Service"
+installed_cli="$service_root/bin/calopod"
+installed_uninstaller="$service_root/release/uninstall"
+link_root="$home_root/.local/bin"
+cli_link="$link_root/calopod"
+uninstall_link="$link_root/calopod-uninstall"
+require_absolute_path "$service_root"
+require_absolute_path "$installed_cli"
+require_absolute_path "$installed_uninstaller"
+require_absolute_path "$link_root"
+
+validate_link_slot "$cli_link" "$installed_cli"
+validate_link_slot "$uninstall_link" "$installed_uninstaller"
+umask 077
+if [ ! -d "$link_root" ]; then
+  install -d -m 700 "$link_root"
+fi
+temporary_cli_link="$link_root/.calopod.installing.$$"
+temporary_uninstall_link="$link_root/.calopod-uninstall.installing.$$"
+cleanup_links() {
+  [ ! -L "$temporary_cli_link" ] || rm -f "$temporary_cli_link"
+  [ ! -L "$temporary_uninstall_link" ] || rm -f "$temporary_uninstall_link"
+}
+trap cleanup_links EXIT HUP INT TERM
+ln -s "$installed_cli" "$temporary_cli_link"
+ln -s "$installed_uninstaller" "$temporary_uninstall_link"
+
+env \
+  CALOPOD_SERVICE_TEST_MODE="$test_mode" \
+  CALOPOD_SERVICE_TEST_HOME="${CALOPOD_RELEASE_TEST_HOME:-}" \
+  CALOPOD_SERVICE_CLI_SOURCE="$cli_source" \
+  CALOPOD_SERVICE_AGENT_SOURCE="$agent_source" \
+  CALOPOD_SERVICE_HOST_SOURCE="$host_source" \
+  CALOPOD_SERVICE_RELEASE_SOURCE="$bundle_root" \
+  "$service_script" install \
+    --interval-seconds "$interval_seconds" \
+    --jitter-seconds "$jitter_seconds" \
+    --lookback-days "$lookback_days" \
+    --horizon-days "$horizon_days"
+
+mv -f "$temporary_cli_link" "$cli_link"
+mv -f "$temporary_uninstall_link" "$uninstall_link"
+trap - EXIT HUP INT TERM
+
+echo "Installed Calopod $version for the current user. User data was preserved."

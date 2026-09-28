@@ -1,0 +1,80 @@
+#!/bin/sh
+
+set -eu
+
+test_mode=${CALOPOD_RELEASE_TEST_MODE:-0}
+script_root=$(CDPATH= cd -- "$(dirname "$0")" && pwd -P)
+
+fail() {
+  echo "$1" >&2
+  exit "${2:-1}"
+}
+
+require_absolute_path() {
+  case "$1" in
+    /*) ;;
+    *) fail "A required path is not absolute." 78 ;;
+  esac
+}
+
+resolve_home() {
+  if [ "$test_mode" = "1" ]; then
+    test_home=${CALOPOD_RELEASE_TEST_HOME:-}
+    require_absolute_path "$test_home"
+    case "$test_home" in
+      */calopod-release-test.*/home) ;;
+      *) fail "The test home is outside the expected temporary directory." 78 ;;
+    esac
+    [ -d "$test_home" ] || fail "The test home does not exist." 78
+    CDPATH= cd -- "$test_home" && pwd -P
+    return
+  fi
+
+  [ "$(id -u)" -ne 0 ] || fail "Run this uninstaller as the signed-in user, not root." 77
+  case "${HOME:-}" in
+    /*) ;;
+    *) fail "The user home directory is not an absolute path." 78 ;;
+  esac
+  [ -d "$HOME" ] || fail "The user home directory is unavailable." 78
+  [ "$(stat -f '%u' "$HOME")" = "$(id -u)" ] \
+    || fail "The user home directory is not owned by the current user." 77
+  CDPATH= cd -- "$HOME" && pwd -P
+}
+
+remove_managed_link() {
+  link_path=$1
+  expected_target=$2
+  if [ -L "$link_path" ] && [ "$(readlink "$link_path")" = "$expected_target" ]; then
+    rm -f "$link_path"
+  fi
+}
+
+[ "$#" -eq 0 ] || fail "The uninstaller does not accept options." 64
+home_root=$(resolve_home)
+service_root="$home_root/Library/Application Support/Calopod/Service"
+installed_cli="$service_root/bin/calopod"
+installed_uninstaller="$service_root/release/uninstall"
+installed_service_script="$service_root/release/calopod-service.sh"
+cli_link="$home_root/.local/bin/calopod"
+uninstall_link="$home_root/.local/bin/calopod-uninstall"
+require_absolute_path "$service_root"
+require_absolute_path "$installed_cli"
+require_absolute_path "$installed_uninstaller"
+require_absolute_path "$installed_service_script"
+
+if [ -x "$installed_service_script" ]; then
+  service_script=$installed_service_script
+elif [ -x "$script_root/Scripts/calopod-service.sh" ]; then
+  service_script="$script_root/Scripts/calopod-service.sh"
+else
+  fail "The Calopod service uninstaller is unavailable." 66
+fi
+
+env \
+  CALOPOD_SERVICE_TEST_MODE="$test_mode" \
+  CALOPOD_SERVICE_TEST_HOME="${CALOPOD_RELEASE_TEST_HOME:-}" \
+  "$service_script" remove
+remove_managed_link "$cli_link" "$installed_cli"
+remove_managed_link "$uninstall_link" "$installed_uninstaller"
+
+echo "Removed the Calopod release. SQLite state and Keychain items were preserved."
