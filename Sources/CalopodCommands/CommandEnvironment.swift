@@ -56,6 +56,7 @@ enum CommandEnvironment {
 enum CommandEnvironmentError: Error, CustomStringConvertible {
     case missingGoogleClientID
     case missingMicrosoftClientID
+    case invalidEventKitHostPath
     case missingEventKitHost
     case eventKitHostFailed
     case unsupportedPlatform
@@ -66,6 +67,8 @@ enum CommandEnvironmentError: Error, CustomStringConvertible {
             "Set CALOPOD_GOOGLE_CLIENT_ID to the desktop OAuth client ID, then try again."
         case .missingMicrosoftClientID:
             "Set CALOPOD_MICROSOFT_CLIENT_ID to the public client ID, then try again."
+        case .invalidEventKitHostPath:
+            "The EventKit host path must be absolute."
         case .missingEventKitHost:
             "Build the EventKit host with Scripts/build-eventkit-host.sh, then try again."
         case .eventKitHostFailed:
