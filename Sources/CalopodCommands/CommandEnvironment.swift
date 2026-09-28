@@ -70,9 +70,9 @@ enum CommandEnvironmentError: Error, CustomStringConvertible {
         case .invalidEventKitHostPath:
             "The EventKit host path must be absolute."
         case .missingEventKitHost:
-            "Build the EventKit host with Scripts/build-eventkit-host.sh, then try again."
+            "The EventKit host is unavailable. Reinstall Calopod or rebuild it from source."
         case .eventKitHostFailed:
-            "The EventKit host did not return a valid response. Rebuild it, then try again."
+            "The EventKit host did not return a valid response. Verify its signature and Calendar access."
         case .unsupportedPlatform:
             "Browser authorization is currently available on macOS."
         }
@@ -102,7 +102,7 @@ private func commandFailure(_ error: Error) -> (message: String, exitCode: Calop
     }
     if error is AgentServiceConfigurationError {
         return (
-            "The installed user service configuration is invalid. Reinstall it from source.",
+            "The installed user service configuration is invalid. Reinstall Calopod.",
             .invalidConfiguration
         )
     }
@@ -115,9 +115,15 @@ private func commandFailure(_ error: Error) -> (message: String, exitCode: Calop
         case .invalidEventKitHostPath:
             return ("The EventKit host path must be absolute.", .invalidConfiguration)
         case .missingEventKitHost:
-            return ("Build the EventKit host with Scripts/build-eventkit-host.sh, then try again.", .invalidConfiguration)
+            return (
+                "The EventKit host is unavailable. Reinstall Calopod or rebuild it from source.",
+                .invalidConfiguration
+            )
         case .eventKitHostFailed:
-            return ("The EventKit host did not return a valid response. Rebuild it, then try again.", .unavailable)
+            return (
+                "The EventKit host did not return a valid response. Verify its signature and Calendar access.",
+                .unavailable
+            )
         case .missingGoogleClientID:
             return ("Set CALOPOD_GOOGLE_CLIENT_ID to the desktop OAuth client ID, then try again.", .invalidConfiguration)
         case .missingMicrosoftClientID:
