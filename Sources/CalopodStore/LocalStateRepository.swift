@@ -272,10 +272,11 @@ public final class LocalStateRepository: @unchecked Sendable {
     }
 
     /// Replaces a Connection's calendar list with what the provider reports
-    /// now — adding new calendars, dropping ones that vanished, and updating
-    /// display metadata — while explicitly preserving each calendar's
-    /// existing `is_selected` state, since a provider refresh should never
-    /// silently re-select or deselect a calendar the user chose themselves.
+    /// now — adding new calendars, dropping unreferenced ones that vanished,
+    /// and updating display metadata — while explicitly preserving each
+    /// calendar's existing `is_selected` state. Bindings used by an Arm stay
+    /// recoverable when a provider temporarily omits or permanently removes a
+    /// calendar; refresh must not discard routing or fail a foreign-key check.
     public func replaceCalendarBindings(
         connectionID: String,
         bindings: [StoredCalendarBinding],
@@ -323,7 +324,18 @@ public final class LocalStateRepository: @unchecked Sendable {
 
             if bindings.isEmpty {
                 try database.execute(
-                    sql: "DELETE FROM calendar_bindings WHERE connection_id = ?",
+                    sql: """
+                        DELETE FROM calendar_bindings
+                        WHERE connection_id = ?
+                          AND NOT EXISTS (
+                              SELECT 1 FROM arms
+                              WHERE target_binding_id = calendar_bindings.id
+                          )
+                          AND NOT EXISTS (
+                              SELECT 1 FROM arm_sources
+                              WHERE calendar_binding_id = calendar_bindings.id
+                          )
+                        """,
                     arguments: [connectionID]
                 )
             } else {
@@ -333,6 +345,14 @@ public final class LocalStateRepository: @unchecked Sendable {
                         DELETE FROM calendar_bindings
                         WHERE connection_id = ?
                           AND provider_calendar_id NOT IN (\(databaseQuestionMarks(count: providerCalendarIDs.count)))
+                          AND NOT EXISTS (
+                              SELECT 1 FROM arms
+                              WHERE target_binding_id = calendar_bindings.id
+                          )
+                          AND NOT EXISTS (
+                              SELECT 1 FROM arm_sources
+                              WHERE calendar_binding_id = calendar_bindings.id
+                          )
                         """,
                     arguments: StatementArguments([connectionID])
                         + StatementArguments(providerCalendarIDs)
