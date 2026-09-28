@@ -104,8 +104,16 @@ struct LaunchAgentController {
         }
     }
 
-    func updateSchedule(intervalSeconds: Int, jitterSeconds: Int?) throws {
-        guard intervalSeconds > 0, jitterSeconds.map({ $0 >= 0 }) ?? true else {
+    func updateSchedule(
+        intervalSeconds: Int,
+        jitterSeconds: Int?,
+        lookbackDays: Int? = nil,
+        horizonDays: Int? = nil
+    ) throws {
+        guard intervalSeconds > 0,
+              jitterSeconds.map({ $0 >= 0 }) ?? true,
+              lookbackDays.map({ $0 >= 0 }) ?? true,
+              horizonDays.map({ $0 > 0 }) ?? true else {
             throw AgentServiceConfigurationError.invalidSchedule
         }
         _ = try installedConfiguration()
@@ -121,6 +129,12 @@ struct LaunchAgentController {
         environment["CALOPOD_AGENT_INTERVAL_SECONDS"] = String(intervalSeconds)
         if let jitterSeconds {
             environment["CALOPOD_AGENT_JITTER_SECONDS"] = String(jitterSeconds)
+        }
+        if let lookbackDays {
+            environment["CALOPOD_AGENT_LOOKBACK_DAYS"] = String(lookbackDays)
+        }
+        if let horizonDays {
+            environment["CALOPOD_AGENT_HORIZON_DAYS"] = String(horizonDays)
         }
         propertyList["EnvironmentVariables"] = environment
         let replacementData = try PropertyListSerialization.data(

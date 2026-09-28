@@ -172,11 +172,18 @@ func scheduleUpdatePreservesPathsAndRestartsALoadedAgent() throws {
         return LaunchctlResult(exitCode: 0, output: "")
     }
 
-    try controller.updateSchedule(intervalSeconds: 900, jitterSeconds: 45)
+    try controller.updateSchedule(
+        intervalSeconds: 900,
+        jitterSeconds: 45,
+        lookbackDays: 2,
+        horizonDays: 21
+    )
 
     let updated = try AgentServiceConfiguration.load(from: fixture.propertyListURL)
     #expect(updated.intervalSeconds == 900)
     #expect(updated.jitterSeconds == 45)
+    #expect(updated.lookbackDays == 2)
+    #expect(updated.horizonDays == 21)
     #expect(updated.stateURL == fixture.stateURL.standardizedFileURL)
     #expect(updated.programURL.path == "/example/bin/calopod-agent")
     #expect(calls.map(\.first) == ["print", "print-disabled", "bootout", "bootstrap"])
