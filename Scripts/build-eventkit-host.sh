@@ -25,6 +25,6 @@ binary_root=$(swift build \
 mkdir -p "$executable_root"
 cp "$repository_root/Support/EventKitHost/Info.plist" "$contents_root/Info.plist"
 cp "$binary_root/calopod-eventkit-host" "$executable_path"
-codesign --force --sign - "$bundle_root"
+codesign --force --sign - "$bundle_root" >/dev/null 2>&1
 
-echo "Built $bundle_root"
+echo "Built the EventKit host."
