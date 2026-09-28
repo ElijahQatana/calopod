@@ -207,10 +207,12 @@ struct EventKitConnectionServiceTests {
             connectionID: connection.id
         )
 
-        #expect(refreshed.contains { $0.id == source.id })
-        #expect(refreshed.contains { $0.id == target.id })
         #expect(refreshed.contains { $0.providerCalendarID == "new" })
         #expect(!refreshed.contains { $0.providerCalendarID == "unused" })
+        let stored = try state.calendarBindings(connectionID: connection.id)
+        #expect(stored.contains { $0.id == source.id })
+        #expect(stored.contains { $0.id == target.id })
+        #expect(!stored.contains { $0.providerCalendarID == "unused" })
         #expect(try state.arms() == [
             StoredArm(
                 id: "synthetic-arm",

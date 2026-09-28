@@ -36,9 +36,15 @@ elif [ "${1:-}" = "calendars" ]; then
   else
     selected=false
     [ ! -f "$fixture_root/source-selected" ] || selected=true
-    cat <<EOF
+    if [ -f "$fixture_root/source-unavailable" ]; then
+      cat <<EOF
+{"command":"calendars","data":{"status":"ok","count":3,"items":[{"id":"main-target","kind":"calendar","label":"Main Target","selected":false,"readOnly":false,"sourceLabel":"Example Account"},{"id":"busy-target","kind":"calendar","label":"Busy Target","selected":false,"readOnly":false,"sourceLabel":"Example Account"},{"id":"archive","kind":"calendar","label":"Archive","selected":false,"readOnly":true,"sourceLabel":"Example Account"}]},"warnings":[]}
+EOF
+    else
+      cat <<EOF
 {"command":"calendars","data":{"status":"ok","count":4,"items":[{"id":"source-one","kind":"calendar","label":"Engineering","selected":$selected,"readOnly":false,"sourceLabel":"Example Account"},{"id":"main-target","kind":"calendar","label":"Main Target","selected":false,"readOnly":false,"sourceLabel":"Example Account"},{"id":"busy-target","kind":"calendar","label":"Busy Target","selected":false,"readOnly":false,"sourceLabel":"Example Account"},{"id":"archive","kind":"calendar","label":"Archive","selected":false,"readOnly":true,"sourceLabel":"Example Account"}]},"warnings":[]}
 EOF
+    fi
   fi
 elif [ "${1:-}" = "main" ] && [ "${2:-}" = "inspect" ]; then
   if [ -f "$fixture_root/main-configured" ]; then

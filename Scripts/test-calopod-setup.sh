@@ -55,4 +55,12 @@ grep -q 'Existing Busy configuration found; preserving it.' "$second_output"
 grep -q 'Automatic sync was stopped while setup changes configuration.' "$second_output"
 [ -f "$fixture_root/enabled" ]
 
+: > "$fixture_root/source-unavailable"
+third_output="$fixture_root/third-output"
+if run_setup /dev/null "$third_output"; then
+  echo "Setup accepted an unavailable configured source." >&2
+  exit 1
+fi
+grep -q 'An existing source calendar is unavailable.' "$third_output"
+
 echo "Guided setup checks passed."

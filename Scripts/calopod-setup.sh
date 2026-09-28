@@ -111,6 +111,18 @@ calendar_id_for_choice() {
   extract "$file" "data.items.$((choice - 1)).id"
 }
 
+calendar_is_available() {
+  file=$1
+  expected_id=$2
+  count=$(extract "$file" data.count)
+  index=0
+  while [ "$index" -lt "$count" ]; do
+    [ "$(extract "$file" "data.items.$index.id")" != "$expected_id" ] || return 0
+    index=$((index + 1))
+  done
+  return 1
+}
+
 choose_sources() {
   file=$1
   count=$(extract "$file" data.count)
@@ -226,12 +238,14 @@ main_count=$(extract "$main_file" data.count)
 arm_count=$(extract "$arms_file" data.count)
 busy_present=false
 busy_index=0
+busy_target=""
 while [ "$busy_index" -lt "$arm_count" ]; do
   kind=$(extract "$arms_file" "data.items.$busy_index.kind" || printf '')
   rule=$(extract "$arms_file" "data.items.$busy_index.rule" || printf '')
   enabled=$(extract "$arms_file" "data.items.$busy_index.enabled" || printf 'false')
   if [ "$kind" = "arm" ] && [ "$rule" = "busy" ] && [ "$enabled" = "true" ]; then
     busy_present=true
+    busy_target=$(extract "$arms_file" "data.items.$busy_index.targetID")
     break
   fi
   busy_index=$((busy_index + 1))
@@ -258,6 +272,18 @@ else
   source_ids=$(choose_sources "$calendars_file")
 fi
 [ -n "$source_ids" ] || fail "No source calendars are configured." 78
+for source_id in $source_ids; do
+  calendar_is_available "$calendars_file" "$source_id" \
+    || fail "An existing source calendar is unavailable. Restore it in Calendar or repair the Arm configuration before setup." 78
+done
+if [ -n "$main_target" ]; then
+  calendar_is_available "$calendars_file" "$main_target" \
+    || fail "The existing Main target is unavailable. Restore it in Calendar or repair the Main configuration before setup." 78
+fi
+if [ -n "$busy_target" ]; then
+  calendar_is_available "$calendars_file" "$busy_target" \
+    || fail "An existing Busy target is unavailable. Restore it in Calendar or repair the Arm configuration before setup." 78
+fi
 
 for source_id in $source_ids; do
   selection_file="$temporary_root/selection.json"

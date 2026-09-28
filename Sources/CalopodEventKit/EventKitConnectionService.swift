@@ -44,7 +44,10 @@ public struct EventKitConnectionService: Sendable {
         now: Date = Date()
     ) throws -> [StoredCalendarBinding] {
         try replaceCalendars(calendars, connectionID: connectionID, now: now)
-        return try state.calendarBindings(connectionID: connectionID)
+        let discoveredIDs = Set(calendars.map(\.id))
+        return try state.calendarBindings(connectionID: connectionID).filter {
+            discoveredIDs.contains($0.providerCalendarID)
+        }
     }
 
     public func disconnect(connectionID: String) throws {
