@@ -72,6 +72,8 @@ validate_managed_paths() {
   require_absolute_path "$plist_path"
   [ "$service_root" = "$support_root/Service" ] \
     || fail "The service directory did not resolve to the expected location." 78
+  [ "$installed_release" = "$service_root/release" ] \
+    || fail "The release directory did not resolve to the expected location." 78
   [ "$plist_path" = "$home_root/Library/LaunchAgents/$label.plist" ] \
     || fail "The LaunchAgent path did not resolve to the expected location." 78
 }

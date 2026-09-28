@@ -70,11 +70,11 @@ else
   fail "The Calopod service uninstaller is unavailable." 66
 fi
 
-remove_managed_link "$cli_link" "$installed_cli"
-remove_managed_link "$uninstall_link" "$installed_uninstaller"
 env \
   CALOPOD_SERVICE_TEST_MODE="$test_mode" \
   CALOPOD_SERVICE_TEST_HOME="${CALOPOD_RELEASE_TEST_HOME:-}" \
   "$service_script" remove
+remove_managed_link "$cli_link" "$installed_cli"
+remove_managed_link "$uninstall_link" "$installed_uninstaller"
 
 echo "Removed the Calopod release. SQLite state and Keychain items were preserved."

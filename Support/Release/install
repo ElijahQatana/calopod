@@ -123,8 +123,6 @@ printf '%s\n' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)
 
 (CDPATH= cd -- "$bundle_root" && shasum -a 256 -c SHA256SUMS >/dev/null) \
   || fail "The release checksum verification failed." 65
-[ "$("$cli_source" --version)" = "$version" ] \
-  || fail "The CLI version does not match the release." 65
 
 if [ "$test_mode" != "1" ]; then
   [ "$(uname -m)" = "arm64" ] || fail "This preview requires an Apple Silicon Mac." 69
@@ -139,7 +137,15 @@ if [ "$test_mode" != "1" ]; then
     || fail "The release agent architecture is invalid." 65
   [ "$(lipo -archs "$host_source/Contents/MacOS/CalopodEventKitHost")" = "arm64" ] \
     || fail "The release EventKit host architecture is invalid." 65
+  codesign --verify --strict "$cli_source" >/dev/null 2>&1 \
+    || fail "The release CLI signature is invalid." 65
+  codesign --verify --strict "$agent_source" >/dev/null 2>&1 \
+    || fail "The release agent signature is invalid." 65
+  codesign --verify --deep --strict "$host_source" >/dev/null 2>&1 \
+    || fail "The release EventKit host signature is invalid." 65
 fi
+[ "$("$cli_source" --version)" = "$version" ] \
+  || fail "The CLI version does not match the release." 65
 
 home_root=$(resolve_home)
 service_root="$home_root/Library/Application Support/Calopod/Service"
