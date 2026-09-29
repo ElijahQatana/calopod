@@ -37,6 +37,13 @@ public enum LocalStateBackup {
             .appendingPathComponent(".calopod-backup-\(UUID().uuidString).sqlite")
         defer { try? fileManager.removeItem(at: stagingURL) }
 
+        guard fileManager.createFile(
+            atPath: stagingURL.path,
+            contents: nil,
+            attributes: [.posixPermissions: 0o600]
+        ) else {
+            throw LocalStateBackupError.invalidPath
+        }
         let database = try CalopodDatabase(path: sourceURL.path)
         try database.backup(toPath: stagingURL.path)
         try makePrivate(stagingURL, fileManager: fileManager)
