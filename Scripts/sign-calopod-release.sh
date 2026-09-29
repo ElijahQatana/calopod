@@ -203,8 +203,12 @@ notary_log="$temporary_root/notary-log.json"
 chmod 600 "$notary_log"
 notary_issues=$(/usr/bin/plutil -extract issues json -o - "$notary_log" 2>/dev/null \
   | tr -d '[:space:]' || true)
-if [ "$notary_issues" != "[]" ] \
-  && ! grep -Eq '"issues"[[:space:]]*:[[:space:]]*null([[:space:]]*[,}])' "$notary_log"; then
+notary_issues_null=false
+if /usr/bin/plutil -p "$notary_log" 2>/dev/null \
+  | grep -Eq '^[[:space:]]*"issues" => <null>[[:space:]]*$'; then
+  notary_issues_null=true
+fi
+if [ "$notary_issues" != "[]" ] && [ "$notary_issues_null" != true ]; then
   fail "The notarization log contains issues that require review." 65
 fi
 
