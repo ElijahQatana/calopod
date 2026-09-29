@@ -142,9 +142,7 @@ public struct SupportRestoreCommand: ParsableCommand {
         do {
             let controller = try LaunchAgentController()
             let snapshot = try controller.snapshot()
-            if snapshot.installed, !snapshot.disabled || snapshot.loaded {
-                throw SupportCommandError.serviceMustBeStopped
-            }
+            try requireServiceStoppedForRestore(snapshot)
             let environment = try supportEnvironment(snapshot: snapshot)
             try environment.stateLocation.prepareDirectory()
             let lock = try ProcessLock.acquire(at: environment.stateLocation.lockURL)
@@ -206,7 +204,7 @@ private func supportExport(
     controller: LaunchAgentController
 ) throws -> (payload: CommandPayload, warnings: [String]) {
     let snapshot = try controller.snapshot()
-    let report = try doctorReport()
+    let report = try doctorReport(controller: controller)
     var paused: Bool?
     var counts: SupportConfigurationCounts?
     if let configuration = snapshot.configuration,
@@ -243,6 +241,12 @@ private func supportExport(
         ),
         report.warnings
     )
+}
+
+func requireServiceStoppedForRestore(_ snapshot: LaunchAgentSnapshot) throws {
+    if snapshot.installed, !snapshot.disabled || snapshot.loaded {
+        throw SupportCommandError.serviceMustBeStopped
+    }
 }
 
 private func supportEnvironment(
