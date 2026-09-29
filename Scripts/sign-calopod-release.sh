@@ -196,9 +196,9 @@ submission_id=$(/usr/bin/plutil -extract id raw -o - "$notary_result" 2>/dev/nul
 [ -n "$submission_id" ] || fail "The notarization result was incomplete." 65
 
 notary_log="$temporary_root/notary-log.json"
-"$xcrun_tool" notarytool log "$submission_id" \
+"$xcrun_tool" notarytool log \
   --keychain-profile "$notary_profile" \
-  "$notary_log" > /dev/null 2>&1 \
+  "$submission_id" "$notary_log" > /dev/null 2>&1 \
   || fail "The notarization log could not be checked." 69
 chmod 600 "$notary_log"
 notary_issues=$(/usr/bin/plutil -extract issues json -o - "$notary_log" 2>/dev/null \
