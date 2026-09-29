@@ -99,6 +99,7 @@ done
 require_absolute_path "$bundle_root"
 version_file="$bundle_root/VERSION"
 checksums_file="$bundle_root/SHA256SUMS"
+signing_file="$bundle_root/SIGNING"
 cli_source="$bundle_root/bin/calopod"
 agent_source="$bundle_root/bin/calopod-agent"
 host_source="$bundle_root/eventkit-host/Calopod EventKit Host.app"
@@ -115,6 +116,15 @@ uninstaller="$bundle_root/uninstall"
 [ -x "$service_script" ] || fail "The release service installer is missing." 66
 [ -x "$setup_script" ] || fail "The guided setup command is missing." 66
 [ -x "$uninstaller" ] || fail "The release uninstaller is missing." 66
+
+distribution_signed=0
+if [ -e "$signing_file" ]; then
+  [ -f "$signing_file" ] && [ ! -L "$signing_file" ] \
+    || fail "The release signing metadata is invalid." 65
+  [ "$(cat "$signing_file")" = developer-id-notarized-v1 ] \
+    || fail "The release signing metadata is unsupported." 65
+  distribution_signed=1
+fi
 
 version=$(sed -n '1p' "$version_file")
 [ -n "$version" ] || fail "The release version is invalid." 65
@@ -145,6 +155,16 @@ if [ "$test_mode" != "1" ]; then
     || fail "The release agent signature is invalid." 65
   codesign --verify --deep --strict "$host_source" >/dev/null 2>&1 \
     || fail "The release EventKit host signature is invalid." 65
+  if [ "$distribution_signed" = "1" ]; then
+    codesign --verify --strict --check-notarization -R=notarized \
+      "$cli_source" >/dev/null 2>&1 \
+      || fail "The release CLI did not pass notarization validation." 65
+    codesign --verify --strict --check-notarization -R=notarized \
+      "$agent_source" >/dev/null 2>&1 \
+      || fail "The release agent did not pass notarization validation." 65
+    /usr/bin/syspolicy_check distribution "$host_source" >/dev/null 2>&1 \
+      || fail "The release EventKit host did not pass system policy validation." 65
+  fi
 fi
 [ "$("$cli_source" --version)" = "$version" ] \
   || fail "The CLI version does not match the release." 65
@@ -152,17 +172,58 @@ fi
 home_root=$(resolve_home)
 service_root="$home_root/Library/Application Support/Calopod/Service"
 installed_cli="$service_root/bin/calopod"
+installed_host="$service_root/eventkit-host/Calopod EventKit Host.app"
 installed_setup="$service_root/release/calopod-setup.sh"
 installed_uninstaller="$service_root/release/uninstall"
+installed_signing="$service_root/release/SIGNING"
 link_root="$home_root/.local/bin"
 cli_link="$link_root/calopod"
 setup_link="$link_root/calopod-setup"
 uninstall_link="$link_root/calopod-uninstall"
 require_absolute_path "$service_root"
 require_absolute_path "$installed_cli"
+require_absolute_path "$installed_host"
 require_absolute_path "$installed_setup"
 require_absolute_path "$installed_uninstaller"
 require_absolute_path "$link_root"
+
+if [ -e "$installed_signing" ]; then
+  [ -f "$installed_signing" ] && [ ! -L "$installed_signing" ] \
+    && [ "$(cat "$installed_signing")" = developer-id-notarized-v1 ] \
+    || fail "The installed release signing metadata is invalid." 65
+  [ "$distribution_signed" = "1" ] \
+    || fail "A notarized installation cannot be replaced by an unsigned preview." 78
+fi
+
+if [ "$test_mode" != "1" ] \
+  && [ "$distribution_signed" = "1" ] \
+  && [ -f "$installed_signing" ] \
+  && [ "$(cat "$installed_signing")" = developer-id-notarized-v1 ]; then
+  [ -d "$installed_host" ] \
+    || fail "The installed EventKit host is incomplete." 66
+  identity_root=$(mktemp -d "${TMPDIR:-/tmp}/calopod-signing-identity.XXXXXX") \
+    || fail "The signing identity could not be compared." 74
+  chmod 700 "$identity_root"
+  cleanup_identity() {
+    rm -rf -- "$identity_root"
+  }
+  trap cleanup_identity EXIT HUP INT TERM
+  codesign -d -r- "$installed_host" > "$identity_root/installed" 2>&1 \
+    || fail "The installed EventKit host identity is invalid." 65
+  codesign -d -r- "$host_source" > "$identity_root/replacement" 2>&1 \
+    || fail "The replacement EventKit host identity is invalid." 65
+  sed -n '/designated => /p' "$identity_root/installed" \
+    > "$identity_root/installed-requirement"
+  sed -n '/designated => /p' "$identity_root/replacement" \
+    > "$identity_root/replacement-requirement"
+  [ -s "$identity_root/installed-requirement" ] \
+    && cmp -s \
+      "$identity_root/installed-requirement" \
+      "$identity_root/replacement-requirement" \
+    || fail "The EventKit host permission identity changed unexpectedly." 78
+  trap - EXIT HUP INT TERM
+  cleanup_identity
+fi
 
 validate_link_slot "$cli_link" "$installed_cli"
 validate_link_slot "$setup_link" "$installed_setup"

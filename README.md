@@ -51,6 +51,7 @@ Combined Busy and Free interval behavior is documented in [docs/AVAILABILITY.md]
 The background runner contract is documented in [docs/BACKGROUND_AGENT.md](docs/BACKGROUND_AGENT.md).
 Source installation for the per-user service is documented in [docs/SOURCE_SERVICE_INSTALL.md](docs/SOURCE_SERVICE_INSTALL.md).
 The versioned CLI preview bundle is documented in [docs/CLI_PREVIEW_INSTALL.md](docs/CLI_PREVIEW_INSTALL.md).
+The Developer ID signing and notarization workflow is documented in [docs/CLI_PREVIEW_RELEASE.md](docs/CLI_PREVIEW_RELEASE.md).
 Automatic-sync controls and diagnostics are documented in [docs/AUTOMATIC_SYNC.md](docs/AUTOMATIC_SYNC.md).
 Sanitized support export and local-state recovery are documented in [docs/CLI_PREVIEW_SUPPORT.md](docs/CLI_PREVIEW_SUPPORT.md).
 Background service recovery and upgrade checks are documented in [docs/SERVICE_RECOVERY.md](docs/SERVICE_RECOVERY.md).

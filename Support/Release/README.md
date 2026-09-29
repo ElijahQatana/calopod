@@ -34,5 +34,6 @@ calopod-uninstall
 ```
 
 The first technical preview supports Apple Silicon Macs running macOS 14 or
-newer. The payload is ad-hoc signed for packaging validation; release signing
-and notarization are performed separately.
+newer. A distribution bundle contains a `SIGNING` marker, Developer ID-signed
+executables, a notarized EventKit host, and checksums created after its ticket
+is stapled. A bundle without that marker is a local development build.

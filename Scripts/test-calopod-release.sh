@@ -53,6 +53,7 @@ write_checksums() {
 }
 
 printf '0.1.0\n' > "$bundle_root/VERSION"
+printf 'developer-id-notarized-v1\n' > "$bundle_root/SIGNING"
 write_payload 0
 write_checksums
 
@@ -83,6 +84,7 @@ uninstall_link="$test_home/.local/bin/calopod-uninstall"
 [ -x "$service_root/bin/calopod-agent" ]
 [ -x "$service_root/eventkit-host/Calopod EventKit Host.app/Contents/MacOS/CalopodEventKitHost" ]
 [ "$(cat "$service_root/release/VERSION")" = "0.1.0" ]
+[ "$(cat "$service_root/release/SIGNING")" = "developer-id-notarized-v1" ]
 [ -L "$cli_link" ]
 [ "$(readlink "$cli_link")" = "$service_root/bin/calopod" ]
 [ -L "$setup_link" ]
@@ -91,6 +93,16 @@ uninstall_link="$test_home/.local/bin/calopod-uninstall"
 [ "$(readlink "$uninstall_link")" = "$service_root/release/uninstall" ]
 [ "$(stat -f '%Lp' "$service_root")" = "700" ]
 [ "$(stat -f '%Lp' "$service_root/release/VERSION")" = "600" ]
+
+rm "$bundle_root/SIGNING"
+write_checksums
+if run_installer >/dev/null 2>&1; then
+  echo "The release installer accepted an unsigned downgrade." >&2
+  exit 1
+fi
+[ "$(cat "$service_root/release/SIGNING")" = "developer-id-notarized-v1" ]
+printf 'developer-id-notarized-v1\n' > "$bundle_root/SIGNING"
+write_checksums
 
 write_payload 2
 write_checksums

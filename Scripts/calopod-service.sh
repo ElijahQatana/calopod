@@ -269,6 +269,12 @@ install_service() {
     require_absolute_path "$release_source"
     [ -f "$release_source/VERSION" ] || fail "The release version is missing." 66
     [ -f "$release_source/SHA256SUMS" ] || fail "The release checksums are missing." 66
+    if [ -e "$release_source/SIGNING" ]; then
+      [ -f "$release_source/SIGNING" ] && [ ! -L "$release_source/SIGNING" ] \
+        || fail "The release signing metadata is invalid." 65
+      [ "$(cat "$release_source/SIGNING")" = developer-id-notarized-v1 ] \
+        || fail "The release signing metadata is unsupported." 65
+    fi
     [ -x "$release_source/uninstall" ] || fail "The release uninstaller is missing." 66
     [ -x "$release_source/Scripts/calopod-service.sh" ] \
       || fail "The release service installer is missing." 66
@@ -324,6 +330,9 @@ install_service() {
     install -d -m 700 "$staging_root/release"
     install -m 600 "$release_source/VERSION" "$staging_root/release/VERSION"
     install -m 600 "$release_source/SHA256SUMS" "$staging_root/release/SHA256SUMS"
+    if [ -f "$release_source/SIGNING" ]; then
+      install -m 600 "$release_source/SIGNING" "$staging_root/release/SIGNING"
+    fi
     install -m 700 "$release_source/uninstall" "$staging_root/release/uninstall"
     install -m 700 \
       "$release_source/Scripts/calopod-service.sh" \
