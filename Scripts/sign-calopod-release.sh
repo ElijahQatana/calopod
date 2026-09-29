@@ -203,8 +203,10 @@ notary_log="$temporary_root/notary-log.json"
 chmod 600 "$notary_log"
 notary_issues=$(/usr/bin/plutil -extract issues json -o - "$notary_log" 2>/dev/null \
   | tr -d '[:space:]' || true)
-[ "$notary_issues" = "[]" ] \
-  || fail "The notarization log contains issues that require review." 65
+if [ "$notary_issues" != "[]" ] \
+  && ! grep -Eq '"issues"[[:space:]]*:[[:space:]]*null([[:space:]]*[,}])' "$notary_log"; then
+  fail "The notarization log contains issues that require review." 65
+fi
 
 "$xcrun_tool" stapler staple -q "$host_path" > /dev/null 2>&1 \
   || fail "The EventKit host notarization ticket could not be stapled." 65

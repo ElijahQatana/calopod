@@ -60,7 +60,7 @@ if [ "\$1" = notarytool ] && [ "\$2" = submit ]; then
   printf '%s\n' '{"id":"00000000-0000-0000-0000-000000000000","status":"Accepted"}'
 elif [ "\$1" = notarytool ] && [ "\$2" = log ]; then
   for argument in "\$@"; do output=\$argument; done
-  printf '%s\n' '{"issues":[]}' > "\$output"
+  printf '%s\n' '{"issues":null}' > "\$output"
 elif [ "\$1" = stapler ] && [ "\$2" = staple ]; then
   mkdir -p "$bundle_path/eventkit-host/Calopod EventKit Host.app/Contents/_CodeSignature"
   printf 'synthetic ticket\n' \
