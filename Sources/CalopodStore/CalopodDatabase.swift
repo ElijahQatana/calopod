@@ -51,4 +51,9 @@ public final class CalopodDatabase: @unchecked Sendable {
             try body(database)
         }
     }
+
+    public func backup(toPath path: String) throws {
+        let destination = try DatabaseQueue(path: path)
+        try writer.backup(to: destination)
+    }
 }
