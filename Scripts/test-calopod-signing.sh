@@ -41,9 +41,9 @@ printf 'codesign %s\n' "\$*" >> "$call_log"
 exit 0
 EOF
 
-cat > "$tool_root/spctl" <<EOF
+cat > "$tool_root/syspolicy_check" <<EOF
 #!/bin/sh
-printf 'spctl %s\n' "\$*" >> "$call_log"
+printf 'syspolicy %s\n' "\$*" >> "$call_log"
 exit 0
 EOF
 
@@ -76,7 +76,7 @@ env \
   CALOPOD_RELEASE_TEST_SECURITY_TOOL="$tool_root/security" \
   CALOPOD_RELEASE_TEST_CODESIGN_TOOL="$tool_root/codesign" \
   CALOPOD_RELEASE_TEST_XCRUN_TOOL="$tool_root/xcrun" \
-  CALOPOD_RELEASE_TEST_SPCTL_TOOL="$tool_root/spctl" \
+  CALOPOD_RELEASE_TEST_SYSPOLICY_TOOL="$tool_root/syspolicy_check" \
   CALOPOD_RELEASE_TEST_DITTO_TOOL="$tool_root/ditto" \
   "$repository_root/Scripts/sign-calopod-release.sh" \
     --bundle "$bundle_path" \
@@ -91,7 +91,8 @@ env \
 (CDPATH= cd -- "$bundle_path" && shasum -a 256 -c SHA256SUMS > /dev/null)
 (CDPATH= cd -- "$test_root" && shasum -a 256 -c "$(basename "$checksum_path")" > /dev/null)
 [ "$(grep -c -- '--options runtime --timestamp' "$call_log")" = 3 ]
-[ "$(grep -c '^spctl ' "$call_log")" = 3 ]
+[ "$(grep -c -- '--check-notarization -R=notarized' "$call_log")" = 2 ]
+[ "$(grep -c '^syspolicy distribution ' "$call_log")" = 1 ]
 ! grep -F "$identity" "$output_file" > /dev/null
 ! grep -F "$profile" "$output_file" > /dev/null
 
@@ -107,7 +108,7 @@ if env \
   CALOPOD_RELEASE_TEST_SECURITY_TOOL="$tool_root/security" \
   CALOPOD_RELEASE_TEST_CODESIGN_TOOL="$tool_root/codesign" \
   CALOPOD_RELEASE_TEST_XCRUN_TOOL="$tool_root/xcrun" \
-  CALOPOD_RELEASE_TEST_SPCTL_TOOL="$tool_root/spctl" \
+  CALOPOD_RELEASE_TEST_SYSPOLICY_TOOL="$tool_root/syspolicy_check" \
   CALOPOD_RELEASE_TEST_DITTO_TOOL="$tool_root/ditto" \
   "$repository_root/Scripts/sign-calopod-release.sh" \
     --bundle "$bundle_path" \

@@ -156,12 +156,14 @@ if [ "$test_mode" != "1" ]; then
   codesign --verify --deep --strict "$host_source" >/dev/null 2>&1 \
     || fail "The release EventKit host signature is invalid." 65
   if [ "$distribution_signed" = "1" ]; then
-    /usr/sbin/spctl --assess --type execute "$cli_source" >/dev/null 2>&1 \
-      || fail "The release CLI did not pass Gatekeeper assessment." 65
-    /usr/sbin/spctl --assess --type execute "$agent_source" >/dev/null 2>&1 \
-      || fail "The release agent did not pass Gatekeeper assessment." 65
-    /usr/sbin/spctl --assess --type execute "$host_source" >/dev/null 2>&1 \
-      || fail "The release EventKit host did not pass Gatekeeper assessment." 65
+    codesign --verify --strict --check-notarization -R=notarized \
+      "$cli_source" >/dev/null 2>&1 \
+      || fail "The release CLI did not pass notarization validation." 65
+    codesign --verify --strict --check-notarization -R=notarized \
+      "$agent_source" >/dev/null 2>&1 \
+      || fail "The release agent did not pass notarization validation." 65
+    /usr/bin/syspolicy_check distribution "$host_source" >/dev/null 2>&1 \
+      || fail "The release EventKit host did not pass system policy validation." 65
   fi
 fi
 [ "$("$cli_source" --version)" = "$version" ] \

@@ -108,9 +108,9 @@ if [ "$test_mode" = "1" ]; then
   security_tool=${CALOPOD_RELEASE_TEST_SECURITY_TOOL:-}
   codesign_tool=${CALOPOD_RELEASE_TEST_CODESIGN_TOOL:-}
   xcrun_tool=${CALOPOD_RELEASE_TEST_XCRUN_TOOL:-}
-  spctl_tool=${CALOPOD_RELEASE_TEST_SPCTL_TOOL:-}
+  syspolicy_tool=${CALOPOD_RELEASE_TEST_SYSPOLICY_TOOL:-}
   ditto_tool=${CALOPOD_RELEASE_TEST_DITTO_TOOL:-}
-  for tool in "$security_tool" "$codesign_tool" "$xcrun_tool" "$spctl_tool" "$ditto_tool"; do
+  for tool in "$security_tool" "$codesign_tool" "$xcrun_tool" "$syspolicy_tool" "$ditto_tool"; do
     require_absolute_path "$tool"
     [ -x "$tool" ] || fail "A release signing test tool is unavailable." 78
   done
@@ -118,7 +118,7 @@ else
   security_tool=/usr/bin/security
   codesign_tool=/usr/bin/codesign
   xcrun_tool=/usr/bin/xcrun
-  spctl_tool=/usr/sbin/spctl
+  syspolicy_tool=/usr/bin/syspolicy_check
   ditto_tool=/usr/bin/ditto
 fi
 
@@ -217,10 +217,13 @@ fi
 "$xcrun_tool" stapler validate -q "$host_path" > /dev/null 2>&1 \
   || fail "The EventKit host notarization ticket is invalid." 65
 
-for executable in "$cli_path" "$agent_path" "$host_path"; do
-  "$spctl_tool" --assess --type execute "$executable" > /dev/null 2>&1 \
-    || fail "A signed release executable failed Gatekeeper assessment." 65
+for executable in "$cli_path" "$agent_path"; do
+  "$codesign_tool" --verify --strict --check-notarization -R=notarized \
+    "$executable" > /dev/null 2>&1 \
+    || fail "A release command failed its notarization check." 65
 done
+"$syspolicy_tool" distribution "$host_path" > /dev/null 2>&1 \
+  || fail "The release EventKit host failed system policy validation." 65
 
 write_checksums
 "$ditto_tool" -c -k --sequesterRsrc --keepParent \
