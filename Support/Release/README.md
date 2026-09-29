@@ -13,17 +13,18 @@ Install the release without loading the background service:
   --horizon-days 30
 ```
 
-The installer adds `calopod` and `calopod-uninstall` links under
+The installer adds `calopod`, `calopod-setup`, and `calopod-uninstall` links under
 `~/.local/bin`. Add that directory to `PATH` if it is not already available in
 your shell.
 
-Enable automatic sync after configuring Connections, selected calendars, and
-Arms:
+Configure Calendars on this Mac, Main, Busy, and automatic sync:
 
 ```sh
-calopod agent enable
-calopod agent status
+calopod-setup
 ```
+
+The setup command asks before creating missing state or enabling automatic
+sync. Use fresh empty target calendars when starting with new state.
 
 Remove installed executables and service files while preserving SQLite state
 and Keychain material:

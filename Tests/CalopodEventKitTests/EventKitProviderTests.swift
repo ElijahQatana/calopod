@@ -179,6 +179,51 @@ struct EventKitConnectionServiceTests {
         #expect(refreshed.first { $0.providerCalendarID == "calendar-one" }?.isSelected == true)
     }
 
+    @Test("Calendar refresh preserves configured routes when calendars disappear")
+    func configuredRoutesSurviveMissingCalendars() throws {
+        let database = try CalopodDatabase.inMemory()
+        let state = LocalStateRepository(database: database)
+        let service = EventKitConnectionService(state: state)
+        let connection = try service.connect(calendars: [
+            calendarSnapshot(id: "source"),
+            calendarSnapshot(id: "target"),
+            calendarSnapshot(id: "unused"),
+        ])
+        let bindings = try state.calendarBindings(connectionID: connection.id)
+        let source = try #require(bindings.first { $0.providerCalendarID == "source" })
+        let target = try #require(bindings.first { $0.providerCalendarID == "target" })
+        try state.saveArm(
+            StoredArm(
+                id: "synthetic-arm",
+                configurationID: connection.configurationID,
+                sourceBindingIDs: [source.id],
+                targetBindingID: target.id,
+                ruleMode: .busy
+            )
+        )
+
+        let refreshed = try service.refreshCalendars(
+            [calendarSnapshot(id: "new")],
+            connectionID: connection.id
+        )
+
+        #expect(refreshed.contains { $0.providerCalendarID == "new" })
+        #expect(!refreshed.contains { $0.providerCalendarID == "unused" })
+        let stored = try state.calendarBindings(connectionID: connection.id)
+        #expect(stored.contains { $0.id == source.id })
+        #expect(stored.contains { $0.id == target.id })
+        #expect(!stored.contains { $0.providerCalendarID == "unused" })
+        #expect(try state.arms() == [
+            StoredArm(
+                id: "synthetic-arm",
+                configurationID: connection.configurationID,
+                sourceBindingIDs: [source.id],
+                targetBindingID: target.id,
+                ruleMode: .busy
+            ),
+        ])
+    }
+
     @Test("Calendar selection is stored explicitly")
     func storedSelection() throws {
         let database = try CalopodDatabase.inMemory()
@@ -226,6 +271,17 @@ struct EventKitConnectionServiceTests {
                 sourceType: "caldav",
                 sourceLabel: "Synthetic CalDAV"
             ) == nil
+        )
+    }
+
+    private func calendarSnapshot(id: String) -> EventKitCalendarSnapshot {
+        EventKitCalendarSnapshot(
+            id: id,
+            title: "Synthetic \(id)",
+            sourceID: "synthetic-source",
+            sourceTitle: "Synthetic source",
+            sourceType: "local",
+            allowsContentModifications: true
         )
     }
 }

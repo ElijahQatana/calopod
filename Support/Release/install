@@ -103,6 +103,7 @@ cli_source="$bundle_root/bin/calopod"
 agent_source="$bundle_root/bin/calopod-agent"
 host_source="$bundle_root/eventkit-host/Calopod EventKit Host.app"
 service_script="$bundle_root/Scripts/calopod-service.sh"
+setup_script="$bundle_root/Scripts/calopod-setup.sh"
 uninstaller="$bundle_root/uninstall"
 
 [ -f "$version_file" ] || fail "The release version is missing." 66
@@ -112,6 +113,7 @@ uninstaller="$bundle_root/uninstall"
 [ -x "$host_source/Contents/MacOS/CalopodEventKitHost" ] \
   || fail "The release EventKit host is incomplete." 66
 [ -x "$service_script" ] || fail "The release service installer is missing." 66
+[ -x "$setup_script" ] || fail "The guided setup command is missing." 66
 [ -x "$uninstaller" ] || fail "The release uninstaller is missing." 66
 
 version=$(sed -n '1p' "$version_file")
@@ -150,29 +152,36 @@ fi
 home_root=$(resolve_home)
 service_root="$home_root/Library/Application Support/Calopod/Service"
 installed_cli="$service_root/bin/calopod"
+installed_setup="$service_root/release/calopod-setup.sh"
 installed_uninstaller="$service_root/release/uninstall"
 link_root="$home_root/.local/bin"
 cli_link="$link_root/calopod"
+setup_link="$link_root/calopod-setup"
 uninstall_link="$link_root/calopod-uninstall"
 require_absolute_path "$service_root"
 require_absolute_path "$installed_cli"
+require_absolute_path "$installed_setup"
 require_absolute_path "$installed_uninstaller"
 require_absolute_path "$link_root"
 
 validate_link_slot "$cli_link" "$installed_cli"
+validate_link_slot "$setup_link" "$installed_setup"
 validate_link_slot "$uninstall_link" "$installed_uninstaller"
 umask 077
 if [ ! -d "$link_root" ]; then
   install -d -m 700 "$link_root"
 fi
 temporary_cli_link="$link_root/.calopod.installing.$$"
+temporary_setup_link="$link_root/.calopod-setup.installing.$$"
 temporary_uninstall_link="$link_root/.calopod-uninstall.installing.$$"
 cleanup_links() {
   [ ! -L "$temporary_cli_link" ] || rm -f "$temporary_cli_link"
+  [ ! -L "$temporary_setup_link" ] || rm -f "$temporary_setup_link"
   [ ! -L "$temporary_uninstall_link" ] || rm -f "$temporary_uninstall_link"
 }
 trap cleanup_links EXIT HUP INT TERM
 ln -s "$installed_cli" "$temporary_cli_link"
+ln -s "$installed_setup" "$temporary_setup_link"
 ln -s "$installed_uninstaller" "$temporary_uninstall_link"
 
 env \
@@ -189,6 +198,7 @@ env \
     --horizon-days "$horizon_days"
 
 mv -f "$temporary_cli_link" "$cli_link"
+mv -f "$temporary_setup_link" "$setup_link"
 mv -f "$temporary_uninstall_link" "$uninstall_link"
 trap - EXIT HUP INT TERM
 

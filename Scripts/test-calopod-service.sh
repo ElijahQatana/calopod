@@ -22,12 +22,14 @@ printf '0.1.0\n' > "$release_source/VERSION"
 printf 'synthetic checksums\n' > "$release_source/SHA256SUMS"
 printf '#!/bin/sh\nexit 0\n' > "$release_source/uninstall"
 printf '#!/bin/sh\nexit 0\n' > "$release_source/Scripts/calopod-service.sh"
+printf '#!/bin/sh\nexit 0\n' > "$release_source/Scripts/calopod-setup.sh"
 chmod 700 \
   "$cli_source" \
   "$agent_source" \
   "$host_executable" \
   "$release_source/uninstall" \
-  "$release_source/Scripts/calopod-service.sh"
+  "$release_source/Scripts/calopod-service.sh" \
+  "$release_source/Scripts/calopod-setup.sh"
 
 state_root="$test_home/Library/Application Support/Calopod"
 mkdir -p "$state_root"
@@ -77,6 +79,7 @@ installed_host="$service_root/eventkit-host/Calopod EventKit Host.app/Contents/M
 [ "$(cat "$service_root/release/VERSION")" = "0.1.0" ]
 [ -x "$service_root/release/uninstall" ]
 [ -x "$service_root/release/calopod-service.sh" ]
+[ -x "$service_root/release/calopod-setup.sh" ]
 plutil -lint "$plist_path" >/dev/null
 [ "$(plutil -extract Label raw "$plist_path")" = "com.calopod.agent" ]
 [ "$(plutil -extract ProgramArguments.0 raw "$plist_path")" = "$installed_agent" ]

@@ -156,6 +156,12 @@ public struct AgentIntervalCommand: ParsableCommand {
     @Option(name: .long, help: "Maximum random delay added to each interval.")
     public var jitterSeconds: Int?
 
+    @Option(name: .long, help: "Days before today included in each automatic run.")
+    public var lookbackDays: Int?
+
+    @Option(name: .long, help: "Days after today included in each automatic run.")
+    public var horizonDays: Int?
+
     @OptionGroup public var output: OutputOptions
 
     public init() {}
@@ -167,6 +173,12 @@ public struct AgentIntervalCommand: ParsableCommand {
         if let jitterSeconds, jitterSeconds < 0 {
             throw ValidationError("--jitter-seconds must not be negative.")
         }
+        if let lookbackDays, lookbackDays < 0 {
+            throw ValidationError("--lookback-days must not be negative.")
+        }
+        if let horizonDays, horizonDays <= 0 {
+            throw ValidationError("--horizon-days must be greater than zero.")
+        }
     }
 
     public func run() throws {
@@ -175,7 +187,9 @@ public struct AgentIntervalCommand: ParsableCommand {
             let controller = try LaunchAgentController()
             try controller.updateSchedule(
                 intervalSeconds: seconds,
-                jitterSeconds: jitterSeconds
+                jitterSeconds: jitterSeconds,
+                lookbackDays: lookbackDays,
+                horizonDays: horizonDays
             )
             try writeAgentControlResult(
                 command: "agent.interval",

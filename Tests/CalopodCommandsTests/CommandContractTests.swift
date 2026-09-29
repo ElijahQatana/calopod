@@ -44,16 +44,26 @@ func agentExposesExplicitControlCommands() {
     let interval = try? AgentIntervalCommand.parse([
         "--seconds", "900",
         "--jitter-seconds", "45",
+        "--lookback-days", "2",
+        "--horizon-days", "21",
         "--format", "json",
     ])
     #expect(status?.output.format == .json)
     #expect(runNow?.output.format == .json)
     #expect(interval?.seconds == 900)
     #expect(interval?.jitterSeconds == 45)
+    #expect(interval?.lookbackDays == 2)
+    #expect(interval?.horizonDays == 21)
     #expect(interval?.output.format == .json)
 
     #expect(throws: (any Error).self) {
         try AgentIntervalCommand.parse(["--seconds", "0"])
+    }
+    #expect(throws: (any Error).self) {
+        try AgentIntervalCommand.parse(["--seconds", "900", "--lookback-days", "-1"])
+    }
+    #expect(throws: (any Error).self) {
+        try AgentIntervalCommand.parse(["--seconds", "900", "--horizon-days", "0"])
     }
 }
 
