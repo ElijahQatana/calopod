@@ -20,7 +20,92 @@ func rootExposesThePlannedCommandGroups() {
         "sync",
         "doctor",
         "agent",
+        "support",
     ])
+}
+
+@Test
+func supportExposesSanitizedExportAndBackupCommands() throws {
+    let names = SupportCommand.configuration.subcommands.map {
+        $0.configuration.commandName ?? ""
+    }
+    #expect(names == ["export", "backup", "verify", "restore"])
+
+    let export = try SupportExportCommand.parse(["--format", "json"])
+    let backup = try SupportBackupCommand.parse([
+        "--output", "/example/backup.sqlite",
+        "--format", "json",
+    ])
+    let verify = try SupportVerifyCommand.parse([
+        "--backup", "/example/backup.sqlite",
+        "--format", "json",
+    ])
+    let restore = try SupportRestoreCommand.parse([
+        "--backup", "/example/backup.sqlite",
+        "--confirm",
+        "--format", "json",
+    ])
+
+    #expect(export.output.format == .json)
+    #expect(backup.outputPath == "/example/backup.sqlite")
+    #expect(verify.backupPath == "/example/backup.sqlite")
+    #expect(restore.confirm)
+    #expect(throws: (any Error).self) {
+        try SupportRestoreCommand.parse(["--backup", "/example/backup.sqlite"])
+    }
+}
+
+@Test
+func supportConfigurationContainsOnlyAggregateCounts() throws {
+    let repository = LocalStateRepository(database: try CalopodDatabase.inMemory())
+    let connection = StoredConnection(
+        id: "synthetic-connection",
+        configurationID: "default",
+        provider: "eventkit",
+        displayLabel: "Private label",
+        isEnabled: true
+    )
+    try repository.saveConnection(connection)
+    try repository.replaceCalendarBindings(
+        connectionID: connection.id,
+        bindings: [
+            StoredCalendarBinding(
+                id: "source",
+                connectionID: connection.id,
+                providerCalendarID: "private-provider-id",
+                displayLabel: "Private calendar",
+                isSelected: true,
+                isReadOnly: false
+            ),
+            StoredCalendarBinding(
+                id: "target",
+                connectionID: connection.id,
+                providerCalendarID: "private-target-id",
+                displayLabel: "Private target",
+                isSelected: false,
+                isReadOnly: false
+            ),
+        ]
+    )
+    try repository.saveArm(
+        StoredArm(
+            id: "arm",
+            configurationID: "default",
+            sourceBindingIDs: ["source"],
+            targetBindingID: "target",
+            ruleMode: .busy
+        )
+    )
+
+    let counts = try supportConfigurationCounts(repository: repository)
+
+    #expect(counts.connectionCount == 1)
+    #expect(counts.enabledConnectionCount == 1)
+    #expect(counts.selectedCalendarCount == 1)
+    #expect(counts.armCount == 1)
+    #expect(counts.enabledArmCount == 1)
+    #expect(!counts.mainConfigured)
+    #expect(counts.busyArmCount == 1)
 }
 
 @Test

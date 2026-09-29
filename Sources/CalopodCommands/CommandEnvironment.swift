@@ -106,6 +106,30 @@ private func commandFailure(_ error: Error) -> (message: String, exitCode: Calop
             .invalidConfiguration
         )
     }
+    if let backup = error as? LocalStateBackupError {
+        return switch backup {
+        case .invalidPath:
+            ("Use an absolute path to a regular local file.", .invalidConfiguration)
+        case .sourceMissing:
+            ("Local state is not initialized yet.", .unavailable)
+        case .destinationExists:
+            ("The backup destination already exists.", .invalidConfiguration)
+        case .backupInvalid:
+            ("The local-state backup is invalid or damaged.", .localStateFailure)
+        case .backupNotPrivate:
+            ("The local-state backup must allow access only to its owner.", .permissionDenied)
+        case .unsupportedSchema:
+            ("The local-state backup was created by an unsupported version.", .invalidConfiguration)
+        case .stateBusy:
+            ("Local state is still in use. Stop the service and other Calopod commands.", .temporaryFailure)
+        }
+    }
+    if error is SupportCommandError {
+        return (
+            "Disable automatic sync before restoring local state.",
+            .temporaryFailure
+        )
+    }
     if let runtime = error as? CalopodRuntimeError {
         switch runtime {
         case .busy:

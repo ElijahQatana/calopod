@@ -52,7 +52,7 @@ struct DoctorReport: Equatable {
 }
 
 #if os(macOS)
-private func doctorReport() throws -> DoctorReport {
+func doctorReport() throws -> DoctorReport {
     let controller = try LaunchAgentController()
     let snapshot: LaunchAgentSnapshot
     do {
