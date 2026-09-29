@@ -17,7 +17,7 @@ public struct DoctorCommand: ParsableCommand {
     public func run() throws {
         #if os(macOS)
         do {
-            let report = try doctorReport()
+            let report = try doctorReport(controller: LaunchAgentController())
             try OutputRenderer.write(
                 command: "doctor",
                 payload: CommandPayload(
@@ -52,8 +52,7 @@ struct DoctorReport: Equatable {
 }
 
 #if os(macOS)
-private func doctorReport() throws -> DoctorReport {
-    let controller = try LaunchAgentController()
+func doctorReport(controller: LaunchAgentController) throws -> DoctorReport {
     let snapshot: LaunchAgentSnapshot
     do {
         snapshot = try controller.snapshot()

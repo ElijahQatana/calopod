@@ -18,6 +18,7 @@ public struct CalopodRoot: AsyncParsableCommand {
             SyncCommand.self,
             DoctorCommand.self,
             AgentCommand.self,
+            SupportCommand.self,
         ]
     )
 

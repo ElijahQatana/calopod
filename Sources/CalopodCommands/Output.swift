@@ -67,6 +67,15 @@ public struct CommandPayload: Codable, Equatable, Sendable {
     public let repairs: Int?
     public let noOps: Int?
     public let warningCount: Int?
+    public let connectionCount: Int?
+    public let enabledConnectionCount: Int?
+    public let selectedCalendarCount: Int?
+    public let armCount: Int?
+    public let enabledArmCount: Int?
+    public let mainConfigured: Bool?
+    public let busyArmCount: Int?
+    public let backupValid: Bool?
+    public let migrationCount: Int?
 
     public init(
         status: String,
@@ -94,7 +103,16 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         removals: Int? = nil,
         repairs: Int? = nil,
         noOps: Int? = nil,
-        warningCount: Int? = nil
+        warningCount: Int? = nil,
+        connectionCount: Int? = nil,
+        enabledConnectionCount: Int? = nil,
+        selectedCalendarCount: Int? = nil,
+        armCount: Int? = nil,
+        enabledArmCount: Int? = nil,
+        mainConfigured: Bool? = nil,
+        busyArmCount: Int? = nil,
+        backupValid: Bool? = nil,
+        migrationCount: Int? = nil
     ) {
         self.status = status
         self.message = message
@@ -122,6 +140,15 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         self.repairs = repairs
         self.noOps = noOps
         self.warningCount = warningCount
+        self.connectionCount = connectionCount
+        self.enabledConnectionCount = enabledConnectionCount
+        self.selectedCalendarCount = selectedCalendarCount
+        self.armCount = armCount
+        self.enabledArmCount = enabledArmCount
+        self.mainConfigured = mainConfigured
+        self.busyArmCount = busyArmCount
+        self.backupValid = backupValid
+        self.migrationCount = migrationCount
     }
 }
 
@@ -297,6 +324,21 @@ public enum OutputRenderer {
             if let warningCount = payload.warningCount {
                 lines.append("Warning count: \(warningCount)")
             }
+            if let count = payload.connectionCount { lines.append("Connections: \(count)") }
+            if let count = payload.enabledConnectionCount {
+                lines.append("Enabled Connections: \(count)")
+            }
+            if let count = payload.selectedCalendarCount {
+                lines.append("Selected calendars: \(count)")
+            }
+            if let count = payload.armCount { lines.append("Arms: \(count)") }
+            if let count = payload.enabledArmCount { lines.append("Enabled Arms: \(count)") }
+            if let configured = payload.mainConfigured {
+                lines.append("Main configured: \(configured)")
+            }
+            if let count = payload.busyArmCount { lines.append("Busy Arms: \(count)") }
+            if let valid = payload.backupValid { lines.append("Backup valid: \(valid)") }
+            if let count = payload.migrationCount { lines.append("Migrations: \(count)") }
             lines.append(contentsOf: warnings.map { "Warning: \($0)" })
             return lines.joined(separator: "\n")
 

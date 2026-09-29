@@ -1,6 +1,16 @@
 import GRDB
 
 extension CalopodDatabase {
+    public static let supportedMigrationIdentifiers = [
+        "v1_foundation",
+        "v2_calendar_sources",
+        "v3_normalized_event_details",
+        "v4_main_calendar",
+        "v5_full_event_details",
+        "v6_sync_run_summaries",
+        "v7_agent_control",
+    ]
+
     static var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
 
