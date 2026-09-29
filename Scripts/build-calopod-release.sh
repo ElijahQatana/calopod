@@ -13,15 +13,28 @@ fail() {
 usage() {
   cat <<'EOF'
 Usage:
-  Scripts/build-calopod-release.sh [--output-directory PATH]
+  Scripts/build-calopod-release.sh [--output-directory PATH] \
+    [--signing-identity SHA1 --notary-profile NAME]
 EOF
 }
 
+signing_identity=""
+notary_profile=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --output-directory)
       [ "$#" -ge 2 ] || fail "--output-directory requires a value." 64
       output_directory=$2
+      shift 2
+      ;;
+    --signing-identity)
+      [ "$#" -ge 2 ] || fail "--signing-identity requires a value." 64
+      signing_identity=$2
+      shift 2
+      ;;
+    --notary-profile)
+      [ "$#" -ge 2 ] || fail "--notary-profile requires a value." 64
+      notary_profile=$2
       shift 2
       ;;
     -h|--help)
@@ -31,6 +44,14 @@ while [ "$#" -gt 0 ]; do
     *) fail "Unknown release-build option: $1" 64 ;;
   esac
 done
+if { [ -n "$signing_identity" ] && [ -z "$notary_profile" ]; } \
+  || { [ -z "$signing_identity" ] && [ -n "$notary_profile" ]; }; then
+  fail "Developer ID signing and notarization options must be provided together." 64
+fi
+distribution_build=0
+if [ -n "$signing_identity" ]; then
+  distribution_build=1
+fi
 
 case "$output_directory" in
   /*) ;;
@@ -111,34 +132,46 @@ plutil -replace CFBundleShortVersionString -string "$version" "$host_plist"
 [ "$(lipo -archs "$staged_bundle/eventkit-host/Calopod EventKit Host.app/Contents/MacOS/CalopodEventKitHost")" = "arm64" ] \
   || fail "The EventKit host is not an arm64 release binary." 65
 
-codesign --force --sign - "$staged_bundle/bin/calopod" >/dev/null 2>&1
-codesign --force --sign - "$staged_bundle/bin/calopod-agent" >/dev/null 2>&1
-codesign --force --sign - \
-  "$staged_bundle/eventkit-host/Calopod EventKit Host.app" >/dev/null 2>&1
-codesign --verify --strict "$staged_bundle/bin/calopod"
-codesign --verify --strict "$staged_bundle/bin/calopod-agent"
-codesign --verify --deep --strict \
-  "$staged_bundle/eventkit-host/Calopod EventKit Host.app"
+staged_archive="$staging_root/$bundle_name.zip"
+staged_archive_checksum="$staged_archive.sha256"
+if [ "$distribution_build" = "1" ]; then
+  "$repository_root/Scripts/sign-calopod-release.sh" \
+    --bundle "$staged_bundle" \
+    --archive "$staged_archive" \
+    --checksum "$staged_archive_checksum" \
+    --signing-identity "$signing_identity" \
+    --notary-profile "$notary_profile"
+else
+  codesign --force --sign - "$staged_bundle/bin/calopod" >/dev/null 2>&1
+  codesign --force --sign - "$staged_bundle/bin/calopod-agent" >/dev/null 2>&1
+  codesign --force --sign - \
+    "$staged_bundle/eventkit-host/Calopod EventKit Host.app" >/dev/null 2>&1
+  codesign --verify --strict "$staged_bundle/bin/calopod"
+  codesign --verify --strict "$staged_bundle/bin/calopod-agent"
+  codesign --verify --deep --strict \
+    "$staged_bundle/eventkit-host/Calopod EventKit Host.app"
 
-(
-  CDPATH= cd -- "$staged_bundle"
-  find . -type f ! -name SHA256SUMS | LC_ALL=C sort | while IFS= read -r file; do
-    shasum -a 256 "$file"
-  done > SHA256SUMS
-  chmod 600 SHA256SUMS
-  shasum -a 256 -c SHA256SUMS >/dev/null
-)
+  (
+    CDPATH= cd -- "$staged_bundle"
+    find . -type f ! -name SHA256SUMS | LC_ALL=C sort | while IFS= read -r file; do
+      shasum -a 256 "$file"
+    done > SHA256SUMS
+    chmod 600 SHA256SUMS
+    shasum -a 256 -c SHA256SUMS >/dev/null
+  )
+  (
+    CDPATH= cd -- "$staging_root"
+    ditto -c -k --sequesterRsrc --keepParent "$bundle_name" "$bundle_name.zip"
+    shasum -a 256 "$bundle_name.zip" > "$bundle_name.zip.sha256"
+  )
+fi
 
 mv "$staged_bundle" "$bundle_path"
 staged_bundle=""
+mv "$staged_archive" "$archive_path"
+mv "$staged_archive_checksum" "$archive_checksum_path"
 trap - EXIT HUP INT TERM
 rm -rf "$staging_root"
 staging_root=""
-
-(
-  CDPATH= cd -- "$output_directory"
-  ditto -c -k --sequesterRsrc --keepParent "$bundle_name" "$bundle_name.zip"
-  shasum -a 256 "$bundle_name.zip" > "$bundle_name.zip.sha256"
-)
 
 echo "Built $bundle_name.zip and its SHA-256 checksum."

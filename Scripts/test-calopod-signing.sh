@@ -95,6 +95,13 @@ env \
 ! grep -F "$identity" "$output_file" > /dev/null
 ! grep -F "$profile" "$output_file" > /dev/null
 
+if "$repository_root/Scripts/build-calopod-release.sh" \
+  --output-directory "$test_root/unpaired-build" \
+  --signing-identity "$identity" > /dev/null 2>&1; then
+  echo "The release builder accepted incomplete notarization options." >&2
+  exit 1
+fi
+
 if env \
   CALOPOD_RELEASE_SIGNING_TEST_MODE=1 \
   CALOPOD_RELEASE_TEST_SECURITY_TOOL="$tool_root/security" \
