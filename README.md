@@ -46,12 +46,21 @@ swift build --product calopod-agent
 
 Dry-run sync refreshes configured Arm sources and managed targets, then reports deterministic creates, updates, removals, repairs, and no-ops without writing calendar events. Apply mode verifies signed ownership, excludes mirrors from source ingestion, rereads after writes, and repairs verified duplicates. EventKit Arms use one explicit preferred writer.
 
+### Doc Links
+
 The complete command tree, date-range behavior, output envelope, and exit codes are documented in [docs/COMMAND_LINE.md](docs/COMMAND_LINE.md).
+
 Combined Busy and Free interval behavior is documented in [docs/AVAILABILITY.md](docs/AVAILABILITY.md).
+
 The background runner contract is documented in [docs/BACKGROUND_AGENT.md](docs/BACKGROUND_AGENT.md).
+
 Source installation for the per-user service is documented in [docs/SOURCE_SERVICE_INSTALL.md](docs/SOURCE_SERVICE_INSTALL.md).
+
 The versioned CLI preview bundle is documented in [docs/CLI_PREVIEW_INSTALL.md](docs/CLI_PREVIEW_INSTALL.md).
+
 The Developer ID signing and notarization workflow is documented in [docs/CLI_PREVIEW_RELEASE.md](docs/CLI_PREVIEW_RELEASE.md).
+
 Automatic-sync controls and diagnostics are documented in [docs/AUTOMATIC_SYNC.md](docs/AUTOMATIC_SYNC.md).
+
 Sanitized support export and local-state recovery are documented in [docs/CLI_PREVIEW_SUPPORT.md](docs/CLI_PREVIEW_SUPPORT.md).
 Background service recovery and upgrade checks are documented in [docs/SERVICE_RECOVERY.md](docs/SERVICE_RECOVERY.md).
