@@ -2,6 +2,8 @@
 
 set -eu
 
+repository_root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd -P)
+
 fail() {
   echo "$1" >&2
   exit "${2:-1}"
@@ -142,18 +144,26 @@ awk -v expected="$signing_identity" '
 
 sign_item() {
   item_path=$1
+  shift
   "$codesign_tool" \
     --force \
     --sign "$signing_identity" \
     --options runtime \
     --timestamp \
+    "$@" \
     "$item_path" > /dev/null 2>&1 \
     || fail "A release executable could not be signed." 65
 }
 
 sign_item "$cli_path"
 sign_item "$agent_path"
-sign_item "$host_path"
+sign_item "$host_path" --entitlements "$repository_root/Support/EventKitHost/Entitlements.plist"
+
+host_entitlements="$temporary_root/host-entitlements.plist"
+"$codesign_tool" -d --entitlements :- "$host_path" > "$host_entitlements" 2>/dev/null \
+  || fail "The signed Calendar host entitlements could not be inspected." 65
+[ "$(/usr/bin/plutil -extract 'com\.apple\.security\.personal-information\.calendars' raw -o - "$host_entitlements" 2>/dev/null)" = true ] \
+  || fail "The signed Calendar host is missing its Calendar entitlement." 65
 "$codesign_tool" --verify --strict "$cli_path" > /dev/null 2>&1 \
   || fail "The release CLI signature is invalid." 65
 "$codesign_tool" --verify --strict "$agent_path" > /dev/null 2>&1 \
