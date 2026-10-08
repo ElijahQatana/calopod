@@ -79,7 +79,7 @@ run_installer() {
 run_installer >/dev/null
 
 service_root="$state_root/Service"
-plist_path="$test_home/Library/LaunchAgents/com.calopod.agent.plist"
+plist_path="$test_home/Library/LaunchAgents/pro.elijahquintana.calopod.agent.plist"
 cli_link="$test_home/.local/bin/calopod"
 setup_link="$test_home/.local/bin/calopod-setup"
 uninstall_link="$test_home/.local/bin/calopod-uninstall"

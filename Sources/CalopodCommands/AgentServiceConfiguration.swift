@@ -9,7 +9,7 @@ enum AgentServiceConfigurationError: Error, Equatable {
 }
 
 struct AgentServiceConfiguration: Equatable {
-    static let label = "com.calopod.agent"
+    static let label = "pro.elijahquintana.calopod.agent"
 
     let programURL: URL
     let stateURL: URL

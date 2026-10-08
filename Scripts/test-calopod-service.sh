@@ -72,7 +72,7 @@ run_service install \
   --horizon-days 30 >/dev/null
 
 service_root="$state_root/Service"
-plist_path="$test_home/Library/LaunchAgents/com.calopod.agent.plist"
+plist_path="$test_home/Library/LaunchAgents/pro.elijahquintana.calopod.agent.plist"
 installed_agent="$service_root/bin/calopod-agent"
 installed_cli="$service_root/bin/calopod"
 installed_host="$service_root/eventkit-host/Calopod EventKit Host.app/Contents/MacOS/CalopodEventKitHost"
@@ -85,8 +85,8 @@ installed_host="$service_root/eventkit-host/Calopod EventKit Host.app/Contents/M
 [ -x "$service_root/release/calopod-service.sh" ]
 [ -x "$service_root/release/calopod-setup.sh" ]
 plutil -lint "$plist_path" >/dev/null
-[ "$(plutil -extract Label raw "$plist_path")" = "com.calopod.agent" ]
-[ "$(plutil -extract AssociatedBundleIdentifiers.0 raw "$plist_path")" = "com.calopod.eventkit-host" ]
+[ "$(plutil -extract Label raw "$plist_path")" = "pro.elijahquintana.calopod.agent" ]
+[ "$(plutil -extract AssociatedBundleIdentifiers.0 raw "$plist_path")" = "pro.elijahquintana.calopod.eventkit-host" ]
 [ "$(cat "$test_root/registered-apps")" = "$installed_host" ]
 [ "$(plutil -extract ProgramArguments.0 raw "$plist_path")" = "$installed_agent" ]
 [ "$(plutil -extract EnvironmentVariables.CALOPOD_STATE_PATH raw "$plist_path")" = "$state_root/state.sqlite" ]

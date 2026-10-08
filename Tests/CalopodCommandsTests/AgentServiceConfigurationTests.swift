@@ -10,7 +10,7 @@ func installedAgentConfigurationRequiresAbsoluteValidatedValues() throws {
     defer { try? FileManager.default.removeItem(at: directory) }
     let propertyListURL = directory.appendingPathComponent("agent.plist")
     let propertyList: [String: Any] = [
-        "Label": "com.calopod.agent",
+        "Label": "pro.elijahquintana.calopod.agent",
         "ProgramArguments": ["/example/bin/calopod-agent"],
         "EnvironmentVariables": [
             "CALOPOD_STATE_PATH": "/example/state.sqlite",
@@ -71,7 +71,7 @@ private func writeAgentPropertyList(
     interval: String
 ) throws {
     let propertyList: [String: Any] = [
-        "Label": "com.calopod.agent",
+        "Label": "pro.elijahquintana.calopod.agent",
         "ProgramArguments": [program],
         "EnvironmentVariables": [
             "CALOPOD_STATE_PATH": "/example/state.sqlite",

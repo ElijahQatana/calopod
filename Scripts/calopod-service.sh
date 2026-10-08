@@ -2,7 +2,7 @@
 
 set -eu
 
-label="com.calopod.agent"
+label="pro.elijahquintana.calopod.agent"
 script_root=$(CDPATH= cd -- "$(dirname "$0")" && pwd -P)
 repository_root=$(CDPATH= cd -- "$script_root/.." && pwd -P)
 test_mode=${CALOPOD_SERVICE_TEST_MODE:-0}
@@ -187,7 +187,7 @@ render_plist() {
 
   plutil -create xml1 "$destination"
   plutil -insert Label -string "$label" "$destination"
-  plutil -insert AssociatedBundleIdentifiers -json '["com.calopod.eventkit-host"]' "$destination"
+  plutil -insert AssociatedBundleIdentifiers -json '["pro.elijahquintana.calopod.eventkit-host"]' "$destination"
   plutil -insert ProgramArguments -json '[]' "$destination"
   plutil -insert ProgramArguments.0 -string "$installed_binary" "$destination"
   plutil -insert EnvironmentVariables -json '{}' "$destination"
