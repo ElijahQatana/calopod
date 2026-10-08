@@ -16,6 +16,8 @@
     <string>Calopod</string>
     <key>CFBundleIconFile</key>
     <string>Calopod</string>
+    <key>CFBundleIconName</key>
+    <string>Calopod</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
