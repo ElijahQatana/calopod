@@ -23,7 +23,9 @@ binary_root=$(swift build \
   --show-bin-path)
 
 mkdir -p "$executable_root"
+mkdir -p "$contents_root/Resources"
 cp "$repository_root/Support/EventKitHost/Info.plist" "$contents_root/Info.plist"
+"$repository_root/Scripts/build-calopod-icon.sh" "$contents_root/Resources"
 cp "$binary_root/calopod-eventkit-host" "$executable_path"
 codesign --force --sign - "$bundle_root" >/dev/null 2>&1
 

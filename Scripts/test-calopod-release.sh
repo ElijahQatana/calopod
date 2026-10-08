@@ -35,8 +35,11 @@ fi
 exit $exit_code
 EOF
   printf '#!/bin/sh\nexit %s\n' "$exit_code" > "$bundle_root/bin/calopod-agent"
-  printf '#!/bin/sh\nexit %s\n' "$exit_code" \
-    > "$bundle_root/eventkit-host/Calopod EventKit Host.app/Contents/MacOS/CalopodEventKitHost"
+  cat > "$bundle_root/eventkit-host/Calopod EventKit Host.app/Contents/MacOS/CalopodEventKitHost" <<EOF
+#!/bin/sh
+if [ "\${1:-}" = --register-app ]; then exit 0; fi
+exit $exit_code
+EOF
   chmod 700 \
     "$bundle_root/bin/calopod" \
     "$bundle_root/bin/calopod-agent" \
@@ -76,7 +79,7 @@ run_installer() {
 run_installer >/dev/null
 
 service_root="$state_root/Service"
-plist_path="$test_home/Library/LaunchAgents/com.calopod.agent.plist"
+plist_path="$test_home/Library/LaunchAgents/pro.elijahquintana.calopod.agent.plist"
 cli_link="$test_home/.local/bin/calopod"
 setup_link="$test_home/.local/bin/calopod-setup"
 uninstall_link="$test_home/.local/bin/calopod-uninstall"
