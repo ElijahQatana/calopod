@@ -178,8 +178,8 @@ struct ArmConfigurationServiceTests {
         }
     }
 
-    @Test("Rejects indirect source and target cycles")
-    func rejectsCycle() throws {
+    @Test("Allows reciprocal and three-calendar routes")
+    func allowsCycle() throws {
         let setup = try armTestSetup()
         try setup.service.createArm(
             id: "first-arm",
@@ -192,11 +192,21 @@ struct ArmConfigurationServiceTests {
             targetBindingID: "target"
         )
 
-        #expect(throws: ArmConfigurationError.unsafeCycle) {
+        try setup.service.createArm(
+            id: "third-arm",
+            sourceBindingIDs: ["target"],
+            targetBindingID: "source-one"
+        )
+        try setup.service.createArm(
+            id: "reverse-arm",
+            sourceBindingIDs: ["source-two"],
+            targetBindingID: "source-one",
+            ruleMode: .fullDetails
+        )
+        #expect(try setup.repository.arms().count == 4)
+        #expect(throws: ArmConfigurationError.sourceMatchesTarget("source-one")) {
             try setup.service.createArm(
-                id: "third-arm",
-                sourceBindingIDs: ["target"],
-                targetBindingID: "source-one"
+                sourceBindingIDs: ["source-one"], targetBindingID: "source-one"
             )
         }
     }

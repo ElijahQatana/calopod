@@ -24,7 +24,9 @@ calopod-setup
 ```
 
 The setup command asks before creating missing state or enabling automatic
-sync. Use fresh empty target calendars when starting with new state.
+sync. Use fresh empty targets for the default Main and Busy setup. Use
+`calopod-setup --arms` to configure reciprocal routes between existing
+calendars. New state must not reuse copies from an old Calopod setup.
 
 Remove installed executables and service files while preserving SQLite state
 and Keychain material:

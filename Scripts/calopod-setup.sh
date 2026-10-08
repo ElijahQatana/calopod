@@ -3,6 +3,13 @@
 set -efu
 
 umask 077
+setup_mode=main-busy
+case "$#:${1:-}" in
+  0:) ;;
+  1:--arms) setup_mode=arms ;;
+  1:--help|1:-h) echo "Usage: calopod-setup [--arms]"; exit 0 ;;
+  *) echo "Usage: calopod-setup [--arms]" >&2; exit 64 ;;
+esac
 script_root=$(CDPATH= cd -- "$(dirname "$0")" && pwd -P)
 test_mode=${CALOPOD_SETUP_TEST_MODE:-0}
 
@@ -199,8 +206,92 @@ choose_target() {
   done
 }
 
+choose_arm_target() {
+  file=$1
+  sources=$2
+  count=$(extract "$file" data.count)
+  echo "Choose a writable destination. It may also be a source for another Arm." >&2
+  index=0
+  candidates=""
+  while [ "$index" -lt "$count" ]; do
+    id=$(extract "$file" "data.items.$index.id")
+    read_only=$(extract "$file" "data.items.$index.readOnly" || printf 'true')
+    case " $sources " in
+      *" $id "*) ;;
+      *)
+        if [ "$read_only" = "false" ]; then
+          calendar_line "$file" "$index" >&2
+          candidates="$candidates $((index + 1))"
+        fi
+        ;;
+    esac
+    index=$((index + 1))
+  done
+  [ -n "$candidates" ] || fail "No writable destination outside this Arm's sources is available." 78
+  while :; do
+    printf 'Destination number: ' >&2
+    IFS= read -r choice || fail "Setup was interrupted." 75
+    choice=$(printf '%s' "$choice" | /usr/bin/tr -d ' ')
+    case " $candidates " in
+      *" $choice "*)
+        prompt_yes "Confirm this destination may receive managed copies and has no copies from an old Calopod setup?" \
+          || { echo "Choose a destination without old Calopod copies." >&2; continue; }
+        calendar_id_for_choice "$file" "$choice"
+        return
+        ;;
+      *) echo "Choose one of the writable destinations shown above." >&2 ;;
+    esac
+  done
+}
+
+choose_arm_rule() {
+  while :; do
+    printf 'Rule: busy or full-details [busy]: ' >&2
+    IFS= read -r rule || fail "Setup was interrupted." 75
+    case "$rule" in
+      ''|busy) printf '%s\n' busy; return ;;
+      full-details)
+        prompt_yes "Confirm this destination may receive source titles, locations, and notes?" || continue
+        printf '%s\n' full-details; return
+        ;;
+      *) echo "Enter busy or full-details." >&2 ;;
+    esac
+  done
+}
+
+configure_custom_arms() {
+  run_json "$arms_file" arm list
+  configured=$(extract "$arms_file" data.count)
+  if [ "$configured" -gt 0 ]; then
+    echo "Preserving $configured existing Arm(s). Duplicate routes cannot be added."
+    prompt_yes "Add another Arm?" || return 0
+  fi
+  while :; do
+    custom_sources=$(choose_sources "$calendars_file")
+    custom_target=$(choose_arm_target "$calendars_file" "$custom_sources")
+    custom_rule=$(choose_arm_rule)
+    for source_id in $custom_sources; do
+      run_json "$temporary_root/selection.json" calendars --connection eventkit-device --select "$source_id"
+    done
+    set -- arm add
+    for source_id in $custom_sources; do
+      set -- "$@" --source "$source_id"
+    done
+    set -- "$@" --target "$custom_target" --rule "$custom_rule"
+    run_json "$arms_file" "$@"
+    echo "Arm configured with the $custom_rule Rule."
+    run_json "$calendars_file" calendars --connection eventkit-device
+    prompt_yes "Add another Arm?" || break
+  done
+}
+
 echo "Calopod guided setup"
-echo "This configures Calendars on this Mac, Main, Busy, and automatic sync."
+if [ "$setup_mode" = "arms" ]; then
+  echo "This configures custom Arms using Calendars on this Mac."
+  echo "Original events stay unchanged. Managed copies are never copied onward."
+else
+  echo "This configures Calendars on this Mac, Main, Busy, and automatic sync."
+fi
 
 status_file="$temporary_root/status.json"
 run_json "$status_file" agent status \
@@ -217,7 +308,7 @@ fi
 if [ ! -f "$state_path" ]; then
   prompt_yes "No existing Calopod state was found. Create new private state?" \
     || fail "Setup stopped without creating state." 75
-  echo "Use fresh empty target calendars with this new state to avoid duplicate managed events."
+  echo "New state cannot own copies from an old Calopod setup. Do not reuse old managed copies."
 else
   echo "Using the existing Calopod state."
 fi
@@ -232,6 +323,9 @@ run_json "$calendars_file" calendars --connection eventkit-device
 
 main_file="$temporary_root/main.json"
 arms_file="$temporary_root/arms.json"
+if [ "$setup_mode" = "arms" ]; then
+  configure_custom_arms
+else
 run_json "$main_file" main inspect
 run_json "$arms_file" arm list
 main_count=$(extract "$main_file" data.count)
@@ -315,6 +409,8 @@ else
   echo "Busy calendar configured."
 fi
 
+fi
+
 current_interval=$(extract "$status_file" data.intervalSeconds)
 current_jitter=$(extract "$status_file" data.jitterSeconds)
 current_lookback=$(extract "$status_file" data.lookbackDays)
@@ -359,6 +455,9 @@ done
 printf 'Dry run: %s create, %s update, %s removal, %s repair, %s no-op, %s warning.\n' \
   "$creates" "$updates" "$removals" "$repairs" "$no_ops" "$warning_count"
 
+if [ "$setup_mode" = "arms" ]; then
+  echo "Automatic sync remains disabled. Apply and verify a manual sync before enabling it."
+else
 if [ "$was_enabled" = "true" ]; then
   enable_prompt="Re-enable automatic sync now?"
 else
@@ -369,6 +468,8 @@ if prompt_yes "$enable_prompt"; then
   run_json "$enable_file" agent enable
 else
   echo "Automatic sync remains disabled."
+fi
+
 fi
 
 doctor_file="$temporary_root/doctor.json"
