@@ -16,7 +16,11 @@ release_source="$test_root/build/release"
 mkdir -p "$test_home" "$(dirname "$agent_source")" "$(dirname "$host_executable")"
 printf '#!/bin/sh\nexit 0\n' > "$cli_source"
 printf '#!/bin/sh\nexit 0\n' > "$agent_source"
-printf '#!/bin/sh\nexit 0\n' > "$host_executable"
+cat > "$host_executable" <<EOF
+#!/bin/sh
+[ "\$1" = --register-app ] || exit 64
+printf '%s\n' "\$0" >> "$test_root/registered-apps"
+EOF
 mkdir -p "$release_source/Scripts"
 printf '0.1.0\n' > "$release_source/VERSION"
 printf 'synthetic checksums\n' > "$release_source/SHA256SUMS"
@@ -68,7 +72,7 @@ run_service install \
   --horizon-days 30 >/dev/null
 
 service_root="$state_root/Service"
-plist_path="$test_home/Library/LaunchAgents/com.calopod.agent.plist"
+plist_path="$test_home/Library/LaunchAgents/pro.elijahquintana.calopod.agent.plist"
 installed_agent="$service_root/bin/calopod-agent"
 installed_cli="$service_root/bin/calopod"
 installed_host="$service_root/eventkit-host/Calopod EventKit Host.app/Contents/MacOS/CalopodEventKitHost"
@@ -81,7 +85,9 @@ installed_host="$service_root/eventkit-host/Calopod EventKit Host.app/Contents/M
 [ -x "$service_root/release/calopod-service.sh" ]
 [ -x "$service_root/release/calopod-setup.sh" ]
 plutil -lint "$plist_path" >/dev/null
-[ "$(plutil -extract Label raw "$plist_path")" = "com.calopod.agent" ]
+[ "$(plutil -extract Label raw "$plist_path")" = "pro.elijahquintana.calopod.agent" ]
+[ "$(plutil -extract AssociatedBundleIdentifiers.0 raw "$plist_path")" = "pro.elijahquintana.calopod.eventkit-host" ]
+[ "$(cat "$test_root/registered-apps")" = "$installed_host" ]
 [ "$(plutil -extract ProgramArguments.0 raw "$plist_path")" = "$installed_agent" ]
 [ "$(plutil -extract EnvironmentVariables.CALOPOD_STATE_PATH raw "$plist_path")" = "$state_root/state.sqlite" ]
 [ "$(plutil -extract EnvironmentVariables.CALOPOD_EVENTKIT_HOST_APP raw "$plist_path")" = "$service_root/eventkit-host/Calopod EventKit Host.app" ]
@@ -108,6 +114,21 @@ run_service install \
 [ "$(tail -n 1 "$installed_cli")" = "exit 2" ]
 [ "$(plutil -extract EnvironmentVariables.CALOPOD_AGENT_INTERVAL_SECONDS raw "$plist_path")" = "900" ]
 [ "$(cat "$state_root/state.sqlite")" = "state-sentinel" ]
+
+printf '#!/bin/sh\nexit 70\n' > "$host_executable"
+if run_service install \
+  --interval-seconds 1200 \
+  --jitter-seconds 60 \
+  --lookback-days 3 \
+  --horizon-days 90 >/dev/null 2>&1; then
+  echo "The installer accepted a failed app association." >&2
+  exit 1
+fi
+[ "$(tail -n 1 "$installed_agent")" = "exit 2" ]
+[ "$(plutil -extract EnvironmentVariables.CALOPOD_AGENT_INTERVAL_SECONDS raw "$plist_path")" = "900" ]
+[ "$(cat "$state_root/state.sqlite")" = "state-sentinel" ]
+[ "$(cat "$state_root/keychain-sentinel")" = "keychain-sentinel" ]
+printf '#!/bin/sh\nexit 0\n' > "$host_executable"
 
 for failure_point in after-staging after-backup after-service after-plist; do
   printf '#!/bin/sh\nexit 3\n' > "$agent_source"

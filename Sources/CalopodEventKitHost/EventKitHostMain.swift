@@ -1,6 +1,7 @@
 import CalopodEventKit
 import CalopodProviders
 import Foundation
+import CoreServices
 
 /// Entry point for the separate, signed EventKit Host app. This process
 /// exists only because macOS grants or denies Calendar access per-process:
@@ -15,10 +16,21 @@ import Foundation
 @MainActor
 struct EventKitHostMain {
     static func main() async {
+        let arguments = Array(CommandLine.arguments.dropFirst())
+        if arguments == ["--register-app"] {
+            // Registration must use the final installed bundle location.
+            let result = LSRegisterURL(Bundle.main.bundleURL as CFURL, true)
+            guard result == noErr else {
+                try? FileHandle.standardError.write(
+                    contentsOf: Data("The Calopod app association could not be registered.\n".utf8)
+                )
+                exit(70)
+            }
+            exit(0)
+        }
         let client = EventKitClient()
         do {
             let response: EventKitHostResponse
-            let arguments = Array(CommandLine.arguments.dropFirst())
             if arguments == ["--request-permission"] {
                 let status = try await client.requestFullAccess()
                 response = EventKitHostResponse(status: status)

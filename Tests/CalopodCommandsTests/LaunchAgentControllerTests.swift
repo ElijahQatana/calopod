@@ -15,7 +15,7 @@ func launchAgentControllerReportsInstalledLaunchdState() throws {
         case "print": LaunchctlResult(exitCode: 0, output: "")
         case "print-disabled": LaunchctlResult(
             exitCode: 0,
-            output: #""com.calopod.agent" => disabled"#
+            output: #""pro.elijahquintana.calopod.agent" => disabled"#
         )
         default: LaunchctlResult(exitCode: 1, output: "")
         }
@@ -53,7 +53,7 @@ func enablingBootstrapsAnInstalledAgent() throws {
         case "print-disabled":
             return LaunchctlResult(
                 exitCode: 0,
-                output: isDisabled ? #""com.calopod.agent" => disabled"# : ""
+                output: isDisabled ? #""pro.elijahquintana.calopod.agent" => disabled"# : ""
             )
         default:
             return LaunchctlResult(exitCode: 1, output: "")
@@ -96,7 +96,7 @@ func disablingBootsOutBeforePersistingTheDisabledState() throws {
         case "print-disabled":
             return LaunchctlResult(
                 exitCode: 0,
-                output: isDisabled ? #""com.calopod.agent" => disabled"# : ""
+                output: isDisabled ? #""pro.elijahquintana.calopod.agent" => disabled"# : ""
             )
         default:
             return LaunchctlResult(exitCode: 1, output: "")
@@ -124,7 +124,7 @@ func restartLeavesADisabledAgentUnloaded() throws {
         case "print": return LaunchctlResult(exitCode: 0, output: "")
         case "print-disabled": return LaunchctlResult(
             exitCode: 0,
-            output: #""com.calopod.agent" => true"#
+            output: #""pro.elijahquintana.calopod.agent" => true"#
         )
         default: return LaunchctlResult(exitCode: 0, output: "")
         }
@@ -206,14 +206,14 @@ private struct LaunchAgentFixture {
         homeDirectory = root.appendingPathComponent("home", isDirectory: true)
         propertyListURL = homeDirectory
             .appendingPathComponent("Library/LaunchAgents", isDirectory: true)
-            .appendingPathComponent("com.calopod.agent.plist")
+            .appendingPathComponent("pro.elijahquintana.calopod.agent.plist")
         stateURL = root.appendingPathComponent("state.sqlite")
         try FileManager.default.createDirectory(
             at: propertyListURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
         let propertyList: [String: Any] = [
-            "Label": "com.calopod.agent",
+            "Label": "pro.elijahquintana.calopod.agent",
             "ProgramArguments": ["/example/bin/calopod-agent"],
             "EnvironmentVariables": [
                 "CALOPOD_STATE_PATH": stateURL.path,

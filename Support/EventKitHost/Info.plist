@@ -7,13 +7,17 @@
     <key>CFBundleExecutable</key>
     <string>CalopodEventKitHost</string>
     <key>CFBundleIdentifier</key>
-    <string>com.calopod.eventkit-host</string>
+    <string>pro.elijahquintana.calopod.eventkit-host</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>Calopod Calendar Access</string>
+    <string>Calopod</string>
     <key>CFBundleDisplayName</key>
-    <string>Calopod Calendar Access</string>
+    <string>Calopod</string>
+    <key>CFBundleIconFile</key>
+    <string>Calopod</string>
+    <key>CFBundleIconName</key>
+    <string>Calopod</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
