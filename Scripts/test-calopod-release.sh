@@ -35,8 +35,11 @@ fi
 exit $exit_code
 EOF
   printf '#!/bin/sh\nexit %s\n' "$exit_code" > "$bundle_root/bin/calopod-agent"
-  printf '#!/bin/sh\nexit %s\n' "$exit_code" \
-    > "$bundle_root/eventkit-host/Calopod EventKit Host.app/Contents/MacOS/CalopodEventKitHost"
+  cat > "$bundle_root/eventkit-host/Calopod EventKit Host.app/Contents/MacOS/CalopodEventKitHost" <<EOF
+#!/bin/sh
+if [ "\${1:-}" = --register-app ]; then exit 0; fi
+exit $exit_code
+EOF
   chmod 700 \
     "$bundle_root/bin/calopod" \
     "$bundle_root/bin/calopod-agent" \
