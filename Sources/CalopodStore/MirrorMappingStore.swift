@@ -87,6 +87,24 @@ extension LocalStateRepository {
         }
     }
 
+    /// Known target copies stay excluded from ingestion even when another
+    /// calendar client removes their ownership marker. This does not grant
+    /// permission to mutate them; target ownership still requires verification.
+    public func managedTargetEventIDs(calendarBindingID: String) throws -> Set<String> {
+        try database.read { database in
+            Set(try String.fetchAll(
+                database,
+                sql: """
+                    SELECT DISTINCT mirror_mappings.provider_event_id
+                    FROM mirror_mappings
+                    JOIN arms ON arms.id = mirror_mappings.arm_id
+                    WHERE arms.target_binding_id = ?
+                    """,
+                arguments: [calendarBindingID]
+            ))
+        }
+    }
+
     public func removeMirrorMapping(mirrorKey: String) throws {
         try database.write { database in
             try database.execute(

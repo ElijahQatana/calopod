@@ -18,7 +18,6 @@ public enum ArmConfigurationError: Error, Equatable, Sendable, CustomStringConve
     case mixedConfigurations
     case sourceMatchesTarget(String)
     case duplicateRoute(source: String, target: String)
-    case unsafeCycle
     case mainCalendarAlreadyConfigured
     case mainCalendarRuleFixed
 
@@ -48,8 +47,6 @@ public enum ArmConfigurationError: Error, Equatable, Sendable, CustomStringConve
             "Calendar '\(id)' cannot be both a source and target on the same Arm."
         case let .duplicateRoute(source, target):
             "An Arm already routes source '\(source)' to target '\(target)'."
-        case .unsafeCycle:
-            "That Arm would create an unsafe source and target cycle."
         case .mainCalendarAlreadyConfigured:
             "A Main calendar is already configured."
         case .mainCalendarRuleFixed:
@@ -61,7 +58,7 @@ public enum ArmConfigurationError: Error, Equatable, Sendable, CustomStringConve
 /// Creates and updates Arms: the sync and publish relationships that route
 /// one or more source calendars to a single target calendar. This is the
 /// only place new Arms are validated, so every safety rule that keeps
-/// routing sane (no cycles, no duplicate routes, one Main calendar, a
+/// routing sane (no self-routes, no duplicate routes, one Main calendar, a
 /// single preferred writer per EventKit target) lives here rather than
 /// being re-checked by each caller.
 public struct ArmConfigurationService: Sendable {
@@ -188,11 +185,9 @@ public struct ArmConfigurationService: Sendable {
                 throw ArmConfigurationError.mainCalendarAlreadyConfigured
             }
         }
-        // Build the existing source -> target routing graph for this
-        // configuration so a new Arm can be checked against it: reject an
-        // exact duplicate route outright, and reject anything that would let
-        // a target's own events (directly or transitively) flow back into
-        // one of its sources, which would create an unbounded sync loop.
+
+        // Reciprocal routes are safe because source ingestion excludes managed
+        // copies. Keep each original source-to-target route unique across Arms.
         let existing = try repository.arms(configurationID: targetConnection.configurationID)
         var routes: [String: Set<String>] = [:]
         for arm in existing {
@@ -206,9 +201,6 @@ public struct ArmConfigurationService: Sendable {
                     source: sourceID,
                     target: targetBindingID
                 )
-            }
-            if hasPath(from: targetBindingID, to: sourceID, routes: routes) {
-                throw ArmConfigurationError.unsafeCycle
             }
             routes[sourceID, default: []].insert(targetBindingID)
         }
@@ -251,25 +243,6 @@ public struct ArmConfigurationService: Sendable {
             throw ArmConfigurationError.connectionNotFound(id)
         }
         return connection
-    }
-
-    /// Depth-first reachability check over the routing graph: true if
-    /// `destination` can be reached by following existing source-to-target
-    /// edges starting at `start`. Used to reject an Arm whose target would
-    /// eventually feed back into one of its own sources.
-    private func hasPath(
-        from start: String,
-        to destination: String,
-        routes: [String: Set<String>]
-    ) -> Bool {
-        var pending = [start]
-        var visited = Set<String>()
-        while let current = pending.popLast() {
-            if current == destination { return true }
-            guard visited.insert(current).inserted else { continue }
-            pending.append(contentsOf: routes[current] ?? [])
-        }
-        return false
     }
 }
 

@@ -48,7 +48,8 @@ public struct EventCache: Sendable {
             connection: connection,
             calendar: calendar,
             from: start,
-            through: end
+            through: end,
+            excludedEventIDs: try repository.managedTargetEventIDs(calendarBindingID: calendar.id)
         )
         let cursors = page.cursorUpdates.map {
             StoredCursorUpdate(
@@ -64,7 +65,7 @@ public struct EventCache: Sendable {
             windowStart: start,
             windowEnd: end,
             instances: normalized.instances,
-            cancelledSourceKeyHashes: normalized.cancelledSourceKeyHashes,
+            cancelledSourceKeyHashes: normalized.cancelledSourceKeyHashes + normalized.excludedSourceKeyHashes,
             isFullRefresh: page.refreshMode == .full,
             cursorUpdates: cursors,
             now: now
@@ -87,6 +88,7 @@ public enum EventNormalizer {
         public let instances: [StoredNormalizedInstance]
         public let cancelledSourceKeyHashes: [String]
         public let discardedCount: Int
+        public let excludedSourceKeyHashes: [String]
     }
 
     public static func normalize(
@@ -94,20 +96,15 @@ public enum EventNormalizer {
         connection: StoredConnection,
         calendar: StoredCalendarBinding,
         from windowStart: Date,
-        through windowEnd: Date
+        through windowEnd: Date,
+        excludedEventIDs: Set<String> = []
     ) -> Result {
         var instances: [StoredNormalizedInstance] = []
         var cancellations: [String] = []
+        var excluded: [String] = []
         var discardedCount = 0
 
         for event in events {
-            // Calopod's own managed mirrors must never be ingested back in
-            // as a source event, or a sync loop would try to mirror its own
-            // output.
-            guard !event.isManagedMirror else {
-                discardedCount += 1
-                continue
-            }
             // Defends against a page that somehow contains events for the
             // wrong connection or calendar (a provider bug, or a stale
             // cache); silently accepting them would attribute events to the
@@ -122,6 +119,14 @@ public enum EventNormalizer {
             let sourceKeyHash = digest(
                 fields: [event.provider, connection.id, calendar.id, event.eventID]
             )
+            // Copies never become sources, including mapped copies whose
+            // marker was removed. Evict any previous cached source instance
+            // on incremental refresh as well as on a full refresh.
+            if event.isManagedMirror || excludedEventIDs.contains(event.eventID) {
+                excluded.append(sourceKeyHash)
+                discardedCount += 1
+                continue
+            }
             if event.isCancelled {
                 cancellations.append(sourceKeyHash)
                 continue
@@ -194,7 +199,8 @@ public enum EventNormalizer {
                     < ($1.startsAt, $1.endsAt, $1.sourceKeyHash)
             },
             cancelledSourceKeyHashes: cancellations.sorted(),
-            discardedCount: discardedCount
+            discardedCount: discardedCount,
+            excludedSourceKeyHashes: excluded.sorted()
         )
     }
 
