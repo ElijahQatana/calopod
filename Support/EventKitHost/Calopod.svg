@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Calopod squid</title>
+  <rect width="64" height="64" rx="15" fill="#b45309"/>
+  <path d="M32 10c-9 0-15 7.3-15 17.2C17 37 23.1 42 32 42s15-5 15-14.8C47 17.3 41 10 32 10Z" fill="#fff" opacity=".96"/>
+  <circle cx="26.5" cy="27" r="2.4" fill="#b45309"/>
+  <circle cx="37.5" cy="27" r="2.4" fill="#b45309"/>
+  <path d="M22 39c-1.8 5.5-1.6 10.4 2.2 13M28.2 41c-1 5.8.2 10.2 3.8 12.7M35.8 41c1 5.8-.2 10.2-3.8 12.7M42 39c1.8 5.5 1.6 10.4-2.2 13" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+</svg>
