@@ -19,12 +19,13 @@ call_log="$fixture_root/calls.log"
 run_setup() {
   input_file=$1
   output_file=$2
+  shift 2
   env \
     CALOPOD_SETUP_TEST_MODE=1 \
     CALOPOD_SETUP_TEST_CLI="$fake_cli" \
     CALOPOD_SETUP_TEST_STATE_PATH="$state_path" \
     CALOPOD_SETUP_FIXTURE_ROOT="$fixture_root" \
-    "$repository_root/Scripts/calopod-setup.sh" \
+    "$repository_root/Scripts/calopod-setup.sh" "$@" \
     < "$input_file" > "$output_file" 2>&1
 }
 
@@ -73,5 +74,40 @@ if run_setup /dev/null "$third_output"; then
   exit 1
 fi
 grep -q 'An existing source calendar is unavailable.' "$third_output"
+
+# Custom setup uses three calendars as both sources and destinations.
+/bin/rm -f "$fixture_root/source-unavailable" "$fixture_root/enabled" "$state_path"
+: > "$fixture_root/custom-mode"
+: > "$call_log"
+custom_input="$fixture_root/custom-input"
+custom_output="$fixture_root/custom-output"
+printf 'y\n1,3\n2\ny\n\ny\n2\n1\ny\nfull-details\ny\ny\n3\n1\ny\n\ny\n1,2\n3\ny\nfull-details\ny\nn\n\n\n\n\n' > "$custom_input"
+run_setup "$custom_input" "$custom_output" --arms
+[ "$(cat "$fixture_root/custom-arm-count")" -eq 4 ]
+[ ! -f "$fixture_root/enabled" ]
+grep -q '^arm add --source a --source c --target b --rule busy --format json$' "$call_log"
+grep -q '^arm add --source b --target a --rule full-details --format json$' "$call_log"
+grep -q '^arm add --source c --target a --rule busy --format json$' "$call_log"
+grep -q '^arm add --source a --source b --target c --rule full-details --format json$' "$call_log"
+! grep -q '^main configure ' "$call_log"
+! grep -q '^agent enable ' "$call_log"
+! grep -q '^sync --from\|^sync --day' "$call_log"
+grep -q 'Original events stay unchanged.' "$custom_output"
+grep -q 'Apply and verify a manual sync before enabling it.' "$custom_output"
+
+# Rerunning custom setup preserves existing Arms without adding duplicates.
+printf 'n\n\n\n\n\n' > "$custom_input"
+run_setup "$custom_input" "$custom_output" --arms
+[ "$(cat "$fixture_root/custom-arm-count")" -eq 4 ]
+grep -q 'Preserving 4 existing Arm(s).' "$custom_output"
+
+# Refuse a destination that is one of the same Arm's sources.
+printf 'y\n1,2,3\n' > "$custom_input"
+if run_setup "$custom_input" "$custom_output" --arms; then
+  echo "Custom setup accepted a self-route." >&2
+  exit 1
+fi
+grep -q "No writable destination outside this Arm's sources is available." "$custom_output"
+[ "$(cat "$fixture_root/custom-arm-count")" -eq 4 ]
 
 echo "Guided setup checks passed."
