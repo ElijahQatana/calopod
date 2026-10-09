@@ -121,6 +121,69 @@ public struct MicrosoftGraphClient: Sendable {
         return ProviderEventPage(events: events, nextSyncToken: nextDeltaLink)
     }
 
+    public func rsvpSnapshot(accessToken: String, target: RSVPTarget,
+                             authorization: RSVPAuthorization) async throws -> RSVPEventSnapshot {
+        guard target.provider == "microsoft", !target.eventID.isEmpty, !target.calendarID.isEmpty,
+              !target.eventID.contains("/"), !target.calendarID.contains("/") else {
+            throw RSVPActionError.unavailable(.identity)
+        }
+        var components = URLComponents(url: eventCollectionURL(calendarID: target.calendarID)
+            .appendingPathComponent(target.eventID), resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "$expand", value: "extensions")]
+        guard let url = components?.url else { throw RSVPActionError.unavailable(.unsupported) }
+        let response = try await send(url: url, accessToken: accessToken, followsCursor: false)
+        let event: MicrosoftEvent = try decode(response)
+        guard event.id == target.eventID, event.seriesMasterID == target.seriesID,
+              event.originalStart == target.originalStart else { throw RSVPActionError.stale }
+        let normalized = event.providerEvent(connectionID: target.connectionID, calendarID: target.calendarID,
+                                             responseIdentityScope: authorization.identityScope)
+        var reasons: [RSVPUnavailableReason] = []
+        if authorization.identityScope != .authenticatedUser { reasons.append(.identityUnverified) }
+        if !authorization.canRespond { reasons.append(.permissionUnverified) }
+        if normalized.isManagedMirror { reasons.append(.managedMirror) }
+        if normalized.isCancelled || event.isOrganizer != false || event.attendees?.isEmpty != false {
+            reasons.append(.notAnInvitation)
+        }
+        if [.unknown, .notApplicable, .organizer].contains(normalized.currentUserResponse.state) {
+            reasons.append(.unsupportedResponse)
+        }
+        let single = event.type == "singleInstance" && event.seriesMasterID == nil && event.originalStart == nil
+        let occurrence = ["occurrence", "exception"].contains(event.type)
+            && event.seriesMasterID != nil && event.originalStart != nil
+        if !single && !occurrence { reasons.append(.unsupportedScope) }
+        let version = event.etag ?? event.changeKey ?? response.headers["etag"]
+        if version?.isEmpty != false { reasons.append(.staleRevision) }
+        return RSVPEventSnapshot(target: target, event: normalized, version: version,
+            capability: reasons.isEmpty ? RSVPActionCapability(supportedScopes: [.occurrence])
+                : RSVPActionCapability(unavailableReasons: reasons),
+            notification: .microsoftOrganizer, concurrency: .preflightOnly)
+    }
+
+    public func submitRSVP(accessToken: String, intent: RSVPActionIntent,
+                           authorization: RSVPAuthorization) async throws {
+        let snapshot = try await rsvpSnapshot(accessToken: accessToken, target: intent.target, authorization: authorization)
+        try snapshot.validate(intent)
+        let url = eventCollectionURL(calendarID: intent.target.calendarID)
+            .appendingPathComponent(intent.target.eventID).appendingPathComponent(intent.decision.microsoftAction)
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // Graph's response actions do not document atomic If-Match support.
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["sendResponse": true])
+        do { _ = try await send(request: request, accessToken: accessToken, followsCursor: false) }
+        catch { throw RSVPActionError.writeFailure(error) }
+    }
+
+    public func reconcileRSVP(accessToken: String, record: RSVPActionRecord,
+                              authorization: RSVPAuthorization) async throws -> RSVPActionOutcome {
+        do {
+            let snapshot = try await rsvpSnapshot(accessToken: accessToken, target: record.intent.target, authorization: authorization)
+            return RSVPReadback.outcome(record, snapshot: snapshot)
+        } catch ProviderFailure.httpStatus(404) {
+            return RSVPReadback.missing(record)
+        }
+    }
+
     public func managedEvents(
         accessToken: String,
         calendarID: String,
@@ -433,6 +496,7 @@ private struct MicrosoftEvent: Decodable {
     let changeKey: String?
     let etag: String?
     let seriesMasterID: String?
+    let type: String?
     let originalStart: String?
     let start: MicrosoftEventTime?
     let end: MicrosoftEventTime?
@@ -461,6 +525,7 @@ private struct MicrosoftEvent: Decodable {
         case changeKey
         case etag = "@odata.etag"
         case seriesMasterID = "seriesMasterId"
+        case type
         case originalStart
         case start
         case end
@@ -737,5 +802,15 @@ private enum MicrosoftDate {
             }
         }
         return nil
+    }
+}
+
+private extension RSVPDecision {
+    var microsoftAction: String {
+        switch self {
+        case .yes: "accept"
+        case .no: "decline"
+        case .maybe: "tentativelyAccept"
+        }
     }
 }

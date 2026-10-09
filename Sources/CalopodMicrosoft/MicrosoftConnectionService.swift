@@ -7,7 +7,7 @@ import Foundation
 /// Manages one Microsoft Calendar Connection end to end: authorization,
 /// token refresh, calendar discovery, and event fetch/write — the Microsoft
 /// Graph counterpart to `GoogleConnectionService`.
-public struct MicrosoftConnectionService: Sendable {
+public struct MicrosoftConnectionService: RSVPActionProvider {
     private static let provider = ProviderKind.microsoft.rawValue
     private static let deltaScope = "microsoft.events.delta-link.v1"
 
@@ -215,6 +215,40 @@ public struct MicrosoftConnectionService: Sendable {
             providerEventID: providerEventID,
             expectedVersion: expectedVersion
         )
+    }
+
+    public func rsvpSnapshot(target: RSVPTarget) async throws -> RSVPEventSnapshot {
+        let (tokens, authorization) = try await rsvpAuthorization(target: target)
+        return try await graph.rsvpSnapshot(accessToken: tokens.accessToken, target: target, authorization: authorization)
+    }
+
+    public func submitRSVP(_ intent: RSVPActionIntent) async throws {
+        let tokens: OAuthTokens
+        let authorization: RSVPAuthorization
+        do { (tokens, authorization) = try await rsvpAuthorization(target: intent.target) }
+        catch { throw RSVPActionError.preflightFailure(error) }
+        do {
+            try await graph.submitRSVP(accessToken: tokens.accessToken, intent: intent, authorization: authorization)
+        } catch {
+            if let actionError = error as? RSVPActionError { throw actionError }
+            throw RSVPActionError.preflightFailure(error)
+        }
+    }
+
+    public func reconcileRSVP(_ record: RSVPActionRecord) async throws -> RSVPActionOutcome {
+        let (tokens, authorization) = try await rsvpAuthorization(target: record.intent.target)
+        return try await graph.reconcileRSVP(accessToken: tokens.accessToken, record: record, authorization: authorization)
+    }
+
+    private func rsvpAuthorization(target: RSVPTarget) async throws -> (OAuthTokens, RSVPAuthorization) {
+        _ = try state.rsvpBinding(target: target, provider: Self.provider)
+        let tokens = try await validTokens(connectionID: target.connectionID)
+        let scopes = Set((tokens.scope ?? "").split(separator: " ").map(String.init))
+        guard scopes.contains("https://graph.microsoft.com/Calendars.ReadWrite") || scopes.contains("Calendars.ReadWrite") else { throw RSVPActionError.unavailable(.permission) }
+        let calendars = try await graph.calendars(accessToken: tokens.accessToken)
+        guard let calendar = calendars.first(where: { $0.id == target.calendarID }),
+              calendar.isDefault && calendar.canEdit else { throw RSVPActionError.unavailable(.permission) }
+        return (tokens, RSVPAuthorization(identityScope: .authenticatedUser, canRespond: true))
     }
 
     public func disconnect(connectionID: String) throws {

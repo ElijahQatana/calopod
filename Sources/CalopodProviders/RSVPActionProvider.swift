@@ -42,6 +42,7 @@ public struct RSVPEventSnapshot: Sendable {
                 : reasons.contains(.unsupportedScope) ? .scope : .unsupported
             throw RSVPActionError.unavailable(issue)
         }
+        guard capability.supportedScopes.contains(.occurrence) else { throw RSVPActionError.unavailable(.scope) }
         guard let version, !version.isEmpty, version == intent.expectedVersion,
               event.currentUserResponse.state == intent.previousResponse else { throw RSVPActionError.stale }
     }

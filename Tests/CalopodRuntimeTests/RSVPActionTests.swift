@@ -60,6 +60,19 @@ struct RSVPActionTests {
         #expect(await provider.writes == 0)
     }
 
+    @Test func matchingPreviousResponseDoesNotProveLostRequestCompleted() {
+        let intent = RSVPActionIntent(target: target, expectedVersion: "v1", previousResponse: .accepted, decision: .yes)
+        let event = ProviderEvent(provider: "google", connectionID: target.connectionID, calendarID: target.calendarID,
+            eventID: target.eventID, seriesID: nil, originalStart: nil, start: nil, end: nil, isAllDay: false,
+            availability: .busy, isCancelled: false, isPrivate: false, title: "Sample invitation", updatedAt: nil,
+            responseMetadata: EventResponse(state: .accepted))
+        let snapshot = RSVPEventSnapshot(target: target, event: event, version: "v2",
+            capability: RSVPActionCapability(supportedScopes: [.occurrence]), notification: .googleAllGuests,
+            concurrency: .conditionalUpdate)
+        let record = RSVPActionRecord(intent: intent, outcome: RSVPActionOutcome(status: .unknown))
+        #expect(RSVPReadback.outcome(record, snapshot: snapshot).status == .unknown)
+    }
+
     @Test func definitiveFailuresRemainSeparateFromConfirmedResponses() async throws {
         for error in [RSVPActionError.stale, .unavailable(.permission), .rejected] {
             let state = LocalStateRepository(database: try .inMemory())

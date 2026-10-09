@@ -800,3 +800,46 @@ func microsoftResponseScopeDiscoverySurvivesRepositoryReads() async throws {
         #expect(page.events.first?.currentUserResponse.state == (isOperator ? .needsResponse : .unknown))
     }
 }
+
+@Test
+func microsoftRSVPRequiresCurrentPermissionAndOperatorScope() async throws {
+    for scenario in 0..<6 {
+        let state = LocalStateRepository(database: try .inMemory())
+        try state.saveConnection(StoredConnection(id: "connection", configurationID: "default",
+            provider: "microsoft", displayLabel: "Synthetic", isEnabled: true))
+        try state.replaceCalendarBindings(connectionID: "connection", bindings: [StoredCalendarBinding(
+            id: "binding", connectionID: "connection", providerCalendarID: "primary-copy", displayLabel: "Synthetic",
+            isSelected: true, isReadOnly: false,
+            responseIdentityScope: scenario == 1 ? .unverified : .authenticatedUser)])
+        let vault = OAuthTokenVault(secretStore: MemorySecretStore())
+        try vault.save(OAuthTokens(accessToken: "synthetic", refreshToken: "synthetic", tokenType: "Bearer",
+            scope: scenario == 0 ? nil : "https://graph.microsoft.com/Calendars.ReadWrite", expiresAt: .distantFuture),
+            provider: "microsoft", connectionID: "connection")
+        let transport = ClosureTransport { request in
+            if request.httpMethod == "POST" {
+                #expect(try state.rsvpAction(id: "decision")?.outcome.status == .pending)
+                return HTTPResponse(statusCode: 202, body: Data())
+            }
+            #expect(request.httpMethod == "GET")
+            if request.url?.lastPathComponent != "calendars" {
+                let accepted = try state.rsvpAction(id: "decision")?.submissionAccepted == true
+                let event = #"{"id":"invitation","@odata.etag":"v1","type":"singleInstance","isOrganizer":false,"attendees":[{"emailAddress":{"address":"invitee@example.com"}}],"responseStatus":{"response":"notResponded"}}"#.replacingOccurrences(of: "notResponded", with: accepted ? "accepted" : "notResponded")
+                return HTTPResponse(statusCode: 200, body: Data(event.utf8))
+            }
+            let json = scenario == 2 ? #"{"value":[{"id":"primary-copy","isDefaultCalendar":false,"canEdit":false}]}"# : #"{"value":[{"id":"primary-copy","isDefaultCalendar":true,"canEdit":true}]}"#
+            return HTTPResponse(statusCode: 200, body: Data(json.utf8))
+        }
+        let service = MicrosoftConnectionService(oauth: MicrosoftOAuthClient(
+            configuration: MicrosoftOAuthConfiguration(clientID: "synthetic")), graph: MicrosoftGraphClient(transport: transport), tokenVault: vault, state: state)
+        let target = RSVPTarget(provider: scenario == 3 ? "eventkit" : "microsoft", connectionID: "connection",
+            calendarBindingID: "binding", calendarID: scenario == 4 ? "different-copy" : "primary-copy", eventID: "invitation")
+        let intent = RSVPActionIntent(id: "decision", target: target, expectedVersion: "v1", previousResponse: .needsResponse, decision: .yes)
+        if scenario == 5 {
+            let result = try await RSVPActionExecutor(state: state).perform(intent, using: service)
+            #expect(result.outcome.confirmedResponse == .accepted)
+            #expect(result.submissionAccepted)
+        } else {
+            await #expect(throws: RSVPActionError.self) { try await service.submitRSVP(intent) }
+        }
+    }
+}

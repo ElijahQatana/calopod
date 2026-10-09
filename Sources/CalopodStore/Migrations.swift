@@ -13,6 +13,7 @@ extension CalopodDatabase {
         "v9_event_response",
         "v10_inbox_observations",
         "v11_inbox_context_settings",
+        "v12_inbox_rsvp_actions",
     ]
 
     static var migrator: DatabaseMigrator {

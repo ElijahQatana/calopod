@@ -759,3 +759,46 @@ func googleResponseScopeDiscoverySurvivesRepositoryReads() async throws {
         #expect(page.events.first?.currentUserResponse.state == (isOperator ? .needsResponse : .unknown))
     }
 }
+
+@Test
+func googleRSVPRequiresCurrentPermissionAndOperatorScope() async throws {
+    for scenario in 0..<6 {
+        let state = LocalStateRepository(database: try .inMemory())
+        try state.saveConnection(StoredConnection(id: "connection", configurationID: "default",
+            provider: "google", displayLabel: "Synthetic", isEnabled: true))
+        try state.replaceCalendarBindings(connectionID: "connection", bindings: [StoredCalendarBinding(
+            id: "binding", connectionID: "connection", providerCalendarID: "primary-copy", displayLabel: "Synthetic",
+            isSelected: true, isReadOnly: false,
+            responseIdentityScope: scenario == 1 ? .unverified : .authenticatedUser)])
+        let vault = OAuthTokenVault(secretStore: MemorySecretStore())
+        try vault.save(OAuthTokens(accessToken: "synthetic", refreshToken: "synthetic", tokenType: "Bearer",
+            scope: scenario == 0 ? nil : "https://www.googleapis.com/auth/calendar.events", expiresAt: .distantFuture),
+            provider: "google", connectionID: "connection")
+        let transport = RecordingTransport { request in
+            if request.httpMethod == "PATCH" {
+                #expect(try state.rsvpAction(id: "decision")?.outcome.status == .pending)
+                return HTTPResponse(statusCode: 200, body: Data())
+            }
+            #expect(request.httpMethod == "GET")
+            if request.url?.lastPathComponent != "calendarList" {
+                let accepted = try state.rsvpAction(id: "decision")?.submissionAccepted == true
+                let event = #"{"id":"invitation","etag":"v1","organizer":{"email":"organizer@example.com"},"attendees":[{"self":true,"email":"invitee@example.com","responseStatus":"needsAction"}]}"#.replacingOccurrences(of: "needsAction", with: accepted ? "accepted" : "needsAction")
+                return HTTPResponse(statusCode: 200, body: Data(event.utf8))
+            }
+            let json = scenario == 2 ? #"{"items":[{"id":"primary-copy","primary":false,"accessRole":"reader"}]}"# : #"{"items":[{"id":"primary-copy","primary":true,"accessRole":"owner"}]}"#
+            return HTTPResponse(statusCode: 200, body: Data(json.utf8))
+        }
+        let service = GoogleConnectionService(oauth: GoogleOAuthClient(
+            configuration: GoogleOAuthConfiguration(clientID: "synthetic")), calendarClient: GoogleCalendarClient(transport: transport), tokenVault: vault, state: state)
+        let target = RSVPTarget(provider: scenario == 3 ? "eventkit" : "google", connectionID: "connection",
+            calendarBindingID: "binding", calendarID: scenario == 4 ? "different-copy" : "primary-copy", eventID: "invitation")
+        let intent = RSVPActionIntent(id: "decision", target: target, expectedVersion: "v1", previousResponse: .needsResponse, decision: .yes)
+        if scenario == 5 {
+            let result = try await RSVPActionExecutor(state: state).perform(intent, using: service)
+            #expect(result.outcome.confirmedResponse == .accepted)
+            #expect(result.submissionAccepted)
+        } else {
+            await #expect(throws: RSVPActionError.self) { try await service.submitRSVP(intent) }
+        }
+    }
+}
