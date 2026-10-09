@@ -379,3 +379,31 @@ func v8ResponseMigrationPreservesEventsWithoutInventingRSVP() throws {
     try db.migrate()
     #expect(try repository.normalizedInstances(calendarBindingIDs: ["binding"], from: start, through: end) == events)
 }
+
+@Test
+func inboxMigrationKeepsExistingEventsWithoutInventingHistory() throws {
+    let path = FileManager.default.temporaryDirectory
+        .appendingPathComponent("inbox-migration-\(UUID().uuidString).sqlite").path
+    defer { try? FileManager.default.removeItem(atPath: path) }
+    do {
+        let queue = try DatabaseQueue(path: path)
+        try CalopodDatabase.migrator.migrate(queue, upTo: "v9_event_response")
+        try queue.write { database in
+            try database.execute(sql: """
+                INSERT INTO configurations VALUES ('config', 1000, 1000);
+                INSERT INTO connections
+                    (id, configuration_id, provider, display_label, is_enabled, created_at, updated_at)
+                VALUES ('connection', 'config', 'eventkit', 'Synthetic', 1, 1000, 1000);
+                """)
+        }
+    }
+    let store = try CalopodDatabase(path: path)
+    try store.read { database in
+        for table in ["inbox_observations", "inbox_activity", "inbox_coverage"] {
+            let count = try Int.fetchOne(database, sql: "SELECT COUNT(*) FROM \(table)")
+            #expect(count == 0)
+        }
+        let count = try Int.fetchOne(database, sql: "SELECT COUNT(*) FROM connections")
+        #expect(count == 1)
+    }
+}

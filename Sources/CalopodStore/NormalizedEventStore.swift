@@ -6,7 +6,7 @@ import GRDB
 /// the shape every other part of the sync engine (planning, Availability)
 /// reads, so it never has to know which provider or connection an event
 /// actually came from.
-public struct StoredNormalizedInstance: Equatable, Sendable {
+public struct StoredNormalizedInstance: Codable, Equatable, Sendable {
     public let sourceKeyHash: String
     public let connectionID: String
     public let calendarBindingID: String
