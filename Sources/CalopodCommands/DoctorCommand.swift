@@ -28,7 +28,8 @@ public struct DoctorCommand: ParsableCommand {
                     warningCount: report.warnings.count
                 ),
                 warnings: report.warnings,
-                format: output.format
+                format: output.format,
+                showIDs: output.ids
             )
             if report.status == "failed" {
                 throw ExitCode(CalopodExitCode.unavailable.rawValue)

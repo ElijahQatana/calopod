@@ -61,7 +61,9 @@ public struct CalendarsCommand: AsyncParsableCommand {
                         count: 1,
                         items: [calendarItem(updated)]
                     ),
-                    format: output.format
+                    format: output.format,
+                    showIDs: output.ids,
+                    human: output.localContext(repository: repository)
                 )
                 return
             }
@@ -79,7 +81,9 @@ public struct CalendarsCommand: AsyncParsableCommand {
                     items: calendars.map(calendarItem)
                 ),
                 warnings: warnings,
-                format: output.format
+                format: output.format,
+                showIDs: output.ids,
+                human: output.localContext(repository: repository)
             )
         } catch {
             try failCommand(error)
@@ -152,7 +156,9 @@ public struct EventsCommand: AsyncParsableCommand {
                     }
                 ),
                 warnings: refresh.warnings,
-                format: output.format
+                format: output.format,
+                showIDs: output.ids,
+                human: output.localContext(repository: repository)
             )
         } catch {
             try failCommand(error)
@@ -255,7 +261,9 @@ public struct AvailabilityCommand: AsyncParsableCommand {
                     }
                 ),
                 warnings: refresh.warnings,
-                format: output.format
+                format: output.format,
+                showIDs: output.ids,
+                human: output.localContext(repository: repository)
             )
         } catch {
             try failCommand(error)

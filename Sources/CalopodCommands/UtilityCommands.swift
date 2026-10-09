@@ -57,7 +57,9 @@ public struct SyncCommand: AsyncParsableCommand {
                     items: result.items.map(planItem)
                 ),
                 warnings: result.warnings,
-                format: output.format
+                format: output.format,
+                showIDs: output.ids,
+                human: HumanOutputContext(applied: result.appliedCount, reconciled: result.reconciledCount, noOps: result.noOpCount)
             )
         } catch {
             try failCommand(error)

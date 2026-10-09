@@ -53,7 +53,8 @@ public struct ConnectionAddCommand: AsyncParsableCommand {
                     status: "unavailable",
                     message: "The \(provider.rawValue) connection adapter is not available yet. No change was made."
                 ),
-                format: output.format
+                format: output.format,
+                showIDs: output.ids
             )
             throw ExitCode(CalopodExitCode.unavailable.rawValue)
         }
@@ -104,7 +105,8 @@ public struct ConnectionAddCommand: AsyncParsableCommand {
                         )
                     ]
                 ),
-                format: output.format
+                format: output.format,
+                showIDs: output.ids
             )
         } catch {
             try failCommand(error)
@@ -124,7 +126,8 @@ public struct ConnectionListCommand: ParsableCommand {
 
     public func run() throws {
         do {
-            let connections = try CommandEnvironment.repository().connections()
+            let repository = try CommandEnvironment.repository()
+            let connections = try repository.connections()
             try OutputRenderer.write(
                 command: "connection.list",
                 payload: CommandPayload(
@@ -135,7 +138,9 @@ public struct ConnectionListCommand: ParsableCommand {
                         CommandItem(id: $0.id, kind: $0.provider, label: $0.displayLabel)
                     }
                 ),
-                format: output.format
+                format: output.format,
+                showIDs: output.ids,
+                human: output.localContext(repository: repository)
             )
         } catch {
             try failCommand(error)
@@ -193,7 +198,8 @@ public struct ConnectionRemoveCommand: ParsableCommand {
             try OutputRenderer.write(
                 command: "connection.remove",
                 payload: CommandPayload(status: "ok", message: "Removed the Connection."),
-                format: output.format
+                format: output.format,
+                showIDs: output.ids
             )
         } catch {
             try failCommand(error)
@@ -212,7 +218,8 @@ private func unavailable(command: String, output: OutputOptions) throws {
             status: "unavailable",
             message: "Connection persistence is not available yet. No change was made."
         ),
-        format: output.format
+        format: output.format,
+        showIDs: output.ids
     )
     throw ExitCode(CalopodExitCode.unavailable.rawValue)
 }

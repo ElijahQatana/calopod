@@ -91,7 +91,9 @@ public struct ArmUpdateCommand: ParsableCommand {
                     count: 1,
                     items: [armItem(arm)]
                 ),
-                format: output.format
+                format: output.format,
+                showIDs: output.ids,
+                human: output.localContext(repository: repository)
             )
         } catch let error as ArmConfigurationError {
             try failCommand(ValidationError(error.description))
@@ -145,7 +147,9 @@ public struct ArmAddCommand: ParsableCommand {
                     count: 1,
                     items: [armItem(arm)]
                 ),
-                format: output.format
+                format: output.format,
+                showIDs: output.ids,
+                human: output.localContext(repository: repository)
             )
         } catch let error as ArmConfigurationError {
             try failCommand(ValidationError(error.description))
@@ -164,7 +168,8 @@ public struct ArmListCommand: ParsableCommand {
 
     public func run() throws {
         do {
-            let arms = try CommandEnvironment.repository().arms()
+            let repository = try CommandEnvironment.repository()
+            let arms = try repository.arms()
             try OutputRenderer.write(
                 command: "arm.list",
                 payload: CommandPayload(
@@ -173,7 +178,9 @@ public struct ArmListCommand: ParsableCommand {
                     count: arms.count,
                     items: arms.map(armItem)
                 ),
-                format: output.format
+                format: output.format,
+                showIDs: output.ids,
+                human: output.localContext(repository: repository)
             )
         } catch {
             try failCommand(error)
@@ -205,7 +212,9 @@ public struct ArmInspectCommand: ParsableCommand {
                     count: 1,
                     items: [armItem(arm)]
                 ),
-                format: output.format
+                format: output.format,
+                showIDs: output.ids,
+                human: output.localContext(repository: repository)
             )
         } catch {
             try failCommand(error)
@@ -237,7 +246,9 @@ public struct ArmDisableCommand: ParsableCommand {
                     count: 1,
                     items: [armItem(arm)]
                 ),
-                format: output.format
+                format: output.format,
+                showIDs: output.ids,
+                human: output.localContext(repository: repository)
             )
         } catch {
             try failCommand(error)
@@ -268,7 +279,9 @@ public struct ArmRemoveCommand: ParsableCommand {
                     status: "ok",
                     message: "Removed the Arm. No calendar events were changed."
                 ),
-                format: output.format
+                format: output.format,
+                showIDs: output.ids,
+                human: output.localContext(repository: repository)
             )
         } catch {
             try failCommand(error)
