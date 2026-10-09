@@ -94,6 +94,7 @@ private func mainItem(_ arm: StoredArm) -> CommandItem {
     CommandItem(
         id: arm.id,
         kind: "main-calendar",
+        label: arm.displayName,
         sourceIDs: arm.sourceBindingIDs,
         targetID: arm.targetBindingID,
         rule: arm.ruleMode.rawValue,

@@ -81,11 +81,11 @@ grep -q 'An existing source calendar is unavailable.' "$third_output"
 : > "$call_log"
 custom_input="$fixture_root/custom-input"
 custom_output="$fixture_root/custom-output"
-printf 'y\n1,3\n2\ny\n\ny\n2\n1\ny\nfull-details\ny\ny\n3\n1\ny\n\ny\n1,2\n3\ny\nfull-details\ny\nn\n\n\n\n\n' > "$custom_input"
+printf 'y\n1,3\n2\ny\n\nWork route\ny\n2\n1\ny\nfull-details\ny\n\ny\n3\n1\ny\n\n\ny\n1,2\n3\ny\nfull-details\ny\n\nn\n\n\n\n\n' > "$custom_input"
 run_setup "$custom_input" "$custom_output" --arms
 [ "$(cat "$fixture_root/custom-arm-count")" -eq 4 ]
 [ ! -f "$fixture_root/enabled" ]
-grep -q '^arm add --source a --source c --target b --rule busy --format json$' "$call_log"
+grep -q '^arm add --source a --source c --target b --rule busy --name Work route --format json$' "$call_log"
 grep -q '^arm add --source b --target a --rule full-details --format json$' "$call_log"
 grep -q '^arm add --source c --target a --rule busy --format json$' "$call_log"
 grep -q '^arm add --source a --source b --target c --rule full-details --format json$' "$call_log"

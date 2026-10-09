@@ -41,7 +41,7 @@ public struct ArmCommand: ParsableCommand {
 public struct ArmUpdateCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "update",
-        abstract: "Change an Arm Rule or preferred writer without writing calendar events."
+        abstract: "Change an Arm name, Rule or preferred writer without writing calendar events."
     )
 
     @Argument(help: "Arm identifier.")
@@ -53,15 +53,18 @@ public struct ArmUpdateCommand: ParsableCommand {
     @Flag(name: .customLong("prefer-current-device"), help: "Make this device the preferred writer.")
     public var preferCurrentDevice = false
 
+    @Option(name: .long, help: "Private display name. Use an empty value to clear it.")
+    public var name: String?
+
     @OptionGroup public var output: OutputOptions
 
     public init() {}
 
     public func run() throws {
         do {
-            guard rule != nil || preferCurrentDevice else {
+            guard name != nil || rule != nil || preferCurrentDevice else {
                 throw ValidationError(
-                    "Choose --rule or --prefer-current-device."
+                    "Choose --name, --rule or --prefer-current-device."
                 )
             }
             let repository = try CommandEnvironment.repository()
@@ -73,6 +76,9 @@ public struct ArmUpdateCommand: ParsableCommand {
                 arm = existing
             } else {
                 throw ArmConfigurationError.armNotFound(armID)
+            }
+            if let name {
+                arm = try service.rename(armID: arm.id, name: name)
             }
             if preferCurrentDevice {
                 arm = try service.preferCurrentDevice(armID: arm.id)
@@ -115,6 +121,9 @@ public struct ArmAddCommand: ParsableCommand {
     @Option(name: .long, help: "Disclosure Rule: busy or full-details. (default: busy)")
     public var rule: ArmRuleArgument = .busy
 
+    @Option(name: .long, help: "Private display name. Use an empty value to clear it.")
+    public var name: String?
+
     @OptionGroup public var output: OutputOptions
 
     public init() {}
@@ -125,7 +134,8 @@ public struct ArmAddCommand: ParsableCommand {
             let arm = try ArmConfigurationService(repository: repository).createArm(
                 sourceBindingIDs: source,
                 targetBindingID: target,
-                ruleMode: rule.ruleMode
+                ruleMode: rule.ruleMode,
+                name: name
             )
             try OutputRenderer.write(
                 command: "arm.add",
@@ -270,6 +280,7 @@ private func armItem(_ arm: StoredArm) -> CommandItem {
     CommandItem(
         id: arm.id,
         kind: arm.isMain ? "main-calendar" : "arm",
+        label: arm.displayName,
         sourceIDs: arm.sourceBindingIDs,
         targetID: arm.targetBindingID,
         rule: arm.ruleMode.rawValue,

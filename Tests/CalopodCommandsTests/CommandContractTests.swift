@@ -93,7 +93,8 @@ func supportConfigurationContainsOnlyAggregateCounts() throws {
             configurationID: "default",
             sourceBindingIDs: ["source"],
             targetBindingID: "target",
-            ruleMode: .busy
+            ruleMode: .busy,
+            name: "Private Arm name"
         )
     )
 
@@ -602,4 +603,16 @@ func failedRefreshKeepsCachedEventsAndReturnsAStaleWarning() async throws {
     #expect(summary.warnings.count == 1)
     #expect(remaining == [cached])
     #expect(try repository.connectionHealth(connectionID: connection.id)?.status == "stale")
+}
+
+@Test
+func armCommandsAcceptPrivateNamesAndClearing() throws {
+    let add = try ArmAddCommand.parse([
+        "--source", "synthetic-source", "--target", "synthetic-target", "--name", "Work hours",
+    ])
+    let rename = try ArmUpdateCommand.parse(["synthetic-arm", "--name", "Office"])
+    let clear = try ArmUpdateCommand.parse(["synthetic-arm", "--name", ""])
+    #expect(add.name == "Work hours")
+    #expect(rename.name == "Office")
+    #expect(clear.name == "")
 }
