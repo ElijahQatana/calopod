@@ -314,6 +314,7 @@ struct GoogleConnectionServiceTests {
 
         let connection = try await service.authorize(using: StubBrowserSession { _ in })
         let bindings = try await service.refreshCalendars(connectionID: connection.id)
+        #expect(bindings.first?.responseIdentityScope == .authenticatedUser)
         let page = try await service.events(
             connectionID: connection.id,
             binding: bindings[0],
@@ -659,5 +660,102 @@ private final class MemorySecretStore: SecretStore, @unchecked Sendable {
 
     func removeValue(for reference: SecretReference) throws {
         lock.withLock { _ = values.removeValue(forKey: reference) }
+    }
+}
+
+
+@Suite("Google current user response")
+struct GoogleResponseTests {
+    @Test(arguments: ["needsAction", "accepted", "tentative", "declined", "unexpected", ""])
+    func responseStates(_ status: String) async throws {
+        let metadata = "\"attendees\":[{\"self\":false,\"responseStatus\":\"declined\"},{\"self\":true,\"responseStatus\":\"\(status)\"}]"
+        let event = try await read(metadata, scope: .authenticatedUser)
+        let expected: [String: EventResponseState] = [
+            "needsAction": .needsResponse, "accepted": .accepted,
+            "tentative": .tentative, "declined": .declined,
+        ]
+        #expect(event.currentUserResponse.state == (expected[status] ?? .unknown))
+        #expect(event.currentUserResponse.respondedAt == nil)
+        #expect(event.currentUserResponse.evidence == .googleSelf)
+        #expect(!event.currentUserResponse.actionCapability.isEligible)
+        #expect(event.currentUserResponse.actionCapability.supportedScopes.isEmpty)
+    }
+
+    @Test
+    func absentAndAmbiguousIdentity() async throws {
+        for metadata in ["\"attendees\":[]", "\"attendees\":[{\"responseStatus\":\"needsAction\"}]",
+                         "\"attendees\":[{\"self\":true},{\"self\":true}]"] {
+            let event = try await read(metadata, scope: .authenticatedUser)
+            #expect(event.currentUserResponse.state == .unknown)
+        }
+        let missing = try await read("\"attendeesOmitted\":true", scope: .authenticatedUser)
+        #expect(missing.currentUserResponse.state == .unknown)
+        let organizer = try await read("\"organizer\":{\"self\":true}", scope: .authenticatedUser)
+        #expect(organizer.currentUserResponse.state == .organizer)
+        let attendeeOrganizer = try await read("\"attendees\":[{\"self\":true,\"organizer\":true}]", scope: .authenticatedUser)
+        #expect(attendeeOrganizer.currentUserResponse.state == .organizer)
+        let omitted = try await read("\"attendeesOmitted\":true,\"attendees\":[{\"self\":true,\"responseStatus\":\"accepted\"}]", scope: .authenticatedUser)
+        #expect(omitted.currentUserResponse.state == .accepted)
+        #expect(omitted.currentUserResponse.limits.contains(.incompleteParticipants))
+    }
+
+    @Test
+    func sharedAndDelegatedCopiesDoNotRepresentOperator() async throws {
+        for metadata in ["\"organizer\":{\"self\":true}",
+                         "\"attendees\":[{\"self\":true,\"responseStatus\":\"needsAction\"}]"] {
+            let event = try await read(metadata, scope: .unverified)
+            #expect(event.currentUserResponse.state == .unknown)
+            #expect(event.currentUserResponse.limits.contains(.identityUnverified))
+        }
+    }
+
+    private func read(_ metadata: String, scope: ResponseIdentityScope) async throws -> ProviderEvent {
+        let json = "{\"items\":[{\"id\":\"synthetic\",\"start\":{\"dateTime\":\"2026-11-05T14:00:00Z\"},\"end\":{\"dateTime\":\"2026-11-05T15:00:00Z\"},\(metadata)}]}"
+        let client = GoogleCalendarClient(transport: RecordingTransport { request in
+            #expect(request.httpMethod == "GET")
+            return HTTPResponse(statusCode: 200, body: Data(json.utf8))
+        })
+        let page = try await client.events(accessToken: "synthetic", connectionID: "google-test",
+                                           calendarID: "synthetic-calendar", from: Date(), through: Date(),
+                                           responseIdentityScope: scope)
+        return try #require(page.events.first)
+    }
+}
+
+
+@Test
+func googleResponseScopeDiscoverySurvivesRepositoryReads() async throws {
+    let database = try CalopodDatabase.inMemory()
+    let state = LocalStateRepository(database: database)
+    let connection = StoredConnection(id: "response-connection", configurationID: "default",
+                                      provider: "google", displayLabel: "Synthetic", isEnabled: true)
+    try state.saveConnection(connection)
+    let vault = OAuthTokenVault(secretStore: MemorySecretStore())
+    try vault.save(OAuthTokens(accessToken: "synthetic", refreshToken: "synthetic",
+                               tokenType: "Bearer", scope: nil, expiresAt: .distantFuture),
+                   provider: "google", connectionID: connection.id)
+    let transport = RecordingTransport { request in
+        #expect(request.httpMethod == "GET")
+        let path = request.url?.path ?? ""
+        if path.hasSuffix("calendarList") {
+            return HTTPResponse(statusCode: 200, body: Data(#"{"items":[{"id":"primary-copy","primary":true,"accessRole":"owner"},{"id":"shared-copy","accessRole":"owner"},{"id":"secondary-copy","accessRole":"writer"}]}"#.utf8))
+        }
+        return HTTPResponse(statusCode: 200, body: Data(#"{"items":[{"id":"event","attendees":[{"self":true,"responseStatus":"needsAction"}]}]}"#.utf8))
+    }
+    let service = GoogleConnectionService(
+        oauth: GoogleOAuthClient(configuration: GoogleOAuthConfiguration(clientID: "synthetic")),
+        calendarClient: GoogleCalendarClient(transport: transport), tokenVault: vault, state: state)
+    _ = try await service.refreshCalendars(connectionID: connection.id)
+    let reopened = LocalStateRepository(database: database)
+    let bindings = try reopened.calendarBindings(connectionID: connection.id)
+    #expect(bindings.count == 3)
+    for binding in bindings {
+        let isOperator = binding.providerCalendarID == "primary-copy"
+        #expect(binding.responseIdentityScope == (isOperator ? .authenticatedUser : .unverified))
+        #expect(try reopened.calendarBinding(id: binding.id)?.responseIdentityScope == binding.responseIdentityScope)
+        let page = try await service.events(connectionID: connection.id, binding: binding,
+                                            from: Date(timeIntervalSince1970: 1_000),
+                                            through: Date(timeIntervalSince1970: 5_000))
+        #expect(page.events.first?.currentUserResponse.state == (isOperator ? .needsResponse : .unknown))
     }
 }

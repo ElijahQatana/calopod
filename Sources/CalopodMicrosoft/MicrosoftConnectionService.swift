@@ -66,7 +66,8 @@ public struct MicrosoftConnectionService: Sendable {
                 providerCalendarID: $0.id,
                 displayLabel: $0.name,
                 isSelected: false,
-                isReadOnly: !$0.canEdit
+                isReadOnly: !$0.canEdit,
+                responseIdentityScope: $0.isDefault ? .authenticatedUser : .unverified
             )
         }
         try state.replaceCalendarBindings(connectionID: connectionID, bindings: bindings, now: now())
@@ -99,7 +100,8 @@ public struct MicrosoftConnectionService: Sendable {
                 calendarID: binding.providerCalendarID,
                 from: start,
                 through: end,
-                deltaLink: deltaLink
+                deltaLink: deltaLink,
+                responseIdentityScope: binding.responseIdentityScope
             )
             refreshMode = deltaLink == nil ? .full : .incremental
         } catch ProviderFailure.cursorExpired {
@@ -108,7 +110,8 @@ public struct MicrosoftConnectionService: Sendable {
                 connectionID: connectionID,
                 calendarID: binding.providerCalendarID,
                 from: start,
-                through: end
+                through: end,
+                responseIdentityScope: binding.responseIdentityScope
             )
             refreshMode = .full
         }

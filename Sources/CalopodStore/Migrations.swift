@@ -10,6 +10,7 @@ extension CalopodDatabase {
         "v6_sync_run_summaries",
         "v7_agent_control",
         "v8_arm_names",
+        "v9_event_response",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -247,6 +248,16 @@ extension CalopodDatabase {
         migrator.registerMigration("v8_arm_names") { database in
             try database.alter(table: "arms") { table in
                 table.add(column: "name", .text)
+            }
+        }
+
+        migrator.registerMigration("v9_event_response") { database in
+            try database.alter(table: "normalized_instances") { table in
+                table.add(column: "response_json", .blob)
+            }
+            try database.alter(table: "calendar_bindings") { table in
+                table.add(column: "response_identity_scope", .text)
+                    .notNull().defaults(to: "unverified")
             }
         }
 

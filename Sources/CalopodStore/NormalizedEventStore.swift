@@ -26,6 +26,7 @@ public struct StoredNormalizedInstance: Equatable, Sendable {
     public let url: String?
     public let organizer: EventParticipant?
     public let attendees: [EventParticipant]
+    public let currentUserResponse: EventResponse
 
     public init(
         sourceKeyHash: String,
@@ -46,7 +47,8 @@ public struct StoredNormalizedInstance: Equatable, Sendable {
         notes: String? = nil,
         url: String? = nil,
         organizer: EventParticipant? = nil,
-        attendees: [EventParticipant] = []
+        attendees: [EventParticipant] = [],
+        currentUserResponse: EventResponse = .unavailable
     ) {
         self.sourceKeyHash = sourceKeyHash
         self.connectionID = connectionID
@@ -67,6 +69,7 @@ public struct StoredNormalizedInstance: Equatable, Sendable {
         self.url = url
         self.organizer = organizer
         self.attendees = attendees
+        self.currentUserResponse = currentUserResponse
     }
 }
 
@@ -140,8 +143,8 @@ extension LocalStateRepository {
                              provider_event_id, recurrence_id, starts_at, ends_at,
                              is_all_day, availability, is_cancelled, content_fingerprint,
                              seen_generation, title, is_private, provider_updated_at,
-                             location, notes, url, organizer_json, attendees_json)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             location, notes, url, organizer_json, attendees_json, response_json)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(source_key_hash) DO UPDATE SET
                             connection_id = excluded.connection_id,
                             calendar_binding_id = excluded.calendar_binding_id,
@@ -161,7 +164,8 @@ extension LocalStateRepository {
                             notes = excluded.notes,
                             url = excluded.url,
                             organizer_json = excluded.organizer_json,
-                            attendees_json = excluded.attendees_json
+                            attendees_json = excluded.attendees_json,
+                            response_json = excluded.response_json
                         """,
                     arguments: [
                         instance.sourceKeyHash,
@@ -184,6 +188,7 @@ extension LocalStateRepository {
                         instance.url,
                         try encodeOptionalEventDetails(instance.organizer),
                         try encodeEventDetails(instance.attendees),
+                        try encodeEventDetails(instance.currentUserResponse),
                     ]
                 )
             }
@@ -268,7 +273,7 @@ extension LocalStateRepository {
                            provider_event_id, recurrence_id, starts_at, ends_at,
                            is_all_day, availability, is_cancelled, content_fingerprint,
                            title, is_private, provider_updated_at,
-                           location, notes, url, organizer_json, attendees_json
+                           location, notes, url, organizer_json, attendees_json, response_json
                     FROM normalized_instances
                     WHERE calendar_binding_id IN (\(normalizedEventQuestionMarks(count: calendarBindingIDs.count)))
                       AND ends_at > ?
@@ -351,7 +356,8 @@ private func normalizedInstance(_ row: Row) -> StoredNormalizedInstance {
         notes: row["notes"],
         url: row["url"],
         organizer: decodeEventDetails(row["organizer_json"]),
-        attendees: decodeEventDetails(row["attendees_json"]) ?? []
+        attendees: decodeEventDetails(row["attendees_json"]) ?? [],
+        currentUserResponse: decodeEventDetails(row["response_json"]) ?? .unavailable
     )
 }
 

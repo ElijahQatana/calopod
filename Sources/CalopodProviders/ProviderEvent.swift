@@ -33,6 +33,10 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
     public let url: String?
     public let organizer: EventParticipant?
     public let attendees: [EventParticipant]
+    public let responseMetadata: EventResponse?
+    public var currentUserResponse: EventResponse {
+        responseMetadata ?? (provider == "ics" ? .readOnlyFeed : .unavailable)
+    }
 
     public init(
         provider: String,
@@ -54,7 +58,8 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
         notes: String? = nil,
         url: String? = nil,
         organizer: EventParticipant? = nil,
-        attendees: [EventParticipant] = []
+        attendees: [EventParticipant] = [],
+        responseMetadata: EventResponse? = nil
     ) {
         self.provider = provider
         self.connectionID = connectionID
@@ -76,6 +81,7 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
         self.url = url
         self.organizer = organizer
         self.attendees = attendees
+        self.responseMetadata = responseMetadata
     }
 
     /// Tags this event as one of Calopod's own managed mirrors so
@@ -103,7 +109,8 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
             notes: notes,
             url: url,
             organizer: organizer,
-            attendees: attendees
+            attendees: attendees,
+            responseMetadata: responseMetadata
         )
     }
 }

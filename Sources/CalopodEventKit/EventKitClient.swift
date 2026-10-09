@@ -215,7 +215,15 @@ private final class LiveEventKitGateway: EventKitGateway {
                 notes: $0.notes,
                 url: $0.url?.absoluteString,
                 organizer: participant($0.organizer),
-                attendees: ($0.attendees ?? []).compactMap(participant)
+                attendees: ($0.attendees ?? []).compactMap(participant),
+                responseMetadata: EventKitResponseNormalizer.response(
+                    organizerIsCurrentUser: $0.organizer?.isCurrentUser == true,
+                    participants: ($0.attendees ?? []).map {
+                        EventKitResponseParticipant(isCurrentUser: $0.isCurrentUser,
+                                                    status: $0.participantStatus)
+                    },
+                    sourceType: sourceType($0.calendar.source.sourceType)
+                )
             )
         }
     }

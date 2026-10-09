@@ -270,6 +270,49 @@ struct EventCacheTests {
         #expect(health.errorCode == "permission")
     }
 
+    @Test("Response evidence survives refresh independently from availability and content")
+    func responseCacheRoundTrip() throws {
+        let database = try CalopodDatabase.inMemory()
+        let repository = LocalStateRepository(database: database)
+        let connection = testConnection()
+        let calendar = testCalendar(connectionID: connection.id)
+        try repository.saveConnection(connection)
+        try repository.replaceCalendarBindings(connectionID: connection.id, bindings: [calendar])
+        let start = Date(timeIntervalSince1970: 1_000)
+        let end = start.addingTimeInterval(3_600)
+        let cache = EventCache(repository: repository)
+        var fingerprints: Set<String> = []
+        for state: EventResponseState in [.needsResponse, .tentative, .accepted, .declined, .organizer, .notApplicable, .unknown] {
+            let response = EventResponse(state: state, respondedAt: start, evidence: .eventKitCurrentUser)
+            let source = event(id: "synthetic", start: start, end: end, availability: .tentative,
+                               responseMetadata: response)
+            try cache.apply(ProviderEventPage(events: [source], nextSyncToken: nil),
+                            connection: connection, calendar: calendar, from: start, through: end)
+            let stored = try #require(repository.normalizedInstances(calendarBindingIDs: [calendar.id],
+                                                                     from: start, through: end).first)
+            #expect(stored.currentUserResponse == response)
+            #expect(stored.availability == "tentative")
+            fingerprints.insert(stored.contentFingerprint)
+        }
+        #expect(fingerprints.count == 1)
+        let source = event(id: "synthetic", start: start, end: end)
+        try cache.apply(ProviderEventPage(events: [source], nextSyncToken: nil, refreshMode: .incremental),
+                        connection: connection, calendar: calendar, from: start, through: end)
+        let stored = try #require(repository.normalizedInstances(calendarBindingIDs: [calendar.id],
+                                                                 from: start, through: end).first)
+        #expect(stored.currentUserResponse == .unavailable)
+    }
+
+    @Test("ICS response identity remains unsupported")
+    func icsResponseIsExplicit() {
+        let source = ProviderEvent(provider: "ics", connectionID: "feed", calendarID: "calendar",
+                                   eventID: "event", seriesID: nil, originalStart: nil,
+                                   start: nil, end: nil, isAllDay: false, availability: .tentative,
+                                   isCancelled: false, isPrivate: false, title: nil, updatedAt: nil,
+                                   attendees: [EventParticipant(status: "needsAction")])
+        #expect(source.currentUserResponse == .readOnlyFeed)
+    }
+
     private func testConnection() -> StoredConnection {
         StoredConnection(
             id: "connection",
@@ -307,7 +350,8 @@ struct EventCacheTests {
         notes: String? = nil,
         url: String? = nil,
         organizer: EventParticipant? = nil,
-        attendees: [EventParticipant] = []
+        attendees: [EventParticipant] = [],
+        responseMetadata: EventResponse? = nil
     ) -> ProviderEvent {
         ProviderEvent(
             provider: "eventkit",
@@ -329,7 +373,8 @@ struct EventCacheTests {
             notes: notes,
             url: url,
             organizer: organizer,
-            attendees: attendees
+            attendees: attendees,
+            responseMetadata: responseMetadata
         )
     }
 }
