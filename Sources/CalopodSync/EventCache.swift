@@ -8,18 +8,21 @@ public struct EventCacheResult: Equatable, Sendable {
     public let storedCount: Int
     public let cancelledCount: Int
     public let discardedCount: Int
+    public let ingestion: EventIngestionSummary
     public let refreshMode: ProviderRefreshMode
 
     public init(
         storedCount: Int,
         cancelledCount: Int,
         discardedCount: Int,
-        refreshMode: ProviderRefreshMode
+        refreshMode: ProviderRefreshMode,
+        ingestion: EventIngestionSummary = EventIngestionSummary()
     ) {
         self.storedCount = storedCount
         self.cancelledCount = cancelledCount
         self.discardedCount = discardedCount
         self.refreshMode = refreshMode
+        self.ingestion = ingestion
     }
 }
 
@@ -74,7 +77,8 @@ public struct EventCache: Sendable {
             storedCount: normalized.instances.count,
             cancelledCount: normalized.cancelledSourceKeyHashes.count,
             discardedCount: normalized.discardedCount,
-            refreshMode: page.refreshMode
+            refreshMode: page.refreshMode,
+            ingestion: normalized.ingestion
         )
     }
 }
@@ -88,6 +92,7 @@ public enum EventNormalizer {
         public let instances: [StoredNormalizedInstance]
         public let cancelledSourceKeyHashes: [String]
         public let discardedCount: Int
+        public let ingestion: EventIngestionSummary
         public let excludedSourceKeyHashes: [String]
     }
 
@@ -102,7 +107,7 @@ public enum EventNormalizer {
         var instances: [StoredNormalizedInstance] = []
         var cancellations: [String] = []
         var excluded: [String] = []
-        var discardedCount = 0
+        var ingestion = EventIngestionSummary()
 
         for event in events {
             // Defends against a page that somehow contains events for the
@@ -113,20 +118,24 @@ public enum EventNormalizer {
                   event.connectionID == connection.id,
                   event.calendarID == calendar.providerCalendarID,
                   !event.eventID.isEmpty else {
-                discardedCount += 1
+                ingestion.invalidIdentityCount += 1
                 continue
             }
-            var identityFields = [event.provider, connection.id, calendar.id, event.eventID]
-            if event.provider == "eventkit", let occurrence = event.originalStart, !occurrence.isEmpty {
-                identityFields.append(occurrence)
-            }
-            let sourceKeyHash = digest(fields: identityFields)
+            let sourceKeyHash = sourceKeyHash(
+                provider: event.provider, connectionID: connection.id,
+                calendarBindingID: calendar.id, eventID: event.eventID,
+                originalStart: event.originalStart
+            )
             // Copies never become sources, including mapped copies whose
             // marker was removed. Evict any previous cached source instance
             // on incremental refresh as well as on a full refresh.
             if event.isManagedMirror || excludedEventIDs.contains(event.eventID) {
                 excluded.append(sourceKeyHash)
-                discardedCount += 1
+                if event.isManagedMirror {
+                    ingestion.excludedMarkedCopyCount += 1
+                } else {
+                    ingestion.excludedMappedCopyCount += 1
+                }
                 continue
             }
             if event.isCancelled {
@@ -138,10 +147,12 @@ public enum EventNormalizer {
             // downstream pass bounded to the window it asked for.
             guard let startsAt = event.start,
                   let endsAt = event.end,
-                  startsAt < endsAt,
-                  endsAt > windowStart,
-                  startsAt < windowEnd else {
-                discardedCount += 1
+                  startsAt < endsAt else {
+                ingestion.invalidTimespanCount += 1
+                continue
+            }
+            guard endsAt > windowStart, startsAt < windowEnd else {
+                ingestion.outOfRangeCount += 1
                 continue
             }
 
@@ -201,9 +212,22 @@ public enum EventNormalizer {
                     < ($1.startsAt, $1.endsAt, $1.sourceKeyHash)
             },
             cancelledSourceKeyHashes: cancellations.sorted(),
-            discardedCount: discardedCount,
+            discardedCount: ingestion.discardedCount,
+            ingestion: ingestion,
             excludedSourceKeyHashes: excluded.sorted()
         )
+    }
+
+    /// Omitting the occurrence reproduces the legacy EventKit identity for review only.
+    public static func sourceKeyHash(
+        provider: String, connectionID: String, calendarBindingID: String,
+        eventID: String, originalStart: String? = nil
+    ) -> String {
+        var fields = [provider, connectionID, calendarBindingID, eventID]
+        if provider == "eventkit", let originalStart, !originalStart.isEmpty {
+            fields.append(originalStart)
+        }
+        return digest(fields: fields)
     }
 
     private static func dateIdentity(_ date: Date) -> String {
