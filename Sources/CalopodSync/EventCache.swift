@@ -201,7 +201,8 @@ public enum EventNormalizer {
                     notes: event.notes,
                     url: event.url,
                     organizer: event.organizer,
-                    attendees: event.attendees
+                    attendees: event.attendees,
+                    currentUserResponse: event.currentUserResponse
                 )
             )
         }

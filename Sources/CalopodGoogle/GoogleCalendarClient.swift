@@ -74,7 +74,8 @@ public struct GoogleCalendarClient: Sendable {
         calendarID: String,
         from start: Date,
         through end: Date,
-        updatedSince: Date? = nil
+        updatedSince: Date? = nil,
+        responseIdentityScope: ResponseIdentityScope = .unverified
     ) async throws -> ProviderEventPage {
         var events: [ProviderEvent] = []
         var pageToken: String?
@@ -114,7 +115,8 @@ public struct GoogleCalendarClient: Sendable {
                 $0.providerEvent(
                     connectionID: connectionID,
                     calendarID: calendarID,
-                    fallbackTimeZone: fallbackTimeZone
+                    fallbackTimeZone: fallbackTimeZone,
+                    responseIdentityScope: responseIdentityScope
                 )
             })
             pageToken = page.nextPageToken
@@ -469,6 +471,7 @@ private struct GoogleEvent: Decodable {
     let conferenceData: GoogleConferenceData?
     let organizer: GooglePerson?
     let attendees: [GoogleAttendee]?
+    let attendeesOmitted: Bool?
     let created: String?
     let updated: String?
     let extendedProperties: GoogleExtendedProperties?
@@ -491,6 +494,7 @@ private struct GoogleEvent: Decodable {
         case conferenceData
         case organizer
         case attendees
+        case attendeesOmitted
         case created
         case updated
         case extendedProperties
@@ -499,7 +503,8 @@ private struct GoogleEvent: Decodable {
     func providerEvent(
         connectionID: String,
         calendarID: String,
-        fallbackTimeZone: TimeZone
+        fallbackTimeZone: TimeZone,
+        responseIdentityScope: ResponseIdentityScope
     ) -> ProviderEvent {
         ProviderEvent(
             provider: "google",
@@ -527,8 +532,45 @@ private struct GoogleEvent: Decodable {
             // only a fallback when the event has no conferencing at all.
             url: hangoutLink ?? conferenceData?.videoURI ?? htmlLink,
             organizer: organizer?.participant,
-            attendees: (attendees ?? []).map(\.participant)
+            attendees: (attendees ?? []).map(\.participant),
+            responseMetadata: currentUserResponse(scope: responseIdentityScope)
         )
+    }
+
+    private func currentUserResponse(scope: ResponseIdentityScope) -> EventResponse {
+        guard scope == .authenticatedUser else {
+            return EventResponse(state: .unknown, limits: [.identityUnverified, .timestampUnavailable],
+                                 unavailableReasons: [.identityUnverified, .actionsNotImplemented])
+        }
+        if organizer?.isSelf == true {
+            return EventResponse(state: .organizer, evidence: .googleSelf,
+                                 limits: [.timestampUnavailable], unavailableReasons: [.notAnInvitation])
+        }
+        let current = (attendees ?? []).filter { $0.isSelf == true }
+        guard current.count == 1 else {
+            return EventResponse(state: .unknown,
+                                 limits: [current.isEmpty ? .missingParticipant : .ambiguousParticipant,
+                                          .timestampUnavailable],
+                                 unavailableReasons: [.identityUnverified, .actionsNotImplemented])
+        }
+        if current[0].isOrganizer == true {
+            return EventResponse(state: .organizer, evidence: .googleSelf,
+                                 limits: [.timestampUnavailable], unavailableReasons: [.notAnInvitation])
+        }
+        let state: EventResponseState
+        switch current[0].responseStatus {
+        case "needsAction": state = .needsResponse
+        case "accepted": state = .accepted
+        case "tentative": state = .tentative
+        case "declined": state = .declined
+        default: state = .unknown
+        }
+        var limits: [ResponseLimit] = [.timestampUnavailable]
+        if state == .unknown { limits.append(.unsupportedStatus) }
+        if attendeesOmitted == true { limits.append(.incompleteParticipants) }
+        return EventResponse(state: state, evidence: .googleSelf, limits: limits,
+                             unavailableReasons: state == .unknown
+                                 ? [.unsupportedResponse, .actionsNotImplemented] : [.actionsNotImplemented])
     }
 
     func managedSnapshot(fallbackTimeZone: TimeZone) -> ManagedEventSnapshot {
@@ -572,6 +614,12 @@ private struct GoogleEvent: Decodable {
 }
 
 private struct GooglePerson: Decodable {
+    let isSelf: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case isSelf = "self"
+        case email, displayName
+    }
     let email: String?
     let displayName: String?
 
@@ -581,6 +629,14 @@ private struct GooglePerson: Decodable {
 }
 
 private struct GoogleAttendee: Decodable {
+    let isSelf: Bool?
+    let isOrganizer: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case isSelf = "self"
+        case email, displayName, responseStatus
+        case isOrganizer = "organizer"
+    }
     let email: String?
     let displayName: String?
     let responseStatus: String?

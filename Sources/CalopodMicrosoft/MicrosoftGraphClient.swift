@@ -61,7 +61,8 @@ public struct MicrosoftGraphClient: Sendable {
         calendarID: String,
         from start: Date,
         through end: Date,
-        deltaLink: String? = nil
+        deltaLink: String? = nil,
+        responseIdentityScope: ResponseIdentityScope = .unverified
     ) async throws -> ProviderEventPage {
         // A stored delta link resumes exactly where the last fetch left off;
         // a link that fails to even parse as a URL is treated the same as an
@@ -107,7 +108,8 @@ public struct MicrosoftGraphClient: Sendable {
             )
             let page: MicrosoftEventList = try decode(response)
             events.append(contentsOf: page.value.map {
-                $0.providerEvent(connectionID: connectionID, calendarID: calendarID)
+                $0.providerEvent(connectionID: connectionID, calendarID: calendarID,
+                                 responseIdentityScope: responseIdentityScope)
             })
             nextURL = try page.nextLink.map(validatedLink)
             if let delta = page.deltaLink {
@@ -447,6 +449,8 @@ private struct MicrosoftEvent: Decodable {
     let onlineMeeting: MicrosoftOnlineMeeting?
     let organizer: MicrosoftRecipient?
     let attendees: [MicrosoftAttendee]?
+    let responseStatus: MicrosoftResponseStatus?
+    let isOrganizer: Bool?
     let createdDateTime: String?
     let lastModifiedDateTime: String?
     let removed: MicrosoftRemoved?
@@ -473,13 +477,16 @@ private struct MicrosoftEvent: Decodable {
         case onlineMeeting
         case organizer
         case attendees
+        case responseStatus
+        case isOrganizer
         case createdDateTime
         case lastModifiedDateTime
         case removed = "@removed"
         case extensions
     }
 
-    func providerEvent(connectionID: String, calendarID: String) -> ProviderEvent {
+    func providerEvent(connectionID: String, calendarID: String,
+                       responseIdentityScope: ResponseIdentityScope) -> ProviderEvent {
         ProviderEvent(
             provider: "microsoft",
             connectionID: connectionID,
@@ -502,8 +509,40 @@ private struct MicrosoftEvent: Decodable {
             notes: plainTextBody,
             url: onlineMeeting?.joinUrl ?? onlineMeetingUrl ?? webLink,
             organizer: organizer?.participant,
-            attendees: (attendees ?? []).map(\.participant)
+            attendees: (attendees ?? []).map(\.participant),
+            responseMetadata: currentUserResponse(scope: responseIdentityScope)
         )
+    }
+
+    private func currentUserResponse(scope: ResponseIdentityScope) -> EventResponse {
+        guard scope == .authenticatedUser else {
+            return EventResponse(state: .unknown, limits: [.identityUnverified],
+                                 unavailableReasons: [.identityUnverified, .actionsNotImplemented])
+        }
+        let state: EventResponseState
+        if isOrganizer == true {
+            state = .organizer
+        } else {
+            switch responseStatus?.response {
+            case "organizer" where isOrganizer != false: state = .organizer
+            case "notResponded": state = .needsResponse
+            case "accepted": state = .accepted
+            case "tentativelyAccepted": state = .tentative
+            case "declined": state = .declined
+            default: state = .unknown
+            }
+        }
+        // Graph can use a year-one sentinel when no response time is known.
+        let timestamp = responseStatus?.time.flatMap { value -> Date? in
+            guard !value.hasPrefix("0001-") else { return nil }
+            return MicrosoftDate.date(from: value)
+        }
+        var limits: [ResponseLimit] = timestamp == nil ? [.timestampUnavailable] : []
+        if state == .unknown { limits.append(.unsupportedStatus) }
+        return EventResponse(state: state, respondedAt: timestamp, evidence: .microsoftEvent,
+                             limits: limits, unavailableReasons: state == .organizer ? [.notAnInvitation]
+                                 : state == .unknown ? [.unsupportedResponse, .actionsNotImplemented]
+                                 : [.actionsNotImplemented])
     }
 
     var managedSnapshot: ManagedEventSnapshot {
@@ -616,6 +655,7 @@ private struct MicrosoftEmailAddress: Decodable {
 
 private struct MicrosoftResponseStatus: Decodable {
     let response: String?
+    let time: String?
 }
 
 private struct MicrosoftManagedExtension: Decodable {

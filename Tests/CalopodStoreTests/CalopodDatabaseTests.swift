@@ -342,3 +342,40 @@ func failedAgentControlMigrationLeavesV6StateRecoverable() throws {
     #expect(evidence.1 == ["recoverable"])
     #expect(evidence.2 == ["incompatible"])
 }
+
+
+@Test
+func v8ResponseMigrationPreservesEventsWithoutInventingRSVP() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("calopod-response-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let path = directory.appendingPathComponent("state.sqlite").path
+    let start = Date(timeIntervalSince1970: 1_000)
+    let end = start.addingTimeInterval(3_600)
+    do {
+        let queue = try DatabaseQueue(path: path)
+        try CalopodDatabase.migrator.migrate(queue, upTo: "v8_arm_names")
+        try queue.write { db in
+            try db.execute(sql: "INSERT INTO configurations VALUES ('default', ?, ?)", arguments: [start, start])
+            try db.execute(sql: "INSERT INTO connections (id, configuration_id, provider, created_at, updated_at) VALUES ('connection', 'default', 'google', ?, ?)", arguments: [start, start])
+            try db.execute(sql: "INSERT INTO calendar_bindings (id, connection_id, provider_calendar_id, created_at) VALUES ('binding', 'connection', 'synthetic-calendar', ?)", arguments: [start])
+            try db.execute(sql: """
+                INSERT INTO normalized_instances
+                    (source_key_hash, connection_id, calendar_binding_id, provider_event_id,
+                     starts_at, ends_at, is_all_day, availability, is_cancelled,
+                     content_fingerprint, seen_generation, attendees_json)
+                VALUES ('source', 'connection', 'binding', 'event', ?, ?, 0, 'tentative', 0, 'fingerprint', 1, ?)
+                """, arguments: [start, end, Data(#"[{"status":"needsAction","emailAddress":"person@example.com"}]"#.utf8)])
+        }
+    }
+    let db = try CalopodDatabase(path: path)
+    let repository = LocalStateRepository(database: db)
+    let events = try repository.normalizedInstances(calendarBindingIDs: ["binding"], from: start, through: end)
+    #expect(events.count == 1)
+    #expect(events[0].availability == "tentative")
+    #expect(events[0].contentFingerprint == "fingerprint")
+    #expect(events[0].currentUserResponse == .unavailable)
+    #expect(try repository.calendarBinding(id: "binding")?.responseIdentityScope == .unverified)
+    try db.migrate()
+    #expect(try repository.normalizedInstances(calendarBindingIDs: ["binding"], from: start, through: end) == events)
+}

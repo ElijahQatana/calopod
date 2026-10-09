@@ -707,3 +707,95 @@ private final class MemorySecretStore: SecretStore, @unchecked Sendable {
         lock.withLock { _ = values.removeValue(forKey: reference) }
     }
 }
+
+
+@Suite("Microsoft current user response")
+struct MicrosoftResponseTests {
+    @Test(arguments: ["notResponded", "accepted", "tentativelyAccepted", "declined", "organizer", "none", "unexpected"])
+    func responseStates(_ status: String) async throws {
+        let event = try await read("\"responseStatus\":{\"response\":\"\(status)\",\"time\":\"2026-11-01T12:00:00Z\"},\"showAs\":\"tentative\",\"attendees\":[{\"status\":{\"response\":\"declined\"}}]", scope: .authenticatedUser)
+        let expected: [String: EventResponseState] = [
+            "notResponded": .needsResponse, "accepted": .accepted,
+            "tentativelyAccepted": .tentative, "declined": .declined, "organizer": .organizer,
+        ]
+        #expect(event.currentUserResponse.state == (expected[status] ?? .unknown))
+        #expect(event.currentUserResponse.respondedAt == ISO8601DateFormatter().date(from: "2026-11-01T12:00:00Z"))
+        #expect(event.availability == .tentative)
+        #expect(!event.currentUserResponse.actionCapability.isEligible)
+        #expect(event.currentUserResponse.actionCapability.supportedScopes.isEmpty)
+    }
+
+    @Test
+    func organizerAndMissingResponse() async throws {
+        let organizer = try await read("\"isOrganizer\":true", scope: .authenticatedUser)
+        #expect(organizer.currentUserResponse.state == .organizer)
+        let missing = try await read("\"attendees\":[{\"status\":{\"response\":\"notResponded\"}}]", scope: .authenticatedUser)
+        #expect(missing.currentUserResponse.state == .unknown)
+        for time in ["0001-01-01T00:00:00Z", "invalid"] {
+            let event = try await read("\"responseStatus\":{\"response\":\"accepted\",\"time\":\"\(time)\"}", scope: .authenticatedUser)
+            #expect(event.currentUserResponse.state == .accepted)
+            #expect(event.currentUserResponse.respondedAt == nil)
+        }
+    }
+
+    @Test
+    func sharedAndDelegatedOwnerResponseIsUnknown() async throws {
+        let event = try await read("\"isOrganizer\":true,\"responseStatus\":{\"response\":\"accepted\",\"time\":\"2026-11-01T12:00:00Z\"}", scope: .unverified)
+        #expect(event.currentUserResponse.state == .unknown)
+        #expect(event.currentUserResponse.respondedAt == nil)
+        #expect(event.currentUserResponse.limits.contains(.identityUnverified))
+    }
+
+    private func read(_ metadata: String, scope: ResponseIdentityScope) async throws -> ProviderEvent {
+        let json = "{\"value\":[{\"id\":\"synthetic\",\"start\":{\"dateTime\":\"2026-11-05T14:00:00Z\"},\"end\":{\"dateTime\":\"2026-11-05T15:00:00Z\"},\(metadata)}]}"
+        let client = MicrosoftGraphClient(transport: ClosureTransport { request in
+            #expect(request.httpMethod == "GET")
+            return HTTPResponse(statusCode: 200, body: Data(json.utf8))
+        })
+        let page = try await client.events(accessToken: "synthetic", connectionID: "microsoft-test",
+                                           calendarID: "synthetic-calendar", from: Date(), through: Date(),
+                                           responseIdentityScope: scope)
+        return try #require(page.events.first)
+    }
+}
+
+
+@Test
+func microsoftResponseScopeDiscoverySurvivesRepositoryReads() async throws {
+    let database = try CalopodDatabase.inMemory()
+    let state = LocalStateRepository(database: database)
+    let connection = StoredConnection(id: "response-connection", configurationID: "default",
+                                      provider: "microsoft", displayLabel: "Synthetic", isEnabled: true)
+    try state.saveConnection(connection)
+    let vault = OAuthTokenVault(secretStore: MemorySecretStore())
+    try vault.save(OAuthTokens(accessToken: "synthetic", refreshToken: "synthetic",
+                               tokenType: "Bearer", scope: nil, expiresAt: .distantFuture),
+                   provider: "microsoft", connectionID: connection.id)
+    let transport = ClosureTransport { request in
+        #expect(request.httpMethod == "GET")
+        let path = request.url?.path ?? ""
+        if path.hasSuffix("calendars") {
+            return HTTPResponse(statusCode: 200, body: Data(#"{"value":[{"id":"primary-copy","isDefaultCalendar":true,"canEdit":true},{"id":"shared-copy","canEdit":true},{"id":"secondary-copy","canEdit":true}]}"#.utf8))
+        }
+        if request.url?.query?.contains("expand") == true {
+            return HTTPResponse(statusCode: 200, body: Data(#"{"value":[]}"#.utf8))
+        }
+        return HTTPResponse(statusCode: 200, body: Data(#"{"value":[{"id":"event","responseStatus":{"response":"notResponded"}}]}"#.utf8))
+    }
+    let service = MicrosoftConnectionService(
+        oauth: MicrosoftOAuthClient(configuration: MicrosoftOAuthConfiguration(clientID: "synthetic")),
+        graph: MicrosoftGraphClient(transport: transport), tokenVault: vault, state: state)
+    _ = try await service.refreshCalendars(connectionID: connection.id)
+    let reopened = LocalStateRepository(database: database)
+    let bindings = try reopened.calendarBindings(connectionID: connection.id)
+    #expect(bindings.count == 3)
+    for binding in bindings {
+        let isOperator = binding.providerCalendarID == "primary-copy"
+        #expect(binding.responseIdentityScope == (isOperator ? .authenticatedUser : .unverified))
+        #expect(try reopened.calendarBinding(id: binding.id)?.responseIdentityScope == binding.responseIdentityScope)
+        let page = try await service.events(connectionID: connection.id, binding: binding,
+                                            from: Date(timeIntervalSince1970: 1_000),
+                                            through: Date(timeIntervalSince1970: 5_000))
+        #expect(page.events.first?.currentUserResponse.state == (isOperator ? .needsResponse : .unknown))
+    }
+}

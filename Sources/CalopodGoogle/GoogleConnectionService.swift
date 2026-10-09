@@ -75,7 +75,8 @@ public struct GoogleConnectionService: Sendable {
                 providerCalendarID: $0.id,
                 displayLabel: $0.summary,
                 isSelected: false,
-                isReadOnly: $0.accessRole == "reader" || $0.accessRole == "freeBusyReader"
+                isReadOnly: $0.accessRole == "reader" || $0.accessRole == "freeBusyReader",
+                responseIdentityScope: $0.primary ? .authenticatedUser : .unverified
             )
         }
         try state.replaceCalendarBindings(connectionID: connectionID, bindings: bindings, now: now())
@@ -121,7 +122,8 @@ public struct GoogleConnectionService: Sendable {
                 calendarID: binding.providerCalendarID,
                 from: start,
                 through: end,
-                updatedSince: watermark
+                updatedSince: watermark,
+                responseIdentityScope: binding.responseIdentityScope
             )
             refreshMode = watermark == nil ? .full : .incremental
         } catch ProviderFailure.cursorExpired {
@@ -134,7 +136,8 @@ public struct GoogleConnectionService: Sendable {
                 connectionID: connectionID,
                 calendarID: binding.providerCalendarID,
                 from: start,
-                through: end
+                through: end,
+                responseIdentityScope: binding.responseIdentityScope
             )
             refreshMode = .full
         }
