@@ -1,4 +1,5 @@
 import ArgumentParser
+import CalopodDomain
 import CalopodEventKit
 import CalopodProviders
 import CalopodStore
@@ -11,6 +12,7 @@ struct CalendarReadSource: Sendable {
 }
 
 struct CalendarRefreshSummary: Sendable {
+    let ingestion: EventIngestionSummary
     let selectedSourceCount: Int
     let refreshedSourceCount: Int
     let failedSourceCount: Int
@@ -73,7 +75,7 @@ func refreshCalendarSources(
     let cache = EventCache(repository: repository)
     var refreshedCount = 0
     var failedCount = 0
-    var discardedCount = 0
+    var ingestion = EventIngestionSummary()
     var warnings: [String] = []
 
     // Grouped by connection so an EventKit refresh launches the host process
@@ -118,7 +120,7 @@ func refreshCalendarSources(
                         from: start,
                         through: end
                     )
-                    discardedCount += result.discardedCount
+                    ingestion.add(result.ingestion)
                     refreshedCount += 1
                 }
             } catch {
@@ -141,7 +143,7 @@ func refreshCalendarSources(
                         from: start,
                         through: end
                     )
-                    discardedCount += result.discardedCount
+                    ingestion.add(result.ingestion)
                     refreshedCount += 1
                 } catch {
                     failedCount += 1
@@ -161,12 +163,9 @@ func refreshCalendarSources(
         }
     }
 
-    if discardedCount > 0 {
-        warnings.append(
-            "Ignored \(discardedCount) malformed or out-of-range event records."
-        )
-    }
+    warnings += ingestion.warnings
     return CalendarRefreshSummary(
+        ingestion: ingestion,
         selectedSourceCount: sources.count,
         refreshedSourceCount: refreshedCount,
         failedSourceCount: failedCount,
