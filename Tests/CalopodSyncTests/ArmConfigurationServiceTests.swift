@@ -6,6 +6,49 @@ import Testing
 
 @Suite("Arm configuration")
 struct ArmConfigurationServiceTests {
+    @Test("Names persist and renaming preserves routing and ownership")
+    func namesPreserveConfiguration() throws {
+        let setup = try armTestSetup()
+        let original = try setup.service.createArm(
+            id: "named-arm", sourceBindingIDs: ["source-one", "source-two"],
+            targetBindingID: "target", ruleMode: .fullDetails, name: "  Work hours  "
+        )
+        #expect(original.name == "Work hours")
+        #expect(try setup.repository.arm(id: original.id) == original)
+        let mapping = StoredMirrorMapping(
+            mirrorKey: "synthetic-mirror", armID: original.id, sourceKeyHash: "source-hash",
+            providerEventID: "managed-copy", providerVersion: "version",
+            desiredFingerprint: "fingerprint", ownershipKeyID: "ownership-key",
+            updatedAt: Date(timeIntervalSince1970: 10)
+        )
+        try setup.repository.saveMirrorMapping(mapping)
+        _ = try setup.repository.setArmEnabled(id: original.id, isEnabled: false)
+        let renamed = try setup.service.rename(armID: original.id, name: "Office")
+        #expect(renamed.name == "Office")
+        #expect(renamed.id == original.id)
+        #expect(renamed.configurationID == original.configurationID)
+        #expect(renamed.sourceBindingIDs == original.sourceBindingIDs)
+        #expect(renamed.targetBindingID == original.targetBindingID)
+        #expect(renamed.ruleMode == original.ruleMode)
+        #expect(renamed.preferredWriterDeviceID == original.preferredWriterDeviceID)
+        #expect(renamed.isMain == original.isMain)
+        #expect(!renamed.isEnabled)
+        #expect(try setup.repository.mirrorMappings(armID: original.id) == [mapping])
+        let cleared = try setup.service.rename(armID: original.id, name: "   ")
+        #expect(cleared.name == nil)
+        #expect(cleared.displayName == "Unnamed Arm")
+        #expect(throws: ArmConfigurationError.invalidName) {
+            try setup.service.rename(armID: original.id, name: "Line\nBreak")
+        }
+        #expect(throws: ArmConfigurationError.invalidName) {
+            try setup.service.rename(armID: original.id, name: String(repeating: "a", count: 201))
+        }
+        #expect(try setup.repository.arm(id: original.id) == cleared)
+        #expect(throws: ArmConfigurationError.armNotFound("missing")) {
+            try setup.service.rename(armID: "missing", name: "Office")
+        }
+    }
+
     @Test("Creates a Busy Arm from selected sources by default")
     func createsBusyArm() throws {
         let setup = try armTestSetup()
