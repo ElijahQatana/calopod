@@ -87,6 +87,47 @@ struct InboxObservationStoreTests {
         #expect(try fixture.activity().first?.event.startsAt == moved.startsAt)
     }
 
+    @Test("Older snapshots recover a previous interval from retained activity")
+    func legacyMove() throws {
+        let fixture = try Fixture()
+        try fixture.refresh([fixture.event()])
+        try fixture.refresh([fixture.event(start: 3000)])
+        try fixture.database.write { db in
+            let data = try #require(try Data.fetchOne(db, sql: "SELECT snapshot FROM inbox_observations WHERE source_key_hash = 'event'"))
+            var snapshot = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            snapshot.removeValue(forKey: "previousInterval")
+            try db.execute(sql: "UPDATE inbox_observations SET snapshot = ? WHERE source_key_hash = 'event'",
+                           arguments: [try JSONSerialization.data(withJSONObject: snapshot)])
+        }
+        #expect(try fixture.repository.inboxObservation(sourceKeyHash: "event")?.previousInterval?.start == fixture.start)
+        try fixture.refresh([fixture.event(start: 3000)])
+        try fixture.refresh([fixture.event(start: 3000)], now: fixture.start.addingTimeInterval(91 * 86400))
+        #expect(try fixture.activity(all: true).isEmpty)
+        #expect(try fixture.repository.inboxObservation(sourceKeyHash: "event")?.previousInterval?.start == fixture.start)
+    }
+
+    @Test("Latest move interval survives review, pruning and restart")
+    func retainedMove() throws {
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("inbox-move-\(UUID().uuidString).sqlite").path
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        do {
+            let fixture = try Fixture(path: path)
+            try fixture.refresh([fixture.event()])
+            try fixture.refresh([fixture.event(start: 3000)])
+            try fixture.repository.acknowledgeInboxRevision(sourceKeyHash: "event", revision: 2)
+            try fixture.refresh([fixture.event(start: 3000)], now: fixture.start.addingTimeInterval(91 * 86400))
+            #expect(try fixture.activity(all: true).isEmpty)
+            #expect(try fixture.repository.inboxObservation(sourceKeyHash: "event")?.previousInterval == SyncWindow(start: fixture.start, end: fixture.start.addingTimeInterval(1000)))
+            try fixture.repository.clearInboxHistory(connectionID: "connection")
+        }
+        let repository = LocalStateRepository(database: try CalopodDatabase(path: path))
+        #expect(try repository.inboxObservation(sourceKeyHash: "event")?.previousInterval?.start == Date(timeIntervalSince1970: 1000))
+        try repository.applyEventRefresh(connectionID: "connection", calendarBindingID: "calendar",
+            windowStart: Date(timeIntervalSince1970: 1000), windowEnd: Date(timeIntervalSince1970: 20000),
+            instances: [try Fixture().event(start: 5000)], cancelledSourceKeyHashes: [], isFullRefresh: true, cursorUpdates: [])
+        #expect(try repository.inboxObservation(sourceKeyHash: "event")?.previousInterval?.start == Date(timeIntervalSince1970: 3000))
+    }
+
     @Test("Omissions, unavailable calendars, deselection and window shifts are not removal proof")
     func incompleteEvidence() throws {
         let fixture = try Fixture()
