@@ -6,6 +6,7 @@ import Foundation
 /// invariant enforced before anything is persisted, so callers can show a
 /// precise, actionable message instead of a generic failure.
 public enum ArmConfigurationError: Error, Equatable, Sendable, CustomStringConvertible {
+    case invalidName
     case noSources
     case armNotFound(String)
     case duplicateSource(String)
@@ -23,6 +24,8 @@ public enum ArmConfigurationError: Error, Equatable, Sendable, CustomStringConve
 
     public var description: String {
         switch self {
+        case .invalidName:
+            "Use an Arm name of up to 200 characters without control characters."
         case .noSources:
             "Choose at least one source calendar."
         case let .armNotFound(id):
@@ -66,6 +69,24 @@ public struct ArmConfigurationService: Sendable {
 
     public init(repository: LocalStateRepository) {
         self.repository = repository
+    }
+
+    public func rename(armID: String, name: String?, now: Date = Date()) throws -> StoredArm {
+        let normalized = try normalizedName(name)
+        guard let arm = try repository.setArmName(id: armID, name: normalized, now: now) else {
+            throw ArmConfigurationError.armNotFound(armID)
+        }
+        return arm
+    }
+
+    private func normalizedName(_ name: String?) throws -> String? {
+        guard let name else { return nil }
+        guard name.count <= 200,
+              !name.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
+            throw ArmConfigurationError.invalidName
+        }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     public func updateRule(
@@ -134,8 +155,10 @@ public struct ArmConfigurationService: Sendable {
         targetBindingID: String,
         ruleMode: ArmRuleMode = .busy,
         isMain: Bool = false,
+        name: String? = nil,
         now: Date = Date()
     ) throws -> StoredArm {
+        let name = try normalizedName(name)
         // Validation runs cheapest-and-most-local checks first (shape of the
         // input) before touching the repository, so a malformed request never
         // pays for a lookup it was always going to fail.
@@ -225,7 +248,8 @@ public struct ArmConfigurationService: Sendable {
             targetBindingID: targetBindingID,
             ruleMode: ruleMode,
             preferredWriterDeviceID: preferredWriterDeviceID,
-            isMain: isMain
+            isMain: isMain,
+            name: name
         )
         try repository.saveArm(arm, now: now)
         return arm

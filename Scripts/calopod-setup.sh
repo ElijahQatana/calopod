@@ -270,6 +270,8 @@ configure_custom_arms() {
     custom_sources=$(choose_sources "$calendars_file")
     custom_target=$(choose_arm_target "$calendars_file" "$custom_sources")
     custom_rule=$(choose_arm_rule)
+    printf 'Arm name (optional): ' >&2
+    IFS= read -r custom_name || fail "Setup was interrupted." 75
     for source_id in $custom_sources; do
       run_json "$temporary_root/selection.json" calendars --connection eventkit-device --select "$source_id"
     done
@@ -278,6 +280,9 @@ configure_custom_arms() {
       set -- "$@" --source "$source_id"
     done
     set -- "$@" --target "$custom_target" --rule "$custom_rule"
+    if [ -n "$custom_name" ]; then
+      set -- "$@" --name "$custom_name"
+    fi
     run_json "$arms_file" "$@"
     echo "Arm configured with the $custom_rule Rule."
     run_json "$calendars_file" calendars --connection eventkit-device

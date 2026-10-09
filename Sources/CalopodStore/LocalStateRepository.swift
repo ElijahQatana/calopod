@@ -72,6 +72,9 @@ public struct StoredCalendarBinding: Equatable, Sendable {
 /// and — for an EventKit target — which device is the single preferred
 /// writer.
 public struct StoredArm: Equatable, Sendable {
+    public let name: String?
+    public var displayName: String { name ?? (isMain ? "Main calendar" : "Unnamed Arm") }
+
     public let id: String
     public let configurationID: String
     public let sourceBindingIDs: [String]
@@ -89,8 +92,10 @@ public struct StoredArm: Equatable, Sendable {
         ruleMode: ArmRuleMode,
         preferredWriterDeviceID: String? = nil,
         isEnabled: Bool = true,
-        isMain: Bool = false
+        isMain: Bool = false,
+        name: String? = nil
     ) {
+        self.name = name
         self.id = id
         self.configurationID = configurationID
         self.sourceBindingIDs = sourceBindingIDs
@@ -443,8 +448,8 @@ public final class LocalStateRepository: @unchecked Sendable {
                 sql: """
                     INSERT INTO arms
                         (id, configuration_id, target_binding_id, rule_mode,
-                         preferred_writer_device_id, is_enabled, is_main, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         preferred_writer_device_id, is_enabled, is_main, created_at, updated_at, name)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                 arguments: [
                     arm.id,
@@ -456,6 +461,7 @@ public final class LocalStateRepository: @unchecked Sendable {
                     arm.isMain,
                     now,
                     now,
+                    arm.name,
                 ]
             )
             for sourceBindingID in arm.sourceBindingIDs {
@@ -475,7 +481,7 @@ public final class LocalStateRepository: @unchecked Sendable {
                     database,
                     sql: """
                         SELECT id, configuration_id, target_binding_id, rule_mode,
-                               preferred_writer_device_id, is_enabled, is_main
+                               preferred_writer_device_id, is_enabled, is_main, name
                         FROM arms
                         WHERE configuration_id = ?
                         ORDER BY created_at, id
@@ -487,7 +493,7 @@ public final class LocalStateRepository: @unchecked Sendable {
                     database,
                     sql: """
                         SELECT id, configuration_id, target_binding_id, rule_mode,
-                               preferred_writer_device_id, is_enabled, is_main
+                               preferred_writer_device_id, is_enabled, is_main, name
                         FROM arms
                         ORDER BY created_at, id
                         """
@@ -503,7 +509,7 @@ public final class LocalStateRepository: @unchecked Sendable {
                 database,
                 sql: """
                     SELECT id, configuration_id, target_binding_id, rule_mode,
-                           preferred_writer_device_id, is_enabled, is_main
+                           preferred_writer_device_id, is_enabled, is_main, name
                     FROM arms
                     WHERE id = ?
                     """,
@@ -513,6 +519,17 @@ public final class LocalStateRepository: @unchecked Sendable {
             }
             return try storedArm(row: row, database: database)
         }
+    }
+
+    @discardableResult
+    public func setArmName(id: String, name: String?, now: Date = Date()) throws -> StoredArm? {
+        try database.write { database in
+            try database.execute(
+                sql: "UPDATE arms SET name = ?, updated_at = ? WHERE id = ?",
+                arguments: [name, now, id]
+            )
+        }
+        return try arm(id: id)
     }
 
     @discardableResult
@@ -657,7 +674,8 @@ private func storedArm(row: Row, database: Database) throws -> StoredArm {
         ruleMode: ruleMode,
         preferredWriterDeviceID: row["preferred_writer_device_id"],
         isEnabled: row["is_enabled"],
-        isMain: row["is_main"]
+        isMain: row["is_main"],
+        name: row["name"]
     )
 }
 

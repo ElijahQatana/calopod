@@ -9,6 +9,7 @@ extension CalopodDatabase {
         "v5_full_event_details",
         "v6_sync_run_summaries",
         "v7_agent_control",
+        "v8_arm_names",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -240,6 +241,12 @@ extension CalopodDatabase {
                 table.column("id", .text).primaryKey()
                 table.column("is_paused", .boolean).notNull().defaults(to: false)
                 table.column("updated_at", .datetime).notNull()
+            }
+        }
+
+        migrator.registerMigration("v8_arm_names") { database in
+            try database.alter(table: "arms") { table in
+                table.add(column: "name", .text)
             }
         }
 
