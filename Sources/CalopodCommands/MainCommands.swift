@@ -38,8 +38,9 @@ public struct MainConfigureCommand: ParsableCommand {
 
     public func run() throws {
         do {
+            let repository = try CommandEnvironment.repository()
             let arm = try ArmConfigurationService(
-                repository: CommandEnvironment.repository()
+                repository: repository
             ).configureMainCalendar(
                 sourceBindingIDs: source,
                 targetBindingID: target
@@ -52,7 +53,9 @@ public struct MainConfigureCommand: ParsableCommand {
                     count: 1,
                     items: [mainItem(arm)]
                 ),
-                format: output.format
+                format: output.format,
+                showIDs: output.ids,
+                human: output.localContext(repository: repository)
             )
         } catch let error as ArmConfigurationError {
             try failCommand(ValidationError(error.description))
@@ -71,7 +74,8 @@ public struct MainInspectCommand: ParsableCommand {
 
     public func run() throws {
         do {
-            let main = try CommandEnvironment.repository().arms().first(where: \.isMain)
+            let repository = try CommandEnvironment.repository()
+            let main = try repository.arms().first(where: \.isMain)
             try OutputRenderer.write(
                 command: "main.inspect",
                 payload: CommandPayload(
@@ -82,7 +86,9 @@ public struct MainInspectCommand: ParsableCommand {
                     count: main == nil ? 0 : 1,
                     items: main.map { [mainItem($0)] } ?? []
                 ),
-                format: output.format
+                format: output.format,
+                showIDs: output.ids,
+                human: output.localContext(repository: repository)
             )
         } catch {
             try failCommand(error)
