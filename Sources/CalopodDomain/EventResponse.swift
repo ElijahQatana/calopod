@@ -38,6 +38,10 @@ public enum RSVPUnavailableReason: String, Codable, Sendable {
     case notAnInvitation = "not-an-invitation"
     case unsupportedResponse = "unsupported-response"
     case providerReadOnly = "provider-read-only"
+    case permissionUnverified = "permission-unverified"
+    case unsupportedScope = "unsupported-scope"
+    case staleRevision = "stale-revision"
+    case managedMirror = "managed-mirror"
 }
 
 public enum RSVPActionScope: String, Codable, Sendable {
@@ -45,7 +49,7 @@ public enum RSVPActionScope: String, Codable, Sendable {
 }
 
 /// Readable response evidence is separate from permission to send a response.
-/// No RSVP operations are implemented by the metadata adapters.
+/// Action adapters establish permission and occurrence scope separately.
 public struct RSVPActionCapability: Codable, Equatable, Sendable {
     public let isEligible: Bool
     public let supportedScopes: [RSVPActionScope]

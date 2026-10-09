@@ -304,6 +304,15 @@ extension CalopodDatabase {
                 """)
         }
 
+        migrator.registerMigration("v12_inbox_rsvp_actions") { database in
+            try database.create(table: "inbox_rsvp_actions") { table in
+                table.column("id", .text).primaryKey()
+                table.column("target", .blob).notNull()
+                table.column("status", .text).notNull()
+                table.column("record", .blob).notNull()
+            }
+        }
+
         return migrator
     }
 }
