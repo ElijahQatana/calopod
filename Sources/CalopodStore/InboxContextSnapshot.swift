@@ -35,10 +35,12 @@ public struct InboxContextSource: Equatable, Sendable {
 public struct InboxContextEvent: Equatable, Sendable {
     public let event: StoredNormalizedInstance
     public let observation: InboxObservation?
+    public let isPresenceConfirmed: Bool
 
-    public init(event: StoredNormalizedInstance, observation: InboxObservation? = nil) {
+    public init(event: StoredNormalizedInstance, observation: InboxObservation? = nil, isPresenceConfirmed: Bool = true) {
         self.event = event
         self.observation = observation
+        self.isPresenceConfirmed = isPresenceConfirmed
     }
 }
 
@@ -94,7 +96,7 @@ extension LocalStateRepository {
                 )
             }
             let bindingIDs = Set(sources.map(\.bindingID))
-            let events = try Row.fetchAll(db, sql: """
+            var events = try Row.fetchAll(db, sql: """
                 SELECT n.* FROM normalized_instances n
                 WHERE n.is_cancelled = 0 AND NOT EXISTS (
                     SELECT 1 FROM mirror_mappings m JOIN arms a ON a.id = m.arm_id
@@ -109,6 +111,22 @@ extension LocalStateRepository {
                 // cache window. It is the newer local event evidence.
                 return InboxContextEvent(event: observation?.event ?? event, observation: observation)
             }
+            let activeKeys = Set(events.map(\.event.sourceKeyHash))
+            let retainedKeys = try String.fetchAll(db, sql: "SELECT source_key_hash FROM inbox_observations ORDER BY source_key_hash")
+            for key in retainedKeys where !activeKeys.contains(key) {
+                guard let observation = try loadInboxObservation(db, sourceKeyHash: key), observation.tombstone == nil,
+                      bindingIDs.contains(observation.event.calendarBindingID), !observation.event.isCancelled else { continue }
+                let event = observation.event
+                let mapped = try Bool.fetchOne(db, sql: """
+                    SELECT EXISTS (SELECT 1 FROM mirror_mappings m JOIN arms a ON a.id = m.arm_id
+                    WHERE a.target_binding_id = ? AND m.provider_event_id = ?)
+                    """, arguments: [event.calendarBindingID, event.providerEventID]) ?? false
+                guard !mapped else { continue }
+                // A missing cache row is not deletion evidence. Retain the
+                // last observation as uncertain context, never a proven pair.
+                events.append(InboxContextEvent(event: event, observation: observation, isPresenceConfirmed: false))
+            }
+            events.sort { ($0.event.startsAt, $0.event.sourceKeyHash) < ($1.event.startsAt, $1.event.sourceKeyHash) }
             return InboxContextSnapshot(
                 sources: sources, events: events,
                 unprovenDuplicateBindingIDs: unprovenDuplicateBindingIDs.intersection(bindingIDs)

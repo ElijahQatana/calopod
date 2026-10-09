@@ -38,6 +38,8 @@ struct InboxConflictTests {
                       event("tentative-accepted", availability: "tentative", response: .accepted)]
         let analysis = analyze(events)
         #expect(analysis.pairs == [InboxConflictPair("a", "tentative-accepted")])
+        #expect(analyze([event("a"), event("oof", availability: "unavailable")]).isComplete)
+        #expect(analyze([event("a"), event("oof", availability: "unavailable")]).pairs.count == 1)
         #expect(InboxConflictCalculator.conflictOnlyEvents(in: snapshot(events), analysis: analysis).map(\.event.sourceKeyHash) == ["a", "tentative-accepted"])
     }
 
@@ -53,14 +55,14 @@ struct InboxConflictTests {
         #expect(InboxConflictPair("a|b", "c") != InboxConflictPair("a", "b|c"))
     }
 
-    @Test("All-day events preserve local day and daylight-saving endpoints")
-    func daylightSaving() throws {
+    @Test("All-day events preserve local day and daylight-saving endpoints", arguments: [3, 11])
+    func daylightSaving(month: Int) throws {
         let zone = try #require(TimeZone(identifier: "America/New_York"))
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = zone
-        let start = try #require(calendar.date(from: DateComponents(year: 2026, month: 11, day: 1)))
+        let start = try #require(calendar.date(from: DateComponents(year: 2026, month: month, day: month == 3 ? 8 : 1)))
         let end = try #require(calendar.date(byAdding: .day, value: 1, to: start))
-        #expect(end.timeIntervalSince(start) == 25 * 3600)
+        #expect(end.timeIntervalSince(start) == Double(month == 3 ? 23 : 25) * 3600)
         let allDay = event("a", start: start.timeIntervalSince1970, end: end.timeIntervalSince1970, allDay: true)
         let late = event("b", start: end.timeIntervalSince1970 - 3600, end: end.timeIntervalSince1970 + 3600)
         let sources = [source("calendar", coverageStart: start.addingTimeInterval(-10_000), coverageEnd: end.addingTimeInterval(10_000)), source("other", coverageStart: start.addingTimeInterval(-10_000), coverageEnd: end.addingTimeInterval(10_000))]
@@ -126,6 +128,22 @@ struct InboxConflictTests {
         #expect(!InboxConflictCalculator.analyze(InboxContextSnapshot(sources: [], events: []), window: window, freshnessCutoff: cutoff).isComplete)
         #expect(!analyze([event("a", availability: "unsupported")]).isComplete)
         #expect(analyze([event("a", response: .unknown)]).warnings.contains { $0.kind == .unknownResponse })
+    }
+
+    @Test("Unconfirmed disappearance keeps possible overlaps explicit and totals incomplete")
+    func unconfirmedPresence() throws {
+        let snap = InboxContextSnapshot(sources: [source("calendar"), source("other")], events: [
+            InboxContextEvent(event: event("a", supported: true)),
+            InboxContextEvent(event: event("b", supported: true), isPresenceConfirmed: false)
+        ])
+        let preview = try InboxCalendarContextBuilder.build(snapshot: snap, focusedKey: "a", settings: InboxContextSettings(), freshnessCutoff: cutoff)
+        #expect(preview.focusedConflicts.count == 1)
+        #expect(!preview.focusedConflicts[0].isConfirmed)
+        #expect(preview.analysis.pairs.isEmpty)
+        #expect(!preview.analysis.isComplete)
+        #expect(preview.attentionReasons.isEmpty)
+        #expect(InboxConflictCalculator.conflictOnlyEvents(in: snap, analysis: preview.analysis).isEmpty)
+        #expect(preview.choices.first(where: { $0.sourceKeyHash == "b" })?.choices == [.hold])
     }
 
     @Test("Changes to focus, another event, selection or freshness require another preview")

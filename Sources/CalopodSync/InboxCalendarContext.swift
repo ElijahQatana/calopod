@@ -100,7 +100,7 @@ public enum InboxCalendarContextBuilder {
             return InboxResponseProjection(choice: choice, conflicts: projected.conflicts.filter { $0.pair.contains(focusedKey) })
         }
         // Other default attention reasons are supplied by the attention query.
-        let reasons: [InboxAttentionReason] = conflicts.isEmpty ? [] : [.conflict]
+        let reasons: [InboxAttentionReason] = conflicts.contains(where: \.isConfirmed) ? [.conflict] : []
         return InboxCalendarContext(
             focused: focused, source: source, visibleWindow: visible, analysisWindow: window,
             rows: rows, analysis: analysis, focusedConflicts: conflicts, conflictGroup: group,
@@ -115,6 +115,7 @@ public enum InboxCalendarContextBuilder {
             return InboxEventChoices(sourceKeyHash: event.sourceKeyHash, choices: [.hold], unavailableReasons: [.identityUnverified])
         }
         var reasons = event.currentUserResponse.actionCapability.unavailableReasons
+        if !item.isPresenceConfirmed { reasons.append(.unsupportedResponse) }
         if source.responseIdentityScope != .authenticatedUser { reasons.append(.identityUnverified) }
         if !["google", "microsoft"].contains(source.provider) { reasons.append(.providerReadOnly) }
         if [.organizer, .notApplicable].contains(event.currentUserResponse.state) || event.isCancelled {
@@ -130,13 +131,14 @@ public enum InboxCalendarContextBuilder {
             choices: uniqueReasons.isEmpty ? [.yes, .no, .maybe, .hold] : [.hold], unavailableReasons: uniqueReasons)
     }
 
-    /// Any event, source, capability, or coverage change requires a fresh card,
-    /// including changes to the other members of the conflict group.
+    /// Relevant event, source, capability, or coverage changes require a fresh
+    /// card. An unchanged refresh and provider version churn do not invalidate
+    /// a decision merely because the observation timestamp advanced.
     public static func revalidate(
         _ preview: InboxCalendarContext, against current: InboxContextSnapshot,
         chosenKey: String, choice: InboxConflictChoice, freshnessCutoff: Date
     ) throws -> InboxContextEvent {
-        guard current == preview.snapshot else { throw InboxCalendarContextError.previewChanged }
+        guard sameDecisionEvidence(preview.snapshot, current, window: preview.analysisWindow) else { throw InboxCalendarContextError.previewChanged }
         guard preview.conflictGroup.contains(where: { $0.event.sourceKeyHash == chosenKey }),
               let event = current.events.first(where: { $0.event.sourceKeyHash == chosenKey }) else {
             throw InboxCalendarContextError.eventUnavailable
@@ -153,4 +155,41 @@ public enum InboxCalendarContextBuilder {
         }
         return event
     }
+}
+
+private func sameDecisionEvidence(_ lhs: InboxContextSnapshot, _ rhs: InboxContextSnapshot, window: SyncWindow) -> Bool {
+    guard lhs.unprovenDuplicateBindingIDs == rhs.unprovenDuplicateBindingIDs else { return false }
+    let oldSources = lhs.sources.sorted { $0.bindingID < $1.bindingID }
+    let newSources = rhs.sources.sorted { $0.bindingID < $1.bindingID }
+    guard oldSources.count == newSources.count else { return false }
+    for (old, new) in zip(oldSources, newSources) {
+        guard old.bindingID == new.bindingID, old.connectionID == new.connectionID,
+              old.connectionLabel == new.connectionLabel, old.calendarLabel == new.calendarLabel,
+              old.provider == new.provider, old.responseIdentityScope == new.responseIdentityScope,
+              old.coverage?.startsAt == new.coverage?.startsAt, old.coverage?.endsAt == new.coverage?.endsAt,
+              old.healthStatus == new.healthStatus, old.staleSince == new.staleSince else { return false }
+    }
+    func relevant(_ snapshot: InboxContextSnapshot) -> [InboxContextEvent] {
+        snapshot.events.filter { $0.event.startsAt < window.end && $0.event.endsAt > window.start }
+            .sorted { $0.event.sourceKeyHash < $1.event.sourceKeyHash }
+    }
+    let oldEvents = relevant(lhs)
+    let newEvents = relevant(rhs)
+    guard oldEvents.count == newEvents.count else { return false }
+    for (old, new) in zip(oldEvents, newEvents) {
+        let a = old.event
+        let b = new.event
+        guard old.isPresenceConfirmed == new.isPresenceConfirmed,
+              old.observation?.revision == new.observation?.revision,
+              old.observation?.tombstone == new.observation?.tombstone,
+              a.sourceKeyHash == b.sourceKeyHash, a.connectionID == b.connectionID,
+              a.calendarBindingID == b.calendarBindingID, a.providerEventID == b.providerEventID,
+              a.recurrenceID == b.recurrenceID, a.startsAt == b.startsAt, a.endsAt == b.endsAt,
+              a.isAllDay == b.isAllDay, a.availability == b.availability,
+              a.isCancelled == b.isCancelled, a.isPrivate == b.isPrivate,
+              a.title == b.title, a.location == b.location, a.notes == b.notes, a.url == b.url,
+              a.organizer?.name == b.organizer?.name, a.organizer?.emailAddress == b.organizer?.emailAddress,
+              a.currentUserResponse == b.currentUserResponse else { return false }
+    }
+    return true
 }

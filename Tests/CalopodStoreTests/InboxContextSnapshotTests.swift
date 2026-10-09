@@ -52,6 +52,17 @@ struct InboxContextSnapshotTests {
         #expect(try fixture.repository.inboxContextSnapshot().events.isEmpty)
     }
 
+    @Test("Bounded disappearance retains uncertain context without manufacturing removal")
+    func uncertainPresence() throws {
+        let fixture = try ContextFixture()
+        try fixture.refresh("one", events: [fixture.event("a", binding: "one")])
+        try fixture.refresh("one", events: [])
+        let snapshot = try fixture.repository.inboxContextSnapshot()
+        #expect(snapshot.events.map(\.event.sourceKeyHash) == ["a"])
+        #expect(!snapshot.events[0].isPresenceConfirmed)
+        #expect(snapshot.events[0].observation?.tombstone == nil)
+    }
+
     @Test("Failed sources stay visible and disabled Connections do not contribute")
     func health() throws {
         let fixture = try ContextFixture()
