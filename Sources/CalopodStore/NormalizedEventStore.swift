@@ -2,6 +2,10 @@ import CalopodDomain
 import Foundation
 import GRDB
 
+public enum EventRefreshError: Error {
+    case invalidScope
+}
+
 /// One source event as persisted after `EventNormalizer` has processed it —
 /// the shape every other part of the sync engine (planning, Availability)
 /// reads, so it never has to know which provider or connection an event
@@ -119,9 +123,23 @@ extension LocalStateRepository {
         cancelledSourceKeyHashes: [String],
         isFullRefresh: Bool,
         cursorUpdates: [StoredCursorUpdate],
-        now: Date = Date()
+        now: Date = Date(),
+        observationInstances: [StoredNormalizedInstance]? = nil,
+        removedSourceKeyHashes: [String] = [],
+        excludedSourceKeyHashes: [String] = [],
+        unconfirmedSourceKeyHashes: [String] = []
     ) throws {
+        guard windowStart < windowEnd,
+              (observationInstances ?? instances).allSatisfy({
+                  $0.connectionID == connectionID && $0.calendarBindingID == calendarBindingID
+              }) else { throw EventRefreshError.invalidScope }
         try database.writeTransaction { database in
+            try recordInboxObservations(
+                database, connectionID: connectionID, calendarBindingID: calendarBindingID,
+                instances: observationInstances ?? instances, cancelled: cancelledSourceKeyHashes,
+                removed: removedSourceKeyHashes, excluded: excludedSourceKeyHashes,
+                windowStart: windowStart, windowEnd: windowEnd, isFullRefresh: isFullRefresh, now: now
+            )
             // Every instance written in this refresh is tagged with a new
             // generation number. On a full refresh, any existing row in the
             // window that *didn't* get this generation's tag was absent from
@@ -193,7 +211,7 @@ extension LocalStateRepository {
                 )
             }
 
-            for sourceKeyHash in cancelledSourceKeyHashes {
+            for sourceKeyHash in cancelledSourceKeyHashes + removedSourceKeyHashes + excludedSourceKeyHashes + unconfirmedSourceKeyHashes {
                 try database.execute(
                     sql: "DELETE FROM normalized_instances WHERE source_key_hash = ?",
                     arguments: [sourceKeyHash]
