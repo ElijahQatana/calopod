@@ -152,7 +152,8 @@ public struct MicrosoftConnectionService: Sendable {
             events: events,
             nextSyncToken: page.nextSyncToken,
             refreshMode: refreshMode,
-            cursorUpdates: cursorUpdates
+            cursorUpdates: cursorUpdates,
+            readIsComplete: page.readIsComplete != false
         )
     }
 

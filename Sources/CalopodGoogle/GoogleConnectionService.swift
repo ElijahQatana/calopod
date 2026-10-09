@@ -164,7 +164,8 @@ public struct GoogleConnectionService: Sendable {
             events: page.events,
             nextSyncToken: page.nextSyncToken,
             refreshMode: refreshMode,
-            cursorUpdates: cursorUpdates
+            cursorUpdates: cursorUpdates,
+            readIsComplete: page.readIsComplete != false
         )
     }
 

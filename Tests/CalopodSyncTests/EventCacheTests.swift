@@ -365,6 +365,143 @@ struct EventCacheTests {
         #expect(source.currentUserResponse == .readOnlyFeed)
     }
 
+    @Test("Private inbox detail stays out of Busy planning and ingestion diagnostics")
+    func inboxPrivacy() throws {
+        let repository = LocalStateRepository(database: try CalopodDatabase.inMemory())
+        let connection = testConnection()
+        let calendar = testCalendar(connectionID: connection.id)
+        try repository.saveConnection(connection)
+        try repository.replaceCalendarBindings(connectionID: connection.id, bindings: [calendar])
+        let cache = EventCache(repository: repository)
+        let start = Date(timeIntervalSince1970: 1000)
+        let end = start.addingTimeInterval(10000)
+        try cache.apply(ProviderEventPage(events: [event(id: "private", start: start, end: end)], nextSyncToken: nil),
+                        connection: connection, calendar: calendar, from: start, through: end)
+        let result = try cache.apply(ProviderEventPage(events: [event(id: "private", start: start, end: end,
+            title: "Synthetic confidential title", notes: "Synthetic confidential notes")], nextSyncToken: nil),
+            connection: connection, calendar: calendar, from: start, through: end)
+        #expect(try repository.inboxActivity(connectionID: connection.id).first?.event.notes == "Synthetic confidential notes")
+        let sources = try repository.normalizedInstances(calendarBindingIDs: [calendar.id], from: start, through: end)
+        let plan = SyncPlanner.plan(arm: StoredArm(id: "arm", configurationID: "default",
+            sourceBindingIDs: [calendar.id], targetBindingID: "target", ruleMode: .busy),
+            sources: sources, mappings: [], targetEvents: [], window: try SyncWindow(start: start, end: end),
+            sourceSnapshotComplete: true)
+        let payload = String(decoding: try JSONEncoder().encode(plan), as: UTF8.self)
+        let diagnostics = String(decoding: try JSONEncoder().encode(result.ingestion), as: UTF8.self)
+        #expect(!payload.contains("Synthetic confidential"))
+        #expect(!diagnostics.contains("Synthetic confidential"))
+        #expect(plan.items.first?.payload?.title == "Busy")
+    }
+
+    @Test("Partial reads do not commit observations, events, coverage or cursors")
+    func incompleteRead() throws {
+        let repository = LocalStateRepository(database: try CalopodDatabase.inMemory())
+        let connection = testConnection()
+        let calendar = testCalendar(connectionID: connection.id)
+        try repository.saveConnection(connection)
+        try repository.replaceCalendarBindings(connectionID: connection.id, bindings: [calendar])
+        let cache = EventCache(repository: repository)
+        let start = Date(timeIntervalSince1970: 1000)
+        let end = start.addingTimeInterval(10000)
+        let partial = ProviderEventPage(events: [event(id: "partial", start: start, end: end)],
+            nextSyncToken: "unsafe", cursorUpdates: [ProviderCursorUpdate(scopeKey: "window", value: "unsafe", scopeStart: start, scopeEnd: end)],
+            readIsComplete: false)
+        #expect(throws: EventCacheError.incompleteRead) {
+            try cache.apply(partial, connection: connection, calendar: calendar, from: start, through: end)
+        }
+        #expect(try repository.inboxActivity(connectionID: connection.id, includeAcknowledged: true).isEmpty)
+        #expect(try repository.normalizedInstances(calendarBindingIDs: [calendar.id], from: start, through: end).isEmpty)
+        #expect(try repository.inboxCoverage(connectionID: connection.id, calendarBindingID: calendar.id) == nil)
+        #expect(try repository.cursor(connectionID: connection.id, calendarBindingID: calendar.id, scopeKey: "window") == nil)
+        // A subsequent complete first import still establishes a quiet baseline.
+        try cache.apply(ProviderEventPage(events: partial.events, nextSyncToken: nil),
+                        connection: connection, calendar: calendar, from: start, through: end)
+        #expect(try repository.inboxActivity(connectionID: connection.id).isEmpty)
+    }
+
+    @Test("Recurring exceptions, outside-window moves and mirror eviction preserve inbox identity")
+    func observationIdentity() throws {
+        let repository = LocalStateRepository(database: try CalopodDatabase.inMemory())
+        let connection = testConnection()
+        let calendar = testCalendar(connectionID: connection.id)
+        try repository.saveConnection(connection)
+        try repository.replaceCalendarBindings(connectionID: connection.id, bindings: [calendar])
+        let cache = EventCache(repository: repository)
+        let start = Date(timeIntervalSince1970: 1000)
+        let end = start.addingTimeInterval(10000)
+        let original = "2026-11-05T09:00:00Z"
+        let other = "2026-11-06T09:00:00Z"
+        func refresh(_ events: [ProviderEvent], full: Bool = false) throws {
+            try cache.apply(ProviderEventPage(events: events, nextSyncToken: nil, refreshMode: full ? .full : .incremental),
+                            connection: connection, calendar: calendar, from: start, through: end)
+        }
+        try refresh([event(id: "series", originalStart: original, start: start, end: start.addingTimeInterval(1000)),
+                     event(id: "series", originalStart: other, start: start.addingTimeInterval(2000), end: start.addingTimeInterval(3000))], full: true)
+        try refresh([event(id: "series", originalStart: original, start: end.addingTimeInterval(1000),
+                           end: end.addingTimeInterval(2000), notes: "Synthetic moved agenda")])
+        let activity = try #require(try repository.inboxActivity(connectionID: connection.id).first)
+        #expect(activity.changedFields == ["time", "notes"])
+        #expect(activity.previousEvent?.startsAt == start)
+        #expect(activity.event.startsAt > end)
+        #expect(try repository.normalizedInstances(calendarBindingIDs: [calendar.id], from: start, through: end).count == 1)
+        let key = activity.sourceKeyHash
+        #expect(try repository.inboxObservation(sourceKeyHash: key)?.revision == 2)
+        try refresh([event(id: "series", originalStart: original, isManagedMirror: true)])
+        #expect(try repository.inboxObservation(sourceKeyHash: key) == nil)
+        #expect(try repository.inboxActivity(connectionID: connection.id, includeAcknowledged: true).isEmpty)
+    }
+
+    @Test("Confirmed removals and uncertain disappearance have different inbox evidence")
+    func removalEvidence() throws {
+        let repository = LocalStateRepository(database: try CalopodDatabase.inMemory())
+        let connection = testConnection()
+        let calendar = testCalendar(connectionID: connection.id)
+        try repository.saveConnection(connection)
+        try repository.replaceCalendarBindings(connectionID: connection.id, bindings: [calendar])
+        let cache = EventCache(repository: repository)
+        let start = Date(timeIntervalSince1970: 1000)
+        let end = start.addingTimeInterval(10000)
+        try cache.apply(ProviderEventPage(events: [event(id: "confirmed", start: start, end: end),
+                                                 event(id: "uncertain", start: start, end: end)], nextSyncToken: nil),
+                        connection: connection, calendar: calendar, from: start, through: end)
+        let tombstones = [ProviderTombstoneEvidence.removed, .unconfirmed].enumerated().map { index, evidence in
+            ProviderEvent(provider: "eventkit", connectionID: connection.id, calendarID: calendar.providerCalendarID,
+                          eventID: index == 0 ? "confirmed" : "uncertain", seriesID: nil, originalStart: nil,
+                          start: nil, end: nil, isAllDay: false, availability: .busy, isCancelled: true,
+                          isPrivate: false, title: nil, updatedAt: nil, tombstoneEvidence: evidence)
+        }
+        try cache.apply(ProviderEventPage(events: tombstones, nextSyncToken: nil, refreshMode: .incremental),
+                        connection: connection, calendar: calendar, from: start, through: end)
+        let activity = try repository.inboxActivity(connectionID: connection.id)
+        #expect(activity.count == 1)
+        #expect(activity.first?.types == [.removed])
+        #expect(activity.first?.event.endsAt == end)
+        let uncertainKey = EventNormalizer.sourceKeyHash(provider: connection.provider, connectionID: connection.id,
+                                                         calendarBindingID: calendar.id, eventID: "uncertain")
+        #expect(try repository.inboxObservation(sourceKeyHash: uncertainKey)?.tombstone == nil)
+        #expect(try repository.normalizedInstances(calendarBindingIDs: [calendar.id], from: start, through: end).isEmpty)
+    }
+
+    @Test("New coverage establishes baselines and does not manufacture removals")
+    func windowExpansion() throws {
+        let repository = LocalStateRepository(database: try CalopodDatabase.inMemory())
+        let connection = testConnection()
+        let calendar = testCalendar(connectionID: connection.id)
+        try repository.saveConnection(connection)
+        try repository.replaceCalendarBindings(connectionID: connection.id, bindings: [calendar])
+        let cache = EventCache(repository: repository)
+        let start = Date(timeIntervalSince1970: 1000)
+        let end = start.addingTimeInterval(10000)
+        try cache.apply(ProviderEventPage(events: [event(id: "old", start: start, end: start.addingTimeInterval(1000))], nextSyncToken: nil),
+                        connection: connection, calendar: calendar, from: start, through: end)
+        try cache.apply(ProviderEventPage(events: [event(id: "expanded", start: end, end: end.addingTimeInterval(1000))], nextSyncToken: nil),
+                        connection: connection, calendar: calendar, from: start, through: end.addingTimeInterval(10000))
+        #expect(try repository.inboxActivity(connectionID: connection.id).isEmpty)
+        let key = EventNormalizer.sourceKeyHash(provider: connection.provider, connectionID: connection.id,
+                                               calendarBindingID: calendar.id, eventID: "old")
+        #expect(try repository.inboxObservation(sourceKeyHash: key)?.tombstone == nil)
+    }
+
     private func testConnection() -> StoredConnection {
         StoredConnection(
             id: "connection",

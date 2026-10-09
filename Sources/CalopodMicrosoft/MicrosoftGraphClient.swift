@@ -510,7 +510,8 @@ private struct MicrosoftEvent: Decodable {
             url: onlineMeeting?.joinUrl ?? onlineMeetingUrl ?? webLink,
             organizer: organizer?.participant,
             attendees: (attendees ?? []).map(\.participant),
-            responseMetadata: currentUserResponse(scope: responseIdentityScope)
+            responseMetadata: currentUserResponse(scope: responseIdentityScope),
+            tombstoneEvidence: removed != nil ? .unconfirmed : nil
         )
     }
 

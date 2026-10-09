@@ -26,7 +26,11 @@ public struct EventCacheResult: Equatable, Sendable {
     }
 }
 
-/// Applies one page of provider events to the local normalized-event store.
+public enum EventCacheError: Error {
+    case incompleteRead
+}
+
+/// Applies one complete provider read to the local normalized-event store.
 /// This is the boundary between "whatever a provider just returned" and the
 /// stable, provider-agnostic `StoredNormalizedInstance` shape the rest of
 /// the sync engine (planning, Availability) actually works with.
@@ -46,6 +50,7 @@ public struct EventCache: Sendable {
         through end: Date,
         now: Date = Date()
     ) throws -> EventCacheResult {
+        guard page.readIsComplete != false else { throw EventCacheError.incompleteRead }
         let normalized = EventNormalizer.normalize(
             page.events,
             connection: connection,
@@ -68,10 +73,17 @@ public struct EventCache: Sendable {
             windowStart: start,
             windowEnd: end,
             instances: normalized.instances,
-            cancelledSourceKeyHashes: normalized.cancelledSourceKeyHashes + normalized.excludedSourceKeyHashes,
+            cancelledSourceKeyHashes: normalized.cancelledSourceKeyHashes,
             isFullRefresh: page.refreshMode == .full,
             cursorUpdates: cursors,
-            now: now
+            now: now,
+            observationInstances: normalized.observationInstances,
+            removedSourceKeyHashes: normalized.removedSourceKeyHashes,
+            excludedSourceKeyHashes: normalized.excludedSourceKeyHashes,
+            unconfirmedSourceKeyHashes: normalized.unconfirmedSourceKeyHashes
+                + normalized.observationInstances.filter {
+                    $0.endsAt <= start || $0.startsAt >= end
+                }.map(\.sourceKeyHash)
         )
         return EventCacheResult(
             storedCount: normalized.instances.count,
@@ -89,6 +101,9 @@ public struct EventCache: Sendable {
 /// may share one event ID. Moving an occurrence preserves that identity.
 public enum EventNormalizer {
     public struct Result: Equatable, Sendable {
+        public let observationInstances: [StoredNormalizedInstance]
+        public let removedSourceKeyHashes: [String]
+        public let unconfirmedSourceKeyHashes: [String]
         public let instances: [StoredNormalizedInstance]
         public let cancelledSourceKeyHashes: [String]
         public let discardedCount: Int
@@ -105,6 +120,9 @@ public enum EventNormalizer {
         excludedEventIDs: Set<String> = []
     ) -> Result {
         var instances: [StoredNormalizedInstance] = []
+        var observations: [StoredNormalizedInstance] = []
+        var removals: [String] = []
+        var unconfirmed: [String] = []
         var cancellations: [String] = []
         var excluded: [String] = []
         var ingestion = EventIngestionSummary()
@@ -139,22 +157,23 @@ public enum EventNormalizer {
                 continue
             }
             if event.isCancelled {
-                cancellations.append(sourceKeyHash)
+                switch event.tombstoneEvidence {
+                case .removed: removals.append(sourceKeyHash)
+                case .unconfirmed: unconfirmed.append(sourceKeyHash)
+                default: cancellations.append(sourceKeyHash)
+                }
                 continue
             }
-            // A malformed timespan or one that falls entirely outside the
-            // requested window is dropped rather than stored, keeping every
-            // downstream pass bounded to the window it asked for.
+            // Keep valid moves for existing inbox observations even outside
+            // the window. The planning cache remains bounded to this read.
             guard let startsAt = event.start,
                   let endsAt = event.end,
                   startsAt < endsAt else {
                 ingestion.invalidTimespanCount += 1
                 continue
             }
-            guard endsAt > windowStart, startsAt < windowEnd else {
-                ingestion.outOfRangeCount += 1
-                continue
-            }
+            let isInRange = endsAt > windowStart && startsAt < windowEnd
+            if !isInRange { ingestion.outOfRangeCount += 1 }
 
             let recurrenceID = event.originalStart ?? event.seriesID
             // Fingerprints the full event content (not just identity) so a
@@ -181,33 +200,36 @@ public enum EventNormalizer {
                     event.attendees.map { participantIdentity($0) }.sorted().joined(separator: "\n"),
                 ]
             )
-            instances.append(
-                StoredNormalizedInstance(
-                    sourceKeyHash: sourceKeyHash,
-                    connectionID: connection.id,
-                    calendarBindingID: calendar.id,
-                    providerEventID: event.eventID,
-                    recurrenceID: recurrenceID,
-                    startsAt: startsAt,
-                    endsAt: endsAt,
-                    isAllDay: event.isAllDay,
-                    availability: event.availability.rawValue,
-                    isCancelled: false,
-                    isPrivate: event.isPrivate,
-                    title: event.title,
-                    contentFingerprint: fingerprint,
-                    providerUpdatedAt: event.updatedAt,
-                    location: event.location,
-                    notes: event.notes,
-                    url: event.url,
-                    organizer: event.organizer,
-                    attendees: event.attendees,
-                    currentUserResponse: event.currentUserResponse
-                )
+            let instance = StoredNormalizedInstance(
+                sourceKeyHash: sourceKeyHash,
+                connectionID: connection.id,
+                calendarBindingID: calendar.id,
+                providerEventID: event.eventID,
+                recurrenceID: recurrenceID,
+                startsAt: startsAt,
+                endsAt: endsAt,
+                isAllDay: event.isAllDay,
+                availability: event.availability.rawValue,
+                isCancelled: false,
+                isPrivate: event.isPrivate,
+                title: event.title,
+                contentFingerprint: fingerprint,
+                providerUpdatedAt: event.updatedAt,
+                location: event.location,
+                notes: event.notes,
+                url: event.url,
+                organizer: event.organizer,
+                attendees: event.attendees,
+                currentUserResponse: event.currentUserResponse
             )
+            observations.append(instance)
+            if isInRange { instances.append(instance) }
         }
 
         return Result(
+            observationInstances: observations,
+            removedSourceKeyHashes: removals.sorted(),
+            unconfirmedSourceKeyHashes: unconfirmed.sorted(),
             instances: instances.sorted {
                 ($0.startsAt, $0.endsAt, $0.sourceKeyHash)
                     < ($1.startsAt, $1.endsAt, $1.sourceKeyHash)

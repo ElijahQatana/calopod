@@ -11,6 +11,7 @@ extension CalopodDatabase {
         "v7_agent_control",
         "v8_arm_names",
         "v9_event_response",
+        "v10_inbox_observations",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -258,6 +259,36 @@ extension CalopodDatabase {
             try database.alter(table: "calendar_bindings") { table in
                 table.add(column: "response_identity_scope", .text)
                     .notNull().defaults(to: "unverified")
+            }
+        }
+
+        migrator.registerMigration("v10_inbox_observations") { database in
+            // Calendar discovery can lose a binding temporarily. Only removing
+            // its Connection should cascade private observation detail.
+            try database.create(table: "inbox_observations") { table in
+                table.column("source_key_hash", .text).primaryKey()
+                table.column("connection_id", .text).notNull()
+                    .references("connections", onDelete: .cascade)
+                table.column("calendar_binding_id", .text).notNull()
+                table.column("snapshot", .blob).notNull()
+            }
+            try database.create(table: "inbox_activity") { table in
+                table.column("source_key_hash", .text).notNull()
+                    .references("inbox_observations", onDelete: .cascade)
+                table.column("revision", .integer).notNull()
+                table.column("observed_at", .datetime).notNull()
+                table.column("acknowledged_at", .datetime)
+                table.column("snapshot", .blob).notNull()
+                table.primaryKey(["source_key_hash", "revision"])
+            }
+            try database.create(table: "inbox_coverage") { table in
+                table.column("connection_id", .text).notNull()
+                    .references("connections", onDelete: .cascade)
+                table.column("calendar_binding_id", .text).notNull()
+                table.column("starts_at", .datetime).notNull()
+                table.column("ends_at", .datetime).notNull()
+                table.column("observed_at", .datetime).notNull()
+                table.primaryKey(["connection_id", "calendar_binding_id"])
             }
         }
 

@@ -379,3 +379,40 @@ func v8ResponseMigrationPreservesEventsWithoutInventingRSVP() throws {
     try db.migrate()
     #expect(try repository.normalizedInstances(calendarBindingIDs: ["binding"], from: start, through: end) == events)
 }
+
+@Test
+func inboxMigrationKeepsExistingEventsWithoutInventingHistory() throws {
+    let path = FileManager.default.temporaryDirectory
+        .appendingPathComponent("inbox-migration-\(UUID().uuidString).sqlite").path
+    defer { try? FileManager.default.removeItem(atPath: path) }
+    do {
+        let queue = try DatabaseQueue(path: path)
+        try CalopodDatabase.migrator.migrate(queue, upTo: "v9_event_response")
+        try queue.write { database in
+            try database.execute(sql: """
+                INSERT INTO configurations VALUES ('config', 1000, 1000);
+                INSERT INTO connections
+                    (id, configuration_id, provider, display_label, is_enabled, created_at, updated_at)
+                VALUES ('connection', 'config', 'eventkit', 'Synthetic', 1, 1000, 1000);
+                INSERT INTO calendar_bindings
+                    (id, connection_id, provider_calendar_id, display_label, is_selected, is_read_only, created_at)
+                VALUES ('calendar', 'connection', 'source', 'Synthetic', 1, 1, 1000);
+                INSERT INTO normalized_instances
+                    (source_key_hash, connection_id, calendar_binding_id, provider_event_id,
+                     starts_at, ends_at, is_all_day, availability, is_cancelled, content_fingerprint, seen_generation, title)
+                VALUES ('event', 'connection', 'calendar', 'event', 1000, 2000, 0, 'busy', 0, 'synthetic', 1, 'Synthetic event');
+                """)
+        }
+    }
+    let store = try CalopodDatabase(path: path)
+    try store.read { database in
+        for table in ["inbox_observations", "inbox_activity", "inbox_coverage"] {
+            let count = try Int.fetchOne(database, sql: "SELECT COUNT(*) FROM \(table)")
+            #expect(count == 0)
+        }
+        let count = try Int.fetchOne(database, sql: "SELECT COUNT(*) FROM connections")
+        #expect(count == 1)
+        let eventCount = try Int.fetchOne(database, sql: "SELECT COUNT(*) FROM normalized_instances WHERE title = 'Synthetic event'")
+        #expect(eventCount == 1)
+    }
+}
