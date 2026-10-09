@@ -80,9 +80,9 @@ public struct EventCache: Sendable {
 }
 
 /// Converts raw provider events into normalized instances keyed by a stable
-/// hash of provider, connection, calendar, and event ID, rather than by the
-/// event ID alone — so identity survives a provider reassigning IDs and
-/// doesn't collide across connections or calendars.
+/// hash of provider, connection, calendar, and event ID. EventKit recurring
+/// instances also include their original occurrence date because a series
+/// may share one event ID. Moving an occurrence preserves that identity.
 public enum EventNormalizer {
     public struct Result: Equatable, Sendable {
         public let instances: [StoredNormalizedInstance]
@@ -116,9 +116,11 @@ public enum EventNormalizer {
                 discardedCount += 1
                 continue
             }
-            let sourceKeyHash = digest(
-                fields: [event.provider, connection.id, calendar.id, event.eventID]
-            )
+            var identityFields = [event.provider, connection.id, calendar.id, event.eventID]
+            if event.provider == "eventkit", let occurrence = event.originalStart, !occurrence.isEmpty {
+                identityFields.append(occurrence)
+            }
+            let sourceKeyHash = digest(fields: identityFields)
             // Copies never become sources, including mapped copies whose
             // marker was removed. Evict any previous cached source instance
             // on incremental refresh as well as on a full refresh.
