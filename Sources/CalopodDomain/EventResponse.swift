@@ -51,6 +51,13 @@ public struct RSVPActionCapability: Codable, Equatable, Sendable {
     public let supportedScopes: [RSVPActionScope]
     public let unavailableReasons: [RSVPUnavailableReason]
 
+    /// Supplied only by a provider action implementation that establishes scope.
+    public init(supportedScopes: [RSVPActionScope]) {
+        isEligible = !supportedScopes.isEmpty
+        self.supportedScopes = supportedScopes
+        unavailableReasons = []
+    }
+
     public init(unavailableReasons: [RSVPUnavailableReason]) {
         isEligible = false
         supportedScopes = []
@@ -70,13 +77,14 @@ public struct EventResponse: Codable, Equatable, Sendable {
         respondedAt: Date? = nil,
         evidence: ResponseEvidence = .none,
         limits: [ResponseLimit] = [],
-        unavailableReasons: [RSVPUnavailableReason] = [.actionsNotImplemented]
+        unavailableReasons: [RSVPUnavailableReason] = [.actionsNotImplemented],
+        actionCapability: RSVPActionCapability? = nil
     ) {
         self.state = state
         self.respondedAt = respondedAt
         self.evidence = evidence
         self.limits = limits
-        actionCapability = RSVPActionCapability(unavailableReasons: unavailableReasons)
+        self.actionCapability = actionCapability ?? RSVPActionCapability(unavailableReasons: unavailableReasons)
     }
 
     public static let unavailable = EventResponse(
