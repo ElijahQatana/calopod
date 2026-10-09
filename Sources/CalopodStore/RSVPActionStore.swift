@@ -18,7 +18,7 @@ extension LocalStateRepository {
     }
 
     /// Atomic reservation prevents another process from resending an uncertain action.
-    public func beginRSVPAction(_ intent: RSVPActionIntent) throws -> (record: RSVPActionRecord, isNew: Bool) {
+    public func beginRSVPAction(_ intent: RSVPActionIntent, sessionUpdate: InboxReviewSessionUpdate? = nil) throws -> (record: RSVPActionRecord, isNew: Bool) {
         try database.write { db in
             if let row = try Row.fetchOne(db, sql: "SELECT record FROM inbox_rsvp_actions WHERE id = ?", arguments: [intent.id]) {
                 let existing = try JSONDecoder().decode(RSVPActionRecord.self, from: row["record"])
@@ -34,6 +34,7 @@ extension LocalStateRepository {
             let record = RSVPActionRecord(intent: intent, outcome: RSVPActionOutcome(status: .pending))
             try db.execute(sql: "INSERT INTO inbox_rsvp_actions (id, target, status, record) VALUES (?, ?, ?, ?)",
                            arguments: [intent.id, target, record.outcome.status.rawValue, try JSONEncoder.sorted.encode(record)])
+            if let sessionUpdate { try writeInboxReviewSession(db, update: sessionUpdate) }
             return (record, true)
         }
     }

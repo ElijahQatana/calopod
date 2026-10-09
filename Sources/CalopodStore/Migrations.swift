@@ -14,6 +14,7 @@ extension CalopodDatabase {
         "v10_inbox_observations",
         "v11_inbox_context_settings",
         "v12_inbox_rsvp_actions",
+        "v13_inbox_review_sessions",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -312,6 +313,30 @@ extension CalopodDatabase {
                 table.column("status", .text).notNull()
                 table.column("record", .blob).notNull()
             }
+        }
+
+        migrator.registerMigration("v13_inbox_review_sessions") { database in
+            try database.alter(table: "normalized_instances") { table in
+                table.add(column: "provider_series_id", .text)
+            }
+            try database.execute(sql: """
+                CREATE TABLE inbox_review_sessions (
+                    id TEXT PRIMARY KEY, generation INTEGER NOT NULL,
+                    updated_at DATETIME NOT NULL, completed INTEGER NOT NULL,
+                    has_unresolved_actions INTEGER NOT NULL, snapshot BLOB NOT NULL
+                );
+                CREATE TABLE inbox_review_session_connections (
+                    session_id TEXT NOT NULL REFERENCES inbox_review_sessions(id) ON DELETE CASCADE,
+                    connection_id TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
+                    PRIMARY KEY (session_id, connection_id)
+                );
+                CREATE TRIGGER inbox_review_connection_removal BEFORE DELETE ON connections
+                BEGIN
+                    DELETE FROM inbox_review_sessions WHERE id IN (
+                        SELECT session_id FROM inbox_review_session_connections WHERE connection_id = OLD.id
+                    );
+                END;
+                """)
         }
 
         return migrator
