@@ -182,6 +182,10 @@ enum InboxCLI {
             let rows = try Set(snapshot.sources.map(\.connectionID)).flatMap { try repository.inboxActivity(connectionID: $0, includeAcknowledged: all) }
                 .filter { bindings.contains($0.event.calendarBindingID) }
                 .filter { entry in
+                    if full.events.contains(where: { $0.event.sourceKeyHash == entry.sourceKeyHash }) { return true }
+                    return try repository.inboxObservation(sourceKeyHash: entry.sourceKeyHash)?.tombstone != nil
+                }
+                .filter { entry in
                     if !options.excludeMaybe { return true }
                     return try repository.inboxObservation(sourceKeyHash: entry.sourceKeyHash)?.event.currentUserResponse.state != .tentative
                 }
@@ -191,8 +195,8 @@ enum InboxCLI {
                 }
                 .filter { entry in !options.conflicts || query.rows.contains(where: { $0.item.event.sourceKeyHash == entry.sourceKeyHash && $0.reasons.contains(.conflict) }) }
                 .sorted { ($0.observedAt, $0.sourceKeyHash, $0.revision) > ($1.observedAt, $1.sourceKeyHash, $1.revision) }
-            items = rows.map { entry in item(entry.event, revision: entry.revision, activity: entry,
-                row: query.rows.first { $0.item.event.sourceKeyHash == entry.sourceKeyHash }, context: full, details: false) }
+            items = try rows.map { entry in item(entry.event, revision: entry.revision, activity: entry,
+                row: query.rows.first { $0.item.event.sourceKeyHash == entry.sourceKeyHash }, observation: try repository.inboxObservation(sourceKeyHash: entry.sourceKeyHash), context: full, details: false) }
         } else {
             let bindings = Set(snapshot.sources.map(\.bindingID))
             items = query.rows.filter { bindings.contains($0.item.event.calendarBindingID) }.map { item($0.item.event, revision: $0.item.observation?.revision ?? 1, row: $0, context: full, details: false) }
@@ -213,7 +217,8 @@ enum InboxCLI {
         let (key, revision) = try parse(identifier)
         let snapshot = try repository.inboxContextSnapshot()
         guard let observation = try repository.inboxObservation(sourceKeyHash: key),
-              snapshot.sources.contains(where: { $0.bindingID == observation.event.calendarBindingID }) else {
+              snapshot.sources.contains(where: { $0.bindingID == observation.event.calendarBindingID }),
+              observation.tombstone != nil || snapshot.events.contains(where: { $0.event.sourceKeyHash == key }) else {
             throw ValidationError("Item is unavailable in selected sources.")
         }
         let activity = try repository.inboxActivity(connectionID: observation.event.connectionID, includeAcknowledged: true)
@@ -242,16 +247,16 @@ enum InboxCLI {
         let observed = observation ?? row?.item.observation
         let detail = InboxItemDetail(eventID: event.sourceKeyHash, revision: revision,
             currentRevisionID: observed.map { id(event.sourceKeyHash, $0.revision) },
-            reviewed: activity?.acknowledgedAt != nil || (observed?.acknowledgedRevision ?? 0) >= revision, response: event.currentUserResponse,
+            reviewed: activity.map { $0.acknowledgedAt != nil } ?? ((observed?.acknowledgedRevision ?? 0) >= revision), response: event.currentUserResponse,
             reasons: row?.reasons.map(\.rawValue) ?? [], changedFields: activity?.changedFields ?? [],
             timing: activity?.responseTiming.rawValue ?? row?.changeTiming?.rawValue ?? observed?.responseTiming.rawValue ?? "not-applicable",
             observedAt: date(activity?.observedAt ?? row?.item.observation?.lastObservedAt), acknowledgedAt: date(activity?.acknowledgedAt),
-            activityTypes: activity?.types.map(\.rawValue) ?? [], location: details ? event.location : nil,
+            activityTypes: activity?.types.map(\.rawValue) ?? observed?.tombstone.map { [$0.rawValue] } ?? [], location: details ? event.location : nil,
             notes: details ? event.notes : nil, url: details ? event.url : nil, organizer: details ? event.organizer : nil,
             conflicts: conflicts, limits: event.currentUserResponse.limits.map(\.rawValue) + event.currentUserResponse.actionCapability.unavailableReasons.map(\.rawValue) + ["provider-read-only-command"],
             presence: row?.item.isPresenceConfirmed == false ? "unconfirmed" : "observed")
         return CommandItem(id: id(event.sourceKeyHash, revision), kind: "inbox", label: event.title, parentID: event.calendarBindingID,
             startsAt: date(event.startsAt), endsAt: date(event.endsAt), allDay: event.isAllDay,
-            cancelled: event.isCancelled || activity?.types.contains(.removed) == true || activity?.types.contains(.cancelled) == true, inbox: detail)
+            cancelled: event.isCancelled || (activity == nil && observed?.tombstone != nil) || activity?.types.contains(.removed) == true || activity?.types.contains(.cancelled) == true, inbox: detail)
     }
 }

@@ -89,6 +89,17 @@ import Testing
         #expect(throws: (any Error).self) { try InboxCLI.acknowledge("event:99", repository: f.repository) }
     }
 
+    @Test func reviewingNewRevisionLeavesOldActivityUnread() throws {
+        let f = try Fixture()
+        try f.refresh([f.event("event")])
+        try f.refresh([f.event("event", notes: "First")])
+        try f.refresh([f.event("event", notes: "Second")])
+        _ = try InboxCLI.acknowledge("event:3", repository: f.repository)
+        let unread = try f.list(activity: true)
+        #expect(unread.items?.map(\.id) == ["event:2"])
+        #expect(unread.items?.first?.inbox?.reviewed == false)
+    }
+
     @Test func movedAndRemovedActivity() throws {
         let f = try Fixture()
         try f.refresh([f.event("event")])
@@ -100,6 +111,17 @@ import Testing
         try f.refresh([], removed: ["event"])
         #expect(try f.list(activity: true).items?.first?.cancelled == true)
         #expect(try InboxCLI.inspect("event:3", repository: f.repository).items?.first?.startsAt == InboxCLI.date(Date(timeIntervalSince1970: 5000)))
+    }
+
+    @Test func mappedCopiesStayOutOfActivityAndInspect() throws {
+        let f = try Fixture()
+        try f.refresh([f.event("copy")])
+        try f.refresh([f.event("copy", notes: "Edit")])
+        #expect(try f.list(activity: true).count == 1)
+        try f.repository.saveArm(StoredArm(id: "arm", configurationID: "default", sourceBindingIDs: ["calendar"], targetBindingID: "calendar", ruleMode: .busy))
+        try f.repository.saveMirrorMapping(StoredMirrorMapping(mirrorKey: "mapping", armID: "arm", sourceKeyHash: "original", providerEventID: "copy", providerVersion: nil, desiredFingerprint: "example", ownershipKeyID: "example", updatedAt: f.start))
+        #expect(try f.list(activity: true).count == 0)
+        #expect(throws: (any Error).self) { try InboxCLI.inspect("copy:2", repository: f.repository) }
     }
 
     @Test func partialRefreshReadsOnly() async throws {

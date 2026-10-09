@@ -169,7 +169,7 @@ enum HumanOutputRenderer {
                         if localIDs, let current = inbox.currentRevisionID { lines.append("  Current revision: \(clean(current))") }
                         if let responded = inbox.response.respondedAt { lines.append("  Response timestamp: \(InboxCLI.date(responded)!)") }
                         lines.append("  Response evidence: \(readable(inbox.response.evidence.rawValue))")
-                        lines.append("  Reasons: \(inbox.reasons.map { $0 == "needs-response" ? "Needs RSVP" : readable($0) }.joined(separator: ", "))")
+                        lines.append("  Current reasons: \(inbox.reasons.map { $0 == "needs-response" ? "Needs RSVP" : readable($0) }.joined(separator: ", "))")
                         if !inbox.activityTypes.isEmpty { lines.append("  Activity: \(inbox.activityTypes.map(readable).joined(separator: ", "))") }
                         if !inbox.changedFields.isEmpty { lines.append("  Changed: \(inbox.changedFields.joined(separator: ", "))") }
                         lines.append("  Timing: \(readable(inbox.timing))")
