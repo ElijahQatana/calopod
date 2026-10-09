@@ -93,6 +93,10 @@ enum HumanOutputRenderer {
                 lines.append("Sources: \(sources.count)")
                 for (index, source) in sources.enumerated() {
                     lines.append("  \(index + 1). \(label(source.label, fallback: "Unnamed calendar")) (\(clean(source.provider)))")
+                    if let coverage = source.inbox {
+                        lines.append("  Coverage: \(coverage.startsAt ?? "unknown") to \(coverage.endsAt ?? "unknown")")
+                        lines.append("  Freshness: \(coverage.status); observed \(coverage.observedAt ?? "never")")
+                    }
                     if localIDs { lines += ["  Source ID: \(clean(source.id))", "  Connection ID: \(clean(source.connectionID))"] }
                 }
             }
@@ -133,11 +137,14 @@ enum HumanOutputRenderer {
                             lines.append("  Connection: \(label(context.connectionLabels[parent], fallback: "Unnamed Connection"))")
                             if localIDs { lines.append("  Connection ID: \(clean(parent))") }
                         }
-                    case "events":
+                    case "events", "inbox", "inbox.activity", "inbox.inspect":
                         lines.append("\(index + 1). \(label(item.label, fallback: "Untitled event"))")
                         if let parent = item.parentID {
                             let source = payload.sources?.first { $0.id == parent }
                             lines.append("  Calendar: \(label(source?.label ?? context.calendarLabels[parent], fallback: "Unknown calendar"))")
+                            if let connectionID = source?.connectionID {
+                                lines.append("  Connection: \(label(context.connectionLabels[connectionID], fallback: "Unnamed Connection"))")
+                            }
                             if localIDs { lines.append("  Calendar ID: \(clean(parent))") }
                         }
                         if let start = item.startsAt { lines.append("  From: \(clean(start))") }
@@ -155,6 +162,28 @@ enum HumanOutputRenderer {
                         if let enabled = context.connectionEnabled[item.id] {
                             lines.append("  State: \(enabled ? "enabled" : "disabled")")
                         }
+                    }
+                    if let inbox = item.inbox {
+                        lines.append("  Response: \(readable(inbox.response.state.rawValue))")
+                        lines.append("  Reviewed: \(inbox.reviewed ? "yes" : "no")")
+                        if localIDs, let current = inbox.currentRevisionID { lines.append("  Current revision: \(clean(current))") }
+                        if let responded = inbox.response.respondedAt { lines.append("  Response timestamp: \(InboxCLI.date(responded)!)") }
+                        lines.append("  Response evidence: \(readable(inbox.response.evidence.rawValue))")
+                        lines.append("  Current reasons: \(inbox.reasons.map { $0 == "needs-response" ? "Needs RSVP" : readable($0) }.joined(separator: ", "))")
+                        if !inbox.activityTypes.isEmpty { lines.append("  Activity: \(inbox.activityTypes.map(readable).joined(separator: ", "))") }
+                        if !inbox.changedFields.isEmpty { lines.append("  Changed: \(inbox.changedFields.joined(separator: ", "))") }
+                        lines.append("  Timing: \(readable(inbox.timing))")
+                        if let observed = inbox.observedAt { lines.append("  Observed: \(clean(observed))") }
+                        if let acknowledged = inbox.acknowledgedAt { lines.append("  Reviewed: \(clean(acknowledged))") }
+                        if let location = inbox.location { lines.append("  Location: \(clean(location))") }
+                        if let notes = inbox.notes { lines.append("  Notes: \(clean(notes))") }
+                        if let url = inbox.url { lines.append("  Link: \(clean(url))") }
+                        if let organizer = inbox.organizer { lines.append("  Organizer: \(clean(organizer.name ?? organizer.emailAddress ?? "Unknown"))") }
+                        for conflict in inbox.conflicts {
+                            lines.append("  Conflict: \(label(conflict.label, fallback: "Untitled event")) / \(label(conflict.calendarLabel, fallback: "Unknown calendar")): \(clean(conflict.startsAt)) to \(clean(conflict.endsAt))")
+                            if localIDs { lines.append("    Event ID: \(clean(conflict.eventID))") }
+                        }
+                        lines.append("  Limits: \(inbox.limits.map(readable).joined(separator: ", "))")
                     }
                     if localIDs { lines.append("  ID: \(clean(item.id))") }
                 }

@@ -167,12 +167,14 @@ public struct CommandSource: Codable, Equatable, Sendable {
     public let connectionID: String
     public let provider: String
     public let label: String?
+    let inbox: InboxSourceDetail?
 
-    public init(id: String, connectionID: String, provider: String, label: String?) {
+    public init(id: String, connectionID: String, provider: String, label: String?, inbox: InboxSourceDetail? = nil) {
         self.id = id
         self.connectionID = connectionID
         self.provider = provider
         self.label = label
+        self.inbox = inbox
     }
 }
 
@@ -198,6 +200,7 @@ public struct CommandItem: Codable, Equatable, Sendable {
     public let armID: String?
     public let mirrorKey: String?
     public let desiredFingerprint: String?
+    let inbox: InboxItemDetail?
 
     public init(
         id: String,
@@ -220,7 +223,8 @@ public struct CommandItem: Codable, Equatable, Sendable {
         reason: String? = nil,
         armID: String? = nil,
         mirrorKey: String? = nil,
-        desiredFingerprint: String? = nil
+        desiredFingerprint: String? = nil,
+        inbox: InboxItemDetail? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -243,6 +247,7 @@ public struct CommandItem: Codable, Equatable, Sendable {
         self.armID = armID
         self.mirrorKey = mirrorKey
         self.desiredFingerprint = desiredFingerprint
+        self.inbox = inbox
     }
 }
 

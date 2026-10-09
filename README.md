@@ -64,3 +64,6 @@ Automatic-sync controls and diagnostics are documented in [docs/AUTOMATIC_SYNC.m
 
 Sanitized support export and local-state recovery are documented in [docs/CLI_PREVIEW_SUPPORT.md](docs/CLI_PREVIEW_SUPPORT.md).
 Background service recovery and upgrade checks are documented in [docs/SERVICE_RECOVERY.md](docs/SERVICE_RECOVERY.md).
+
+Inbox list, activity, refresh, inspect, and local acknowledgement commands are described in
+[Inbox commands](docs/INBOX_CLI.md).
