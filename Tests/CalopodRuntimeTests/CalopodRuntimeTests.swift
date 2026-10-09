@@ -93,6 +93,44 @@ func agentScheduleRequiresExplicitRuntimeValues() throws {
 }
 
 #if os(macOS)
+@Test(arguments: [false, true])
+func runtimeHostResolutionFollowsInstalledCommandSymlinks(relativeLink: Bool) throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("calopod-installed-host-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let service = directory.appendingPathComponent("Library/Application Support/Calopod/Service")
+    let host = service.appendingPathComponent("eventkit-host/Calopod EventKit Host.app")
+    let executable = service.appendingPathComponent("bin/calopod")
+    let link = directory.appendingPathComponent(".local/bin/calopod")
+    let unrelatedHost = directory.appendingPathComponent(".local/eventkit-host/Calopod EventKit Host.app")
+    for path in [host, executable.deletingLastPathComponent(), link.deletingLastPathComponent(), unrelatedHost] {
+        try FileManager.default.createDirectory(at: path, withIntermediateDirectories: true)
+    }
+    #expect(FileManager.default.createFile(atPath: executable.path, contents: Data()))
+    try FileManager.default.createSymbolicLink(
+        atPath: link.path,
+        withDestinationPath: relativeLink
+            ? "../../Library/Application Support/Calopod/Service/bin/calopod"
+            : executable.path
+    )
+
+    let linked = try EventKitHostRunner.resolveAppURL(variables: [:], executableURL: link)
+    let direct = try EventKitHostRunner.resolveAppURL(variables: [:], executableURL: executable)
+    #expect(linked == host.standardizedFileURL)
+    #expect(linked == direct)
+
+    let overridden = try EventKitHostRunner.resolveAppURL(
+        variables: ["CALOPOD_EVENTKIT_HOST_APP": unrelatedHost.path],
+        executableURL: link
+    )
+    #expect(overridden == unrelatedHost.standardizedFileURL)
+
+    try FileManager.default.removeItem(at: host)
+    #expect(throws: CalopodRuntimeError.missingEventKitHost) {
+        try EventKitHostRunner.resolveAppURL(variables: [:], executableURL: link)
+    }
+}
+
 @Test
 func eventKitHostResolutionUsesAnAbsoluteConfiguredPathOrTheExecutableTree() throws {
     #expect(throws: CalopodRuntimeError.invalidEventKitHostPath) {

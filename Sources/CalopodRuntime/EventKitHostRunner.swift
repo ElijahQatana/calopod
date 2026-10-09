@@ -25,10 +25,9 @@ struct EventKitHostRunner {
     /// Finds the EventKit Host app: an explicit, validated absolute path
     /// from `CALOPOD_EVENTKIT_HOST_APP` first (required for a LaunchAgent,
     /// whose working directory can't be relied on), otherwise a search
-    /// upward from the running executable for a development build's
-    /// `eventkit-host` or `.build/eventkit-host` output — which only works
-    /// for a process launched from within (or under) the repository
-    /// checkout.
+    /// upward from the resolved executable for packaged `eventkit-host`
+    /// or development `.build/eventkit-host` output. Installed command
+    /// symlinks must resolve to the service payload before this search.
     static func resolveAppURL(
         variables: [String: String],
         executableURL: URL
@@ -40,7 +39,9 @@ struct EventKitHostRunner {
             return URL(fileURLWithPath: configured, isDirectory: true).standardizedFileURL
         }
 
-        var ancestor = executableURL.deletingLastPathComponent()
+        var ancestor = executableURL.standardizedFileURL
+            .resolvingSymlinksInPath()
+            .deletingLastPathComponent()
         while ancestor.path != "/" {
             let candidate = ancestor
                 .appendingPathComponent("eventkit-host", isDirectory: true)
