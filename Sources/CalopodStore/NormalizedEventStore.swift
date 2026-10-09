@@ -16,6 +16,7 @@ public struct StoredNormalizedInstance: Codable, Equatable, Sendable {
     public let calendarBindingID: String
     public let providerEventID: String
     public let recurrenceID: String?
+    public let providerSeriesID: String?
     public let startsAt: Date
     public let endsAt: Date
     public let isAllDay: Bool
@@ -52,13 +53,15 @@ public struct StoredNormalizedInstance: Codable, Equatable, Sendable {
         url: String? = nil,
         organizer: EventParticipant? = nil,
         attendees: [EventParticipant] = [],
-        currentUserResponse: EventResponse = .unavailable
+        currentUserResponse: EventResponse = .unavailable,
+        providerSeriesID: String? = nil
     ) {
         self.sourceKeyHash = sourceKeyHash
         self.connectionID = connectionID
         self.calendarBindingID = calendarBindingID
         self.providerEventID = providerEventID
         self.recurrenceID = recurrenceID
+        self.providerSeriesID = providerSeriesID
         self.startsAt = startsAt
         self.endsAt = endsAt
         self.isAllDay = isAllDay
@@ -161,8 +164,8 @@ extension LocalStateRepository {
                              provider_event_id, recurrence_id, starts_at, ends_at,
                              is_all_day, availability, is_cancelled, content_fingerprint,
                              seen_generation, title, is_private, provider_updated_at,
-                             location, notes, url, organizer_json, attendees_json, response_json)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             location, notes, url, organizer_json, attendees_json, response_json, provider_series_id)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(source_key_hash) DO UPDATE SET
                             connection_id = excluded.connection_id,
                             calendar_binding_id = excluded.calendar_binding_id,
@@ -183,7 +186,8 @@ extension LocalStateRepository {
                             url = excluded.url,
                             organizer_json = excluded.organizer_json,
                             attendees_json = excluded.attendees_json,
-                            response_json = excluded.response_json
+                            response_json = excluded.response_json,
+                            provider_series_id = excluded.provider_series_id
                         """,
                     arguments: [
                         instance.sourceKeyHash,
@@ -207,6 +211,7 @@ extension LocalStateRepository {
                         try encodeOptionalEventDetails(instance.organizer),
                         try encodeEventDetails(instance.attendees),
                         try encodeEventDetails(instance.currentUserResponse),
+                        instance.providerSeriesID,
                     ]
                 )
             }
@@ -291,7 +296,7 @@ extension LocalStateRepository {
                            provider_event_id, recurrence_id, starts_at, ends_at,
                            is_all_day, availability, is_cancelled, content_fingerprint,
                            title, is_private, provider_updated_at,
-                           location, notes, url, organizer_json, attendees_json, response_json
+                           location, notes, url, organizer_json, attendees_json, response_json, provider_series_id
                     FROM normalized_instances
                     WHERE calendar_binding_id IN (\(normalizedEventQuestionMarks(count: calendarBindingIDs.count)))
                       AND ends_at > ?
@@ -375,7 +380,8 @@ func normalizedInstance(_ row: Row) -> StoredNormalizedInstance {
         url: row["url"],
         organizer: decodeEventDetails(row["organizer_json"]),
         attendees: decodeEventDetails(row["attendees_json"]) ?? [],
-        currentUserResponse: decodeEventDetails(row["response_json"]) ?? .unavailable
+        currentUserResponse: decodeEventDetails(row["response_json"]) ?? .unavailable,
+        providerSeriesID: row["provider_series_id"]
     )
 }
 
