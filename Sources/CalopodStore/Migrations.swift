@@ -11,6 +11,7 @@ extension CalopodDatabase {
         "v7_agent_control",
         "v8_arm_names",
         "v9_event_response",
+        "v10_inbox_observations",
     ]
 
     static var migrator: DatabaseMigrator {
