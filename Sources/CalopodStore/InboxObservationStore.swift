@@ -1,3 +1,4 @@
+import CalopodDomain
 import Foundation
 import GRDB
 
@@ -55,7 +56,8 @@ extension LocalStateRepository {
                 firstObservedAt: observation.firstObservedAt, lastObservedAt: observation.lastObservedAt,
                 responseBaseline: observation.responseBaseline, responseTiming: observation.responseTiming,
                 tombstone: observation.tombstone,
-                acknowledgedRevision: max(observation.acknowledgedRevision ?? 0, revision)
+                acknowledgedRevision: max(observation.acknowledgedRevision ?? 0, revision),
+                previousInterval: observation.previousInterval
             ))
             return true
         }
@@ -73,7 +75,8 @@ extension LocalStateRepository {
                     event: observation.event, revision: observation.revision,
                     firstObservedAt: observation.firstObservedAt, lastObservedAt: observation.lastObservedAt,
                     responseBaseline: observation.responseBaseline, responseTiming: observation.responseTiming,
-                    tombstone: observation.tombstone, acknowledgedRevision: observation.revision
+                    tombstone: observation.tombstone, acknowledgedRevision: observation.revision,
+                    previousInterval: observation.previousInterval
                 ))
             }
             try db.execute(sql: """
@@ -87,7 +90,26 @@ extension LocalStateRepository {
 func loadInboxObservation(_ db: Database, sourceKeyHash: String) throws -> InboxObservation? {
     guard let data = try Data.fetchOne(db, sql: "SELECT snapshot FROM inbox_observations WHERE source_key_hash = ?",
                                       arguments: [sourceKeyHash]) else { return nil }
-    return try inboxDecode(data)
+    let observation: InboxObservation = try inboxDecode(data)
+    guard observation.previousInterval == nil else { return observation }
+    // Older snapshots predate durable move intervals. Recover the latest move
+    // from retained activity when available, without inventing missing history.
+    for data in try Data.fetchAll(db, sql: """
+        SELECT snapshot FROM inbox_activity WHERE source_key_hash = ? ORDER BY revision DESC
+        """, arguments: [sourceKeyHash]) {
+        let activity: InboxActivity = try inboxDecode(data)
+        guard let previous = activity.previousEvent,
+              previous.startsAt != activity.event.startsAt || previous.endsAt != activity.event.endsAt,
+              let interval = try? SyncWindow(start: previous.startsAt, end: previous.endsAt) else { continue }
+        return InboxObservation(
+            event: observation.event, revision: observation.revision,
+            firstObservedAt: observation.firstObservedAt, lastObservedAt: observation.lastObservedAt,
+            responseBaseline: observation.responseBaseline, responseTiming: observation.responseTiming,
+            tombstone: observation.tombstone, acknowledgedRevision: observation.acknowledgedRevision,
+            previousInterval: interval
+        )
+    }
+    return observation
 }
 
 private func saveInboxObservation(_ db: Database, observation: InboxObservation) throws {
@@ -160,7 +182,10 @@ func recordInboxObservations(
         let observation = InboxObservation(
             event: event, revision: revision, firstObservedAt: previous?.firstObservedAt ?? now,
             lastObservedAt: now, responseBaseline: baseline, responseTiming: timing,
-            tombstone: nil, acknowledgedRevision: previous?.acknowledgedRevision
+            tombstone: nil, acknowledgedRevision: previous?.acknowledgedRevision,
+            previousInterval: fields.contains("time") ? previous.flatMap {
+                try? SyncWindow(start: $0.event.startsAt, end: $0.event.endsAt)
+            } : previous?.previousInterval
         )
         try saveInboxObservation(db, observation: observation)
         if !types.isEmpty {
@@ -178,7 +203,8 @@ func recordInboxObservations(
                 event: previous.event, revision: previous.revision + 1,
                 firstObservedAt: previous.firstObservedAt, lastObservedAt: now,
                 responseBaseline: previous.responseBaseline, responseTiming: .notApplicable,
-                tombstone: type, acknowledgedRevision: previous.acknowledgedRevision
+                tombstone: type, acknowledgedRevision: previous.acknowledgedRevision,
+                previousInterval: previous.previousInterval
             )
             try saveInboxObservation(db, observation: observation)
             try saveInboxActivity(db, observation: observation, previous: previous.event,

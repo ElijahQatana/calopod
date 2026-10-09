@@ -32,6 +32,8 @@ public struct InboxObservation: Codable, Equatable, Sendable {
     public let responseTiming: InboxResponseTiming
     public let tombstone: InboxActivityType?
     public let acknowledgedRevision: Int64?
+    /// The interval immediately before the latest move, independent of activity retention.
+    public let previousInterval: SyncWindow?
 }
 
 /// Activity retains both intervals so moved events can be filtered once by

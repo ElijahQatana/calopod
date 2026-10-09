@@ -48,14 +48,15 @@ public struct InboxConflictAnalysis: Equatable, Sendable {
 /// days for all-day events. Preserve those endpoints; never round to UTC days.
 public enum InboxConflictCalculator {
     public static func analyze(
-        _ snapshot: InboxContextSnapshot, window: SyncWindow, freshnessCutoff: Date,
+        _ snapshot: InboxContextSnapshot, window: SyncWindow?, freshnessCutoff: Date,
         responseOverride: (key: String, state: EventResponseState)? = nil
     ) -> InboxConflictAnalysis {
         let sources = Set(snapshot.sources.map(\.bindingID))
         let unconfirmed = Set(snapshot.events.filter { !$0.isPresenceConfirmed }.map(\.event.sourceKeyHash))
-        let events = snapshot.events.map(\.event).filter {
-            sources.contains($0.calendarBindingID) && !$0.isCancelled
-                && $0.startsAt < $0.endsAt && $0.endsAt > window.start && $0.startsAt < window.end
+        let events = snapshot.events.map(\.event).filter { event in
+            sources.contains(event.calendarBindingID) && !event.isCancelled
+                && event.startsAt < event.endsAt
+                && (window.map { event.endsAt > $0.start && event.startsAt < $0.end } ?? true)
         }
         let blocking = events.filter {
             let response = responseOverride?.key == $0.sourceKeyHash ? responseOverride!.state : $0.currentUserResponse.state
@@ -87,7 +88,9 @@ public enum InboxConflictCalculator {
                 || source.coverage.map({ $0.observedAt < freshnessCutoff }) == true {
                 warnings.append(InboxContextWarning(kind: .staleSource, bindingID: source.bindingID, sourceKeyHash: nil))
             }
-            if source.coverage.map({ $0.startsAt > window.start || $0.endsAt < window.end }) != false {
+            if source.coverage.map({ coverage in
+                window.map { coverage.startsAt > $0.start || coverage.endsAt < $0.end } ?? false
+            }) != false {
                 warnings.append(InboxContextWarning(kind: .incompleteCoverage, bindingID: source.bindingID, sourceKeyHash: nil))
             }
             if snapshot.unprovenDuplicateBindingIDs.contains(source.bindingID) {
