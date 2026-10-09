@@ -60,6 +60,32 @@ struct RSVPActionTests {
         #expect(await provider.writes == 0)
     }
 
+    @Test func cancelledIntentRemainsRecoverableWithoutSubmission() async throws {
+        let state = LocalStateRepository(database: try .inMemory())
+        let intent = RSVPActionIntent(target: target, expectedVersion: "v1", previousResponse: .needsResponse, decision: .yes)
+        let provider = ActionStub(state: state, result: .unknown)
+        let executor = RSVPActionExecutor(state: state)
+        let task = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await executor.perform(intent, using: provider)
+        }
+        #expect(try await task.value.outcome.status == .unknown)
+        #expect(try await executor.perform(intent, using: provider).outcome.status == .unknown)
+        #expect(await provider.writes == 0)
+    }
+
+    @Test func concurrentCallsReserveOneSubmission() async throws {
+        let state = LocalStateRepository(database: try .inMemory())
+        let intent = RSVPActionIntent(target: target, expectedVersion: "v1", previousResponse: .needsResponse, decision: .yes)
+        let provider = ActionStub(state: state, result: .unknown)
+        let executor = RSVPActionExecutor(state: state)
+        try await withThrowingTaskGroup(of: RSVPActionRecord.self) { group in
+            for _ in 0..<6 { group.addTask { try await executor.perform(intent, using: provider) } }
+            for try await record in group { #expect(record.outcome.status == .unknown) }
+        }
+        #expect(await provider.writes == 1)
+    }
+
     @Test func matchingPreviousResponseDoesNotProveLostRequestCompleted() {
         let intent = RSVPActionIntent(target: target, expectedVersion: "v1", previousResponse: .accepted, decision: .yes)
         let event = ProviderEvent(provider: "google", connectionID: target.connectionID, calendarID: target.calendarID,
