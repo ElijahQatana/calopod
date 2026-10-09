@@ -8,6 +8,11 @@ public enum ProviderAvailability: String, Codable, Sendable {
     case unavailable
 }
 
+/// Disappearance from a bounded provider view is not always deletion.
+public enum ProviderTombstoneEvidence: String, Codable, Sendable {
+    case cancelled, removed, unconfirmed
+}
+
 /// A calendar event exactly as one provider client reports it, before
 /// `EventNormalizer` reshapes it into a `StoredNormalizedInstance`. Provider
 /// clients translate into this common shape so nothing downstream needs to
@@ -23,6 +28,7 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
     public let end: Date?
     public let isAllDay: Bool
     public let availability: ProviderAvailability
+    public let tombstoneEvidence: ProviderTombstoneEvidence?
     public let isCancelled: Bool
     public let isPrivate: Bool
     public let title: String?
@@ -59,7 +65,8 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
         url: String? = nil,
         organizer: EventParticipant? = nil,
         attendees: [EventParticipant] = [],
-        responseMetadata: EventResponse? = nil
+        responseMetadata: EventResponse? = nil,
+        tombstoneEvidence: ProviderTombstoneEvidence? = nil
     ) {
         self.provider = provider
         self.connectionID = connectionID
@@ -71,6 +78,7 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
         self.end = end
         self.isAllDay = isAllDay
         self.availability = availability
+        self.tombstoneEvidence = tombstoneEvidence
         self.isCancelled = isCancelled
         self.isPrivate = isPrivate
         self.title = title
@@ -110,7 +118,8 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
             url: url,
             organizer: organizer,
             attendees: attendees,
-            responseMetadata: responseMetadata
+            responseMetadata: responseMetadata,
+            tombstoneEvidence: tombstoneEvidence
         )
     }
 }
@@ -120,6 +129,8 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
 /// time without re-scanning the whole calendar.
 public struct ProviderEventPage: Codable, Equatable, Sendable {
     public let events: [ProviderEvent]
+    /// Missing on older serialized reads, whose adapters already collected all pages.
+    public let readIsComplete: Bool?
     public let nextSyncToken: String?
     public let refreshMode: ProviderRefreshMode
     public let cursorUpdates: [ProviderCursorUpdate]
@@ -128,9 +139,11 @@ public struct ProviderEventPage: Codable, Equatable, Sendable {
         events: [ProviderEvent],
         nextSyncToken: String?,
         refreshMode: ProviderRefreshMode = .full,
-        cursorUpdates: [ProviderCursorUpdate] = []
+        cursorUpdates: [ProviderCursorUpdate] = [],
+        readIsComplete: Bool = true
     ) {
         self.events = events
+        self.readIsComplete = readIsComplete
         self.nextSyncToken = nextSyncToken
         self.refreshMode = refreshMode
         self.cursorUpdates = cursorUpdates

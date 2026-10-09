@@ -191,6 +191,7 @@ struct MicrosoftGraphClientTests {
         #expect(!page.events[0].isManagedMirror)
         #expect(page.events[0].start != nil)
         #expect(page.events[1].isCancelled)
+        #expect(page.events[1].tombstoneEvidence == .unconfirmed)
         #expect(page.events[1].start == nil)
         #expect(page.nextSyncToken?.contains("$deltatoken=opaque") == true)
     }
