@@ -2,7 +2,7 @@ import CalopodDomain
 import CalopodStore
 import Foundation
 
-public struct InboxAttentionFilter: Equatable, Sendable {
+public struct InboxAttentionFilter: Codable, Equatable, Sendable {
     public let window: SyncWindow?
     public let excludeMaybe: Bool
     public let conflictsOnly: Bool

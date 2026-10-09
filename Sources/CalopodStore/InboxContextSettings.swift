@@ -6,7 +6,7 @@ public enum InboxContextSettingsError: Error, Equatable {
 }
 
 /// Local display margins, independent of conflict detection and sync coverage.
-public struct InboxContextSettings: Equatable, Sendable {
+public struct InboxContextSettings: Codable, Equatable, Sendable {
     public let beforeMinutes: Int
     public let afterMinutes: Int
 
