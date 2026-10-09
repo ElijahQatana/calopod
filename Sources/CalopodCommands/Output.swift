@@ -10,6 +10,9 @@ public struct OutputOptions: ParsableArguments {
     @Option(name: .long, help: "Output format: human or json.")
     public var format: OutputFormat = .human
 
+    @Flag(name: .long, help: "Include exact identifiers in local human-readable output.")
+    public var ids = false
+
     public init() {}
 }
 
@@ -255,92 +258,17 @@ public enum OutputRenderer {
         command: String,
         payload: CommandPayload,
         warnings: [String] = [],
-        format: OutputFormat
+        format: OutputFormat,
+        showIDs: Bool = false,
+        human: HumanOutputContext = HumanOutputContext(),
+        width: Int = 80
     ) throws -> String {
         switch format {
         case .human:
-            var lines = [payload.message]
-            if let count = payload.count {
-                lines.append("Count: \(count)")
-            }
-            if let mode = payload.mode {
-                lines.append("Mode: \(mode)")
-            }
-            if let range = payload.range {
-                lines.append("From: \(range.start)")
-                lines.append("Through: \(range.endExclusive) (exclusive)")
-                lines.append("Timezone: \(range.timezone)")
-            }
-            if let sources = payload.sources {
-                lines.append("Sources: \(sources.count)")
-                lines.append(contentsOf: sources.map {
-                    [$0.id, $0.label, $0.provider].compactMap { $0 }.joined(separator: "  ")
-                })
-            }
-            if let items = payload.items {
-                lines.append(contentsOf: items.map { item in
-                    var details = [item.id, item.label].compactMap { $0 }
-                    if item.selected == true { details.append("selected") }
-                    if item.readOnly == true { details.append("read only") }
-                    if let startsAt = item.startsAt { details.append(startsAt) }
-                    if let endsAt = item.endsAt { details.append("to \(endsAt)") }
-                    if item.allDay == true { details.append("all day") }
-                    if item.cancelled == true { details.append("cancelled") }
-                    if let availability = item.availability { details.append(availability) }
-                    if let sourceType = item.sourceType { details.append(sourceType) }
-                    if let sourceLabel = item.sourceLabel { details.append(sourceLabel) }
-                    if let sourceIDs = item.sourceIDs { details.append("sources: \(sourceIDs.joined(separator: ", "))") }
-                    if let targetID = item.targetID { details.append("target: \(targetID)") }
-                    if let rule = item.rule { details.append("rule: \(rule)") }
-                    if let enabled = item.enabled { details.append(enabled ? "enabled" : "disabled") }
-                    if let reason = item.reason { details.append("reason: \(reason)") }
-                    if let armID = item.armID { details.append("arm: \(armID)") }
-                    if let mirrorKey = item.mirrorKey { details.append("mirror: \(mirrorKey)") }
-                    return details.joined(separator: "  ")
-                })
-            }
-            if let installed = payload.installed { lines.append("Installed: \(installed)") }
-            if let enabled = payload.enabled { lines.append("Enabled: \(enabled)") }
-            if let paused = payload.paused { lines.append("Paused: \(paused)") }
-            if let runState = payload.runState { lines.append("Run state: \(runState)") }
-            if let stateReady = payload.stateReady { lines.append("State ready: \(stateReady)") }
-            if let interval = payload.intervalSeconds { lines.append("Interval: \(interval) seconds") }
-            if let jitter = payload.jitterSeconds { lines.append("Jitter: \(jitter) seconds") }
-            if let lookback = payload.lookbackDays { lines.append("Lookback: \(lookback) days") }
-            if let horizon = payload.horizonDays { lines.append("Horizon: \(horizon) days") }
-            if let age = payload.lastSuccessAgeSeconds {
-                lines.append("Last success age: \(age) seconds")
-            }
-            if let failure = payload.failureCategory {
-                lines.append("Failure category: \(failure)")
-            }
-            if let planned = payload.planned { lines.append("Planned: \(planned)") }
-            if let applied = payload.applied { lines.append("Applied: \(applied)") }
-            if let creates = payload.creates { lines.append("Creates: \(creates)") }
-            if let updates = payload.updates { lines.append("Updates: \(updates)") }
-            if let removals = payload.removals { lines.append("Removals: \(removals)") }
-            if let repairs = payload.repairs { lines.append("Repairs: \(repairs)") }
-            if let noOps = payload.noOps { lines.append("No-ops: \(noOps)") }
-            if let warningCount = payload.warningCount {
-                lines.append("Warning count: \(warningCount)")
-            }
-            if let count = payload.connectionCount { lines.append("Connections: \(count)") }
-            if let count = payload.enabledConnectionCount {
-                lines.append("Enabled Connections: \(count)")
-            }
-            if let count = payload.selectedCalendarCount {
-                lines.append("Selected calendars: \(count)")
-            }
-            if let count = payload.armCount { lines.append("Arms: \(count)") }
-            if let count = payload.enabledArmCount { lines.append("Enabled Arms: \(count)") }
-            if let configured = payload.mainConfigured {
-                lines.append("Main configured: \(configured)")
-            }
-            if let count = payload.busyArmCount { lines.append("Busy Arms: \(count)") }
-            if let valid = payload.backupValid { lines.append("Backup valid: \(valid)") }
-            if let count = payload.migrationCount { lines.append("Migrations: \(count)") }
-            lines.append(contentsOf: warnings.map { "Warning: \($0)" })
-            return lines.joined(separator: "\n")
+            return HumanOutputRenderer.render(
+                command: command, payload: payload, warnings: warnings,
+                showIDs: showIDs, context: human, width: width
+            )
 
         case .json:
             let encoder = JSONEncoder()
@@ -359,8 +287,13 @@ public enum OutputRenderer {
         command: String,
         payload: CommandPayload,
         warnings: [String] = [],
-        format: OutputFormat
+        format: OutputFormat,
+        showIDs: Bool = false,
+        human: HumanOutputContext = HumanOutputContext()
     ) throws {
-        print(try render(command: command, payload: payload, warnings: warnings, format: format))
+        print(try render(
+            command: command, payload: payload, warnings: warnings, format: format,
+            showIDs: showIDs, human: human, width: HumanOutputRenderer.terminalWidth
+        ))
     }
 }
