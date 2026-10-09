@@ -20,7 +20,11 @@ public struct InboxCommand: AsyncParsableCommand {
         subcommands: [InboxActivityCommand.self, InboxRefreshCommand.self, InboxInspectCommand.self, InboxAcknowledgeCommand.self])
     @OptionGroup public var options: InboxOptions
     public init() {}
-    public func run() async throws { try writeInbox(options: options, activity: false) }
+    public func run() async throws {
+        do {
+            try writeInbox(options: options, activity: false)
+        } catch { try failCommand(error) }
+    }
 }
 
 public struct InboxActivityCommand: AsyncParsableCommand {
@@ -28,7 +32,11 @@ public struct InboxActivityCommand: AsyncParsableCommand {
     @OptionGroup public var options: InboxOptions
     @Flag(name: .long) public var all = false
     public init() {}
-    public func run() async throws { try writeInbox(options: options, activity: true, all: all) }
+    public func run() async throws {
+        do {
+            try writeInbox(options: options, activity: true, all: all)
+        } catch { try failCommand(error) }
+    }
 }
 
 public struct InboxRefreshCommand: AsyncParsableCommand {
@@ -39,27 +47,29 @@ public struct InboxRefreshCommand: AsyncParsableCommand {
     @Option(name: .long) public var calendar: String?
     public init() {}
     public func run() async throws {
-        let requested = try resolveRange(range, default: .none)
-        let repository = try CommandEnvironment.repository()
-        let sources = try selectedCalendarSources(connectionID: connection, calendarID: calendar, repository: repository)
-        let resolved: ResolvedDateRange
-        if let requested { resolved = requested }
-        else {
-            let url = try LaunchAgentController().propertyListURL
-            guard FileManager.default.fileExists(atPath: url.path) else {
-                throw ValidationError("Supply --day or --from and --through when no tracked-window service is configured.")
+        do {
+            let requested = try resolveRange(range, default: .none)
+            let repository = try CommandEnvironment.repository()
+            let sources = try selectedCalendarSources(connectionID: connection, calendarID: calendar, repository: repository)
+            let resolved: ResolvedDateRange
+            if let requested { resolved = requested }
+            else {
+                let url = try LaunchAgentController().propertyListURL
+                guard FileManager.default.fileExists(atPath: url.path) else {
+                    throw ValidationError("Supply --day or --from and --through when no tracked-window service is configured.")
+                }
+                let config = try AgentServiceConfiguration.load(from: url)
+                let schedule = try AgentSchedule(interval: Double(config.intervalSeconds), maximumJitter: Double(config.jitterSeconds),
+                    lookbackDays: config.lookbackDays, horizonDays: config.horizonDays)
+                var localCalendar = Calendar.current
+                if let zone = range.timezone { localCalendar.timeZone = TimeZone(identifier: zone)! }
+                resolved = ResolvedDateRange(window: try schedule.window(containing: Date(), calendar: localCalendar),
+                    timeZoneIdentifier: localCalendar.timeZone.identifier)
             }
-            let config = try AgentServiceConfiguration.load(from: url)
-            let schedule = try AgentSchedule(interval: Double(config.intervalSeconds), maximumJitter: Double(config.jitterSeconds),
-                lookbackDays: config.lookbackDays, horizonDays: config.horizonDays)
-            var localCalendar = Calendar.current
-            if let zone = range.timezone { localCalendar.timeZone = TimeZone(identifier: zone)! }
-            resolved = ResolvedDateRange(window: try schedule.window(containing: Date(), calendar: localCalendar),
-                timeZoneIdentifier: localCalendar.timeZone.identifier)
-        }
-        let refresh = await refreshCalendarSources(sources, from: resolved.window.start, through: resolved.window.end, repository: repository)
-        try OutputRenderer.write(command: "inbox.refresh", payload: inboxRefreshPayload(refresh, range: resolved),
-            warnings: refresh.warnings, format: output.format, showIDs: output.ids)
+            let refresh = await refreshCalendarSources(sources, from: resolved.window.start, through: resolved.window.end, repository: repository)
+            try OutputRenderer.write(command: "inbox.refresh", payload: inboxRefreshPayload(refresh, range: resolved),
+                warnings: refresh.warnings, format: output.format, showIDs: output.ids)
+        } catch { try failCommand(error) }
     }
 }
 
@@ -69,9 +79,11 @@ public struct InboxInspectCommand: AsyncParsableCommand {
     @OptionGroup public var output: OutputOptions
     public init() {}
     public func run() async throws {
-        let repository = try CommandEnvironment.repository()
-        try OutputRenderer.write(command: "inbox.inspect", payload: try InboxCLI.inspect(itemID, repository: repository),
-            format: output.format, showIDs: output.ids, human: output.localContext(repository: repository))
+        do {
+            let repository = try CommandEnvironment.repository()
+            try OutputRenderer.write(command: "inbox.inspect", payload: try InboxCLI.inspect(itemID, repository: repository),
+                format: output.format, showIDs: output.ids, human: output.localContext(repository: repository))
+        } catch { try failCommand(error) }
     }
 }
 
@@ -81,9 +93,11 @@ public struct InboxAcknowledgeCommand: AsyncParsableCommand {
     @OptionGroup public var output: OutputOptions
     public init() {}
     public func run() async throws {
-        let repository = try CommandEnvironment.repository()
-        try OutputRenderer.write(command: "inbox.acknowledge", payload: try InboxCLI.acknowledge(itemID, repository: repository),
-            format: output.format, showIDs: output.ids, human: output.localContext(repository: repository))
+        do {
+            let repository = try CommandEnvironment.repository()
+            try OutputRenderer.write(command: "inbox.acknowledge", payload: try InboxCLI.acknowledge(itemID, repository: repository),
+                format: output.format, showIDs: output.ids, human: output.localContext(repository: repository))
+        } catch { try failCommand(error) }
     }
 }
 
@@ -97,7 +111,7 @@ private func writeInbox(options: InboxOptions, activity: Bool, all: Bool = false
 
 func inboxRefreshPayload(_ refresh: CalendarRefreshSummary, range: ResolvedDateRange) -> CommandPayload {
     CommandPayload(status: refresh.failedSourceCount == 0 ? "ok" : "partial",
-        message: "Refreshed \(refresh.refreshedSourceCount) sources; \(refresh.failedSourceCount) failed. Local observations only.",
+        message: "Refreshed \(refresh.refreshedSourceCount) sources; \(refresh.failedSourceCount) failed. Observed at \(InboxCLI.date(Date())!). Failed sources remain stale.",
         count: refresh.refreshedSourceCount, range: RangeOutput(range: range),
         selectedCalendarCount: refresh.selectedSourceCount, ingestion: refresh.ingestion)
 }
@@ -124,6 +138,8 @@ public struct InboxItemDetail: Codable, Equatable, Sendable {
 }
 public struct InboxConflictDetail: Codable, Equatable, Sendable {
     let eventID: String
+    let label: String?
+    let calendarLabel: String?
     let startsAt: String
     let endsAt: String
 }
@@ -157,7 +173,8 @@ enum InboxCLI {
     static func list(repository: LocalStateRepository, options: InboxOptions, range: ResolvedDateRange?,
                      activity: Bool, all: Bool = false, now: Date = Date()) throws -> CommandPayload {
         let snapshot = try snapshot(repository, options: options)
-        let query = InboxAttentionQuery.evaluate(snapshot, filter: InboxAttentionFilter(window: range?.window,
+        let full = try repository.inboxContextSnapshot()
+        let query = InboxAttentionQuery.evaluate(full, filter: InboxAttentionFilter(window: range?.window,
             excludeMaybe: options.excludeMaybe, conflictsOnly: options.conflicts), freshnessCutoff: now.addingTimeInterval(-3600))
         var items: [CommandItem]
         if activity {
@@ -175,20 +192,22 @@ enum InboxCLI {
                 .filter { entry in !options.conflicts || query.rows.contains(where: { $0.item.event.sourceKeyHash == entry.sourceKeyHash && $0.reasons.contains(.conflict) }) }
                 .sorted { ($0.observedAt, $0.sourceKeyHash, $0.revision) > ($1.observedAt, $1.sourceKeyHash, $1.revision) }
             items = rows.map { entry in item(entry.event, revision: entry.revision, activity: entry,
-                row: query.rows.first { $0.item.event.sourceKeyHash == entry.sourceKeyHash }, details: false) }
+                row: query.rows.first { $0.item.event.sourceKeyHash == entry.sourceKeyHash }, context: full, details: false) }
         } else {
-            items = query.rows.map { item($0.item.event, revision: $0.item.observation?.revision ?? 1, row: $0, details: false) }
+            let bindings = Set(snapshot.sources.map(\.bindingID))
+            items = query.rows.filter { bindings.contains($0.item.event.calendarBindingID) }.map { item($0.item.event, revision: $0.item.observation?.revision ?? 1, row: $0, context: full, details: false) }
         }
-        let sources = snapshot.sources.map { source in
-            CommandSource(id: source.bindingID, connectionID: source.connectionID, provider: source.provider, label: source.calendarLabel,
-                inbox: InboxSourceDetail(startsAt: date(source.coverage?.startsAt), endsAt: date(source.coverage?.endsAt),
-                    observedAt: date(source.coverage?.observedAt), status: source.coverage == nil ? "unknown" :
-                        (source.staleSince != nil || source.healthStatus != "healthy" || source.coverage!.observedAt < now.addingTimeInterval(-3600) ? "stale" : "fresh")))
-        }
+        let sources = snapshot.sources.map { source($0, now: now) }
         let gaps = Set(query.analysis.warnings.map { $0.kind.rawValue }).sorted()
         return CommandPayload(status: gaps.isEmpty ? "ok" : "partial",
             message: "\(items.count) retained items. Coverage is bounded.\(gaps.isEmpty ? "" : " Limits: " + gaps.joined(separator: ", "))",
             count: items.count, range: range.map(RangeOutput.init), sources: sources, items: items)
+    }
+    static func source(_ source: InboxContextSource, now: Date) -> CommandSource {
+        CommandSource(id: source.bindingID, connectionID: source.connectionID, provider: source.provider, label: source.calendarLabel,
+            inbox: InboxSourceDetail(startsAt: date(source.coverage?.startsAt), endsAt: date(source.coverage?.endsAt),
+                observedAt: date(source.coverage?.observedAt), status: source.coverage == nil ? "unknown" :
+                    (source.staleSince != nil || source.healthStatus != "healthy" || source.coverage!.observedAt < now.addingTimeInterval(-3600) ? "stale" : "fresh")))
     }
     static func inspect(_ identifier: String, repository: LocalStateRepository) throws -> CommandPayload {
         let (key, revision) = try parse(identifier)
@@ -203,9 +222,7 @@ enum InboxCLI {
         let query = InboxAttentionQuery.evaluate(snapshot, freshnessCutoff: Date().addingTimeInterval(-3600))
         let row = query.rows.first { $0.item.event.sourceKeyHash == key }
         return CommandPayload(status: "ok", message: "Local revision detail. Inspect does not acknowledge or send RSVP.", count: 1,
-            sources: snapshot.sources.filter { $0.bindingID == observation.event.calendarBindingID }.map {
-                CommandSource(id: $0.bindingID, connectionID: $0.connectionID, provider: $0.provider, label: $0.calendarLabel)
-            }, items: [item(activity?.event ?? observation.event, revision: revision, activity: activity, row: row, observation: observation, details: true)])
+            sources: snapshot.sources.filter { $0.bindingID == observation.event.calendarBindingID }.map { source($0, now: Date()) }, items: [item(activity?.event ?? observation.event, revision: revision, activity: activity, row: row, observation: observation, context: snapshot, details: true)])
     }
     static func acknowledge(_ identifier: String, repository: LocalStateRepository) throws -> CommandPayload {
         _ = try inspect(identifier, repository: repository)
@@ -214,16 +231,20 @@ enum InboxCLI {
         return CommandPayload(status: "ok", message: "Reviewed one revision locally. RSVP and conflicts are unchanged.", count: 1)
     }
     static func item(_ event: StoredNormalizedInstance, revision: Int64, activity: InboxActivity? = nil,
-                     row: InboxAttentionRow? = nil, observation: InboxObservation? = nil, details: Bool) -> CommandItem {
-        let conflicts = (row?.conflicts ?? []).map { conflict in InboxConflictDetail(
-            eventID: conflict.pair.first == event.sourceKeyHash ? conflict.pair.second : conflict.pair.first,
-            startsAt: date(conflict.overlap.start)!, endsAt: date(conflict.overlap.end)!) }
+                     row: InboxAttentionRow? = nil, observation: InboxObservation? = nil, context: InboxContextSnapshot? = nil, details: Bool) -> CommandItem {
+        let conflicts = (row?.conflicts ?? []).map { conflict in
+            let key = conflict.pair.first == event.sourceKeyHash ? conflict.pair.second : conflict.pair.first
+            let other = context?.events.first { $0.event.sourceKeyHash == key }?.event
+            return InboxConflictDetail(eventID: key, label: other?.title,
+                calendarLabel: context?.sources.first { $0.bindingID == other?.calendarBindingID }?.calendarLabel,
+                startsAt: date(conflict.overlap.start)!, endsAt: date(conflict.overlap.end)!)
+        }
         let observed = observation ?? row?.item.observation
         let detail = InboxItemDetail(eventID: event.sourceKeyHash, revision: revision,
             currentRevisionID: observed.map { id(event.sourceKeyHash, $0.revision) },
             reviewed: activity?.acknowledgedAt != nil || (observed?.acknowledgedRevision ?? 0) >= revision, response: event.currentUserResponse,
             reasons: row?.reasons.map(\.rawValue) ?? [], changedFields: activity?.changedFields ?? [],
-            timing: activity?.responseTiming.rawValue ?? row?.changeTiming?.rawValue ?? row?.item.observation?.responseTiming.rawValue ?? "not-applicable",
+            timing: activity?.responseTiming.rawValue ?? row?.changeTiming?.rawValue ?? observed?.responseTiming.rawValue ?? "not-applicable",
             observedAt: date(activity?.observedAt ?? row?.item.observation?.lastObservedAt), acknowledgedAt: date(activity?.acknowledgedAt),
             activityTypes: activity?.types.map(\.rawValue) ?? [], location: details ? event.location : nil,
             notes: details ? event.notes : nil, url: details ? event.url : nil, organizer: details ? event.organizer : nil,

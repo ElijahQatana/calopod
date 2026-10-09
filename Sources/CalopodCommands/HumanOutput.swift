@@ -169,7 +169,7 @@ enum HumanOutputRenderer {
                         if localIDs, let current = inbox.currentRevisionID { lines.append("  Current revision: \(clean(current))") }
                         if let responded = inbox.response.respondedAt { lines.append("  Response timestamp: \(InboxCLI.date(responded)!)") }
                         lines.append("  Response evidence: \(readable(inbox.response.evidence.rawValue))")
-                        lines.append("  Reasons: \(inbox.reasons.map(readable).joined(separator: ", "))")
+                        lines.append("  Reasons: \(inbox.reasons.map { $0 == "needs-response" ? "Needs RSVP" : readable($0) }.joined(separator: ", "))")
                         if !inbox.activityTypes.isEmpty { lines.append("  Activity: \(inbox.activityTypes.map(readable).joined(separator: ", "))") }
                         if !inbox.changedFields.isEmpty { lines.append("  Changed: \(inbox.changedFields.joined(separator: ", "))") }
                         lines.append("  Timing: \(readable(inbox.timing))")
@@ -180,7 +180,7 @@ enum HumanOutputRenderer {
                         if let url = inbox.url { lines.append("  Link: \(clean(url))") }
                         if let organizer = inbox.organizer { lines.append("  Organizer: \(clean(organizer.name ?? organizer.emailAddress ?? "Unknown"))") }
                         for conflict in inbox.conflicts {
-                            lines.append("  Conflict: \(clean(conflict.startsAt)) to \(clean(conflict.endsAt))")
+                            lines.append("  Conflict: \(label(conflict.label, fallback: "Untitled event")) / \(label(conflict.calendarLabel, fallback: "Unknown calendar")): \(clean(conflict.startsAt)) to \(clean(conflict.endsAt))")
                             if localIDs { lines.append("    Event ID: \(clean(conflict.eventID))") }
                         }
                         lines.append("  Limits: \(inbox.limits.map(readable).joined(separator: ", "))")

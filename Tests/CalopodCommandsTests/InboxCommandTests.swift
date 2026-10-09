@@ -50,6 +50,25 @@ import Testing
         #expect(!noIDs.contains("maybe:2"))
     }
 
+    @Test func scopeKeepsOtherConflictSources() throws {
+        let f = try Fixture()
+        try f.repository.replaceCalendarBindings(connectionID: "connection", bindings: [
+            StoredCalendarBinding(id: "calendar", connectionID: "connection", providerCalendarID: "source", displayLabel: "Example", isSelected: true, isReadOnly: true),
+            StoredCalendarBinding(id: "other", connectionID: "connection", providerCalendarID: "other", displayLabel: "Other", isSelected: true, isReadOnly: true)
+        ])
+        try f.refresh([f.event("event")])
+        let other = StoredNormalizedInstance(sourceKeyHash: "other", connectionID: "connection", calendarBindingID: "other", providerEventID: "other", recurrenceID: nil,
+            startsAt: f.start, endsAt: f.start.addingTimeInterval(1000), isAllDay: false, availability: "busy", isCancelled: false, isPrivate: false,
+            title: "Other example", contentFingerprint: "example", providerUpdatedAt: nil, currentUserResponse: EventResponse(state: .accepted))
+        try f.repository.applyEventRefresh(connectionID: "connection", calendarBindingID: "other", windowStart: f.start, windowEnd: f.end,
+            instances: [other], cancelledSourceKeyHashes: [], isFullRefresh: true, cursorUpdates: [])
+        let options = try InboxOptions.parse(["--calendar", "calendar", "--conflicts"])
+        #expect(try f.list(options).items?.map(\.id) == ["event:1"])
+        #expect(try f.list(options).items?.first?.inbox?.conflicts.first?.eventID == "other")
+        _ = try f.repository.setCalendarSelection(id: "other", isSelected: false)
+        #expect(try f.list(options).count == 0)
+    }
+
     @Test func revisionReviewAndRestart() throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: url) }
