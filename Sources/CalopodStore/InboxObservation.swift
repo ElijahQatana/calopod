@@ -75,4 +75,10 @@ public struct InboxCoverage: Equatable, Sendable {
     public let startsAt: Date
     public let endsAt: Date
     public let observedAt: Date
+
+    public init(startsAt: Date, endsAt: Date, observedAt: Date) {
+        self.startsAt = startsAt
+        self.endsAt = endsAt
+        self.observedAt = observedAt
+    }
 }

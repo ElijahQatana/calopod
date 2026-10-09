@@ -12,6 +12,7 @@ extension CalopodDatabase {
         "v8_arm_names",
         "v9_event_response",
         "v10_inbox_observations",
+        "v11_inbox_context_settings",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -290,6 +291,17 @@ extension CalopodDatabase {
                 table.column("observed_at", .datetime).notNull()
                 table.primaryKey(["connection_id", "calendar_binding_id"])
             }
+        }
+
+        migrator.registerMigration("v11_inbox_context_settings") { database in
+            try database.execute(sql: """
+                CREATE TABLE inbox_context_settings (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    before_minutes INTEGER NOT NULL CHECK (before_minutes BETWEEN 0 AND 10080),
+                    after_minutes INTEGER NOT NULL CHECK (after_minutes BETWEEN 0 AND 10080),
+                    CHECK (before_minutes + after_minutes > 0)
+                )
+                """)
         }
 
         return migrator
