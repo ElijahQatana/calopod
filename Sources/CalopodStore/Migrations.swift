@@ -13,6 +13,7 @@ extension CalopodDatabase {
         "v9_event_response",
         "v10_inbox_observations",
         "v11_inbox_context_settings",
+        "v12_inbox_rsvp_actions",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -302,6 +303,15 @@ extension CalopodDatabase {
                     CHECK (before_minutes + after_minutes > 0)
                 )
                 """)
+        }
+
+        migrator.registerMigration("v12_inbox_rsvp_actions") { database in
+            try database.create(table: "inbox_rsvp_actions") { table in
+                table.column("id", .text).primaryKey()
+                table.column("target", .blob).notNull()
+                table.column("status", .text).notNull()
+                table.column("record", .blob).notNull()
+            }
         }
 
         return migrator

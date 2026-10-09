@@ -8,7 +8,7 @@ import Foundation
 /// refresh, calendar discovery, and event fetch/write. This is the layer
 /// that turns Google's API and OAuth specifics into the same shape every
 /// other provider connection service exposes.
-public struct GoogleConnectionService: Sendable {
+public struct GoogleConnectionService: RSVPActionProvider {
     private static let provider = ProviderKind.google.rawValue
     // Two independent cursors per window: a watermark timestamp bounding
     // which events are fetched, and Google's own sync token for genuinely
@@ -227,6 +227,40 @@ public struct GoogleConnectionService: Sendable {
             providerEventID: providerEventID,
             expectedVersion: expectedVersion
         )
+    }
+
+    public func rsvpSnapshot(target: RSVPTarget) async throws -> RSVPEventSnapshot {
+        let (tokens, authorization) = try await rsvpAuthorization(target: target)
+        return try await calendarClient.rsvpSnapshot(accessToken: tokens.accessToken, target: target, authorization: authorization)
+    }
+
+    public func submitRSVP(_ intent: RSVPActionIntent) async throws {
+        let tokens: OAuthTokens
+        let authorization: RSVPAuthorization
+        do { (tokens, authorization) = try await rsvpAuthorization(target: intent.target) }
+        catch { throw RSVPActionError.preflightFailure(error) }
+        do {
+            try await calendarClient.submitRSVP(accessToken: tokens.accessToken, intent: intent, authorization: authorization)
+        } catch {
+            if let actionError = error as? RSVPActionError { throw actionError }
+            throw RSVPActionError.preflightFailure(error)
+        }
+    }
+
+    public func reconcileRSVP(_ record: RSVPActionRecord) async throws -> RSVPActionOutcome {
+        let (tokens, authorization) = try await rsvpAuthorization(target: record.intent.target)
+        return try await calendarClient.reconcileRSVP(accessToken: tokens.accessToken, record: record, authorization: authorization)
+    }
+
+    private func rsvpAuthorization(target: RSVPTarget) async throws -> (OAuthTokens, RSVPAuthorization) {
+        _ = try state.rsvpBinding(target: target, provider: Self.provider)
+        let tokens = try await validTokens(connectionID: target.connectionID)
+        let scopes = Set((tokens.scope ?? "").split(separator: " ").map(String.init))
+        guard scopes.contains("https://www.googleapis.com/auth/calendar.events") || scopes.contains("https://www.googleapis.com/auth/calendar") else { throw RSVPActionError.unavailable(.permission) }
+        let calendars = try await calendarClient.calendars(accessToken: tokens.accessToken)
+        guard let calendar = calendars.first(where: { $0.id == target.calendarID }),
+              calendar.primary && ["owner", "writer"].contains(calendar.accessRole) else { throw RSVPActionError.unavailable(.permission) }
+        return (tokens, RSVPAuthorization(identityScope: .authenticatedUser, canRespond: true))
     }
 
     public func disconnect(connectionID: String) throws {

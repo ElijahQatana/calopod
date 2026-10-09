@@ -126,6 +126,80 @@ public struct GoogleCalendarClient: Sendable {
         return ProviderEventPage(events: events, nextSyncToken: nextSyncToken)
     }
 
+    public func rsvpSnapshot(accessToken: String, target: RSVPTarget,
+                             authorization: RSVPAuthorization) async throws -> RSVPEventSnapshot {
+        guard target.provider == "google", !target.eventID.isEmpty, !target.calendarID.isEmpty,
+              !target.eventID.contains("/"), !target.calendarID.contains("/") else {
+            throw RSVPActionError.unavailable(.identity)
+        }
+        let response = try await send(url: eventCollectionURL(calendarID: target.calendarID)
+            .appendingPathComponent(target.eventID), accessToken: accessToken)
+        let event: GoogleEvent = try decode(response)
+        guard event.id == target.eventID, event.recurringEventID == target.seriesID,
+              event.originalStartTime?.identity == target.originalStart else { throw RSVPActionError.stale }
+        let normalized = event.providerEvent(connectionID: target.connectionID, calendarID: target.calendarID,
+                                             fallbackTimeZone: .gmt, responseIdentityScope: authorization.identityScope)
+        var reasons: [RSVPUnavailableReason] = []
+        if authorization.identityScope != .authenticatedUser { reasons.append(.identityUnverified) }
+        if !authorization.canRespond { reasons.append(.permissionUnverified) }
+        if normalized.isManagedMirror { reasons.append(.managedMirror) }
+        if normalized.isCancelled || normalized.currentUserResponse.state == .organizer
+            || event.organizer?.email == nil { reasons.append(.notAnInvitation) }
+        if [.unknown, .notApplicable].contains(normalized.currentUserResponse.state)
+            || event.attendees?.filter({ $0.isSelf == true }).first?.email == nil {
+            reasons.append(.unsupportedResponse)
+        }
+        let single = event.recurringEventID == nil && event.originalStartTime?.identity == nil
+        let occurrence = event.recurringEventID != nil && event.originalStartTime?.identity != nil
+            && event.recurringEventID != event.id
+        if event.recurrence != nil || (!single && !occurrence) {
+            reasons.append(.unsupportedScope)
+        }
+        let version = event.etag ?? response.headers["etag"]
+        if version?.isEmpty != false { reasons.append(.staleRevision) }
+        return RSVPEventSnapshot(target: target, event: normalized, version: version,
+            capability: reasons.isEmpty ? RSVPActionCapability(supportedScopes: [.occurrence])
+                : RSVPActionCapability(unavailableReasons: reasons),
+            notification: .googleAllGuests, concurrency: .conditionalUpdate,
+            currentUserEmail: event.attendees?.first(where: { $0.isSelf == true })?.email)
+    }
+
+    public func submitRSVP(accessToken: String, intent: RSVPActionIntent,
+                           authorization: RSVPAuthorization) async throws {
+        let snapshot = try await rsvpSnapshot(accessToken: accessToken, target: intent.target, authorization: authorization)
+        try snapshot.validate(intent)
+        // attendeesOmitted updates only this participant; no event details or other guests are sent.
+        let response = snapshot.event.currentUserResponse
+        guard response.evidence == .googleSelf else { throw RSVPActionError.unavailable(.identity) }
+        guard let email = snapshot.currentUserEmail else { throw RSVPActionError.unavailable(.identity) }
+        var components = URLComponents(url: eventCollectionURL(calendarID: intent.target.calendarID)
+            .appendingPathComponent(intent.target.eventID), resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "sendUpdates", value: "all")]
+        guard let url = components?.url else { throw RSVPActionError.unavailable(.unsupported) }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(intent.expectedVersion, forHTTPHeaderField: "If-Match")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "attendeesOmitted": true,
+            "attendees": [["email": email, "responseStatus": intent.decision.googleStatus]],
+        ])
+        do { _ = try await send(request: request, accessToken: accessToken) }
+        catch { throw RSVPActionError.writeFailure(error) }
+    }
+
+    public func reconcileRSVP(accessToken: String, record: RSVPActionRecord,
+                              authorization: RSVPAuthorization) async throws -> RSVPActionOutcome {
+        do {
+            let snapshot = try await rsvpSnapshot(accessToken: accessToken, target: record.intent.target, authorization: authorization)
+            return RSVPReadback.outcome(record, snapshot: snapshot)
+        } catch ProviderFailure.httpStatus(404) {
+            return RSVPReadback.missing(record)
+        } catch ProviderFailure.cursorExpired {
+            return RSVPReadback.missing(record)
+        }
+    }
+
     public func managedEvents(
         accessToken: String,
         calendarID: String,
@@ -457,6 +531,7 @@ private struct GoogleEvent: Decodable {
     let id: String
     let etag: String?
     let recurringEventID: String?
+    let recurrence: [String]?
     let originalStartTime: GoogleEventTime?
     let start: GoogleEventTime?
     let end: GoogleEventTime?
@@ -480,6 +555,7 @@ private struct GoogleEvent: Decodable {
         case id
         case etag
         case recurringEventID = "recurringEventId"
+        case recurrence
         case originalStartTime
         case start
         case end
@@ -726,5 +802,15 @@ private enum RFC3339 {
         }
         formatter.formatOptions = [.withInternetDateTime]
         return formatter.date(from: value)
+    }
+}
+
+private extension RSVPDecision {
+    var googleStatus: String {
+        switch self {
+        case .yes: "accepted"
+        case .no: "declined"
+        case .maybe: "tentative"
+        }
     }
 }
