@@ -149,7 +149,8 @@ struct InboxConflictTests {
     @Test("Changes to focus, another event, selection or freshness require another preview")
     func races() throws {
         let preview = try context([event("a", supported: true), event("b")])
-        for changed in [snapshot([event("a", end: 13_000, supported: true), event("b")]),
+        for changed in [snapshot([event("a", supported: false), event("b")]),
+                        snapshot([event("a", end: 13_000, supported: true), event("b")]),
                         snapshot([event("a", supported: true), event("b", response: .declined)]),
                         InboxContextSnapshot(sources: [source("calendar")], events: preview.snapshot.events)] {
             #expect(throws: InboxCalendarContextError.previewChanged) {
@@ -160,6 +161,8 @@ struct InboxConflictTests {
             try InboxCalendarContextBuilder.revalidate(preview, against: preview.snapshot, chosenKey: "a", choice: .yes, freshnessCutoff: date(501))
         }
         #expect(try context([event("a"), event("b", response: .declined)]).focusedConflicts.isEmpty)
+        let unrelated = snapshot([event("a", supported: true), event("b"), event("later", start: 80_000, end: 81_000)])
+        #expect(try InboxCalendarContextBuilder.revalidate(preview, against: unrelated, chosenKey: "a", choice: .yes, freshnessCutoff: cutoff).event.sourceKeyHash == "a")
     }
 
     func date(_ value: Double) -> Date { Date(timeIntervalSince1970: value) }

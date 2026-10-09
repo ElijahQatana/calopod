@@ -17,12 +17,12 @@ struct InboxContextIntegrationTests {
         let start = Date(timeIntervalSince1970: 1000)
         let end = Date(timeIntervalSince1970: 20_000)
         let now = Date(timeIntervalSince1970: 500)
-        func providerEvent(_ key: String, response: EventResponseState = .accepted, mirror: Bool = false, notes: String? = nil) -> ProviderEvent {
+        func providerEvent(_ key: String, response: EventResponseState = .accepted, mirror: Bool = false, notes: String? = nil, updatedAt: Date? = nil, attendees: [EventParticipant] = []) -> ProviderEvent {
             ProviderEvent(provider: "google", connectionID: connection.id, calendarID: calendar.providerCalendarID,
                 eventID: key, seriesID: nil, originalStart: nil, start: Date(timeIntervalSince1970: 10_000),
                 end: Date(timeIntervalSince1970: 12_000), isAllDay: false, availability: .busy,
-                isCancelled: false, isPrivate: false, title: "Example event", updatedAt: nil,
-                isManagedMirror: mirror, notes: notes, responseMetadata: EventResponse(state: response, evidence: .googleSelf))
+                isCancelled: false, isPrivate: false, title: "Example event", updatedAt: updatedAt,
+                isManagedMirror: mirror, notes: notes, attendees: attendees, responseMetadata: EventResponse(state: response, evidence: .googleSelf))
         }
         func refresh(_ events: [ProviderEvent]) throws {
             try EventCache(repository: repository).apply(ProviderEventPage(events: events, nextSyncToken: nil, refreshMode: .full), connection: connection, calendar: calendar, from: start, through: end, now: now)
@@ -41,6 +41,8 @@ struct InboxContextIntegrationTests {
         // A provider re-read with unchanged meaningful content must not force
         // another decision just because the observed timestamp advanced.
         try EventCache(repository: repository).apply(ProviderEventPage(events: [providerEvent("a"), providerEvent("b")], nextSyncToken: nil, refreshMode: .full), connection: connection, calendar: calendar, from: start, through: end, now: now.addingTimeInterval(10))
+        #expect(try InboxCalendarContextBuilder.revalidate(preview, against: repository.inboxContextSnapshot(), chosenKey: key, choice: .hold, freshnessCutoff: now).event.sourceKeyHash == key)
+        try refresh([providerEvent("a", updatedAt: now.addingTimeInterval(20), attendees: [EventParticipant(name: "Example guest", status: "tentative")]), providerEvent("b")])
         #expect(try InboxCalendarContextBuilder.revalidate(preview, against: repository.inboxContextSnapshot(), chosenKey: key, choice: .hold, freshnessCutoff: now).event.sourceKeyHash == key)
         try refresh([providerEvent("a"), providerEvent("b", notes: "Edited while reviewing")])
         #expect(throws: InboxCalendarContextError.previewChanged) {
