@@ -70,7 +70,8 @@ func refreshCalendarSources(
     _ sources: [CalendarReadSource],
     from start: Date,
     through end: Date,
-    repository: LocalStateRepository
+    repository: LocalStateRepository,
+    readSource: ((CalendarReadSource, Date, Date) async throws -> ProviderEventPage)? = nil
 ) async -> CalendarRefreshSummary {
     let cache = EventCache(repository: repository)
     var refreshedCount = 0
@@ -92,7 +93,7 @@ func refreshCalendarSources(
 
     for group in groups {
         var failureCode: String?
-        if group.connection.provider == "eventkit" {
+        if group.connection.provider == "eventkit", readSource == nil {
             do {
                 let response = try EventKitHostRunner().perform(
                     EventKitHostRequest(
@@ -130,12 +131,11 @@ func refreshCalendarSources(
         } else {
             for source in group.sources {
                 do {
-                    let page = try await readEvents(
-                        connection: source.connection,
-                        binding: source.calendar,
-                        start: start,
-                        end: end
-                    )
+                    let page: ProviderEventPage
+                    if let readSource { page = try await readSource(source, start, end) }
+                    else {
+                        page = try await readEvents(connection: source.connection, binding: source.calendar, start: start, end: end)
+                    }
                     let result = try cache.apply(
                         page,
                         connection: source.connection,

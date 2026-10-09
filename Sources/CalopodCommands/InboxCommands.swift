@@ -1,0 +1,236 @@
+import ArgumentParser
+import CalopodDomain
+import CalopodRuntime
+import CalopodStore
+import CalopodSync
+import Foundation
+
+public struct InboxOptions: ParsableArguments {
+    @OptionGroup public var range: DateRangeOptions
+    @OptionGroup public var output: OutputOptions
+    @Option(name: .long) public var connection: String?
+    @Option(name: .long) public var calendar: String?
+    @Flag(name: .long) public var excludeMaybe = false
+    @Flag(name: .long, help: "Only events with known conflicts.") public var conflicts = false
+    public init() {}
+}
+
+public struct InboxCommand: AsyncParsableCommand {
+    public static let configuration = CommandConfiguration(commandName: "inbox", abstract: "Read retained local inbox observations.",
+        subcommands: [InboxActivityCommand.self, InboxRefreshCommand.self, InboxInspectCommand.self, InboxAcknowledgeCommand.self])
+    @OptionGroup public var options: InboxOptions
+    public init() {}
+    public func run() async throws { try writeInbox(options: options, activity: false) }
+}
+
+public struct InboxActivityCommand: AsyncParsableCommand {
+    public static let configuration = CommandConfiguration(commandName: "activity", abstract: "List unread activity, newest first.")
+    @OptionGroup public var options: InboxOptions
+    @Flag(name: .long) public var all = false
+    public init() {}
+    public func run() async throws { try writeInbox(options: options, activity: true, all: all) }
+}
+
+public struct InboxRefreshCommand: AsyncParsableCommand {
+    public static let configuration = CommandConfiguration(commandName: "refresh", abstract: "Read sources into the local cache without target reconciliation.")
+    @OptionGroup public var range: DateRangeOptions
+    @OptionGroup public var output: OutputOptions
+    @Option(name: .long) public var connection: String?
+    @Option(name: .long) public var calendar: String?
+    public init() {}
+    public func run() async throws {
+        let requested = try resolveRange(range, default: .none)
+        let repository = try CommandEnvironment.repository()
+        let sources = try selectedCalendarSources(connectionID: connection, calendarID: calendar, repository: repository)
+        let resolved: ResolvedDateRange
+        if let requested { resolved = requested }
+        else {
+            let url = try LaunchAgentController().propertyListURL
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                throw ValidationError("Supply --day or --from and --through when no tracked-window service is configured.")
+            }
+            let config = try AgentServiceConfiguration.load(from: url)
+            let schedule = try AgentSchedule(interval: Double(config.intervalSeconds), maximumJitter: Double(config.jitterSeconds),
+                lookbackDays: config.lookbackDays, horizonDays: config.horizonDays)
+            var localCalendar = Calendar.current
+            if let zone = range.timezone { localCalendar.timeZone = TimeZone(identifier: zone)! }
+            resolved = ResolvedDateRange(window: try schedule.window(containing: Date(), calendar: localCalendar),
+                timeZoneIdentifier: localCalendar.timeZone.identifier)
+        }
+        let refresh = await refreshCalendarSources(sources, from: resolved.window.start, through: resolved.window.end, repository: repository)
+        try OutputRenderer.write(command: "inbox.refresh", payload: inboxRefreshPayload(refresh, range: resolved),
+            warnings: refresh.warnings, format: output.format, showIDs: output.ids)
+    }
+}
+
+public struct InboxInspectCommand: AsyncParsableCommand {
+    public static let configuration = CommandConfiguration(commandName: "inspect", abstract: "Inspect a retained revision without reviewing it.")
+    @Argument public var itemID: String
+    @OptionGroup public var output: OutputOptions
+    public init() {}
+    public func run() async throws {
+        let repository = try CommandEnvironment.repository()
+        try OutputRenderer.write(command: "inbox.inspect", payload: try InboxCLI.inspect(itemID, repository: repository),
+            format: output.format, showIDs: output.ids, human: output.localContext(repository: repository))
+    }
+}
+
+public struct InboxAcknowledgeCommand: AsyncParsableCommand {
+    public static let configuration = CommandConfiguration(commandName: "acknowledge", abstract: "Review exactly one local revision; never send RSVP.")
+    @Argument public var itemID: String
+    @OptionGroup public var output: OutputOptions
+    public init() {}
+    public func run() async throws {
+        let repository = try CommandEnvironment.repository()
+        try OutputRenderer.write(command: "inbox.acknowledge", payload: try InboxCLI.acknowledge(itemID, repository: repository),
+            format: output.format, showIDs: output.ids, human: output.localContext(repository: repository))
+    }
+}
+
+private func writeInbox(options: InboxOptions, activity: Bool, all: Bool = false) throws {
+    let resolved = try resolveRange(options.range, default: .none)
+    let repository = try CommandEnvironment.repository()
+    let payload = try InboxCLI.list(repository: repository, options: options, range: resolved, activity: activity, all: all)
+    try OutputRenderer.write(command: activity ? "inbox.activity" : "inbox", payload: payload,
+        format: options.output.format, showIDs: options.output.ids, human: options.output.localContext(repository: repository))
+}
+
+func inboxRefreshPayload(_ refresh: CalendarRefreshSummary, range: ResolvedDateRange) -> CommandPayload {
+    CommandPayload(status: refresh.failedSourceCount == 0 ? "ok" : "partial",
+        message: "Refreshed \(refresh.refreshedSourceCount) sources; \(refresh.failedSourceCount) failed. Local observations only.",
+        count: refresh.refreshedSourceCount, range: RangeOutput(range: range),
+        selectedCalendarCount: refresh.selectedSourceCount, ingestion: refresh.ingestion)
+}
+
+public struct InboxItemDetail: Codable, Equatable, Sendable {
+    let eventID: String
+    let revision: Int64
+    let currentRevisionID: String?
+    let reviewed: Bool
+    let response: EventResponse
+    let reasons: [String]
+    let changedFields: [String]
+    let timing: String
+    let observedAt: String?
+    let acknowledgedAt: String?
+    let activityTypes: [String]
+    let location: String?
+    let notes: String?
+    let url: String?
+    let organizer: EventParticipant?
+    let conflicts: [InboxConflictDetail]
+    let limits: [String]
+    let presence: String
+}
+public struct InboxConflictDetail: Codable, Equatable, Sendable {
+    let eventID: String
+    let startsAt: String
+    let endsAt: String
+}
+public struct InboxSourceDetail: Codable, Equatable, Sendable {
+    let startsAt: String?
+    let endsAt: String?
+    let observedAt: String?
+    let status: String
+}
+
+enum InboxCLI {
+    static func date(_ value: Date?) -> String? { value.map { ISO8601DateFormatter().string(from: $0) } }
+    static func id(_ key: String, _ revision: Int64) -> String { "\(key):\(revision)" }
+    static func parse(_ id: String) throws -> (String, Int64) {
+        guard let split = id.lastIndex(of: ":"), let revision = Int64(id[id.index(after: split)...]), revision > 0,
+              split != id.startIndex else { throw ValidationError("Use an event:revision identifier from inbox --ids or JSON.") }
+        return (String(id[..<split]), revision)
+    }
+    static func snapshot(_ repository: LocalStateRepository, options: InboxOptions) throws -> InboxContextSnapshot {
+        let full = try repository.inboxContextSnapshot()
+        if let connection = options.connection, !full.sources.contains(where: { $0.connectionID == connection }) {
+            throw ValidationError("Connection is not enabled or has no selected calendars.")
+        }
+        let sources = full.sources.filter { options.connection == nil || $0.connectionID == options.connection }
+            .filter { options.calendar == nil || $0.bindingID == options.calendar }
+        if options.calendar != nil && sources.isEmpty { throw ValidationError("Calendar is not selected on that Connection.") }
+        let bindings = Set(sources.map(\.bindingID))
+        return InboxContextSnapshot(sources: sources, events: full.events.filter { bindings.contains($0.event.calendarBindingID) },
+            unprovenDuplicateBindingIDs: full.unprovenDuplicateBindingIDs.intersection(bindings))
+    }
+    static func list(repository: LocalStateRepository, options: InboxOptions, range: ResolvedDateRange?,
+                     activity: Bool, all: Bool = false, now: Date = Date()) throws -> CommandPayload {
+        let snapshot = try snapshot(repository, options: options)
+        let query = InboxAttentionQuery.evaluate(snapshot, filter: InboxAttentionFilter(window: range?.window,
+            excludeMaybe: options.excludeMaybe, conflictsOnly: options.conflicts), freshnessCutoff: now.addingTimeInterval(-3600))
+        var items: [CommandItem]
+        if activity {
+            let bindings = Set(snapshot.sources.map(\.bindingID))
+            let rows = try Set(snapshot.sources.map(\.connectionID)).flatMap { try repository.inboxActivity(connectionID: $0, includeAcknowledged: all) }
+                .filter { bindings.contains($0.event.calendarBindingID) }
+                .filter { entry in
+                    if !options.excludeMaybe { return true }
+                    return try repository.inboxObservation(sourceKeyHash: entry.sourceKeyHash)?.event.currentUserResponse.state != .tentative
+                }
+                .filter { entry in
+                    guard let window = range?.window else { return true }
+                    return [entry.event, entry.previousEvent].compactMap { $0 }.contains { $0.endsAt > window.start && $0.startsAt < window.end }
+                }
+                .filter { entry in !options.conflicts || query.rows.contains(where: { $0.item.event.sourceKeyHash == entry.sourceKeyHash && $0.reasons.contains(.conflict) }) }
+                .sorted { ($0.observedAt, $0.sourceKeyHash, $0.revision) > ($1.observedAt, $1.sourceKeyHash, $1.revision) }
+            items = rows.map { entry in item(entry.event, revision: entry.revision, activity: entry,
+                row: query.rows.first { $0.item.event.sourceKeyHash == entry.sourceKeyHash }, details: false) }
+        } else {
+            items = query.rows.map { item($0.item.event, revision: $0.item.observation?.revision ?? 1, row: $0, details: false) }
+        }
+        let sources = snapshot.sources.map { source in
+            CommandSource(id: source.bindingID, connectionID: source.connectionID, provider: source.provider, label: source.calendarLabel,
+                inbox: InboxSourceDetail(startsAt: date(source.coverage?.startsAt), endsAt: date(source.coverage?.endsAt),
+                    observedAt: date(source.coverage?.observedAt), status: source.coverage == nil ? "unknown" :
+                        (source.staleSince != nil || source.healthStatus != "healthy" || source.coverage!.observedAt < now.addingTimeInterval(-3600) ? "stale" : "fresh")))
+        }
+        let gaps = Set(query.analysis.warnings.map { $0.kind.rawValue }).sorted()
+        return CommandPayload(status: gaps.isEmpty ? "ok" : "partial",
+            message: "\(items.count) retained items. Coverage is bounded.\(gaps.isEmpty ? "" : " Limits: " + gaps.joined(separator: ", "))",
+            count: items.count, range: range.map(RangeOutput.init), sources: sources, items: items)
+    }
+    static func inspect(_ identifier: String, repository: LocalStateRepository) throws -> CommandPayload {
+        let (key, revision) = try parse(identifier)
+        let snapshot = try repository.inboxContextSnapshot()
+        guard let observation = try repository.inboxObservation(sourceKeyHash: key),
+              snapshot.sources.contains(where: { $0.bindingID == observation.event.calendarBindingID }) else {
+            throw ValidationError("Item is unavailable in selected sources.")
+        }
+        let activity = try repository.inboxActivity(connectionID: observation.event.connectionID, includeAcknowledged: true)
+            .first { $0.sourceKeyHash == key && $0.revision == revision }
+        guard revision == observation.revision || activity != nil else { throw ValidationError("Revision is no longer retained.") }
+        let query = InboxAttentionQuery.evaluate(snapshot, freshnessCutoff: Date().addingTimeInterval(-3600))
+        let row = query.rows.first { $0.item.event.sourceKeyHash == key }
+        return CommandPayload(status: "ok", message: "Local revision detail. Inspect does not acknowledge or send RSVP.", count: 1,
+            sources: snapshot.sources.filter { $0.bindingID == observation.event.calendarBindingID }.map {
+                CommandSource(id: $0.bindingID, connectionID: $0.connectionID, provider: $0.provider, label: $0.calendarLabel)
+            }, items: [item(activity?.event ?? observation.event, revision: revision, activity: activity, row: row, observation: observation, details: true)])
+    }
+    static func acknowledge(_ identifier: String, repository: LocalStateRepository) throws -> CommandPayload {
+        _ = try inspect(identifier, repository: repository)
+        let (key, revision) = try parse(identifier)
+        guard try repository.acknowledgeInboxRevision(sourceKeyHash: key, revision: revision) else { throw ValidationError("Revision is unavailable.") }
+        return CommandPayload(status: "ok", message: "Reviewed one revision locally. RSVP and conflicts are unchanged.", count: 1)
+    }
+    static func item(_ event: StoredNormalizedInstance, revision: Int64, activity: InboxActivity? = nil,
+                     row: InboxAttentionRow? = nil, observation: InboxObservation? = nil, details: Bool) -> CommandItem {
+        let conflicts = (row?.conflicts ?? []).map { conflict in InboxConflictDetail(
+            eventID: conflict.pair.first == event.sourceKeyHash ? conflict.pair.second : conflict.pair.first,
+            startsAt: date(conflict.overlap.start)!, endsAt: date(conflict.overlap.end)!) }
+        let observed = observation ?? row?.item.observation
+        let detail = InboxItemDetail(eventID: event.sourceKeyHash, revision: revision,
+            currentRevisionID: observed.map { id(event.sourceKeyHash, $0.revision) },
+            reviewed: activity?.acknowledgedAt != nil || (observed?.acknowledgedRevision ?? 0) >= revision, response: event.currentUserResponse,
+            reasons: row?.reasons.map(\.rawValue) ?? [], changedFields: activity?.changedFields ?? [],
+            timing: activity?.responseTiming.rawValue ?? row?.changeTiming?.rawValue ?? row?.item.observation?.responseTiming.rawValue ?? "not-applicable",
+            observedAt: date(activity?.observedAt ?? row?.item.observation?.lastObservedAt), acknowledgedAt: date(activity?.acknowledgedAt),
+            activityTypes: activity?.types.map(\.rawValue) ?? [], location: details ? event.location : nil,
+            notes: details ? event.notes : nil, url: details ? event.url : nil, organizer: details ? event.organizer : nil,
+            conflicts: conflicts, limits: event.currentUserResponse.limits.map(\.rawValue) + event.currentUserResponse.actionCapability.unavailableReasons.map(\.rawValue) + ["provider-read-only-command"],
+            presence: row?.item.isPresenceConfirmed == false ? "unconfirmed" : "observed")
+        return CommandItem(id: id(event.sourceKeyHash, revision), kind: "inbox", label: event.title, parentID: event.calendarBindingID,
+            startsAt: date(event.startsAt), endsAt: date(event.endsAt), allDay: event.isAllDay,
+            cancelled: event.isCancelled || activity?.types.contains(.removed) == true || activity?.types.contains(.cancelled) == true, inbox: detail)
+    }
+}
