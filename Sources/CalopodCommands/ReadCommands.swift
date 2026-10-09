@@ -153,7 +153,8 @@ public struct EventsCommand: AsyncParsableCommand {
                             cancelled: false,
                             availability: $0.availability
                         )
-                    }
+                    },
+                    ingestion: refresh.ingestion
                 ),
                 warnings: refresh.warnings,
                 format: output.format,
@@ -258,7 +259,8 @@ public struct AvailabilityCommand: AsyncParsableCommand {
                             endsAt: outputDate(interval.end),
                             availability: interval.kind.rawValue
                         )
-                    }
+                    },
+                    ingestion: refresh.ingestion
                 ),
                 warnings: refresh.warnings,
                 format: output.format,

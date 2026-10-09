@@ -72,6 +72,7 @@ struct EventCacheTests {
         #expect(result.instances.count == 2)
         #expect(result.cancelledSourceKeyHashes.count == 1)
         #expect(result.discardedCount == 3)
+        #expect(result.ingestion == EventIngestionSummary(excludedMarkedCopyCount: 1, invalidTimespanCount: 1, outOfRangeCount: 1))
         #expect(result.instances[0].isAllDay)
         #expect(result.instances[0].availability == "free")
         #expect(result.instances[0].isPrivate)
@@ -83,6 +84,56 @@ struct EventCacheTests {
         #expect(result.instances[1].availability == "tentative")
         #expect(result.instances[1].recurrenceID == "2026-03-08T09:00:00-04:00")
         #expect(result.instances.allSatisfy { $0.sourceKeyHash.count == 64 })
+    }
+
+    @Test("Expected exclusions, invalid records, and window boundaries are separate")
+    func ingestionCategories() throws {
+        let start = Date(timeIntervalSince1970: 1_000)
+        let end = start.addingTimeInterval(100)
+        let result = EventNormalizer.normalize([
+            event(id: "marked-and-mapped", isManagedMirror: true),
+            event(id: "mapped", start: nil, end: nil),
+            event(id: "", isManagedMirror: true),
+            event(id: "missing-time", start: start, end: nil),
+            event(id: "zero-duration", start: start, end: start),
+            event(id: "reversed", start: end, end: start),
+            event(id: "left-boundary", start: start.addingTimeInterval(-10), end: start),
+            event(id: "right-boundary", start: end, end: end.addingTimeInterval(10)),
+            event(id: "overlap", start: start.addingTimeInterval(-10), end: start.addingTimeInterval(10)),
+            event(id: "cancelled", isCancelled: true),
+        ], connection: testConnection(), calendar: testCalendar(connectionID: "connection"),
+           from: start, through: end, excludedEventIDs: ["marked-and-mapped", "mapped"])
+        #expect(result.ingestion == EventIngestionSummary(
+            excludedMarkedCopyCount: 1, excludedMappedCopyCount: 1,
+            invalidIdentityCount: 1, invalidTimespanCount: 3, outOfRangeCount: 2
+        ))
+        #expect(result.discardedCount == 8)
+        #expect(result.instances.count == 1)
+        #expect(result.cancelledSourceKeyHashes.count == 1)
+        #expect(result.excludedSourceKeyHashes.count == 2)
+        #expect(result.ingestion.warnings == [
+            "Ignored event records with invalid identity: 1.",
+            "Ignored event records with invalid timespans: 3.",
+        ])
+        #expect(EventIngestionSummary(excludedMarkedCopyCount: 3, excludedMappedCopyCount: 2, outOfRangeCount: 1).warnings.isEmpty)
+        var combined = EventIngestionSummary()
+        combined.add(result.ingestion)
+        combined.add(result.ingestion)
+        #expect(combined.discardedCount == 16)
+        #expect(combined.invalidTimespanCount == 6)
+    }
+
+    @Test("Wrong provider, connection, or calendar remains an invalid identity")
+    func mismatchedIdentity() {
+        let result = EventNormalizer.normalize([
+            event(id: "wrong-provider", isManagedMirror: true, provider: "google"),
+            event(id: "wrong-connection", connectionID: "other-connection"),
+            event(id: "wrong-calendar", calendarID: "other-calendar"),
+        ], connection: testConnection(), calendar: testCalendar(connectionID: "connection"),
+           from: Date(timeIntervalSince1970: 1_000), through: Date(timeIntervalSince1970: 2_000))
+        #expect(result.ingestion == EventIngestionSummary(invalidIdentityCount: 3))
+        #expect(result.instances.isEmpty)
+        #expect(result.excludedSourceKeyHashes.isEmpty)
     }
 
     @Test("Full and incremental refreshes converge cache and cursors")
@@ -135,6 +186,7 @@ struct EventCacheTests {
             through: end
         )
         #expect(initialResult.storedCount == 2)
+        #expect(initialResult.ingestion == EventIngestionSummary())
         let initialStored = try repository.normalizedInstances(
             calendarBindingIDs: [calendar.id],
             from: start,
@@ -351,12 +403,15 @@ struct EventCacheTests {
         url: String? = nil,
         organizer: EventParticipant? = nil,
         attendees: [EventParticipant] = [],
-        responseMetadata: EventResponse? = nil
+        responseMetadata: EventResponse? = nil,
+        provider: String = "eventkit",
+        connectionID: String = "connection",
+        calendarID: String = "provider-calendar"
     ) -> ProviderEvent {
         ProviderEvent(
-            provider: "eventkit",
-            connectionID: "connection",
-            calendarID: "provider-calendar",
+            provider: provider,
+            connectionID: connectionID,
+            calendarID: calendarID,
             eventID: id,
             seriesID: seriesID,
             originalStart: originalStart,

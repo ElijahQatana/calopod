@@ -54,7 +54,9 @@ public struct SyncCommand: AsyncParsableCommand {
                     count: mode == .dryRun ? result.items.count : result.appliedCount,
                     range: RangeOutput(range: resolved),
                     mode: mode.rawValue,
-                    items: result.items.map(planItem)
+                    items: result.items.map(planItem),
+                    ingestion: result.ingestion,
+                    review: result.review
                 ),
                 warnings: result.warnings,
                 format: output.format,

@@ -1,4 +1,5 @@
 import ArgumentParser
+import CalopodDomain
 import Foundation
 
 public enum OutputFormat: String, CaseIterable, ExpressibleByArgument, Sendable {
@@ -79,6 +80,8 @@ public struct CommandPayload: Codable, Equatable, Sendable {
     public let busyArmCount: Int?
     public let backupValid: Bool?
     public let migrationCount: Int?
+    public let ingestion: EventIngestionSummary?
+    public let review: SyncReviewSummary?
 
     public init(
         status: String,
@@ -115,7 +118,9 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         mainConfigured: Bool? = nil,
         busyArmCount: Int? = nil,
         backupValid: Bool? = nil,
-        migrationCount: Int? = nil
+        migrationCount: Int? = nil,
+        ingestion: EventIngestionSummary? = nil,
+        review: SyncReviewSummary? = nil
     ) {
         self.status = status
         self.message = message
@@ -152,6 +157,8 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         self.busyArmCount = busyArmCount
         self.backupValid = backupValid
         self.migrationCount = migrationCount
+        self.ingestion = ingestion
+        self.review = review
     }
 }
 

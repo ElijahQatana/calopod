@@ -1,5 +1,6 @@
 @testable import CalopodCommands
 import CalopodStore
+import CalopodDomain
 import Foundation
 import Testing
 
@@ -103,6 +104,35 @@ struct HumanOutputTests {
                 #expect(output.contains("No-ops: 1"))
             }
         }
+    }
+
+    @Test("Ingestion and reconciliation summaries expose counts without private content")
+    func syncReviewPrivacy() throws {
+        let payload = CommandPayload(
+            status: "ok", message: "Dry-run synchronization plan.", mode: "dry-run",
+            items: [CommandItem(id: "private-id", kind: "remove", label: "Private event", parentID: "private-hash", reason: "source-missing", armID: "private-arm")],
+            ingestion: EventIngestionSummary(excludedMarkedCopyCount: 2, excludedMappedCopyCount: 1, outOfRangeCount: 3),
+            review: SyncReviewSummary(recurringOccurrenceCreateCount: 4, legacyRecurringRemovalCandidateCount: 1, staleMappingCleanupCount: 2)
+        )
+        let human = try OutputRenderer.render(command: "sync", payload: payload, format: .human, showIDs: true)
+        for expected in ["Excluded marked copies: 2", "Excluded mapped copies: 1", "Invalid identities: 0", "Outside requested window: 3", "Recurring occurrence creates: 4", "Legacy recurring removal candidates: 1", "Stale mapping cleanup: 2", "counts do not prove source cancellation"] {
+            #expect(human.contains(expected))
+        }
+        #expect(!human.contains("private-"))
+        #expect(!human.contains("Private event"))
+        let json = try OutputRenderer.render(command: "sync", payload: payload, format: .json)
+        let envelope = try #require(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+        let data = try #require(envelope["data"] as? [String: Any])
+        #expect(data["items"] != nil)
+        #expect(data["mode"] as? String == "dry-run")
+        for field in ["ingestion", "review"] {
+            let summary = try #require(data[field] as? [String: Any])
+            #expect(summary.values.allSatisfy { $0 is Int })
+            #expect(!String(describing: summary).contains("private-"))
+        }
+        let legacy = try OutputRenderer.render(command: "sync", payload: CommandPayload(status: "ok", message: "Done."), format: .json)
+        #expect(!legacy.contains("ingestion"))
+        #expect(!legacy.contains("review"))
     }
 
     @Test("Empty results and no-ops are explicit")

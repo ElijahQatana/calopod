@@ -26,6 +26,8 @@ public struct SyncExecutionResult: Sendable {
     public let reconciledCount: Int
     public let noOpCount: Int
     public let warnings: [String]
+    public let ingestion: EventIngestionSummary
+    public let review: SyncReviewSummary
 
     public init(
         status: String,
@@ -35,7 +37,9 @@ public struct SyncExecutionResult: Sendable {
         appliedCount: Int,
         reconciledCount: Int,
         noOpCount: Int,
-        warnings: [String]
+        warnings: [String],
+        ingestion: EventIngestionSummary = EventIngestionSummary(),
+        review: SyncReviewSummary = SyncReviewSummary()
     ) {
         self.status = status
         self.mode = mode
@@ -45,6 +49,8 @@ public struct SyncExecutionResult: Sendable {
         self.reconciledCount = reconciledCount
         self.noOpCount = noOpCount
         self.warnings = warnings
+        self.ingestion = ingestion
+        self.review = review
     }
 }
 
@@ -133,7 +139,9 @@ public struct SyncEngine: Sendable {
             through: window.end,
             repository: repository
         )
+        let sourceProviders = Dictionary(uniqueKeysWithValues: sources.map { ($0.calendar.id, $0.connection.provider) })
         var planItems: [SyncPlanItem] = []
+        var review = SyncReviewSummary()
         var observationsByArm: [String: [TargetEventObservation]] = [:]
         var targetFailureCount = 0
         var targetWarnings: [String] = []
@@ -208,6 +216,10 @@ public struct SyncEngine: Sendable {
                 sourceSnapshotComplete: refresh.failedSourceCount == 0,
                 targetSnapshotComplete: targetComplete
             )
+            review.add(SyncPlanReview.summarize(
+                plan: plan, sources: events,
+                sourceProviders: sourceProviders
+            ))
             planItems.append(contentsOf: plan.items)
         }
         planItems.sort {
@@ -227,7 +239,9 @@ public struct SyncEngine: Sendable {
                 appliedCount: 0,
                 reconciledCount: 0,
                 noOpCount: planItems.filter { $0.action == .noOp }.count,
-                warnings: warnings
+                warnings: warnings,
+                ingestion: refresh.ingestion,
+                review: review
             )
         }
 
@@ -303,7 +317,9 @@ public struct SyncEngine: Sendable {
             appliedCount: appliedCount,
             reconciledCount: reconciledCount,
             noOpCount: noOpCount,
-            warnings: warnings
+            warnings: warnings,
+            ingestion: refresh.ingestion,
+            review: review
         )
     }
 
@@ -371,7 +387,7 @@ public struct SyncEngine: Sendable {
     ) async -> CalendarRefreshSummary {
         let cache = EventCache(repository: repository)
         var failedCount = 0
-        var discardedCount = 0
+        var ingestion = EventIngestionSummary()
         var warnings: [String] = []
         // Sources sharing a connection are fetched together — most
         // importantly for EventKit, where this means one host-process
@@ -416,7 +432,7 @@ public struct SyncEngine: Sendable {
                             from: start,
                             through: end
                         )
-                        discardedCount += result.discardedCount
+                        ingestion.add(result.ingestion)
                     }
                 } catch {
                     failedCount += group.sources.count
@@ -439,7 +455,7 @@ public struct SyncEngine: Sendable {
                             from: start,
                             through: end
                         )
-                        discardedCount += result.discardedCount
+                        ingestion.add(result.ingestion)
                     } catch {
                         failedCount += 1
                         failureCode = failureCode ?? refreshFailureCode(error)
@@ -457,10 +473,9 @@ public struct SyncEngine: Sendable {
                 )
             }
         }
-        if discardedCount > 0 {
-            warnings.append("Ignored \(discardedCount) malformed or out-of-range event records.")
-        }
+        warnings += ingestion.warnings
         return CalendarRefreshSummary(
+            ingestion: ingestion,
             failedSourceCount: failedCount,
             warnings: warnings
         )
@@ -665,6 +680,7 @@ private struct CalendarReadSource: Sendable {
 }
 
 private struct CalendarRefreshSummary: Sendable {
+    let ingestion: EventIngestionSummary
     let failedSourceCount: Int
     let warnings: [String]
 }

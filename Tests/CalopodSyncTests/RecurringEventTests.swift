@@ -54,6 +54,49 @@ struct RecurringEventTests {
         #expect((normalize(plain).sourceKeyHash == normalize(recurring).sourceKeyHash) == (provider != "eventkit"))
     }
 
+    @Test(arguments: ["eventkit", "google", "microsoft"])
+    func reviewDoesNotGuessRecurrence(provider: String) throws {
+        let cache = try RecurringCacheFixture(provider: provider)
+        try cache.refresh([cache.event(at: 60, recurring: provider != "eventkit")])
+        let arm = StoredArm(id: "arm", configurationID: "default", sourceBindingIDs: ["source"], targetBindingID: "target", ruleMode: .busy)
+        let window = try SyncWindow(start: cache.start, end: cache.end)
+        let plan = SyncPlanner.plan(arm: arm, sources: try cache.instances(), mappings: [], targetEvents: [], window: window, sourceSnapshotComplete: true)
+        #expect(plan.items.count == 1)
+        #expect(SyncPlanReview.summarize(plan: plan, sources: try cache.instances(), sourceProviders: ["source": provider]).recurringOccurrenceCreateCount == 0)
+    }
+
+    @Test("Review distinguishes missing target recreation from stale mapping cleanup")
+    func missingTargetReview() async throws {
+        let fixture = try RecurringLifecycleFixture()
+        try fixture.cache.refresh([fixture.cache.event(at: 60)])
+        _ = try await fixture.run()
+        await fixture.targets.removeCopies("busy")
+        let arm = fixture.arms[0]
+        let before = try fixture.cache.repository.mirrorMappings(armID: arm.id)
+        let recreationPlan = try await fixture.plan(arm)
+        #expect(SyncPlanReview.summarize(plan: recreationPlan, sources: try fixture.cache.instances(), sourceProviders: ["source": "eventkit"]) == SyncReviewSummary(targetRecreationCount: 1))
+        try fixture.cache.refresh([])
+        let cleanupPlan = try await fixture.plan(arm)
+        #expect(SyncPlanReview.summarize(plan: cleanupPlan, sources: [], sourceProviders: ["source": "eventkit"]) == SyncReviewSummary(staleMappingCleanupCount: 1))
+        #expect(try fixture.cache.repository.mirrorMappings(armID: arm.id) == before)
+        let fullPlan = try await fixture.plan(fixture.arms[1])
+        #expect(SyncPlanReview.summarize(plan: fullPlan, sources: [], sourceProviders: ["source": "eventkit"]) == SyncReviewSummary(otherSourceMissingRemovalCount: 1))
+    }
+
+    @Test("Occurrence evidence outside the plan window cannot label legacy removals")
+    func boundedReview() async throws {
+        let fixture = try RecurringLifecycleFixture()
+        try fixture.cache.refresh([fixture.cache.event(at: 180, recurring: false)])
+        _ = try await fixture.run()
+        try fixture.cache.refresh([fixture.cache.event(at: 180)])
+        let full = try await fixture.plan(fixture.arms[0])
+        let narrow = SyncPlan(window: try SyncWindow(start: fixture.cache.start, end: Date(timeIntervalSince1970: 100)), items: full.items)
+        let review = SyncPlanReview.summarize(plan: narrow, sources: try fixture.cache.instances(), sourceProviders: ["source": "eventkit"])
+        #expect(review.recurringOccurrenceCreateCount == 0)
+        #expect(review.legacyRecurringRemovalCandidateCount == 0)
+        #expect(review.otherSourceMissingRemovalCount == 1)
+    }
+
     @Test("Busy and Full copies converge independently through occurrence changes")
     func convergesOccurrenceCopies() async throws {
         let fixture = try RecurringLifecycleFixture()
@@ -96,6 +139,12 @@ struct RecurringEventTests {
             #expect(plan.items.filter { $0.action == .create }.count == 3)
             #expect(plan.items.filter { $0.action == .remove }.count == 1)
             #expect(plan.items.allSatisfy { $0.action != .repair })
+            let review = SyncPlanReview.summarize(
+                plan: plan, sources: try fixture.cache.instances(), sourceProviders: ["source": "eventkit"]
+            )
+            #expect(review == SyncReviewSummary(recurringOccurrenceCreateCount: 3, legacyRecurringRemovalCandidateCount: 1))
+            #expect(try await fixture.plan(arm) == plan)
+
         }
         #expect(try await fixture.run() == 8)
         #expect(try await fixture.run() == 0)
@@ -117,6 +166,12 @@ struct RecurringEventTests {
         try fixture.cache.refresh([60.0, 120.0, 180.0].map { fixture.cache.event(at: $0) })
         let plan = try await fixture.plan(fixture.arms[0])
         #expect(plan.items.contains { $0.action == .repair && $0.reason == .ownershipUnverified })
+        let review = SyncPlanReview.summarize(
+            plan: plan, sources: try fixture.cache.instances(), sourceProviders: ["source": "eventkit"]
+        )
+        #expect(review.legacyRecurringRemovalCandidateCount == 0)
+        #expect(review.otherRepairCount == 1)
+
         await #expect(throws: ManagedEventLifecycleError.ambiguousRepair(.ownershipUnverified)) {
             try await fixture.run()
         }
@@ -224,6 +279,10 @@ private actor RecurringTargets {
     private var nextID = 0
 
     func snapshots(_ calendar: String) -> [ManagedEventSnapshot] { storage[calendar]! }
+
+    func removeCopies(_ calendar: String) {
+        storage[calendar] = [Self.original]
+    }
 
     func removeCopyMarkers(_ calendar: String) {
         storage[calendar] = storage[calendar]!.map {

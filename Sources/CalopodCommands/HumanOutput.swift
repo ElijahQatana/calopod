@@ -186,6 +186,26 @@ enum HumanOutputRenderer {
         if let removals = payload.removals { lines.append("Removals: \(removals)") }
         if let repairs = payload.repairs { lines.append("Repairs: \(repairs)") }
         if let noOps = payload.noOps { lines.append("No-ops: \(noOps)") }
+        if let ingestion = payload.ingestion {
+            lines += [
+                "Excluded marked copies: \(ingestion.excludedMarkedCopyCount)",
+                "Excluded mapped copies: \(ingestion.excludedMappedCopyCount)",
+                "Invalid identities: \(ingestion.invalidIdentityCount)",
+                "Invalid timespans: \(ingestion.invalidTimespanCount)",
+                "Outside requested window: \(ingestion.outOfRangeCount)",
+            ]
+        }
+        if let review = payload.review {
+            lines += [
+                "Recurring occurrence creates: \(review.recurringOccurrenceCreateCount)",
+                "Legacy recurring removal candidates: \(review.legacyRecurringRemovalCandidateCount)",
+                "Other source-missing removals: \(review.otherSourceMissingRemovalCount)",
+                "Stale mapping cleanup: \(review.staleMappingCleanupCount)",
+                "Missing target recreation: \(review.targetRecreationCount)",
+                "Other repairs: \(review.otherRepairCount)",
+                "Removal candidates require review; counts do not prove source cancellation.",
+            ]
+        }
         if let warningCount = payload.warningCount {
             lines.append("Warning count: \(warningCount)")
         }
