@@ -354,7 +354,7 @@ private func normalizedEventQuestionMarks(count: Int) -> String {
     Array(repeating: "?", count: count).joined(separator: ", ")
 }
 
-private func normalizedInstance(_ row: Row) -> StoredNormalizedInstance {
+func normalizedInstance(_ row: Row) -> StoredNormalizedInstance {
     StoredNormalizedInstance(
         sourceKeyHash: row["source_key_hash"],
         connectionID: row["connection_id"],
