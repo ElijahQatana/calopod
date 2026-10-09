@@ -66,6 +66,8 @@ public struct InboxRefreshCommand: AsyncParsableCommand {
                 resolved = ResolvedDateRange(window: try schedule.window(containing: Date(), calendar: localCalendar),
                     timeZoneIdentifier: localCalendar.timeZone.identifier)
             }
+            let lock = try ProcessLock.acquire(at: CommandEnvironment.runtimeEnvironment().stateLocation.lockURL)
+            defer { withExtendedLifetime(lock) {} }
             let refresh = await refreshCalendarSources(sources, from: resolved.window.start, through: resolved.window.end, repository: repository)
             try OutputRenderer.write(command: "inbox.refresh", payload: inboxRefreshPayload(refresh, range: resolved),
                 warnings: refresh.warnings, format: output.format, showIDs: output.ids)

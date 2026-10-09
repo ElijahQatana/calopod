@@ -1,4 +1,5 @@
 import ArgumentParser
+import CalopodRuntime
 import CalopodStore
 import CalopodSync
 import Foundation
@@ -122,6 +123,8 @@ public struct EventsCommand: AsyncParsableCommand {
                 calendarID: calendar,
                 repository: repository
             )
+            let lock = try ProcessLock.acquire(at: CommandEnvironment.runtimeEnvironment().stateLocation.lockURL)
+            defer { withExtendedLifetime(lock) {} }
             let refresh = await refreshCalendarSources(
                 sources,
                 from: resolved.window.start,
@@ -218,6 +221,8 @@ public struct AvailabilityCommand: AsyncParsableCommand {
                 calendarID: calendar,
                 repository: repository
             )
+            let lock = try ProcessLock.acquire(at: CommandEnvironment.runtimeEnvironment().stateLocation.lockURL)
+            defer { withExtendedLifetime(lock) {} }
             let refresh = await refreshCalendarSources(
                 sources,
                 from: resolved.window.start,

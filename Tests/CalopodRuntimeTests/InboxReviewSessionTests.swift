@@ -143,6 +143,9 @@ struct InboxReviewSessionTests {
             #expect(resumed.summary?.failed == (mode == .failed ? 1 : 0))
             #expect(await f.remote.writes == 1)
             if mode == .unknown {
+                let unavailable: InboxReviewSessionController.Provider = { _ in throw RSVPActionError.unavailable(.permission) }
+                let noAccess = try await f.reopen().resume(id: session.id, freshnessCutoff: f.cutoff, refresh: f.refresh, provider: unavailable)
+                #expect(noAccess.summary?.unknown == 1)
                 do { _ = try await f.card(session.id, key: "a"); Issue.record("Expected unresolved decision") }
                 catch InboxReviewSessionError.unresolvedDecision { }
             }
@@ -254,6 +257,19 @@ struct InboxReviewSessionTests {
         #expect(await f.remote.writes == 1)
     }
 
+    @Test func readOnlySourcesKeepContextAndHoldWithoutProviderAccess() async throws {
+        let f = try ReviewFixture(backend: "eventkit")
+        defer { f.remove() }
+        let session = try f.start()
+        let unavailable: InboxReviewSessionController.Provider = { _ in throw RSVPActionError.unavailable(.unsupported) }
+        let card = try #require(try await f.controller.card(sessionID: session.id, freshnessCutoff: f.cutoff, refresh: f.refresh, provider: unavailable))
+        #expect(card.providerSnapshot == nil)
+        #expect(card.context.choices.first?.choices == [.hold])
+        let done = try await f.controller.decide(.hold, card: card, freshnessCutoff: f.cutoff, refresh: f.refresh, provider: unavailable)
+        #expect(done.summary?.hold == 1)
+        #expect(await f.remote.writes == 0)
+    }
+
     @Test func concurrentEditKeepsItsNewerRevisionUnread() async throws {
         let f = try ReviewFixture()
         defer { f.remove() }
@@ -325,12 +341,12 @@ private struct ReviewFixture {
     var refresh: InboxReviewSessionController.Refresh { { try state.inboxContextSnapshot() } }
     var provider: InboxReviewSessionController.Provider { { _ in remote } }
 
-    init(keys: [String] = ["a"], overlapping: Bool = false) throws {
+    init(keys: [String] = ["a"], overlapping: Bool = false, backend: String = "google") throws {
         root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         database = try CalopodDatabase(path: root.appendingPathComponent("state.sqlite").path)
         state = LocalStateRepository(database: database)
-        try state.saveConnection(StoredConnection(id: "connection", configurationID: "config", provider: "google", displayLabel: "Example", isEnabled: true))
+        try state.saveConnection(StoredConnection(id: "connection", configurationID: "config", provider: backend, displayLabel: "Example", isEnabled: true))
         try state.replaceCalendarBindings(connectionID: "connection", bindings: [StoredCalendarBinding(id: "calendar", connectionID: "connection", providerCalendarID: "primary", displayLabel: "Example", isSelected: true, isReadOnly: false, responseIdentityScope: .authenticatedUser)])
         let events = keys.enumerated().map { index, key in
             Self.event(key, start: overlapping ? 10_000 : 10_000 + Double(index) * 20_000)
