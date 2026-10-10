@@ -38,6 +38,8 @@ public struct InboxReviewSessionController: Sendable {
         self.checkpoint = checkpoint
     }
 
+    public func session(id: String) throws -> InboxReviewSession { try load(id).0 }
+
     public func start(filter: InboxAttentionFilter = InboxAttentionFilter(), settings: InboxContextSettings? = nil,
                       metricsWindow: SyncWindow, freshnessCutoff: Date, now: Date = Date()) throws -> InboxReviewSession {
         let lock = try ProcessLock.acquire(at: lockURL)
@@ -106,7 +108,13 @@ public struct InboxReviewSessionController: Sendable {
         let choices = InboxCalendarContextBuilder.choices(for: context.focused, snapshot: snapshot)
         var providerSnapshot: RSVPEventSnapshot?
         if choices.choices.contains(.yes) {
-            let preview = try await provider(target).rsvpSnapshot(target: target)
+            let preview: RSVPEventSnapshot
+            do { preview = try await provider(target).rsvpSnapshot(target: target) }
+            catch {
+                session.updateSummary(freshnessCutoff: freshnessCutoff)
+                try save(session, generation: &generation)
+                return InboxReviewCard(sessionID: session.id, generation: generation, context: context, providerSnapshot: nil)
+            }
             guard preview.target == target, matches(context.focused.event, preview.event) else {
                 throw InboxReviewSessionError.freshDecisionRequired
             }
