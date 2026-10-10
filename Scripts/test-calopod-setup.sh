@@ -43,6 +43,7 @@ grep -q '^sync --dry-run --day ' "$call_log"
 grep -q 'Dry run: 1 create, 0 update, 0 removal, 0 repair, 1 no-op, 0 warning.' "$first_output"
 grep -q 'Health check: attention with 1 warning(s).' "$first_output"
 grep -q 'Setup complete.' "$first_output"
+! grep -q '^arm list --format human$' "$call_log"
 
 second_input="$fixture_root/second-input"
 second_output="$fixture_root/second-output"
@@ -95,11 +96,38 @@ grep -q '^arm add --source a --source b --target c --rule full-details --format 
 grep -q 'Original events stay unchanged.' "$custom_output"
 grep -q 'Apply and verify a manual sync before enabling it.' "$custom_output"
 
+grep -q 'Arm routing summary (labels are shown only in this terminal):' "$custom_output"
+grep -q '^Count: 4$' "$custom_output"
+awk '
+  /^arm add / { last_add = NR }
+  /^arm list --format human$/ { summary = NR }
+  /^sync --dry-run / { preview = NR }
+  END { exit !(last_add < summary && summary < preview) }
+' "$call_log"
+
 # Rerunning custom setup preserves existing Arms without adding duplicates.
+: > "$call_log"
 printf 'n\n\n\n\n\n' > "$custom_input"
 run_setup "$custom_input" "$custom_output" --arms
 [ "$(cat "$fixture_root/custom-arm-count")" -eq 4 ]
 grep -q 'Preserving 4 existing Arm(s).' "$custom_output"
+grep -q '^Count: 4$' "$custom_output"
+grep -q '^arm list --format human$' "$call_log"
+! grep -q '^arm add ' "$call_log"
+! grep -q '^agent enable ' "$call_log"
+
+# A failed summary stops setup before the dry run.
+: > "$fixture_root/summary-failed"
+: > "$call_log"
+printf 'n\n' > "$custom_input"
+if run_setup "$custom_input" "$custom_output" --arms; then
+  echo "Custom setup continued after a failed summary." >&2
+  exit 1
+fi
+grep -q 'Could not read the configured Arms. Automatic sync remains disabled.' "$custom_output"
+! grep -q '^sync ' "$call_log"
+[ ! -f "$fixture_root/enabled" ]
+/bin/rm -f "$fixture_root/summary-failed"
 
 # Refuse a destination that is one of the same Arm's sources.
 printf 'y\n1,2,3\n' > "$custom_input"

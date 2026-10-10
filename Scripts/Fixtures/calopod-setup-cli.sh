@@ -70,7 +70,12 @@ elif [ "${1:-}" = "main" ] && [ "${2:-}" = "configure" ]; then
   : > "$fixture_root/main-configured"
   printf '%s\n' '{"command":"main.configure","data":{"status":"ok","count":1},"warnings":[]}'
 elif [ "${1:-}" = "arm" ] && [ "${2:-}" = "list" ]; then
-  if [ -f "$fixture_root/custom-mode" ]; then
+  if [ "$*" = "arm list --format human" ]; then
+    [ ! -f "$fixture_root/summary-failed" ] || exit 74
+    count=0
+    [ ! -f "$fixture_root/custom-arm-count" ] || count=$(cat "$fixture_root/custom-arm-count")
+    printf 'Configured Arms.\nCount: %s\n' "$count"
+  elif [ -f "$fixture_root/custom-mode" ]; then
     count=0
     [ ! -f "$fixture_root/custom-arm-count" ] || count=$(cat "$fixture_root/custom-arm-count")
     printf '{"data":{"status":"ok","count":%s,"items":[]},"warnings":[]}\n' "$count"
