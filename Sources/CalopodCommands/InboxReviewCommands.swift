@@ -68,7 +68,7 @@ public struct InboxReviewCommand: AsyncParsableCommand {
                 SyncWindow(start: Date(), end: Date().addingTimeInterval(1))
             let refresh: InboxReviewSessionController.Refresh = {
                 let current = try state.inboxContextSnapshot()
-                if !current.sources.isEmpty {
+                if current.sources.contains(where: { ["eventkit", "google", "microsoft"].contains($0.provider) }) {
                     let sources = try selectedCalendarSources(connectionID: nil, calendarID: nil, repository: state)
                     for source in sources {
                         guard let coverage = current.sources.first(where: { $0.bindingID == source.calendar.id })?.coverage else { continue }

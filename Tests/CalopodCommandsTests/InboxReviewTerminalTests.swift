@@ -7,6 +7,9 @@ import CalopodSync
 @testable import CalopodCommands
 import Foundation
 import Testing
+#if os(macOS)
+import Darwin
+#endif
 
 @Suite("Inbox review transcripts")
 struct InboxReviewTerminalTests {
@@ -54,14 +57,14 @@ struct InboxReviewTerminalTests {
     @Test func conflictNavigationReturnsAndReplacesTotals() async throws {
         let f = try TranscriptFixture(count: 2, overlapping: true)
         defer { f.remove() }
-        let (done, text) = try await f.run(["g1", "y", "n", "m"])
+        let (done, text) = try await f.run(["g1", "y", "g1", "m", "n"])
         #expect(text.contains("[b] Back to queue"))
         #expect(text.contains("Yes overlaps Example"))
         #expect(text.contains("1000.0 seconds"))
-        #expect(done.summary?.yes == 1 && done.summary?.no == 1)
-        #expect(done.summary?.maybe == 0)
+        #expect(done.summary?.yes == 0 && done.summary?.no == 1)
+        #expect(done.summary?.maybe == 1)
         #expect(done.summary?.remainingConflicts == 0)
-        #expect(await f.remote.writes == 2)
+        #expect(await f.remote.writes == 3)
     }
 
     @Test func failureCanHoldAndUnknownMustReconcile() async throws {
@@ -79,6 +82,16 @@ struct InboxReviewTerminalTests {
             if mode == .staleOnce { #expect(text.contains("Event changed")) }
             if mode == .previewFailed { #expect(await f.remote.writes == 0) }
         }
+    }
+
+    @Test func failedFinalExitKeepsFailureWithoutOfferingAnUnavailableResume() async throws {
+        let f = try TranscriptFixture(count: 1)
+        defer { f.remove() }
+        await f.remote.setMode(.failed)
+        let (done, text) = try await f.run(["y", "q"])
+        #expect(done.summary?.failed == 1 && done.summary?.yes == 0)
+        #expect(text.contains("Start calopod inbox review for remaining items"))
+        #expect(!text.contains("--resume"))
     }
 
     @Test func changedRevisionRequiresFreshInput() async throws {
@@ -131,6 +144,132 @@ struct InboxReviewTerminalTests {
         #expect(safe.components(separatedBy: "\n").allSatisfy { $0.count <= 12 })
     }
 
+    @Test func offscreenOverlapUsesFullInterval() async throws {
+        let f = try TranscriptFixture(count: 2, overlapping: true)
+        defer { f.remove() }
+        try f.replace("key1", start: 10_800, end: 11_800)
+        let session = try f.controller.start(settings: InboxContextSettings(beforeMinutes: 0, afterMinutes: 1),
+            metricsWindow: f.window, freshnessCutoff: f.cutoff)
+        let card = try #require(try await f.controller.card(sessionID: session.id, freshnessCutoff: f.cutoff, refresh: f.refresh, provider: f.provider))
+        #expect(card.context.rows.count == 1)
+        #expect(card.context.focusedConflicts.first?.overlap.start == Date(timeIntervalSince1970: 10_800))
+        let (_, text) = try await f.run(["h", "h"], session: session)
+        #expect(text.contains("Yes overlaps Example 1"))
+        #expect(text.contains("200.0 seconds"))
+        #expect(text.contains("[g1] Review Example 1"))
+    }
+
+    @Test func filtersKeepContextAndSavedTimezone() async throws {
+        let f = try TranscriptFixture(count: 2, overlapping: true)
+        defer { f.remove() }
+        try f.replace("key1", response: .tentative)
+        let session = try f.controller.start(filter: InboxAttentionFilter(window: f.window, excludeMaybe: true,
+            conflictsOnly: true, bindingIDs: ["calendar"]), metricsWindow: f.window, freshnessCutoff: f.cutoff,
+            displayTimeZoneIdentifier: "America/New_York")
+        #expect(session.entries.map(\.sourceKeyHash) == ["key0"])
+        let (_, text) = try await f.run([], session: session)
+        #expect(text.contains("Maybe excluded; conflicts only"))
+        #expect(text.contains("Example 1"))
+        let resumed = try await f.controller.resume(id: session.id, freshnessCutoff: f.cutoff, refresh: f.refresh, provider: f.provider)
+        #expect(resumed.displayTimeZoneIdentifier == "America/New_York")
+        #expect(resumed.filter == session.filter)
+        let outside = try f.controller.start(filter: InboxAttentionFilter(window: SyncWindow(start: Date(timeIntervalSince1970: 20_000), end: Date(timeIntervalSince1970: 21_000))), metricsWindow: f.window, freshnessCutoff: f.cutoff)
+        #expect(outside.queueCount == 0)
+    }
+
+    @Test func narrowCardsEscapeContentAndKeepIncompleteEvidence() async throws {
+        let f = try TranscriptFixture(count: 1)
+        defer { f.remove() }
+        try f.apply(title: "Example\u{1b}[2J\u{07}\u{202e} title")
+        try f.state.markConnectionStale(connectionID: "connection", errorCode: "temporary")
+        var inputs = ["h"], text = ""
+        var terminal = f.terminal(read: { inputs.isEmpty ? nil : inputs.removeFirst() }, write: { text += $0 + "\n" })
+        terminal.width = 24; terminal.decoration = false
+        let done = try await terminal.run(f.start())
+        #expect(!text.contains("\u{1b}") && !text.contains("\u{07}") && !text.contains("\u{202e}"))
+        #expect(text.split(separator: "\n").allSatisfy { $0.count <= 24 })
+        #expect(text.contains("incomplete"))
+        #expect(done.summary?.contextIsComplete == false)
+    }
+
+    @Test func broaderScopeAndProviderCapabilityDoNotOfferResponses() async throws {
+        for mode in [TranscriptRemote.Mode.seriesOnly, .differentScope] {
+            let f = try TranscriptFixture(count: 1)
+            defer { f.remove() }
+            await f.remote.setMode(mode)
+            let (done, text) = try await f.run(["h"])
+            #expect(!text.contains("[y] Yes"))
+            #expect(done.summary?.hold == 1)
+            #expect(await f.remote.writes == 0)
+        }
+    }
+
+    @Test func introducedConflictStaysCountedAfterResolution() async throws {
+        let f = try TranscriptFixture(count: 2, overlapping: true)
+        defer { f.remove() }
+        try f.replace("key0", response: .declined)
+        try f.replace("key0", title: "Changed invitation")
+        let (done, text) = try await f.run(["y", "n"])
+        #expect(done.summary?.yes == 1 && done.summary?.no == 1)
+        #expect(done.summary?.createdConflicts == 1)
+        #expect(done.summary?.remainingConflicts == 0)
+        #expect(text.contains("Conflicts created: 1"))
+    }
+
+    @Test func completeSessionsSelectArtFromConfirmedTotals() async throws {
+        for (count, expected) in [(6, "Party squid"), (21, "kraken")] {
+            let f = try TranscriptFixture(count: count)
+            defer { f.remove() }
+            let (done, text) = try await f.run(Array(repeating: "n", count: count))
+            #expect(done.summary?.no == count)
+            #expect(text.contains(expected))
+        }
+    }
+
+    #if os(macOS)
+    @Test(arguments: [false, true]) func terminalEOFAndInterruptSaveProgress(interrupt: Bool) throws {
+        let f = try TranscriptFixture(count: 1, backend: "ics")
+        defer { f.remove() }
+        var master: Int32 = 0, slave: Int32 = 0
+        #expect(openpty(&master, &slave, nil, nil, nil) == 0)
+        defer { Darwin.close(master); Darwin.close(slave) }
+        let process = Process()
+        let package = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        process.executableURL = package.appendingPathComponent(".build/debug/calopod")
+        process.arguments = ["inbox", "review", "--no-decoration"]
+        var environment = ProcessInfo.processInfo.environment
+        environment["CALOPOD_STATE_PATH"] = f.root.appendingPathComponent("state.sqlite").path
+        process.environment = environment
+        let terminal = FileHandle(fileDescriptor: slave, closeOnDealloc: false)
+        process.standardInput = terminal; process.standardOutput = terminal; process.standardError = terminal
+        try process.run()
+        defer { if process.isRunning { process.terminate(); process.waitUntilExit() } }
+        var text = ""
+        func collect(until marker: String) {
+            for _ in 0..<60 {
+                if text.contains(marker) { return }
+                var descriptor = pollfd(fd: master, events: Int16(POLLIN), revents: 0)
+                if poll(&descriptor, 1, 100) > 0 {
+                    var bytes = [UInt8](repeating: 0, count: 4096)
+                    let count = Darwin.read(master, &bytes, bytes.count)
+                    if count > 0 { text += String(decoding: bytes.prefix(count), as: UTF8.self) }
+                }
+            }
+        }
+        collect(until: "[h] Hold")
+        #expect(text.contains("[h] Hold"))
+        if interrupt { kill(process.processIdentifier, SIGINT) }
+        else { var eof: UInt8 = 4; _ = Darwin.write(master, &eof, 1) }
+        collect(until: "--resume")
+        #expect(text.contains("Progress saved."))
+        #expect(text.contains("--resume"))
+        #expect(!text.contains("squid") && !text.contains("kraken"))
+        let stored = try #require(try f.state.inboxReviewSession())
+        let session = try JSONDecoder().decode(InboxReviewSession.self, from: stored.snapshot)
+        #expect(session.cursor == 0 && session.summary?.yes == 0)
+    }
+    #endif
+
     @Test func noninteractiveRefusesBeforeStateOrProviders() async throws {
         let command = try InboxReviewCommand.parse(["--format", "json"])
         await #expect(throws: (any Error).self) { try await command.run() }
@@ -168,6 +307,19 @@ private struct TranscriptFixture {
         }
         try state.applyEventRefresh(connectionID: "connection", calendarBindingID: "calendar", windowStart: window.start, windowEnd: window.end, instances: events, cancelledSourceKeyHashes: [], isFullRefresh: true, cursorUpdates: [])
     }
+    func replace(_ key: String, start: Double? = nil, end: Double? = nil, response: EventResponseState? = nil, title: String? = nil) throws {
+        var events = try state.inboxContextSnapshot().events.map(\.event)
+        let index = try #require(events.firstIndex { $0.sourceKeyHash == key })
+        let old = events[index]
+        events[index] = StoredNormalizedInstance(sourceKeyHash: key, connectionID: "connection", calendarBindingID: "calendar",
+            providerEventID: key, recurrenceID: nil, startsAt: start.map(Date.init(timeIntervalSince1970:)) ?? old.startsAt,
+            endsAt: end.map(Date.init(timeIntervalSince1970:)) ?? old.endsAt, isAllDay: false, availability: "busy",
+            isCancelled: false, isPrivate: false, title: title ?? old.title, contentFingerprint: "example", providerUpdatedAt: nil,
+            currentUserResponse: EventResponse(state: response ?? old.currentUserResponse.state, evidence: .googleSelf,
+                actionCapability: RSVPActionCapability(supportedScopes: [.occurrence])))
+        try state.applyEventRefresh(connectionID: "connection", calendarBindingID: "calendar", windowStart: window.start,
+            windowEnd: window.end, instances: events, cancelledSourceKeyHashes: [], isFullRefresh: true, cursorUpdates: [])
+    }
     func start() throws -> InboxReviewSession { try controller.start(metricsWindow: window, freshnessCutoff: cutoff) }
     func terminal(read: @escaping () -> String?, write: @escaping (String) -> Void) -> InboxReviewTerminal {
         InboxReviewTerminal(controller: controller, refresh: refresh, provider: provider, read: read, write: write, timezone: TimeZone(secondsFromGMT: 0)!)
@@ -182,7 +334,7 @@ private struct TranscriptFixture {
 }
 
 private actor TranscriptRemote: RSVPActionProvider {
-    enum Mode { case confirmed, failed, unknown, staleOnce, previewFailed }
+    enum Mode { case confirmed, failed, unknown, staleOnce, previewFailed, seriesOnly, differentScope }
     let state: LocalStateRepository
     var writes = 0
     var mode = Mode.confirmed
@@ -194,7 +346,9 @@ private actor TranscriptRemote: RSVPActionProvider {
         let event = ProviderEvent(provider: "google", connectionID: target.connectionID, calendarID: target.calendarID, eventID: target.eventID, seriesID: nil, originalStart: nil,
             start: local.startsAt, end: local.endsAt, isAllDay: local.isAllDay, availability: .busy, isCancelled: false, isPrivate: false,
             title: local.title, updatedAt: nil, location: local.location, notes: local.notes, url: local.url, organizer: local.organizer, responseMetadata: local.currentUserResponse)
-        return RSVPEventSnapshot(target: target, event: event, version: "v1", capability: RSVPActionCapability(supportedScopes: [.occurrence]), notification: .googleAllGuests, concurrency: .conditionalUpdate)
+        let returnedTarget = mode == .differentScope ? RSVPTarget(provider: target.provider, connectionID: target.connectionID,
+            calendarBindingID: target.calendarBindingID, calendarID: target.calendarID, eventID: "series", seriesID: "series", originalStart: nil) : target
+        return RSVPEventSnapshot(target: returnedTarget, event: event, version: "v1", capability: RSVPActionCapability(supportedScopes: mode == .seriesOnly ? [.series] : [.occurrence]), notification: .googleAllGuests, concurrency: .conditionalUpdate)
     }
     func submitRSVP(_ intent: RSVPActionIntent) async throws {
         if mode == .staleOnce { mode = .confirmed; throw RSVPActionError.stale }
