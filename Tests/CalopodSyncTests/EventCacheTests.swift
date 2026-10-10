@@ -365,8 +365,9 @@ struct EventCacheTests {
         #expect(source.currentUserResponse == .readOnlyFeed)
     }
 
-    @Test("Private inbox detail stays out of Busy planning and ingestion diagnostics")
-    func inboxPrivacy() throws {
+    @Test("Private inbox detail stays out of Busy planning and ingestion diagnostics",
+          arguments: [EventResponseState.needsResponse, .tentative, .accepted, .declined, .unknown])
+    func inboxPrivacy(_ response: EventResponseState) throws {
         let repository = LocalStateRepository(database: try CalopodDatabase.inMemory())
         let connection = testConnection()
         let calendar = testCalendar(connectionID: connection.id)
@@ -378,7 +379,11 @@ struct EventCacheTests {
         try cache.apply(ProviderEventPage(events: [event(id: "private", start: start, end: end)], nextSyncToken: nil),
                         connection: connection, calendar: calendar, from: start, through: end)
         let result = try cache.apply(ProviderEventPage(events: [event(id: "private", start: start, end: end,
-            title: "Synthetic confidential title", notes: "Synthetic confidential notes")], nextSyncToken: nil),
+            title: "Synthetic confidential title", location: "Synthetic confidential room",
+            notes: "Synthetic confidential notes", url: "https://example.com/confidential",
+            organizer: EventParticipant(name: "Synthetic confidential organizer", emailAddress: "organizer@example.com"),
+            attendees: [EventParticipant(emailAddress: "guest@example.com")],
+            responseMetadata: EventResponse(state: response, respondedAt: start, evidence: .eventKitCurrentUser))], nextSyncToken: nil),
             connection: connection, calendar: calendar, from: start, through: end)
         #expect(try repository.inboxActivity(connectionID: connection.id).first?.event.notes == "Synthetic confidential notes")
         let sources = try repository.normalizedInstances(calendarBindingIDs: [calendar.id], from: start, through: end)
@@ -388,8 +393,12 @@ struct EventCacheTests {
             sourceSnapshotComplete: true)
         let payload = String(decoding: try JSONEncoder().encode(plan), as: UTF8.self)
         let diagnostics = String(decoding: try JSONEncoder().encode(result.ingestion), as: UTF8.self)
-        #expect(!payload.contains("Synthetic confidential"))
-        #expect(!diagnostics.contains("Synthetic confidential"))
+        #expect(sources.first?.currentUserResponse.state == response)
+        for text in [payload, diagnostics] {
+            for privateField in ["Synthetic confidential", "example.com", "responseMetadata", "respondedAt", "eventkit-current-user"] {
+                #expect(!text.contains(privateField))
+            }
+        }
         #expect(plan.items.first?.payload?.title == "Busy")
     }
 
