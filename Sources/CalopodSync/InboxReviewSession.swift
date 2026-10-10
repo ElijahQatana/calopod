@@ -57,6 +57,7 @@ public struct InboxReviewSession: Codable, Equatable, Sendable {
     public let startedAt: Date
     public let filter: InboxAttentionFilter
     public let settings: InboxContextSettings
+    public let displayTimeZoneIdentifier: String?
     public var entries: [InboxReviewEntry]
     public let queueCount: Int
     public let originalOccurrenceKeys: Set<String>
@@ -67,11 +68,12 @@ public struct InboxReviewSession: Codable, Equatable, Sendable {
 
     public init(snapshot: InboxContextSnapshot, filter: InboxAttentionFilter, settings: InboxContextSettings,
                 metricsWindow: SyncWindow, freshnessCutoff: Date, now: Date = Date(),
-                id: String = UUID().uuidString.lowercased()) {
+                id: String = UUID().uuidString.lowercased(), displayTimeZoneIdentifier: String? = nil) {
         self.id = id
         startedAt = now
         self.filter = filter
         self.settings = settings
+        self.displayTimeZoneIdentifier = displayTimeZoneIdentifier
         entries = InboxAttentionQuery.evaluate(snapshot, filter: filter, freshnessCutoff: freshnessCutoff).rows.map {
             InboxReviewEntry(sourceKeyHash: $0.item.event.sourceKeyHash, startingRevision: $0.item.observation?.revision)
         }

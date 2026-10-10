@@ -6,13 +6,15 @@ public struct InboxAttentionFilter: Codable, Equatable, Sendable {
     public let window: SyncWindow?
     public let excludeMaybe: Bool
     public let conflictsOnly: Bool
+    public let bindingIDs: Set<String>?
 
     /// A nil window includes all relevant retained occurrences, not just today.
     /// CLI date parsing supplies normalized local-day or timestamp boundaries.
-    public init(window: SyncWindow? = nil, excludeMaybe: Bool = false, conflictsOnly: Bool = false) {
+    public init(window: SyncWindow? = nil, excludeMaybe: Bool = false, conflictsOnly: Bool = false, bindingIDs: Set<String>? = nil) {
         self.window = window
         self.excludeMaybe = excludeMaybe
         self.conflictsOnly = conflictsOnly
+        self.bindingIDs = bindingIDs
     }
 }
 
@@ -58,6 +60,7 @@ public enum InboxAttentionQuery {
             let event = item.event
             guard !event.isCancelled, item.observation?.tombstone == nil,
                   let source = snapshot.sources.first(where: { $0.bindingID == event.calendarBindingID }) else { continue }
+            if let ids = filter.bindingIDs, !ids.contains(event.calendarBindingID) { continue }
             if filter.excludeMaybe && event.currentUserResponse.state == .tentative { continue }
             if let range = filter.window {
                 let currentMatches = event.endsAt > range.start && event.startsAt < range.end
