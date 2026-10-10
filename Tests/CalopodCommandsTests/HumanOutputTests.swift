@@ -26,6 +26,33 @@ struct HumanOutputTests {
         #expect(exact.contains("Destination ID: target"))
     }
 
+    @Test("Routing summaries keep Arms sharing a destination separate")
+    func sharedDestinationSummary() throws {
+        let payload = CommandPayload(status: "ok", message: "Configured Arms.", count: 2, items: [
+            CommandItem(id: "named-arm-id", kind: "arm", label: "Office", sourceIDs: ["source-a", "source-b"],
+                        targetID: "target-id", rule: "full-details", enabled: true),
+            CommandItem(id: "unnamed-arm-id", kind: "arm", sourceIDs: ["source-c"],
+                        targetID: "target-id", rule: "busy", enabled: false),
+        ])
+        let context = HumanOutputContext(calendarLabels: [
+            "source-a": "Synthetic A", "source-b": "Synthetic B", "source-c": "Synthetic C", "target-id": "Combined",
+        ])
+        let output = try OutputRenderer.render(command: "arm.list", payload: payload, format: .human, human: context)
+        let arms = output.components(separatedBy: "\n\n")
+        try #require(arms.count == 4)
+        for text in ["1. Office", "Sources: 2", "Synthetic A", "Synthetic B", "Rule: Full details", "State: enabled"] {
+            #expect(arms[1].contains(text))
+        }
+        for text in ["2. Unnamed Arm", "Sources: 1", "Synthetic C", "Rule: busy", "State: disabled"] {
+            #expect(arms[2].contains(text))
+        }
+        #expect(arms[1].contains("Destination: Combined"))
+        #expect(arms[2].contains("Destination: Combined"))
+        for id in ["named-arm-id", "unnamed-arm-id", "source-a", "source-b", "source-c", "target-id"] {
+            #expect(!output.contains(id))
+        }
+    }
+
     @Test("Main and unnamed Arms have readable fallbacks without hiding missing calendars")
     func fallbacks() throws {
         let payload = CommandPayload(status: "ok", message: "Configured Arms.", items: [

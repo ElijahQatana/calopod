@@ -330,6 +330,9 @@ main_file="$temporary_root/main.json"
 arms_file="$temporary_root/arms.json"
 if [ "$setup_mode" = "arms" ]; then
   configure_custom_arms
+  echo "Arm routing summary (labels are shown only in this terminal):"
+  "$cli" arm list --format human \
+    || fail "Could not read the configured Arms. Automatic sync remains disabled." 74
 else
 run_json "$main_file" main inspect
 run_json "$arms_file" arm list
