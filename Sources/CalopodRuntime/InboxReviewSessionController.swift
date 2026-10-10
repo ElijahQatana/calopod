@@ -41,13 +41,13 @@ public struct InboxReviewSessionController: Sendable {
     public func session(id: String) throws -> InboxReviewSession { try load(id).0 }
 
     public func start(filter: InboxAttentionFilter = InboxAttentionFilter(), settings: InboxContextSettings? = nil,
-                      metricsWindow: SyncWindow, freshnessCutoff: Date, now: Date = Date()) throws -> InboxReviewSession {
+                      metricsWindow: SyncWindow, freshnessCutoff: Date, now: Date = Date(), displayTimeZoneIdentifier: String? = nil) throws -> InboxReviewSession {
         let lock = try ProcessLock.acquire(at: lockURL)
         defer { withExtendedLifetime(lock) {} }
         try state.pruneInboxReviewSessions(completedBefore: now.addingTimeInterval(-30 * 86_400))
         let snapshot = try state.inboxContextSnapshot()
         var session = try InboxReviewSession(snapshot: snapshot, filter: filter, settings: settings ?? state.inboxContextSettings(),
-            metricsWindow: metricsWindow, freshnessCutoff: freshnessCutoff, now: now)
+            metricsWindow: metricsWindow, freshnessCutoff: freshnessCutoff, now: now, displayTimeZoneIdentifier: displayTimeZoneIdentifier)
         session.updateSummary(freshnessCutoff: freshnessCutoff)
         try state.createInboxReviewSession(update(session, generation: 0, now: now),
             connectionIDs: Set(snapshot.sources.map(\.connectionID)))
@@ -118,7 +118,8 @@ public struct InboxReviewSessionController: Sendable {
             guard preview.target == target, matches(context.focused.event, preview.event) else {
                 throw InboxReviewSessionError.freshDecisionRequired
             }
-            providerSnapshot = preview
+            if preview.capability.isEligible, preview.capability.supportedScopes.contains(.occurrence),
+               let version = preview.version, !version.isEmpty { providerSnapshot = preview }
         }
         session.updateSummary(freshnessCutoff: freshnessCutoff)
         try save(session, generation: &generation)
@@ -168,16 +169,17 @@ public struct InboxReviewSessionController: Sendable {
     }
 
     /// A vanished or unsupported card can be explicitly deferred without an RSVP.
-    public func deferUnavailable(sessionID: String, sourceKeyHash: String, freshnessCutoff: Date) throws -> InboxReviewSession {
+    public func deferUnavailable(sessionID: String, sourceKeyHash: String, freshnessCutoff: Date, hold: Bool = false) throws -> InboxReviewSession {
         let lock = try ProcessLock.acquire(at: lockURL)
         defer { withExtendedLifetime(lock) {} }
         var (session, generation) = try load(sessionID)
         guard let index = session.entries.firstIndex(where: { $0.sourceKeyHash == sourceKeyHash }),
-              session.entries[index].outcome == nil, session.entries[index].actions.isEmpty else {
+              (hold ? !session.entries[index].actions.contains(where: { !$0.accounted }) && session.entries[index].outcome != .unknown
+                    : session.entries[index].outcome == nil && session.entries[index].actions.isEmpty) else {
             throw InboxReviewSessionError.itemNotQueued
         }
         session.summary = nil
-        session.entries[index].outcome = .unavailable
+        session.entries[index].outcome = hold ? .hold : .unavailable
         try save(session, generation: &generation)
         try finish(&session, generation: &generation, freshnessCutoff: freshnessCutoff)
         return session

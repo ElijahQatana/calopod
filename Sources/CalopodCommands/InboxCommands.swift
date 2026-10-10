@@ -17,7 +17,7 @@ public struct InboxOptions: ParsableArguments {
 
 public struct InboxCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(commandName: "inbox", abstract: "Read retained local inbox observations.",
-        subcommands: [InboxActivityCommand.self, InboxRefreshCommand.self, InboxInspectCommand.self, InboxAcknowledgeCommand.self])
+        subcommands: [InboxActivityCommand.self, InboxRefreshCommand.self, InboxInspectCommand.self, InboxAcknowledgeCommand.self, InboxConfigCommand.self, InboxReviewCommand.self])
     @OptionGroup public var options: InboxOptions
     public init() {}
     public func run() async throws {
