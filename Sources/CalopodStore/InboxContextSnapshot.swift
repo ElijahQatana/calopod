@@ -3,7 +3,7 @@ import Foundation
 import GRDB
 
 /// Source detail belongs to local inbox views, never Busy payloads or diagnostics.
-public struct InboxContextSource: Equatable, Sendable {
+public struct InboxContextSource: Codable, Equatable, Sendable {
     public let bindingID: String
     public let connectionID: String
     public let connectionLabel: String?
@@ -32,7 +32,7 @@ public struct InboxContextSource: Equatable, Sendable {
     }
 }
 
-public struct InboxContextEvent: Equatable, Sendable {
+public struct InboxContextEvent: Codable, Equatable, Sendable {
     public let event: StoredNormalizedInstance
     public let observation: InboxObservation?
     public let isPresenceConfirmed: Bool
@@ -46,7 +46,7 @@ public struct InboxContextEvent: Equatable, Sendable {
 
 /// One consistent local read. Caller-supplied duplicate evidence is explicit:
 /// similarity of title/time or account type is never proof of shared identity.
-public struct InboxContextSnapshot: Equatable, Sendable {
+public struct InboxContextSnapshot: Codable, Equatable, Sendable {
     public let sources: [InboxContextSource]
     public let events: [InboxContextEvent]
     public let unprovenDuplicateBindingIDs: Set<String>

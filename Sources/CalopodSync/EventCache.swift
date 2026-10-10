@@ -220,7 +220,8 @@ public enum EventNormalizer {
                 url: event.url,
                 organizer: event.organizer,
                 attendees: event.attendees,
-                currentUserResponse: event.currentUserResponse
+                currentUserResponse: event.currentUserResponse,
+                providerSeriesID: event.seriesID
             )
             observations.append(instance)
             if isInRange { instances.append(instance) }

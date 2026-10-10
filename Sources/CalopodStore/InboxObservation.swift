@@ -73,7 +73,7 @@ extension StoredNormalizedInstance {
 }
 
 /// Last complete read window; combine with Connection health to report freshness.
-public struct InboxCoverage: Equatable, Sendable {
+public struct InboxCoverage: Codable, Equatable, Sendable {
     public let startsAt: Date
     public let endsAt: Date
     public let observedAt: Date

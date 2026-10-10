@@ -275,6 +275,13 @@ public final class LocalStateRepository: @unchecked Sendable {
 
     public func removeConnection(id: String) throws {
         try database.write { database in
+            let actions = try Row.fetchAll(database, sql: "SELECT id, record FROM inbox_rsvp_actions")
+            for row in actions {
+                let record = try JSONDecoder().decode(RSVPActionRecord.self, from: row["record"])
+                if record.intent.target.connectionID == id {
+                    try database.execute(sql: "DELETE FROM inbox_rsvp_actions WHERE id = ?", arguments: [row["id"] as String])
+                }
+            }
             try database.execute(sql: "DELETE FROM connections WHERE id = ?", arguments: [id])
         }
     }

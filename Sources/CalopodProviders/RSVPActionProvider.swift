@@ -93,15 +93,18 @@ public struct RSVPActionExecutor: Sendable {
 
     public init(state: LocalStateRepository) { self.state = state }
 
-    public func perform(_ intent: RSVPActionIntent, using provider: any RSVPActionProvider) async throws -> RSVPActionRecord {
+    public func perform(_ intent: RSVPActionIntent, using provider: any RSVPActionProvider,
+                        sessionUpdate: InboxReviewSessionUpdate? = nil,
+                        beforeSubmission: @Sendable () throws -> Void = {}) async throws -> RSVPActionRecord {
         // An existing ID is recovery, even if a crash left it in pending state.
         if let existing = try state.rsvpAction(id: intent.id) {
             guard existing.intent == intent else { throw RSVPActionStoreError.intentMismatch }
             return try await reconcile(existing, using: provider)
         }
-        let reservation = try state.beginRSVPAction(intent)
+        let reservation = try state.beginRSVPAction(intent, sessionUpdate: sessionUpdate)
         let record = reservation.record
         guard reservation.isNew else { return try await reconcile(record, using: provider) }
+        try beforeSubmission()
         do {
             try Task.checkCancellation()
             try await provider.submitRSVP(record.intent)

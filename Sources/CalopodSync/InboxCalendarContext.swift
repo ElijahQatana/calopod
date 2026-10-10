@@ -184,7 +184,7 @@ private func sameDecisionEvidence(_ lhs: InboxContextSnapshot, _ rhs: InboxConte
               old.observation?.tombstone == new.observation?.tombstone,
               a.sourceKeyHash == b.sourceKeyHash, a.connectionID == b.connectionID,
               a.calendarBindingID == b.calendarBindingID, a.providerEventID == b.providerEventID,
-              a.recurrenceID == b.recurrenceID, a.startsAt == b.startsAt, a.endsAt == b.endsAt,
+              a.recurrenceID == b.recurrenceID, a.providerSeriesID == b.providerSeriesID, a.startsAt == b.startsAt, a.endsAt == b.endsAt,
               a.isAllDay == b.isAllDay, a.availability == b.availability,
               a.isCancelled == b.isCancelled, a.isPrivate == b.isPrivate,
               a.title == b.title, a.location == b.location, a.notes == b.notes, a.url == b.url,

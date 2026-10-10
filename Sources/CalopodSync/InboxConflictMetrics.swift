@@ -7,7 +7,7 @@ public enum InboxConflictMetricsError: Error, Equatable {
     case responseNotObserved
 }
 
-/// Persist this value with the later review-session journal. Counts are lower
+/// Persisted with review sessions. Counts are lower
 /// bounds when sources are incomplete; a zero never proves no conflicts then.
 public struct InboxConflictMetrics: Codable, Equatable, Sendable {
     public let window: SyncWindow
@@ -75,6 +75,14 @@ public struct InboxConflictMetrics: Codable, Equatable, Sendable {
         remainingPairs = current.pairs
         isComplete = current.isComplete
         attributionIsComplete = attributionIsComplete && prior.isComplete && current.isComplete && uncertain.isEmpty
+    }
+
+    public mutating func recordUncertainDecision(after: InboxContextSnapshot, freshnessCutoff: Date) {
+        let current = InboxConflictCalculator.analyze(after, window: window, freshnessCutoff: freshnessCutoff)
+        uncertainPairs.formUnion(current.pairs.subtracting(remainingPairs))
+        remainingPairs = current.pairs
+        isComplete = false
+        attributionIsComplete = false
     }
 
     /// A refresh without a confirmed review response cannot increase created.
