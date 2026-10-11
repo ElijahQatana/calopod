@@ -412,6 +412,21 @@ struct SyncPlannerTests {
         #expect(incomplete.items.map(\.reason) == [.targetSnapshotIncomplete])
     }
 
+    @Test(arguments: [true, false], [true, false])
+    func unseenMappingsAreDeferred(sourceComplete: Bool, targetComplete: Bool) throws {
+        let arm = storedArm(ruleMode: .busy)
+        let mapping = StoredMirrorMapping(
+            mirrorKey: "unseen-mirror", armID: arm.id, sourceKeyHash: "unseen-source",
+            providerEventID: "unseen-target", providerVersion: "v1", desiredFingerprint: "previous",
+            ownershipKeyID: "synthetic-key", updatedAt: Date(timeIntervalSince1970: 1)
+        )
+        let plan = SyncPlanner.plan(
+            arm: arm, sources: [], mappings: [mapping], targetEvents: [], window: try window(),
+            sourceSnapshotComplete: sourceComplete, targetSnapshotComplete: targetComplete
+        )
+        #expect(plan.items.isEmpty)
+    }
+
     @Test("An incomplete target read cannot create an unmapped event")
     func incompleteTargetReadCannotCreate() throws {
         let plan = SyncPlanner.plan(
