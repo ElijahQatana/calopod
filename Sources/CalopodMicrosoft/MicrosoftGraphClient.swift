@@ -377,16 +377,25 @@ public struct MicrosoftGraphClient: Sendable {
         includeExtension: Bool
     ) throws -> Data {
         let payload = managed.payload
+        // Graph wants all-day events to run midnight to midnight in the stated zone.
+        let start: String
+        let end: String
+        if payload.isAllDay {
+            let days = AllDayDate.days(
+                startsAt: payload.startsAt,
+                endsAt: payload.endsAt,
+                timeZoneIdentifier: payload.timeZoneIdentifier
+            )
+            start = "\(days.start)T00:00:00.0000000"
+            end = "\(days.end)T00:00:00.0000000"
+        } else {
+            start = MicrosoftDate.string(from: payload.startsAt)
+            end = MicrosoftDate.string(from: payload.endsAt)
+        }
         var object: [String: Any] = [
             "subject": payload.title ?? "",
-            "start": [
-                "dateTime": MicrosoftDate.string(from: payload.startsAt),
-                "timeZone": "UTC",
-            ],
-            "end": [
-                "dateTime": MicrosoftDate.string(from: payload.endsAt),
-                "timeZone": "UTC",
-            ],
+            "start": ["dateTime": start, "timeZone": "UTC"],
+            "end": ["dateTime": end, "timeZone": "UTC"],
             "isAllDay": payload.isAllDay,
             "showAs": microsoftAvailability(payload.availability),
             "isReminderOn": false,
@@ -641,7 +650,9 @@ private struct MicrosoftEvent: Decodable {
                         || sensitivity == "personal"
                         || sensitivity == "confidential",
                 location: location?.displayName,
-                notes: plainTextBody
+                notes: plainTextBody,
+                // Reads ask for UTC, so an all-day event's day is its UTC day.
+                timeZoneIdentifier: isAllDay == true ? "UTC" : nil
             )
         } else {
             payload = nil

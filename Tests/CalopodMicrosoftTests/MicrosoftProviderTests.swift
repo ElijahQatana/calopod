@@ -843,3 +843,32 @@ func microsoftRSVPRequiresCurrentPermissionAndOperatorScope() async throws {
         }
     }
 }
+
+@Test("All-day mirrors run midnight to midnight on the source's calendar day", arguments: [
+    "Asia/Tokyo", "Europe/Paris", "America/Los_Angeles",
+])
+func allDayWrite(zone: String) async throws {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: zone)!
+    let start = calendar.date(from: DateComponents(year: 2026, month: 10, day: 5))!
+    let end = calendar.date(byAdding: .day, value: 1, to: start)!
+    let transport = MicrosoftManagedWriteTransport()
+    let base = microsoftManagedRequest()
+    let request = ManagedEventWriteRequest(
+        desiredFingerprint: base.desiredFingerprint,
+        payload: DesiredEventPayload(
+            startsAt: start, endsAt: end, isAllDay: true, availability: "busy", title: "Busy",
+            isPrivate: nil, timeZoneIdentifier: zone
+        ),
+        provenance: base.provenance
+    )
+
+    _ = try await MicrosoftGraphClient(transport: transport)
+        .createManagedEvent(accessToken: "token", calendarID: "target", request: request)
+
+    let sent = try #require(await transport.requests.first)
+    let object = try #require(JSONSerialization.jsonObject(with: sent.body) as? [String: Any])
+    #expect((object["start"] as? [String: String]) == ["dateTime": "2026-10-05T00:00:00.0000000", "timeZone": "UTC"])
+    #expect((object["end"] as? [String: String]) == ["dateTime": "2026-10-06T00:00:00.0000000", "timeZone": "UTC"])
+    #expect(object["isAllDay"] as? Bool == true)
+}
