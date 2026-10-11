@@ -375,6 +375,7 @@ func v8ResponseMigrationPreservesEventsWithoutInventingRSVP() throws {
     #expect(events[0].availability == "tentative")
     #expect(events[0].contentFingerprint == "fingerprint")
     #expect(events[0].currentUserResponse == .unavailable)
+    #expect(events[0].timeZoneIdentifier == nil)
     #expect(try repository.calendarBinding(id: "binding")?.responseIdentityScope == .unverified)
     try db.migrate()
     #expect(try repository.normalizedInstances(calendarBindingIDs: ["binding"], from: start, through: end) == events)

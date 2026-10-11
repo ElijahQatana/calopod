@@ -578,4 +578,26 @@ struct EventCacheTests {
             responseMetadata: responseMetadata
         )
     }
+
+    @Test("Only all-day events keep their time zone")
+    func allDayZoneIsKept() {
+        let start = Date(timeIntervalSince1970: 1_000)
+        func make(_ id: String, allDay: Bool) -> ProviderEvent {
+            ProviderEvent(
+                provider: "eventkit", connectionID: "connection", calendarID: "provider-calendar",
+                eventID: id, seriesID: nil, originalStart: nil, start: start, end: start.addingTimeInterval(86_400),
+                isAllDay: allDay, availability: .busy, isCancelled: false, isPrivate: false,
+                title: "Synthetic event", updatedAt: nil, timeZoneIdentifier: "Asia/Tokyo"
+            )
+        }
+        let result = EventNormalizer.normalize(
+            [make("day", allDay: true), make("timed", allDay: false)],
+            connection: testConnection(),
+            calendar: testCalendar(connectionID: testConnection().id),
+            from: start,
+            through: start.addingTimeInterval(86_400)
+        )
+        let zones = Dictionary(uniqueKeysWithValues: result.instances.map { ($0.providerEventID, $0.timeZoneIdentifier ?? "none") })
+        #expect(zones == ["day": "Asia/Tokyo", "timed": "none"])
+    }
 }
