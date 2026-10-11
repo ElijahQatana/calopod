@@ -10,6 +10,7 @@ public enum CalopodRuntimeError: Error, Equatable, Sendable {
     case missingEventKitHost
     case eventKitHostFailed
     case eventKitHostTimedOut
+    case eventKitHostUntrusted
     case missingGoogleClientID
     case missingMicrosoftClientID
     case unsupportedPlatform

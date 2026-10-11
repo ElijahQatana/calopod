@@ -12,18 +12,21 @@ struct EventKitHostRunner {
     private let launcherURL: URL
     private let standardLimit: TimeInterval
     private let permissionLimit: TimeInterval
+    private let verifyHost: (URL) throws -> Void
 
     /// Lets tests stand in for `open` and shorten the limits.
     init(
         appURL: URL,
         launcherURL: URL,
         standardLimit: TimeInterval,
-        permissionLimit: TimeInterval
+        permissionLimit: TimeInterval,
+        verifyHost: @escaping (URL) throws -> Void = EventKitHostSignature.verify(appURL:)
     ) {
         self.appURL = appURL
         self.launcherURL = launcherURL
         self.standardLimit = standardLimit
         self.permissionLimit = permissionLimit
+        self.verifyHost = verifyHost
     }
 
     init(environment: CalopodRuntimeEnvironment) throws {
@@ -34,6 +37,7 @@ struct EventKitHostRunner {
         launcherURL = URL(fileURLWithPath: "/usr/bin/open")
         standardLimit = EventKitHostLimits.standard
         permissionLimit = EventKitHostLimits.permissionRequest
+        verifyHost = EventKitHostSignature.verify(appURL:)
         let executableURL = appURL
             .appendingPathComponent("Contents/MacOS/CalopodEventKitHost")
         guard FileManager.default.isExecutableFile(atPath: executableURL.path) else {
@@ -109,6 +113,11 @@ struct EventKitHostRunner {
         requestData: Data? = nil,
         limit: TimeInterval
     ) throws -> EventKitHostResponse {
+        do {
+            try verifyHost(appURL)
+        } catch {
+            throw CalopodRuntimeError.eventKitHostUntrusted
+        }
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("calopod-eventkit-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(

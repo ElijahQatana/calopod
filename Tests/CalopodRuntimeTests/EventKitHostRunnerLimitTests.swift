@@ -23,7 +23,8 @@ private func makeRunner(launcher: URL, standard: TimeInterval, permission: TimeI
         appURL: URL(fileURLWithPath: "/nonexistent/Host.app"),
         launcherURL: launcher,
         standardLimit: standard,
-        permissionLimit: permission
+        permissionLimit: permission,
+        verifyHost: { _ in }
     )
 }
 
@@ -73,6 +74,26 @@ struct EventKitHostRunnerLimitTests {
         await #expect(throws: CalopodRuntimeError.eventKitHostTimedOut) {
             try await slow.perform(EventKitHostRequest(operation: .permissionStatus))
         }
+    }
+
+    @Test
+    func untrustedHostIsNeverLaunched() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("calopod-host-limit-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let marker = directory.appendingPathComponent("launched")
+        let runner = EventKitHostRunner(
+            appURL: URL(fileURLWithPath: "/nonexistent/Host.app"),
+            launcherURL: try makeLauncher("touch '\(marker.path)'", in: directory),
+            standardLimit: 5,
+            permissionLimit: 5,
+            verifyHost: { _ in throw EventKitHostSignatureError.unsigned }
+        )
+        await #expect(throws: CalopodRuntimeError.eventKitHostUntrusted) {
+            try await runner.perform(EventKitHostRequest(operation: .permissionStatus))
+        }
+        #expect(!FileManager.default.fileExists(atPath: marker.path))
     }
 
     @Test
