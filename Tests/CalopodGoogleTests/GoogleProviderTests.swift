@@ -802,3 +802,44 @@ func googleRSVPRequiresCurrentPermissionAndOperatorScope() async throws {
         }
     }
 }
+
+@Test("All-day mirrors are written on the source's calendar day", arguments: [
+    "Asia/Tokyo", "Europe/Paris", "America/Los_Angeles", "Europe/Paris-dst",
+])
+func allDayWrite(zone: String) async throws {
+    let (identifier, day) = zone == "Europe/Paris-dst" ? ("Europe/Paris", 25) : (zone, 5)
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: identifier)!
+    let start = calendar.date(from: DateComponents(year: 2026, month: 10, day: day))!
+    let end = calendar.date(byAdding: .day, value: 1, to: start)!
+    let transport = RecordingTransport { request in
+        let object = try #require(JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any])
+        #expect((object["start"] as? [String: String]) == ["date": "2026-10-\(String(format: "%02d", day))"])
+        #expect((object["end"] as? [String: String]) == ["date": "2026-10-\(String(format: "%02d", day + 1))"])
+        return HTTPResponse(statusCode: 200, body: Data(#"{"id":"provider-event","etag":"e"}"#.utf8))
+    }
+    var request = googleManagedRequest()
+    request = ManagedEventWriteRequest(
+        desiredFingerprint: request.desiredFingerprint,
+        payload: DesiredEventPayload(
+            startsAt: start, endsAt: end, isAllDay: true, availability: "busy", title: "Busy",
+            isPrivate: nil, timeZoneIdentifier: identifier
+        ),
+        provenance: request.provenance
+    )
+    _ = try await GoogleCalendarClient(transport: transport)
+        .createManagedEvent(accessToken: "token", calendarID: "target", request: request)
+}
+
+@Test("An all-day source keeps the zone its dates were read in")
+func allDayRead() async throws {
+    let json = #"{"timeZone":"Europe/Paris","items":[{"id":"a","start":{"date":"2026-10-05"},"end":{"date":"2026-10-06"}},{"id":"b","start":{"date":"2026-10-05","timeZone":"Asia/Tokyo"},"end":{"date":"2026-10-06"}},{"id":"c","start":{"dateTime":"2026-10-05T10:00:00Z"},"end":{"dateTime":"2026-10-05T11:00:00Z"}}]}"#
+    let client = GoogleCalendarClient(transport: RecordingTransport { _ in
+        HTTPResponse(statusCode: 200, body: Data(json.utf8))
+    })
+    let page = try await client.events(
+        accessToken: "synthetic", connectionID: "google-test", calendarID: "synthetic-calendar",
+        from: Date(), through: Date(), responseIdentityScope: .unverified
+    )
+    #expect(page.events.map(\.timeZoneIdentifier) == ["Europe/Paris", "Asia/Tokyo", nil])
+}
