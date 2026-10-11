@@ -66,8 +66,8 @@ public enum SyncPlanner {
     ///
     /// 1. Walk every source event that belongs in the window and decide
     ///    create / update / no-op / repair for its mirror.
-    /// 2. Walk every mapping this Arm already owns whose source disappeared
-    ///    (fell out of the window or was cancelled) and decide remove/repair.
+    /// 2. Walk mappings whose target is observed in the window but whose
+    ///    source no longer wants a mirror, and decide remove/repair.
     /// 3. Walk any leftover target observations that match neither a desired
     ///    source nor a known mapping, flagging genuinely orphaned events for
     ///    repair.
@@ -189,12 +189,11 @@ public enum SyncPlanner {
             )
         }
 
-        // Pass 2: mappings this Arm already owns whose source no longer
-        // wants a mirror (it left the window or was cancelled). These are
-        // candidates for `.remove`, but only once ownership on the target
-        // side is unambiguous — the same caution as pass 1 applies.
+        // Pass 2: observed copies whose source no longer wants a mirror.
         for mapping in armMappings where !desiredMirrorKeys.contains(mapping.mirrorKey) {
             let observations = observationsByMirror[mapping.mirrorKey] ?? []
+            // A bounded read cannot prove an unseen copy is missing.
+            guard !observations.isEmpty else { continue }
             let verified = observations.filter { $0.ownershipStatus == .verified }
             let action: SyncPlanAction
             let reason: SyncPlanReason
@@ -216,9 +215,6 @@ public enum SyncPlanner {
             } else if verified.first != nil {
                 action = .repair
                 reason = .providerIdentityChanged
-            } else if targetSnapshotComplete && observations.isEmpty {
-                action = .repair
-                reason = .targetMissing
             } else if !targetSnapshotComplete {
                 action = .repair
                 reason = .targetSnapshotIncomplete

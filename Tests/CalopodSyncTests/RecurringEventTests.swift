@@ -65,7 +65,7 @@ struct RecurringEventTests {
         #expect(SyncPlanReview.summarize(plan: plan, sources: try cache.instances(), sourceProviders: ["source": provider]).recurringOccurrenceCreateCount == 0)
     }
 
-    @Test("Review distinguishes missing target recreation from stale mapping cleanup")
+    @Test("Review recreates current sources and defers mappings absent from both reads")
     func missingTargetReview() async throws {
         let fixture = try RecurringLifecycleFixture()
         try fixture.cache.refresh([fixture.cache.event(at: 60)])
@@ -77,7 +77,8 @@ struct RecurringEventTests {
         #expect(SyncPlanReview.summarize(plan: recreationPlan, sources: try fixture.cache.instances(), sourceProviders: ["source": "eventkit"]) == SyncReviewSummary(targetRecreationCount: 1))
         try fixture.cache.refresh([])
         let cleanupPlan = try await fixture.plan(arm)
-        #expect(SyncPlanReview.summarize(plan: cleanupPlan, sources: [], sourceProviders: ["source": "eventkit"]) == SyncReviewSummary(staleMappingCleanupCount: 1))
+        #expect(cleanupPlan.items.isEmpty)
+        #expect(SyncPlanReview.summarize(plan: cleanupPlan, sources: [], sourceProviders: ["source": "eventkit"]) == SyncReviewSummary())
         #expect(try fixture.cache.repository.mirrorMappings(armID: arm.id) == before)
         let fullPlan = try await fixture.plan(fixture.arms[1])
         #expect(SyncPlanReview.summarize(plan: fullPlan, sources: [], sourceProviders: ["source": "eventkit"]) == SyncReviewSummary(otherSourceMissingRemovalCount: 1))
@@ -123,6 +124,36 @@ struct RecurringEventTests {
             let snapshots = await fixture.targets.snapshots(arm.targetBindingID)
             #expect(snapshots.filter { $0.provenance != nil }.count == 2)
             #expect(snapshots.filter { $0.providerEventID == "unmanaged-original" } == [RecurringTargets.original])
+        }
+    }
+
+    @Test("Disjoint bounded runs preserve copies and mappings outside each window")
+    func preservesMappingsAcrossWindows() async throws {
+        let fixture = try RecurringLifecycleFixture()
+        try fixture.cache.refresh([60.0, 180.0].map { fixture.cache.event(at: $0) })
+        #expect(try await fixture.run() == 4)
+        let mappings = try fixture.arms.map { try fixture.cache.repository.mirrorMappings(armID: $0.id) }
+        let copies = await fixture.targets.snapshots("busy") + fixture.targets.snapshots("full")
+
+        for (start, end) in [(0.0, 100.0), (150.0, 250.0), (90.0, 180.0), (0.0, 100.0)] {
+            let window = try SyncWindow(start: Date(timeIntervalSince1970: start), end: Date(timeIntervalSince1970: end))
+            for arm in fixture.arms {
+                let plan = try await fixture.plan(arm, within: window)
+                #expect(plan.items.allSatisfy { $0.action == .noOp })
+            }
+            #expect(try await fixture.run(within: window) == 0)
+            #expect(try fixture.arms.map { try fixture.cache.repository.mirrorMappings(armID: $0.id) } == mappings)
+            #expect(await fixture.targets.snapshots("busy") + fixture.targets.snapshots("full") == copies)
+        }
+
+        try fixture.cache.refresh([fixture.cache.event(at: 60, cancelled: true)], mode: .incremental)
+        let firstWindow = try SyncWindow(start: fixture.cache.start, end: Date(timeIntervalSince1970: 100))
+        #expect(try await fixture.run(within: firstWindow) == 2)
+        #expect(try await fixture.run(within: firstWindow) == 0)
+        let remainingSource = try #require(fixture.cache.instances().first)
+        for (index, arm) in fixture.arms.enumerated() {
+            let remaining = try fixture.cache.repository.mirrorMappings(armID: arm.id)
+            #expect(remaining == mappings[index].filter { $0.sourceKeyHash == remainingSource.sourceKeyHash })
         }
     }
 
@@ -241,29 +272,33 @@ private struct RecurringLifecycleFixture {
         window = try SyncWindow(start: cache.start, end: cache.end)
     }
 
-    func observations(_ arm: StoredArm) async throws -> [TargetEventObservation] {
+    func observations(_ arm: StoredArm, within requestedWindow: SyncWindow? = nil) async throws -> [TargetEventObservation] {
         try ManagedTargetObserver(secretStore: secrets).observations(
-            snapshots: await targets.snapshots(arm.targetBindingID), arm: arm,
+            snapshots: await targets.snapshots(arm.targetBindingID, within: requestedWindow), arm: arm,
             mappings: try cache.repository.mirrorMappings(armID: arm.id)
         )
     }
 
-    func plan(_ arm: StoredArm) async throws -> SyncPlan {
-        SyncPlanner.plan(
-            arm: arm, targetProvider: .eventKit, sources: try cache.instances(),
+    func plan(_ arm: StoredArm, within requestedWindow: SyncWindow? = nil) async throws -> SyncPlan {
+        let window = requestedWindow ?? self.window
+        return SyncPlanner.plan(
+            arm: arm, targetProvider: .eventKit, sources: try cache.repository.normalizedInstances(
+                calendarBindingIDs: arm.sourceBindingIDs, from: window.start, through: window.end
+            ),
             mappings: try cache.repository.mirrorMappings(armID: arm.id),
-            targetEvents: try await observations(arm), window: window, sourceSnapshotComplete: true
+            targetEvents: try await observations(arm, within: requestedWindow), window: window, sourceSnapshotComplete: true
         )
     }
 
-    func run() async throws -> Int {
+    func run(within requestedWindow: SyncWindow? = nil) async throws -> Int {
+        let window = requestedWindow ?? self.window
         var writes = 0
         for arm in arms {
             let summary = try await ManagedEventConvergenceService(repository: cache.repository, secretStore: secrets).converge(
-                initialItems: try await plan(arm).items, arm: arm, targetProvider: .eventKit,
-                initialObservations: try await observations(arm), window: window
+                initialItems: try await plan(arm, within: requestedWindow).items, arm: arm, targetProvider: .eventKit,
+                initialObservations: try await observations(arm, within: requestedWindow), window: window
             ) {
-                await targets.snapshots(arm.targetBindingID)
+                await targets.snapshots(arm.targetBindingID, within: requestedWindow)
             } perform: { mutation in
                 try await targets.perform(mutation, calendar: arm.targetBindingID)
             }
@@ -278,7 +313,12 @@ private actor RecurringTargets {
     private var storage: [String: [ManagedEventSnapshot]] = ["busy": [original], "full": [original]]
     private var nextID = 0
 
-    func snapshots(_ calendar: String) -> [ManagedEventSnapshot] { storage[calendar]! }
+    func snapshots(_ calendar: String, within window: SyncWindow? = nil) -> [ManagedEventSnapshot] {
+        storage[calendar]!.filter {
+            guard let window, let payload = $0.payload else { return true }
+            return payload.endsAt > window.start && payload.startsAt < window.end
+        }
+    }
 
     func removeCopies(_ calendar: String) {
         storage[calendar] = [Self.original]
