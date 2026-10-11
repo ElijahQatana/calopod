@@ -160,6 +160,32 @@ func agentStatusDoesNotCreateMissingState() throws {
 }
 
 @Test
+func invalidInstalledScheduleIsReportedAsConfiguration() throws {
+    let fixture = try LaunchAgentFixture()
+    defer { fixture.remove() }
+    var plist = try PropertyListSerialization.propertyList(
+        from: Data(contentsOf: fixture.propertyListURL), options: [], format: nil
+    ) as! [String: Any]
+    var variables = plist["EnvironmentVariables"] as! [String: String]
+    variables["CALOPOD_AGENT_INTERVAL_SECONDS"] = "0"
+    plist["EnvironmentVariables"] = variables
+    try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+        .write(to: fixture.propertyListURL)
+    let controller = try LaunchAgentController(
+        homeDirectory: fixture.homeDirectory,
+        userID: 501
+    ) { _ in LaunchctlResult(exitCode: 0, output: "") }
+
+    let status = try agentStatusPayload(controller: controller)
+    let doctor = try doctorReport(controller: controller)
+
+    #expect(status.status == "failed")
+    #expect(status.failureCategory == "configuration")
+    #expect(doctor.status == "failed")
+    #expect(doctor.items.first?.reason == "configuration")
+}
+
+@Test
 func scheduleUpdatePreservesPathsAndRestartsALoadedAgent() throws {
     let fixture = try LaunchAgentFixture()
     defer { fixture.remove() }

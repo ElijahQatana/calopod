@@ -6,12 +6,12 @@ import Foundation
 @main
 struct CalopodAgent {
     static func main() async {
+        let arguments = Array(CommandLine.arguments.dropFirst())
+        guard arguments.isEmpty || arguments == ["--once"] else {
+            writeError("Usage: calopod-agent [--once]\n")
+            exit(64)
+        }
         do {
-            let arguments = Array(CommandLine.arguments.dropFirst())
-            guard arguments.isEmpty || arguments == ["--once"] else {
-                writeError("Usage: calopod-agent [--once]\n")
-                exit(64)
-            }
             let environment = try CalopodRuntimeEnvironment()
             let runner = CalopodAgentRunner(
                 environment: environment,
@@ -45,6 +45,13 @@ struct CalopodAgent {
                     failureCategory: syncFailureCategory(error)
                 )
             )
+            // Startup errors here are configuration problems that a restart
+            // cannot fix. Stay idle so launchd does not loop on them; a
+            // schedule or install change restarts the service.
+            if arguments.isEmpty {
+                await TerminationSignals().wait()
+                exit(0)
+            }
             exit(1)
         }
     }
