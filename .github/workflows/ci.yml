@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Check public content
+        if: github.event_name == 'pull_request'
+        run: |
+          # The checkout is the merge commit, so its first parent is the base.
+          git reset --soft HEAD^1
+          Scripts/check-public-content.sh
+
+      - name: Build
+        run: swift build
+
+      - name: Test
+        run: swift test --disable-sandbox

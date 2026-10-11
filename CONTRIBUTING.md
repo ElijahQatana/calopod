@@ -41,6 +41,10 @@ git diff --cached --check
 
 Read the staged diff before committing. Automated checks catch common mistakes, but they do not replace a manual review.
 
+## Continuous integration
+
+Pull requests and pushes to main run `swift build` and `swift test --disable-sandbox` on a macOS runner (see `.github/workflows/ci.yml`). Pull requests also run the public-content check against their diff. The workflow uses no secrets and read-only permissions.
+
 ## Pull requests
 
 Write a short explanation of what changed and why. Include the verification performed and call out any known limitation or follow-up. Resolve review conversations before merging.
