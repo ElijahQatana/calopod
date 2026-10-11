@@ -254,6 +254,7 @@ func genericFailureCategory(_ value: String?) -> String {
         "ambiguous-repair",
         "authorization",
         "busy",
+        "client-id",
         "configuration",
         "consent",
         "convergence",
@@ -294,6 +295,8 @@ private func actionForFailure(_ category: String?) -> String {
         "Verify the EventKit host signature and reinstall the user service."
     case "local-state":
         "Repair or restore local state before running automatic sync."
+    case "client-id":
+        "Reinstall the user service with the provider client ID set in the environment."
     case "configuration", "writer-policy":
         "Review the enabled Connections and Arms before retrying."
     default:

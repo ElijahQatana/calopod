@@ -707,7 +707,8 @@ public func syncFailureCategory(_ error: Error) -> String {
         case .busy: "busy"
         case .missingEventKitHost, .invalidEventKitHostPath: "eventkit-host"
         case .eventKitHostFailed: "eventkit-host-response"
-        case .missingGoogleClientID, .missingMicrosoftClientID, .invalidConfiguration:
+        case .missingGoogleClientID, .missingMicrosoftClientID: "client-id"
+        case .invalidConfiguration:
             "configuration"
         case .unsupportedPlatform: "unsupported-platform"
         case .invalidStatePath: "local-state"

@@ -6,6 +6,33 @@ import Foundation
 import Testing
 
 @Test
+func directConnectionsNeedAClientIDInTheServiceEnvironment() throws {
+    let repository = LocalStateRepository(database: try CalopodDatabase.inMemory())
+    let location = try CalopodStateLocation(environment: ["CALOPOD_STATE_PATH": "/example/state.sqlite"])
+    let executable = URL(fileURLWithPath: "/example/calopod-agent")
+    let bare = try CalopodRuntimeEnvironment(variables: [:], stateLocation: location, executableURL: executable)
+    let configured = try CalopodRuntimeEnvironment(
+        variables: [
+            "CALOPOD_GOOGLE_CLIENT_ID": "synthetic-google-id",
+            "CALOPOD_MICROSOFT_CLIENT_ID": "synthetic-microsoft-id",
+        ],
+        stateLocation: location,
+        executableURL: executable
+    )
+
+    #expect(throws: CalopodRuntimeError.missingGoogleClientID) {
+        try bare.googleService(repository: repository)
+    }
+    #expect(throws: CalopodRuntimeError.missingMicrosoftClientID) {
+        try bare.microsoftService(repository: repository)
+    }
+    _ = try configured.googleService(repository: repository)
+    _ = try configured.microsoftService(repository: repository)
+    #expect(syncFailureCategory(CalopodRuntimeError.missingGoogleClientID) == "client-id")
+    #expect(syncFailureCategory(CalopodRuntimeError.missingMicrosoftClientID) == "client-id")
+}
+
+@Test
 func statePathsMustBeAbsolute() {
     #expect(throws: CalopodRuntimeError.invalidStatePath) {
         try CalopodStateLocation(environment: ["CALOPOD_STATE_PATH": "state.sqlite"])
