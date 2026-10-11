@@ -406,7 +406,7 @@ public struct SyncEngine: Sendable {
             var failureCode: String?
             if group.connection.provider == "eventkit" {
                 do {
-                    let response = try EventKitHostRunner(environment: environment).perform(
+                    let response = try await EventKitHostRunner(environment: environment).perform(
                         EventKitHostRequest(
                             operation: .events,
                             calendarIDs: group.sources.map(\.calendar.providerCalendarID),
@@ -538,7 +538,7 @@ public struct SyncEngine: Sendable {
             )
         case "eventkit":
             #if os(macOS)
-            let response = try EventKitHostRunner(environment: environment).perform(
+            let response = try await EventKitHostRunner(environment: environment).perform(
                 EventKitHostRequest(
                     operation: .managedEvents,
                     calendarIDs: [target.providerCalendarID],
@@ -652,7 +652,7 @@ public struct SyncEngine: Sendable {
                     expectedProviderVersion: expectedVersion
                 )
             }
-            let response = try EventKitHostRunner(environment: environment).perform(request)
+            let response = try await EventKitHostRunner(environment: environment).perform(request)
             guard response.status == .fullAccess, response.errorCode == nil else {
                 throw ProviderFailure.invalidResponse
             }
@@ -707,6 +707,7 @@ public func syncFailureCategory(_ error: Error) -> String {
         case .busy: "busy"
         case .missingEventKitHost, .invalidEventKitHostPath: "eventkit-host"
         case .eventKitHostFailed: "eventkit-host-response"
+        case .eventKitHostTimedOut: "eventkit-host-timeout"
         case .missingGoogleClientID, .missingMicrosoftClientID, .invalidConfiguration:
             "configuration"
         case .unsupportedPlatform: "unsupported-platform"

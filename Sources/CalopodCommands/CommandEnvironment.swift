@@ -59,6 +59,7 @@ enum CommandEnvironmentError: Error, CustomStringConvertible {
     case invalidEventKitHostPath
     case missingEventKitHost
     case eventKitHostFailed
+    case eventKitHostTimedOut
     case unsupportedPlatform
 
     var description: String {
@@ -73,6 +74,8 @@ enum CommandEnvironmentError: Error, CustomStringConvertible {
             "The EventKit host is unavailable. Reinstall Calopod or rebuild it from source."
         case .eventKitHostFailed:
             "The EventKit host did not return a valid response. Verify its signature and Calendar access."
+        case .eventKitHostTimedOut:
+            "The EventKit host did not respond in time. Try again, or restart the user service."
         case .unsupportedPlatform:
             "Browser authorization is currently available on macOS."
         }
@@ -147,6 +150,11 @@ private func commandFailure(_ error: Error) -> (message: String, exitCode: Calop
             return (
                 "The EventKit host did not return a valid response. Verify its signature and Calendar access.",
                 .unavailable
+            )
+        case .eventKitHostTimedOut:
+            return (
+                "The EventKit host did not respond in time. Try again, or restart the user service.",
+                .temporaryFailure
             )
         case .missingGoogleClientID:
             return ("Set CALOPOD_GOOGLE_CLIENT_ID to the desktop OAuth client ID, then try again.", .invalidConfiguration)
