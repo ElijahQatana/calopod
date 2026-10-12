@@ -81,31 +81,20 @@ struct EventKitHostRunner {
     ) throws -> EventKitHostResponse {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("calopod-eventkit-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(
-            at: temporaryDirectory,
-            withIntermediateDirectories: true
-        )
-        try FileManager.default.setAttributes(
-            [.posixPermissions: 0o700],
-            ofItemAtPath: temporaryDirectory.path
-        )
+        try PrivateFiles.createDirectory(at: temporaryDirectory)
         defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
 
         let stdoutURL = temporaryDirectory.appendingPathComponent("stdout.json")
         let stderrURL = temporaryDirectory.appendingPathComponent("stderr.log")
         let launcherStderrURL = temporaryDirectory.appendingPathComponent("launcher-stderr.log")
-        _ = FileManager.default.createFile(atPath: stdoutURL.path, contents: nil)
-        _ = FileManager.default.createFile(atPath: stderrURL.path, contents: nil)
-        _ = FileManager.default.createFile(atPath: launcherStderrURL.path, contents: nil)
-        try setPrivatePermissions(on: stdoutURL)
-        try setPrivatePermissions(on: stderrURL)
-        try setPrivatePermissions(on: launcherStderrURL)
+        try PrivateFiles.createFile(at: stdoutURL)
+        try PrivateFiles.createFile(at: stderrURL)
+        try PrivateFiles.createFile(at: launcherStderrURL)
 
         var appArguments = arguments
         if let requestData {
             let requestURL = temporaryDirectory.appendingPathComponent("request.json")
-            try requestData.write(to: requestURL, options: .atomic)
-            try setPrivatePermissions(on: requestURL)
+            try PrivateFiles.createFile(at: requestURL, contents: requestData)
             appArguments.append(contentsOf: ["--request-file", requestURL.path])
         }
 
@@ -140,13 +129,6 @@ struct EventKitHostRunner {
             throw CalopodRuntimeError.eventKitHostFailed
         }
         return response
-    }
-
-    private func setPrivatePermissions(on url: URL) throws {
-        try FileManager.default.setAttributes(
-            [.posixPermissions: 0o600],
-            ofItemAtPath: url.path
-        )
     }
 }
 #endif

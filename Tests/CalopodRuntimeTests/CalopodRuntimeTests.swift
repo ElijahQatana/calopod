@@ -656,3 +656,58 @@ private final class LockedSequence<Value: Sendable>: @unchecked Sendable {
         }
     }
 }
+
+private func mode(of url: URL) throws -> Int {
+    let value = try #require(
+        FileManager.default.attributesOfItem(atPath: url.path)[.posixPermissions] as? NSNumber
+    )
+    return value.intValue
+}
+
+@Test
+func privateFilesAreCreatedOwnerOnlyEvenWithAPermissiveUmask() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent("calopod-private-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let previous = umask(0)
+    defer { umask(previous) }
+
+    let directory = root.appendingPathComponent("a/b", isDirectory: true)
+    #expect(try PrivateFiles.createDirectory(at: directory))
+    #expect(try !PrivateFiles.createDirectory(at: directory))
+    #expect(try mode(of: directory) == 0o700)
+
+    let file = directory.appendingPathComponent("request.json")
+    try PrivateFiles.createFile(at: file, contents: Data("{}".utf8))
+    #expect(try mode(of: file) == 0o600)
+    #expect(try Data(contentsOf: file) == Data("{}".utf8))
+}
+
+@Test
+func newStateDirectoryAndDatabaseSidecarsAreOwnerOnlyWithAPermissiveUmask() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent("calopod-state-umask-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let previous = umask(0)
+    defer { umask(previous) }
+    let state = try CalopodStateLocation(
+        environment: ["CALOPOD_STATE_PATH": root.appendingPathComponent("state.sqlite").path]
+    )
+
+    try state.prepareDatabaseFile()
+    #expect(try mode(of: root) == 0o700)
+    #expect(try mode(of: state.databaseURL) == 0o600)
+
+    let database = try CalopodDatabase(path: state.databaseURL.path)
+    try database.migrate()
+    try database.write { db in
+        try db.execute(sql: "CREATE TABLE probe (id INTEGER)")
+        try db.execute(sql: "INSERT INTO probe VALUES (1)")
+        let sidecars = try FileManager.default.contentsOfDirectory(atPath: root.path)
+            .filter { $0.hasPrefix("state.sqlite-") }
+        #expect(!sidecars.isEmpty)
+        for name in sidecars {
+            #expect(try mode(of: root.appendingPathComponent(name)) == 0o600)
+        }
+    }
+}

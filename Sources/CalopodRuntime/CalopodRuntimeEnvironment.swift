@@ -71,17 +71,14 @@ public struct CalopodStateLocation: Equatable, Sendable {
         if existed, !isDirectory.boolValue {
             throw CalopodRuntimeError.invalidStatePath
         }
-        try fileManager.createDirectory(
-            at: directory,
-            withIntermediateDirectories: true
-        )
+        let created = try PrivateFiles.createDirectory(at: directory)
         // The default Application Support location is always locked down;
         // an explicit `CALOPOD_STATE_PATH` override is not, since it may
         // point at a directory the caller (a test, a developer) manages
         // permissions for themselves — this only tightens permissions on a
         // directory it just created for that case, never one that already
         // existed under someone else's control.
-        if protectsExistingDirectory || !existed {
+        if protectsExistingDirectory, !created {
             try fileManager.setAttributes(
                 [.posixPermissions: 0o700],
                 ofItemAtPath: directory.path
@@ -101,9 +98,7 @@ public struct CalopodStateLocation: Equatable, Sendable {
                 throw CalopodRuntimeError.invalidStatePath
             }
         } else {
-            guard fileManager.createFile(atPath: databaseURL.path, contents: nil) else {
-                throw CalopodRuntimeError.invalidStatePath
-            }
+            try PrivateFiles.createFile(at: databaseURL)
         }
         try fileManager.setAttributes(
             [.posixPermissions: 0o600],
