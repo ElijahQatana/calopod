@@ -10,7 +10,7 @@ import Testing
 
 @Suite("Synthetic EventKit all-day boundaries")
 struct AllDayBoundaryTests {
-    @Test("Exclusive midnight ends survive serialization and a second plan", arguments:
+    @Test("Inclusive EventKit ends survive serialization and a second plan", arguments:
         ["2026-10-05", "2026-03-08", "2026-11-01"], [1, 3]
     )
     func exclusiveEnds(day: String, duration: Int) async throws {
@@ -31,10 +31,12 @@ struct AllDayBoundaryTests {
             id: "synthetic-source", connectionID: connection.id, providerCalendarID: "synthetic-calendar",
             displayLabel: "Synthetic calendar", isSelected: true, isReadOnly: false
         )
-        // This fixture assumes exclusive midnight ends; it does not read an EKEventStore.
+        let readEnd = try #require(EventKitAllDayDates.exclusiveEnd(
+            end.addingTimeInterval(-1), isAllDay: true, in: zone
+        ))
         let event = ProviderEvent(
             provider: "eventkit", connectionID: connection.id, calendarID: binding.providerCalendarID,
-            eventID: "synthetic-event", seriesID: nil, originalStart: nil, start: start, end: end,
+            eventID: "synthetic-event", seriesID: nil, originalStart: nil, start: start, end: readEnd,
             isAllDay: true, availability: .busy, isCancelled: false, isPrivate: false,
             title: "Synthetic day", updatedAt: nil, timeZoneIdentifier: zone.identifier
         )
@@ -47,7 +49,7 @@ struct AllDayBoundaryTests {
         let days = AllDayDate.days(startsAt: start, endsAt: end, timeZoneIdentifier: zone.identifier)
         #expect(days.start < days.end)
 
-        for provider in ["google", "microsoft"] {
+        for provider in ["eventkit", "google", "microsoft"] {
             let arm = StoredArm(
                 id: "synthetic-arm", configurationID: connection.configurationID,
                 sourceBindingIDs: [binding.id], targetBindingID: "synthetic-target", ruleMode: .busy
@@ -61,7 +63,8 @@ struct AllDayBoundaryTests {
             let payload = try #require(item.payload)
             let (writtenStart, writtenEnd) = EventKitManagedEventPresentation.dates(for: payload, in: zone)
             #expect(writtenStart == start)
-            #expect(writtenEnd == end)
+            #expect(writtenEnd == end.addingTimeInterval(-1))
+            #expect(EventKitAllDayDates.exclusiveEnd(writtenEnd, isAllDay: true, in: zone) == end)
             let request = ManagedEventWriteRequest(
                 desiredFingerprint: SyncPlanner.desiredFingerprint(payload: payload, ruleMode: .busy),
                 payload: payload,
@@ -73,7 +76,17 @@ struct AllDayBoundaryTests {
             )
             let transport = AllDayEchoTransport(provider: provider)
             let snapshots: [ManagedEventSnapshot]
-            if provider == "google" {
+            if provider == "eventkit" {
+                snapshots = [ManagedEventSnapshot(
+                    providerEventID: "synthetic-target-event", providerVersion: "v1",
+                    payload: DesiredEventPayload(
+                        startsAt: writtenStart,
+                        endsAt: try #require(EventKitAllDayDates.exclusiveEnd(writtenEnd, isAllDay: true, in: zone)),
+                        isAllDay: true, availability: payload.availability, title: payload.title,
+                        isPrivate: nil, timeZoneIdentifier: zone.identifier
+                    ), markerStatus: .parsed, provenance: request.provenance
+                )]
+            } else if provider == "google" {
                 let client = GoogleCalendarClient(transport: transport)
                 _ = try await client.createManagedEvent(accessToken: "synthetic", calendarID: "target", request: request)
                 snapshots = try await client.managedEvents(
@@ -86,14 +99,16 @@ struct AllDayBoundaryTests {
                     accessToken: "synthetic", calendarID: "target", from: start, through: end
                 )
             }
-            let body = try #require(await transport.writtenBody)
-            let object = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
-            if provider == "google" {
-                #expect(object["start"] as? [String: String] == ["date": days.start])
-                #expect(object["end"] as? [String: String] == ["date": days.end])
-            } else {
-                #expect(object["start"] as? [String: String] == ["dateTime": "\(days.start)T00:00:00.0000000", "timeZone": "UTC"])
-                #expect(object["end"] as? [String: String] == ["dateTime": "\(days.end)T00:00:00.0000000", "timeZone": "UTC"])
+            if provider != "eventkit" {
+                let body = try #require(await transport.writtenBody)
+                let object = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+                if provider == "google" {
+                    #expect(object["start"] as? [String: String] == ["date": days.start])
+                    #expect(object["end"] as? [String: String] == ["date": days.end])
+                } else {
+                    #expect(object["start"] as? [String: String] == ["dateTime": "\(days.start)T00:00:00.0000000", "timeZone": "UTC"])
+                    #expect(object["end"] as? [String: String] == ["dateTime": "\(days.end)T00:00:00.0000000", "timeZone": "UTC"])
+                }
             }
             let read = try #require(snapshots.first)
             let readPayload = try #require(read.payload)
@@ -116,7 +131,7 @@ struct AllDayBoundaryTests {
         }
     }
 
-    @Test("A hypothetical last-second end loses its exclusive end day", arguments: [1, 3])
+    @Test("Last-second ends normalize once without shortening the span", arguments: [1, 3])
     func lastSecondEnd(duration: Int) throws {
         let zone = TimeZone(identifier: "America/New_York")!
         var calendar = Calendar(identifier: .gregorian)
@@ -124,12 +139,16 @@ struct AllDayBoundaryTests {
         let start = try #require(AllDayDate.midnight(of: "2026-10-05", in: zone))
         let exclusiveEnd = try #require(calendar.date(byAdding: .day, value: duration, to: start))
         let expected = AllDayDate.days(startsAt: start, endsAt: exclusiveEnd, timeZoneIdentifier: zone.identifier)
-        let hypothetical = AllDayDate.days(
-            startsAt: start, endsAt: exclusiveEnd.addingTimeInterval(-1), timeZoneIdentifier: zone.identifier
-        )
-        #expect(hypothetical.start == expected.start)
-        #expect(hypothetical.end < expected.end)
-        if duration == 1 { #expect(hypothetical.start == hypothetical.end) }
+        let normalized = try #require(EventKitAllDayDates.exclusiveEnd(
+            exclusiveEnd.addingTimeInterval(-1), isAllDay: true, in: zone
+        ))
+        let actual = AllDayDate.days(startsAt: start, endsAt: normalized, timeZoneIdentifier: zone.identifier)
+        #expect(actual.start == expected.start)
+        #expect(actual.end == expected.end)
+        #expect(EventKitAllDayDates.exclusiveEnd(normalized, isAllDay: true, in: zone) == normalized)
+        #expect(EventKitAllDayDates.exclusiveEnd(exclusiveEnd.addingTimeInterval(-1), isAllDay: false, in: zone)
+            == exclusiveEnd.addingTimeInterval(-1))
+        #expect(EventKitAllDayDates.exclusiveEnd(nil, isAllDay: true, in: zone) == nil)
     }
 }
 

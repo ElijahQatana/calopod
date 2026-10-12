@@ -442,6 +442,7 @@ struct EventKitAllDayTests {
         var local = Calendar(identifier: .gregorian)
         local.timeZone = mac
         #expect(local.dateComponents([.year, .month, .day, .hour], from: first) == DateComponents(year: 2026, month: 10, day: 5, hour: 0))
-        #expect(local.dateComponents([.year, .month, .day, .hour], from: last) == DateComponents(year: 2026, month: 10, day: 6, hour: 0))
+        #expect(local.dateComponents([.year, .month, .day, .hour, .minute, .second], from: last)
+            == DateComponents(year: 2026, month: 10, day: 5, hour: 23, minute: 59, second: 59))
     }
 }
