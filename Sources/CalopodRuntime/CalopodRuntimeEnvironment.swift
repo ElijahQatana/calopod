@@ -53,11 +53,13 @@ public struct CalopodStateLocation: Equatable, Sendable {
             databaseURL = URL(fileURLWithPath: override).standardizedFileURL
             protectsExistingDirectory = false
         } else {
-            let base = applicationSupportURL
+            guard let base = applicationSupportURL
                 ?? FileManager.default.urls(
                     for: .applicationSupportDirectory,
                     in: .userDomainMask
-                ).first!
+                ).first else {
+                throw CalopodRuntimeError.invalidStatePath
+            }
             databaseURL = base
                 .appendingPathComponent("Calopod", isDirectory: true)
                 .appendingPathComponent("state.sqlite")

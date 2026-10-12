@@ -69,9 +69,9 @@ public enum InboxConflictCalculator {
                 guard other.sourceKeyHash != event.sourceKeyHash else { continue }
                 let start = max(event.startsAt, other.startsAt)
                 let end = min(event.endsAt, other.endsAt)
-                if start < end {
+                if start < end, let overlap = try? SyncWindow(start: start, end: end) {
                     conflicts.append(InboxConflict(pair: InboxConflictPair(event.sourceKeyHash, other.sourceKeyHash),
-                                                   overlap: try! SyncWindow(start: start, end: end),
+                                                   overlap: overlap,
                                                    isConfirmed: !unconfirmed.contains(event.sourceKeyHash) && !unconfirmed.contains(other.sourceKeyHash)))
                 }
             }

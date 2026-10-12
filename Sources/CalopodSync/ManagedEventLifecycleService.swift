@@ -19,6 +19,7 @@ public enum ManagedEventMutationResult: Sendable {
 }
 
 public enum ManagedEventLifecycleError: Error, Equatable, Sendable {
+    case ambiguousMapping
     case ambiguousRepair(SyncPlanReason)
     case invalidPlanItem
     case missingVerifiedTarget
@@ -80,11 +81,13 @@ public struct ManagedEventLifecycleService: Sendable {
             }
         }
 
-        var mappings = Dictionary(
-            uniqueKeysWithValues: try repository.mirrorMappings(armID: arm.id).map {
+        guard var mappings = Dictionary(
+            uniquelyKeyed: try repository.mirrorMappings(armID: arm.id).map {
                 ($0.mirrorKey, $0)
             }
-        )
+        ) else {
+            throw ManagedEventLifecycleError.ambiguousMapping
+        }
         var providerWrites = 0
         var reconciliations = 0
         var noOps = 0

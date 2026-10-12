@@ -139,7 +139,11 @@ public struct SyncEngine: Sendable {
             through: window.end,
             repository: repository
         )
-        let sourceProviders = Dictionary(uniqueKeysWithValues: sources.map { ($0.calendar.id, $0.connection.provider) })
+        guard let sourceProviders = Dictionary(
+            uniquelyKeyed: sources.map { ($0.calendar.id, $0.connection.provider) }
+        ) else {
+            throw CalopodRuntimeError.invalidConfiguration("arm-source")
+        }
         var planItems: [SyncPlanItem] = []
         var review = SyncReviewSummary()
         var observationsByArm: [String: [TargetEventObservation]] = [:]
@@ -264,7 +268,9 @@ public struct SyncEngine: Sendable {
             throw CalopodRuntimeError.ambiguousRepair
         }
 
-        let armsByID = Dictionary(uniqueKeysWithValues: arms.map { ($0.id, $0) })
+        guard let armsByID = Dictionary(uniquelyKeyed: arms.map { ($0.id, $0) }) else {
+            throw CalopodRuntimeError.invalidConfiguration("arm-duplicate")
+        }
         let convergence = ManagedEventConvergenceService(
             repository: repository,
             secretStore: secretStore
