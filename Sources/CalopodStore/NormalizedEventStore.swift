@@ -159,66 +159,68 @@ extension LocalStateRepository {
             ) ?? 0
             let generation = previousGeneration + 1
 
+            let upsert = try database.makeStatement(
+                sql: """
+                    INSERT INTO normalized_instances
+                        (source_key_hash, connection_id, calendar_binding_id,
+                         provider_event_id, recurrence_id, starts_at, ends_at,
+                         is_all_day, availability, is_cancelled, content_fingerprint,
+                         seen_generation, title, is_private, provider_updated_at,
+                         location, notes, url, organizer_json, attendees_json, response_json, provider_series_id, time_zone, last_seen_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(source_key_hash) DO UPDATE SET
+                        connection_id = excluded.connection_id,
+                        calendar_binding_id = excluded.calendar_binding_id,
+                        provider_event_id = excluded.provider_event_id,
+                        recurrence_id = excluded.recurrence_id,
+                        starts_at = excluded.starts_at,
+                        ends_at = excluded.ends_at,
+                        is_all_day = excluded.is_all_day,
+                        availability = excluded.availability,
+                        is_cancelled = excluded.is_cancelled,
+                        content_fingerprint = excluded.content_fingerprint,
+                        seen_generation = excluded.seen_generation,
+                        title = excluded.title,
+                        is_private = excluded.is_private,
+                        provider_updated_at = excluded.provider_updated_at,
+                        location = excluded.location,
+                        notes = excluded.notes,
+                        url = excluded.url,
+                        organizer_json = excluded.organizer_json,
+                        attendees_json = excluded.attendees_json,
+                        response_json = excluded.response_json,
+                        provider_series_id = excluded.provider_series_id,
+                        time_zone = excluded.time_zone,
+                        last_seen_at = excluded.last_seen_at
+                    """
+            )
             for instance in instances {
-                try database.execute(
-                    sql: """
-                        INSERT INTO normalized_instances
-                            (source_key_hash, connection_id, calendar_binding_id,
-                             provider_event_id, recurrence_id, starts_at, ends_at,
-                             is_all_day, availability, is_cancelled, content_fingerprint,
-                             seen_generation, title, is_private, provider_updated_at,
-                             location, notes, url, organizer_json, attendees_json, response_json, provider_series_id, time_zone)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ON CONFLICT(source_key_hash) DO UPDATE SET
-                            connection_id = excluded.connection_id,
-                            calendar_binding_id = excluded.calendar_binding_id,
-                            provider_event_id = excluded.provider_event_id,
-                            recurrence_id = excluded.recurrence_id,
-                            starts_at = excluded.starts_at,
-                            ends_at = excluded.ends_at,
-                            is_all_day = excluded.is_all_day,
-                            availability = excluded.availability,
-                            is_cancelled = excluded.is_cancelled,
-                            content_fingerprint = excluded.content_fingerprint,
-                            seen_generation = excluded.seen_generation,
-                            title = excluded.title,
-                            is_private = excluded.is_private,
-                            provider_updated_at = excluded.provider_updated_at,
-                            location = excluded.location,
-                            notes = excluded.notes,
-                            url = excluded.url,
-                            organizer_json = excluded.organizer_json,
-                            attendees_json = excluded.attendees_json,
-                            response_json = excluded.response_json,
-                            provider_series_id = excluded.provider_series_id,
-                            time_zone = excluded.time_zone
-                        """,
-                    arguments: [
-                        instance.sourceKeyHash,
-                        connectionID,
-                        calendarBindingID,
-                        instance.providerEventID,
-                        instance.recurrenceID,
-                        instance.startsAt,
-                        instance.endsAt,
-                        instance.isAllDay,
-                        instance.availability,
-                        instance.isCancelled,
-                        instance.contentFingerprint,
-                        generation,
-                        instance.title,
-                        instance.isPrivate,
-                        instance.providerUpdatedAt,
-                        instance.location,
-                        instance.notes,
-                        instance.url,
-                        try encodeOptionalEventDetails(instance.organizer),
-                        try encodeEventDetails(instance.attendees),
-                        try encodeEventDetails(instance.currentUserResponse),
-                        instance.providerSeriesID,
-                        instance.timeZoneIdentifier,
-                    ]
-                )
+                try upsert.execute(arguments: [
+                    instance.sourceKeyHash,
+                    connectionID,
+                    calendarBindingID,
+                    instance.providerEventID,
+                    instance.recurrenceID,
+                    instance.startsAt,
+                    instance.endsAt,
+                    instance.isAllDay,
+                    instance.availability,
+                    instance.isCancelled,
+                    instance.contentFingerprint,
+                    generation,
+                    instance.title,
+                    instance.isPrivate,
+                    instance.providerUpdatedAt,
+                    instance.location,
+                    instance.notes,
+                    instance.url,
+                    try encodeOptionalEventDetails(instance.organizer),
+                    try encodeEventDetails(instance.attendees),
+                    try encodeEventDetails(instance.currentUserResponse),
+                    instance.providerSeriesID,
+                    instance.timeZoneIdentifier,
+                    now,
+                ])
             }
 
             for sourceKeyHash in cancelledSourceKeyHashes + removedSourceKeyHashes + excludedSourceKeyHashes + unconfirmedSourceKeyHashes {

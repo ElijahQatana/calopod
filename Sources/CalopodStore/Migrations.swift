@@ -16,6 +16,7 @@ extension CalopodDatabase {
         "v12_inbox_rsvp_actions",
         "v13_inbox_review_sessions",
         "v14_all_day_time_zone",
+        "v15_refresh_retention_indexes",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -344,6 +345,18 @@ extension CalopodDatabase {
             try database.alter(table: "normalized_instances") { table in
                 table.add(column: "time_zone", .text)
             }
+        }
+
+        migrator.registerMigration("v15_refresh_retention_indexes") { database in
+            try database.alter(table: "normalized_instances") { table in
+                table.add(column: "last_seen_at", .datetime)
+            }
+            try database.create(index: "normalized_instances_binding_generation",
+                                on: "normalized_instances", columns: ["calendar_binding_id", "seen_generation"])
+            try database.create(index: "normalized_instances_binding_window",
+                                on: "normalized_instances", columns: ["calendar_binding_id", "starts_at", "ends_at"])
+            try database.create(index: "sync_runs_retention", on: "sync_runs", columns: ["status", "finished_at"])
+            try database.create(index: "sync_operations_mirror", on: "sync_operations", columns: ["mirror_key"])
         }
 
         return migrator
