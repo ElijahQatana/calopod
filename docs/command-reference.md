@@ -17,7 +17,7 @@ calopod support export | backup | verify | restore
 calopod-setup [--arms]
 ```
 
-`connection add` takes `mac`, `google` or `microsoft`.
+`connection add` takes `mac`, `google` or `microsoft`. `events` and `availability` take `--cached` to read local data without refreshing.
 
 ## Dates
 

@@ -15,7 +15,7 @@ calopod inbox activity
 calopod inbox refresh --from 2026-11-05 --through 2026-11-12
 ```
 
-`inbox` and `activity` read Calopod's local copy and are instant. `refresh` asks your calendars for new information. It doesn't write to any of them. Without dates it uses the window set for automatic sync, so pass `--from` and `--through` if you haven't set that up.
+`inbox`, `activity` and `inspect` read Calopod's local copy and are instant, even while a sync is running. `refresh` asks your calendars for new information. It doesn't write to any of them. Without dates it uses the window set for automatic sync, so pass `--from` and `--through` if you haven't set that up.
 
 Filters: `--connection`, `--calendar`, `--exclude-maybe` (hides those events entirely) and the usual date options. A date filter matches any event that overlaps the range. A moved event matches its old or new time, and shows once. With no dates you see everything relevant, not only today.
 

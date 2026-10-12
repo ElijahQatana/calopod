@@ -29,7 +29,7 @@ calopod events --day 2026-09-25
 calopod availability --from 2026-09-25 --through 2026-09-30
 ```
 
-Both read every selected calendar. Add `--connection` or `--calendar` to narrow them down. If one calendar can't be reached, you still get results from the others with a `partial` status and a warning. Don't ignore that warning when you're planning around the answer.
+Both read every selected calendar. Add `--connection` or `--calendar` to narrow them down. Add `--cached` to skip the refresh and read what Calopod already has, which works even while a sync is running. The result is marked `partial`, because nothing was checked for freshness. If one calendar can't be reached, you still get results from the others with a `partial` status and a warning. Don't ignore that warning when you're planning around the answer.
 
 Availability rules:
 
@@ -78,7 +78,7 @@ The preview lists what would be created, updated, removed or repaired, and why. 
 calopod sync --day 2026-09-25
 ```
 
-Calopod only changes events it created and can prove are its own. If something looks wrong, such as a missing marker or a calendar it couldn't fully read, it stops and says so instead of guessing. Running it again is safe. It won't pile up duplicates.
+Calopod only changes events it created and can prove are its own. On the Mac's calendars that includes matching the event's ID to what Calopod recorded, so a copied or moved marker is reported for review and never adopted or deleted. If something looks wrong, such as a missing marker or a calendar it couldn't fully read, it stops and says so instead of guessing. Running it again is safe. It won't pile up duplicates.
 
 If you edit a copy by hand, the next sync may put it back. Edit the original instead.
 

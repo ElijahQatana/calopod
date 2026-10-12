@@ -26,7 +26,7 @@ calopod support backup --output "$PWD/calopod-state-backup.sqlite"
 calopod support verify --backup "$PWD/calopod-state-backup.sqlite"
 ```
 
-The backup is a private copy of Calopod's database on this Mac. It holds your settings and cached event data, so treat it as private. It doesn't include Keychain items, so it won't work on a different Mac.
+The backup is a single-file copy of Calopod's database on this Mac. It holds your settings and the event details Calopod has cached (see [What Calopod stores](#what-calopod-stores)), unencrypted, so keep it somewhere protected. It doesn't include Keychain items, so it won't work on a different Mac.
 
 To restore:
 
@@ -38,7 +38,13 @@ calopod doctor
 calopod agent enable
 ```
 
-Your backup file is kept, and if the restore fails your current data is left in place.
+Restore waits for any running sync, refresh or cached read to finish and refuses while one is active. Your backup file is kept, and if the restore fails your current data is left in place. If a crash left `-wal` or `-shm` files next to the database, don't delete them; restore recovers them first.
+
+## What Calopod stores
+
+To keep the inbox, change detection, replies and full-details copies working, Calopod caches event details from your calendars, including events marked private: titles, notes, locations, links, organizer and attendee names and emails, times, and your response. It also keeps connection and calendar names and the inbox history.
+
+All of this sits in a SQLite file that only your user can read. Calopod doesn't encrypt it or hide private events, so anything running as you can read it. FileVault protects the disk, but a copy of the file elsewhere is unprotected. Sign-in tokens and the signing key are in the Keychain instead. History older than 90 days is cleaned up automatically.
 
 ## Calendar permission problems
 

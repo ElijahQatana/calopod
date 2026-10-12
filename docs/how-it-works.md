@@ -31,7 +31,12 @@ Rules in short:
 - Updates and deletes stop unless ownership is proven.
 - A source that vanished during an incomplete read is not treated as deleted.
 - Titles, attendees and locations are never used to work out identity.
+- On EventKit, a marker only counts if the event's ID matches the one Calopod stored. A copied marker, a missing record or a changed ID blocks the apply and is reported. Markers also sign the target calendar (version 2); version 1 markers on known copies still verify.
 - Duplicate repair keeps one deterministic survivor and only considers verified copies in the target calendar.
+
+## EventKit all-day events
+
+Calendar returns the end of an all-day event as 23:59:59 on its last day, and treats a write of the following midnight as one extra day. Calopod converts at both boundaries: on read it moves a last-second end to the next local midnight, and on write it converts back. Timed events and ends that are already midnight are left alone. Conversion uses calendar-day arithmetic, so 23- and 25-hour daylight-saving days work.
 
 ## Source identity
 
@@ -49,9 +54,11 @@ EventKit change notifications say something changed, not what, so Calopod always
 
 ## Local state and secrets
 
-SQLite holds the settings, cached events, copy mappings, run history and the inbox's response history. It never holds tokens, passwords or the ownership key. Those live in the Keychain, and secrets are never taken as command arguments.
+SQLite holds the settings, cached events (including titles, notes, attendees and private events), copy mappings, run history and the inbox's response history. It's owner-only but not encrypted. It never holds tokens, passwords or the ownership key. Those live in the Keychain, and secrets are never taken as command arguments.
 
 The event cache is stored per account, calendar and time window. A cursor only advances in the same transaction that saves the events it covers. Malformed or out-of-range events are dropped and only counted.
+
+The database uses WAL with a two-second busy timeout. Writers (sync, refresh, review, backup) share an exclusive lock, so only one runs at a time. Cached readers take a shared lock that doesn't block sync but does block restore. Completed sync runs older than 90 days are pruned at the start of each sync, along with deletion records once the source has come back. Anything unfinished or unresolved is kept.
 
 Migrations run in order, in transactions, and a failed one leaves the old schema intact. If the database is lost, a full read plus the markers on the target calendars can rebuild most of it. Sign-ins would need to be redone.
 
