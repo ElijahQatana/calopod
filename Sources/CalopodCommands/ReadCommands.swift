@@ -4,10 +4,8 @@ import CalopodStore
 import CalopodSync
 import Foundation
 
-/// Lists a Connection's calendars and lets the user select or deselect one.
-/// `--select` runs the duplicate-source check first (`CalendarSelectionSafety`)
-/// so a calendar that overlaps an existing direct provider connection is
-/// rejected before it's ever marked selected.
+/// Lists a Connection's calendars and selects or deselects them. `--select` runs the
+/// duplicate-source check first.
 public struct CalendarsCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "calendars",
@@ -186,9 +184,8 @@ private func outputDate(_ date: Date?) -> String? {
     return formatter.string(from: date)
 }
 
-/// Shows combined Busy/Free intervals across selected calendars for a range,
-/// derived with `AvailabilityCalculator` from the same normalized events
-/// `EventsCommand` lists — never source titles, locations, or other content.
+/// Shows combined Busy and Free intervals for a range. Only times are used, never titles or
+/// locations.
 public struct AvailabilityCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "availability",

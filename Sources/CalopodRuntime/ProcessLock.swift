@@ -1,11 +1,8 @@
 import Darwin
 import Foundation
 
-/// An exclusive, OS-enforced lock backing the single rule that manual CLI
-/// sync and the background agent both depend on: two writers must never run
-/// at once. Whichever process (a `calopod sync` invocation or the agent's own
-/// run loop) acquires the lock file first proceeds; every other one fails
-/// fast with `.busy` rather than blocking or racing on the same state.
+/// An exclusive OS lock so a manual sync and the agent never write at once. The loser fails fast
+/// with `.busy`.
 public final class ProcessLock: @unchecked Sendable {
     private let descriptor: Int32
 
@@ -13,14 +10,9 @@ public final class ProcessLock: @unchecked Sendable {
         self.descriptor = descriptor
     }
 
-    /// Opens (creating if needed) and non-blockingly locks the file at `url`.
-    /// Shared locks let local readers coexist while excluding restore.
-    /// `LOCK_NB` is what turns a would-be wait into an
-    /// immediate `.busy` failure — callers report a safe "sync already
-    /// running" rather than queuing behind another writer. `FD_CLOEXEC`
-    /// keeps the descriptor from leaking into any child process spawned
-    /// while the lock is held, and the permissions are pinned to
-    /// owner-only, matching every other private state file.
+    /// Opens and locks the file at `url` without blocking (`LOCK_NB`), so contention is an
+    /// immediate `.busy`. Shared locks let local readers coexist while excluding restore.
+    /// `FD_CLOEXEC` keeps the descriptor out of child processes, and the file is owner-only.
     public static func acquire(at url: URL, shared: Bool = false) throws -> ProcessLock {
         let descriptor = open(url.path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
         guard descriptor >= 0 else {
@@ -39,10 +31,8 @@ public final class ProcessLock: @unchecked Sendable {
         return ProcessLock(descriptor: descriptor)
     }
 
-    // `flock` is tied to the file descriptor's lifetime: closing it (whether
-    // this object is deallocated normally or the process is killed) always
-    // releases the lock, so a crashed holder can never leave sync
-    // permanently stuck as "busy".
+    // `flock` ends with the file descriptor, so even a crashed holder can't leave sync stuck on
+    // busy.
     deinit {
         flock(descriptor, LOCK_UN)
         close(descriptor)

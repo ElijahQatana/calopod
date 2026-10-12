@@ -28,10 +28,7 @@ public struct ConnectionCommand: ParsableCommand {
     public init() {}
 }
 
-/// Connects a new Connection. For `mac`/`eventkit` this is the normal
-/// permission and calendar-discovery entry point: it requests Calendar
-/// access through the EventKit host, then immediately lists calendars while
-/// access is confirmed, rather than requiring a separate discovery step.
+/// Adds a Connection. For `mac` it requests Calendar access and lists calendars in one step.
 public struct ConnectionAddCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(commandName: "add")
 
@@ -207,10 +204,8 @@ public struct ConnectionRemoveCommand: ParsableCommand {
     }
 }
 
-// `inspect` and `disable` are declared as real subcommands (so the command
-// tree and its help text already reflect the intended shape) but report
-// "unavailable" rather than doing nothing silently, since the persistence
-// they'd need doesn't exist yet.
+// `inspect` and `disable` are declared so the help text is complete, but they report "unavailable"
+// until they are built.
 private func unavailable(command: String, output: OutputOptions) throws {
     try OutputRenderer.write(
         command: command,

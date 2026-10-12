@@ -13,10 +13,7 @@ public enum ProviderTombstoneEvidence: String, Codable, Sendable {
     case cancelled, removed, unconfirmed
 }
 
-/// A calendar event exactly as one provider client reports it, before
-/// `EventNormalizer` reshapes it into a `StoredNormalizedInstance`. Provider
-/// clients translate into this common shape so nothing downstream needs to
-/// know which backend an event came from.
+/// An event as a provider client reports it, before `EventNormalizer` reshapes it.
 public struct ProviderEvent: Codable, Equatable, Sendable {
     public let provider: String
     public let connectionID: String
@@ -96,10 +93,8 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
         self.responseMetadata = responseMetadata
     }
 
-    /// Tags this event as one of Calopod's own managed mirrors so
-    /// `EventNormalizer` excludes it from source ingestion — without this,
-    /// a mirror could be read back in as a new source event and sync itself
-    /// in a loop.
+    /// Marks this event as one of Calopod's mirrors so `EventNormalizer` leaves it out; otherwise a
+    /// mirror could be read back as a source and loop.
     public func markingManagedMirror() -> ProviderEvent {
         ProviderEvent(
             provider: provider,
@@ -129,9 +124,8 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
     }
 }
 
-/// One page of events returned from a provider fetch, plus enough state
-/// (`nextSyncToken`, `cursorUpdates`) to resume an incremental fetch next
-/// time without re-scanning the whole calendar.
+/// One page of events plus the state (`nextSyncToken`, `cursorUpdates`) to resume an incremental
+/// fetch.
 public struct ProviderEventPage: Codable, Equatable, Sendable {
     public let events: [ProviderEvent]
     /// Missing on older serialized reads, whose adapters already collected all pages.
@@ -155,18 +149,14 @@ public struct ProviderEventPage: Codable, Equatable, Sendable {
     }
 }
 
-/// Whether a fetched page represents the complete current state of a
-/// calendar (`full`) or only the events that changed since the last cursor
-/// (`incremental`). `EventCache` needs this to know whether an event's
-/// absence from a page means it was deleted.
+/// Whether a page is the complete current state (`full`) or only changes (`incremental`).
+/// `EventCache` needs this to know if absence means deletion.
 public enum ProviderRefreshMode: String, Codable, Equatable, Sendable {
     case full
     case incremental
 }
 
-/// A provider's incremental-sync cursor for one scope (a calendar, or a
-/// bounded window within one), persisted so the next fetch can resume from
-/// here instead of re-reading everything.
+/// A provider's incremental cursor for one scope, saved so the next fetch can resume.
 public struct ProviderCursorUpdate: Codable, Equatable, Sendable {
     public let scopeKey: String
     public let value: String

@@ -117,8 +117,7 @@ func refreshCalendarSources(
     var ingestion = EventIngestionSummary()
     var warnings: [String] = []
 
-    // Grouped by connection so an EventKit refresh launches the host process
-    // once for every selected calendar on that connection, not once per
+    // Grouped by connection so EventKit launches the host once per connection, not once per
     // calendar.
     var groups: [(connection: StoredConnection, sources: [CalendarReadSource])] = []
     for source in sources {

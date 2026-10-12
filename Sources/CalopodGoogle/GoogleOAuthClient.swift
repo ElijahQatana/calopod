@@ -4,9 +4,8 @@ import Foundation
 import FoundationNetworking
 #endif
 
-/// Endpoints and client identity for one Google OAuth setup. Defaults point
-/// at Google's production endpoints so only `clientID` needs to be supplied
-/// for normal use.
+/// Endpoints and client identity for Google OAuth. Only `clientID` is needed; the defaults are
+/// Google's.
 public struct GoogleOAuthConfiguration: Sendable {
     public let clientID: String
     public let authorizationEndpoint: URL
@@ -23,10 +22,8 @@ public struct GoogleOAuthConfiguration: Sendable {
     }
 }
 
-/// Runs the Google OAuth authorization-code flow (via PKCE, over the system
-/// browser) and refreshes access tokens. Scopes are deliberately limited to
-/// reading the calendar list and reading/writing events — no broader Google
-/// account access is ever requested.
+/// Runs the Google authorization-code flow (PKCE, system browser) and refreshes tokens. Scopes are
+/// limited to the calendar list and events.
 public struct GoogleOAuthClient: Sendable {
     public static let scopes = [
         "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
@@ -52,11 +49,8 @@ public struct GoogleOAuthClient: Sendable {
             throw ProviderFailure.configurationMissing("Google OAuth client ID")
         }
 
-        // access_type=offline + prompt=consent guarantee Google issues a
-        // refresh token even if the user has authorized this app before
-        // (Google otherwise omits it on repeat consent), which is required
-        // since sync needs to keep working long after the access token
-        // expires.
+        // `access_type=offline` with `prompt=consent` makes Google return a refresh token even on
+        // repeat consent.
         let pkce = PKCEPair.generate()
         let result = try await browser.authorize { context in
             var components = URLComponents(
@@ -87,10 +81,8 @@ public struct GoogleOAuthClient: Sendable {
         )
     }
 
-    /// Exchanges a refresh token for a new access token. A 400/401 here
-    /// means the refresh token itself was revoked or expired — surfaced as
-    /// `.refreshRejected` so callers know re-authorization (not a retry) is
-    /// what's needed.
+    /// Exchanges a refresh token for an access token. A 400/401 means it was revoked or expired,
+    /// surfaced as `.refreshRejected`.
     public func refresh(_ tokens: OAuthTokens) async throws -> OAuthTokens {
         let response = try await tokenRequest([
             "client_id": configuration.clientID,
@@ -152,10 +144,8 @@ public struct GoogleOAuthClient: Sendable {
         return try await transport.send(request)
     }
 
-    /// Classifies an OAuth endpoint failure into a `ProviderFailure` the rest
-    /// of the app can act on: rate limits and server errors are retryable,
-    /// 400/401 mean the request or credentials are bad, and everything else
-    /// is passed through as its raw status.
+    /// Classifies an OAuth failure: 429 and 5xx are retryable, 400/401 mean bad credentials,
+    /// anything else passes through.
     private func mapFailure(_ response: HTTPResponse) -> ProviderFailure {
         if response.statusCode == 429 || response.statusCode >= 500 {
             return .temporaryFailure(retryAfterSeconds: retryAfter(response.headers))

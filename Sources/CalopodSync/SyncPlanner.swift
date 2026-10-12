@@ -3,11 +3,8 @@ import CalopodStore
 import CryptoKit
 import Foundation
 
-/// How confidently a target-calendar event can be traced back to Calopod.
-/// `SyncPlanner` only ever creates, updates, or deletes an event whose
-/// ownership is `.verified`; every other status means the planner cannot
-/// prove the event is safe to touch, so it becomes a `.repair` decision
-/// instead of a silent mutation.
+/// How confidently a target event is traced to Calopod. The planner only changes `.verified`
+/// events; the rest become `.repair`.
 public enum TargetOwnershipStatus: String, Codable, Equatable, Sendable {
     case verified
     case missingMarker = "missing-marker"
@@ -18,10 +15,7 @@ public enum TargetOwnershipStatus: String, Codable, Equatable, Sendable {
     case unmanaged
 }
 
-/// One event as it currently exists on the target calendar, classified by
-/// ownership. Produced by `ManagedTargetObserver` from a raw provider
-/// snapshot, and consumed by `SyncPlanner` alongside the desired source
-/// state to compute what (if anything) needs to change.
+/// An event on the target, classified by ownership by `ManagedTargetObserver`.
 public struct TargetEventObservation: Codable, Equatable, Sendable {
     public let calendarBindingID: String
     public let providerEventID: String
@@ -56,25 +50,15 @@ public struct TargetEventObservation: Codable, Equatable, Sendable {
     }
 }
 
-/// Computes the deterministic diff between what an Arm's sources say should
-/// exist on the target calendar and what is actually observed there. The
-/// result is a pure, side-effect-free `SyncPlan`; nothing here talks to a
-/// calendar provider, which is what makes dry-run and apply share the exact
-/// same decision logic.
+/// Computes the diff between what the sources want and what the target has. It is pure, so dry-run
+/// and apply share the same decisions.
 public enum SyncPlanner {
-    /// Three-way reconciliation, one arm at a time:
-    ///
-    /// 1. Walk every source event that belongs in the window and decide
-    ///    create / update / no-op / repair for its mirror.
-    /// 2. Walk mappings whose target is observed in the window but whose
-    ///    source no longer wants a mirror, and decide remove/repair.
-    /// 3. Walk any leftover target observations that match neither a desired
-    ///    source nor a known mapping, flagging genuinely orphaned events for
+    /// Reconciles one Arm in three passes, joined by `mirrorKey` (a stable hash of the Arm and
+    /// source):
+    /// 1. Each source event in the window: create, update, no-op or repair.
+    /// 2. Mappings whose target is observed but whose source no longer wants a mirror: remove or
     ///    repair.
-    ///
-    /// A `mirrorKey` (a stable hash of the Arm and source identity) is the
-    /// join key across all three passes, so this never depends on iteration
-    /// order or provider-assigned IDs remaining stable.
+    /// 3. Leftover target events matching neither: flag orphans for repair.
     public static func plan(
         arm: StoredArm,
         targetProvider: ProviderKind? = nil,
@@ -110,9 +94,8 @@ public enum SyncPlanner {
         var items: [SyncPlanItem] = []
         var desiredMirrorKeys = Set<String>()
 
-        // Pass 1: every source event that should have a mirror on the
-        // target. Sorted deterministically so the resulting plan (and its
-        // item IDs) don't depend on the order sources came back in.
+        // Pass 1: sources that should have a mirror, sorted so the plan doesn't depend on read
+        // order.
         for source in boundedSources.sorted(by: sourceOrder) {
             let mirrorKey = mirrorKey(armID: arm.id, sourceKeyHash: source.sourceKeyHash)
             desiredMirrorKeys.insert(mirrorKey)
@@ -129,10 +112,8 @@ public enum SyncPlanner {
                 $0.ownershipStatus != .verified && $0.ownershipStatus != .unmanaged
             }
 
-            // Ownership questions always come first: an event Calopod can't
-            // positively verify, or more than one verified event for the
-            // same mirror, is never auto-resolved here — it goes to `.repair`
-            // so a human (or a later, narrower rule) decides what happens.
+            // Ownership comes first: an unverifiable event, or several verified ones for one
+            // mirror, goes to `.repair`, never auto-resolved.
             let action: SyncPlanAction
             let reason: SyncPlanReason
             if !unverified.isEmpty {
@@ -235,11 +216,8 @@ public enum SyncPlanner {
             )
         }
 
-        // Pass 3: target events that match neither a desired source (pass 1)
-        // nor a mapping this Arm knows about (pass 2). An `.unmanaged` event
-        // is just someone else's calendar entry and is left alone; anything
-        // else carries a Calopod marker Calopod can no longer explain, which
-        // is always worth flagging.
+        // Pass 3: an `.unmanaged` event is someone else's and left alone; anything else carries a
+        // marker we can't explain, which is worth flagging.
         let mappedMirrorKeys = Set(armMappings.map(\.mirrorKey))
         for (mirrorKey, observations) in observationsByMirror
             where !desiredMirrorKeys.contains(mirrorKey) && !mappedMirrorKeys.contains(mirrorKey) {
@@ -267,19 +245,14 @@ public enum SyncPlanner {
         )
     }
 
-    /// Stable identity for "this source event, mirrored by this Arm" that
-    /// never depends on a provider-assigned event ID. Used as the join key
-    /// between sources, mappings, and target observations, and stored in the
-    /// ownership marker written onto every managed event so it can be
-    /// re-derived and checked later.
+    /// Stable identity for "this source event, mirrored by this Arm", independent of provider IDs.
+    /// It joins sources, mappings and target events, and is stored in the marker.
     public static func mirrorKey(armID: String, sourceKeyHash: String) -> String {
         base32(digest(fields: ["calopod-mirror-v1", armID, sourceKeyHash]))
     }
 
-    /// Hash of everything the target event's fields are derived from for a
-    /// given Rule. Comparing this against the fingerprint recorded the last
-    /// time Calopod wrote the event is how the planner tells a real content
-    /// change apart from a no-op, without re-reading or diffing every field.
+    /// Hash of everything the target fields derive from, for a Rule. Comparing it to the last
+    /// written value tells a real change from a no-op.
     public static func desiredFingerprint(
         payload: DesiredEventPayload,
         ruleMode: ArmRuleMode
@@ -347,11 +320,9 @@ public enum SyncPlanner {
         }
     }
 
-    /// Builds the notes field for a Full details Rule. EventKit's organizer
-    /// and attendee fields are read-only and native attendee writes could
-    /// send real invitations or RSVP changes, so participant context and the
-    /// source's meeting link are folded into plain text notes instead of
-    /// structured calendar fields.
+    /// Builds notes for Full details. EventKit's organizer and attendee fields are read-only and
+    /// native attendee writes could send invitations, so people and the meeting link go in
+    /// plain-text notes.
     private static func fullDetailsNotes(_ source: StoredNormalizedInstance) -> String? {
         var sections: [String] = []
         if let notes = normalizedNotes(source.notes) {

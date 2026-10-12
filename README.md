@@ -1,70 +1,58 @@
-# Calopod 🦑
+# Calopod
 
 *One schedule. Many calendars.*
 
-Calopod connects separate calendar accounts, keeps them cross-blocked, publishes one complete Main calendar, and derives Availability across every selected source.
+If your calendars live in different places (work, personal, a side project), each one only knows about its own events. Calopod runs on your Mac, reads the calendars you pick, and keeps them in step:
 
-## The shape of it
+- **Busy blocks.** Events from one calendar show up as plain "Busy" on the others, so nobody double-books you.
+- **A Main calendar.** One calendar that holds every event, with full details.
+- **Availability.** Your combined free and busy time across everything you selected.
+- **An inbox.** Invitations that need an answer, changes you haven't seen, and conflicts, with Yes, No and Maybe replies for Google and Microsoft invitations.
 
-- **Connections** are calendar accounts or sources.
-- **Arms** are sync and publish relationships.
-- **Rules** control what an Arm may expose.
-- **Main calendar** is the complete unified view.
-- **Availability** is derived across the selected sources.
+It never edits or deletes events it didn't create. Sign-in tokens go in your Keychain, and everything else stays on your Mac.
 
-The first release is a local command-line utility for macOS. It starts with the calendar accounts already configured on the Mac, so normal local use does not require a Google Cloud project or Microsoft Entra registration. A background Mac service, native Mac app, and manual-sync iPhone app follow from the same shared core.
+## Words you'll see
 
-The complete product boundary is in [PROJECT_CHARTER.md](PROJECT_CHARTER.md).
+| Term | Meaning |
+|---|---|
+| **Connection** | A calendar account Calopod reads from, such as your Mac's calendars, Google, or Microsoft. |
+| **Arm** | A copy route: events from one or more source calendars go to one target calendar. |
+| **Rule** | What an Arm may copy. `Busy` copies times only. `Full details` also copies title, location and notes. |
+| **Main calendar** | A target that receives everything with full details. |
 
-## CLI preview bundle
+## Requirements
 
-The terminal-first preview is packaged as a versioned per-user bundle for
-Apple Silicon Macs running macOS 14 or newer. Build, verification, installation,
-upgrade, and removal are documented in
-[docs/CLI_PREVIEW_INSTALL.md](docs/CLI_PREVIEW_INSTALL.md).
-After installation, `calopod-setup` lets you choose Basic (one full-details
-Main calendar and one Busy-only calendar) or Custom Arms for Calendars on this
-Mac, then guides the schedule, dry run, and health check.
+An Apple Silicon Mac running macOS 14 or newer. Calopod is a command-line tool for now.
 
-## Development
+## Get started
 
-Calopod requires Swift 6.1 or newer. Build and test the shared workspace from the repository root:
+1. [Install Calopod](docs/install.md) and run `calopod-setup`. It walks you through choosing calendars and setting up Main and Busy.
+2. Read [Using Calopod](docs/using-calopod.md) for day-to-day commands.
+3. Turn on [automatic sync](docs/automatic-sync.md) once a manual sync looks right.
+
+To build from source you need Swift 6.1 or newer:
 
 ```sh
 swift build
-swift test
+swift test --disable-sandbox
 ```
 
-Start with [Calendars on this Mac](docs/CALENDARS_ON_THIS_MAC.md). Direct Google and Microsoft connections are also available for provider development and advanced setups; those paths currently require a developer-owned client ID. Setup lives in [docs/GOOGLE_CALENDAR.md](docs/GOOGLE_CALENDAR.md) and [docs/MICROSOFT_CALENDAR.md](docs/MICROSOFT_CALENDAR.md).
+## Guides
 
-The CLI and agent targets share the same core:
+- [Install](docs/install.md)
+- [Using Calopod](docs/using-calopod.md)
+- [Inbox and invitations](docs/inbox.md)
+- [Automatic sync](docs/automatic-sync.md)
+- [Google and Microsoft accounts](docs/google-and-microsoft.md)
+- [Troubleshooting and backups](docs/troubleshooting.md)
+- [Command reference](docs/command-reference.md)
+- [How it works](docs/how-it-works.md)
+- [Releasing](docs/releasing.md) (maintainers)
 
-```sh
-swift run calopod sync --dry-run --day 2026-09-25
-swift run calopod main inspect
-swift build --product calopod-agent
-```
+## Contributing and security
 
-Dry-run sync refreshes configured Arm sources and managed targets, then reports deterministic creates, updates, removals, repairs, and no-ops without writing calendar events. Apply mode verifies signed ownership, excludes mirrors from source ingestion, rereads after writes, and repairs verified duplicates. EventKit Arms use one explicit preferred writer.
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 
-### Doc Links
+## License
 
-The complete command tree, date-range behavior, output envelope, and exit codes are documented in [docs/COMMAND_LINE.md](docs/COMMAND_LINE.md).
-
-Combined Busy and Free interval behavior is documented in [docs/AVAILABILITY.md](docs/AVAILABILITY.md).
-
-The background runner contract is documented in [docs/BACKGROUND_AGENT.md](docs/BACKGROUND_AGENT.md).
-
-Source installation for the per-user service is documented in [docs/SOURCE_SERVICE_INSTALL.md](docs/SOURCE_SERVICE_INSTALL.md).
-
-The versioned CLI preview bundle is documented in [docs/CLI_PREVIEW_INSTALL.md](docs/CLI_PREVIEW_INSTALL.md).
-
-The Developer ID signing and notarization workflow is documented in [docs/CLI_PREVIEW_RELEASE.md](docs/CLI_PREVIEW_RELEASE.md).
-
-Automatic-sync controls and diagnostics are documented in [docs/AUTOMATIC_SYNC.md](docs/AUTOMATIC_SYNC.md).
-
-Sanitized support export and local-state recovery are documented in [docs/CLI_PREVIEW_SUPPORT.md](docs/CLI_PREVIEW_SUPPORT.md).
-Background service recovery and upgrade checks are documented in [docs/SERVICE_RECOVERY.md](docs/SERVICE_RECOVERY.md).
-
-Inbox list, activity, refresh, inspect, and local acknowledgement commands are described in
-[Inbox commands](docs/INBOX_CLI.md).
+[MIT](LICENSE)

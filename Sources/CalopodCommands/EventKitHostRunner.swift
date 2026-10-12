@@ -3,10 +3,8 @@ import CalopodEventKit
 import CalopodRuntime
 import Foundation
 
-/// Launches the EventKit Host app from an interactive CLI invocation.
-/// Without `CALOPOD_EVENTKIT_HOST_APP` set, the host path is resolved from
-/// the running executable. That supports both repository builds and the
-/// packaged per-user layout without depending on the current directory.
+/// Launches the EventKit host app. Without `CALOPOD_EVENTKIT_HOST_APP`, the path is found from the
+/// running executable, so it works for source builds and the installed layout.
 struct EventKitHostRunner {
     private let appURL: URL
     private let launcherURL: URL

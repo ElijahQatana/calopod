@@ -28,10 +28,8 @@ public struct AvailabilityResult: Equatable, Sendable {
     }
 }
 
-/// Derives Busy/Free Availability across every selected source calendar for
-/// a window. This only reasons about time ranges — no titles, locations, or
-/// other event content ever passes through here, which keeps Availability
-/// safe to share even when the underlying events are private.
+/// Derives Busy and Free time across selected calendars. Only time ranges are used, so the result
+/// is safe to share.
 public enum AvailabilityCalculator {
     public static func calculate(
         instances: [StoredNormalizedInstance],
@@ -42,9 +40,7 @@ public enum AvailabilityCalculator {
             return AvailabilityResult(busy: [], free: [])
         }
 
-        // Clip every busy source interval to the requested window up front,
-        // so the merge pass below never has to special-case a range that
-        // extends outside it.
+        // Clip busy intervals to the window first.
         let candidates = instances.compactMap { instance -> AvailabilityInterval? in
             guard !instance.isCancelled,
                   instance.availability != "free",
@@ -61,10 +57,7 @@ public enum AvailabilityCalculator {
             ($0.start, $0.end) < ($1.start, $1.end)
         }
 
-        // Sweep the sorted, clipped intervals left to right and merge any
-        // that touch or overlap. This collapses events from multiple
-        // overlapping calendars into one Busy block instead of reporting
-        // each source separately.
+        // Sweep left to right, merging intervals that touch or overlap.
         var busy: [AvailabilityInterval] = []
         for candidate in candidates {
             guard let current = busy.last else {
@@ -82,9 +75,7 @@ public enum AvailabilityCalculator {
             }
         }
 
-        // Free time is simply whatever the merged Busy blocks don't cover,
-        // walked as the gaps between them (and before the first / after the
-        // last) within the window.
+        // Free time is the gaps between the merged busy blocks.
         var free: [AvailabilityInterval] = []
         var cursor = windowStart
         for interval in busy {

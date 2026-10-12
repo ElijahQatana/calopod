@@ -3,9 +3,7 @@ import CalopodProviders
 import EventKit
 import Foundation
 
-/// Seam between `EventKitClient` and the real EventKit store, so tests can
-/// substitute a fake gateway instead of touching the user's actual Calendar
-/// data (or requiring Calendar permission at all).
+/// Seam over the real EventKit store so tests can use a fake instead of the user's calendars.
 public protocol EventKitGateway: Actor {
     var authorizationStatus: EventKitAccessStatus { get }
     func requestFullAccess() async throws
@@ -38,10 +36,8 @@ public protocol EventKitGateway: Actor {
     func changeNotifications() -> AsyncStream<Void>
 }
 
-/// Public entry point for talking to the local Calendar store. Every
-/// operation except checking or requesting access first confirms full
-/// access is actually granted, so a permission regression fails loudly with
-/// `.permissionDenied` rather than silently returning partial or stale data.
+/// Entry point for the local Calendar store. Every call except the access check confirms full
+/// access first, so a permission loss fails loudly.
 public final class EventKitClient: Sendable {
     private let gateway: any EventKitGateway
 
@@ -57,9 +53,7 @@ public final class EventKitClient: Sendable {
         get async { await gateway.authorizationStatus }
     }
 
-    // Only prompts when the status is genuinely undecided; re-requesting
-    // after a user has already denied or restricted access would just
-    // re-show a system dialog macOS won't act on differently.
+    // Only prompt when the status is undecided; macOS ignores a second request after a denial.
     public func requestFullAccess() async throws -> EventKitAccessStatus {
         if await gateway.authorizationStatus == .notDetermined {
             try await gateway.requestFullAccess()
@@ -156,8 +150,8 @@ private actor LiveEventKitGateway: EventKitGateway {
     }
 
     func requestFullAccess() async throws {
-        // Older toolchains reject sending the store into the async overload,
-        // so use the callback form and keep the store on this actor.
+        // Older toolchains reject sending the store into the async overload, so use the callback
+        // form.
         _ = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Bool, Error>) in
             store.requestFullAccessToEvents { granted, error in
                 if let error {
@@ -212,10 +206,8 @@ private actor LiveEventKitGateway: EventKitGateway {
                 isPrivate: false,
                 title: $0.title,
                 updatedAt: $0.lastModifiedDate,
-                // The ownership marker is encoded into the URL field (see
-                // `OwnershipMarkerCodec.markerURL`), so any event carrying
-                // one of these URLs is Calopod's own mirror and must be
-                // excluded from source ingestion.
+                // The ownership marker is stored in the URL field, so an event with one is
+                // Calopod's own mirror and is excluded from sources.
                 isManagedMirror: $0.url?.scheme == "calopod"
                     && $0.url?.host == "managed",
                 location: $0.location ?? $0.structuredLocation?.title,
@@ -282,9 +274,8 @@ private actor LiveEventKitGateway: EventKitGateway {
               event.calendar.calendarIdentifier == calendar.calendarIdentifier else {
             throw ProviderFailure.invalidResponse
         }
-        // Optimistic concurrency: if the caller supplied the version it last
-        // observed and the event has since changed, refuse the write (412)
-        // rather than overwriting an edit sync hasn't seen yet.
+        // If the event changed since the caller last saw it, refuse the write (412) instead of
+        // overwriting.
         if let expectedVersion,
            eventVersion(event) != expectedVersion {
             throw ProviderFailure.httpStatus(412)
@@ -362,10 +353,8 @@ private actor LiveEventKitGateway: EventKitGateway {
         }
     }
 
-    /// Reads back a managed event's current state as a snapshot, decoding
-    /// whatever ownership marker its URL carries. This is the data
-    /// `ManagedTargetObserver` classifies — `managedSnapshot` itself makes no
-    /// ownership judgment, it just reports what's on the calendar.
+    /// Reads a managed event back as a snapshot. It reports what is there and makes no ownership
+    /// judgment.
     private func managedSnapshot(_ event: EKEvent) -> ManagedEventSnapshot {
         let decoded: (ManagedEventMarkerStatus, ManagedEventProvenance?)
         if let url = event.url, url.scheme == "calopod", url.host == "managed" {
@@ -412,9 +401,7 @@ private actor LiveEventKitGateway: EventKitGateway {
         )
     }
 
-    // EKParticipant only exposes contact info as a `mailto:` URL, so this
-    // pulls the address back out of it rather than relying on a separate
-    // structured email field, which EventKit doesn't provide.
+    // EKParticipant only exposes a `mailto:` URL, so the address is taken from that.
     private func participantEmail(_ url: URL?) -> String? {
         guard let url, url.scheme?.lowercased() == "mailto" else { return nil }
         let encoded = String(url.absoluteString.dropFirst("mailto:".count))
@@ -439,9 +426,8 @@ private actor LiveEventKitGateway: EventKitGateway {
         }
     }
 
-    // EventKit doesn't always report a last-modified date for purely local
-    // events, so this falls back to a stable per-item identity string —
-    // still enough to detect that *some* write raced ahead, just not when.
+    // Local events may have no modification date, so fall back to a per-item string. That still
+    // shows a write happened, just not when.
     private func eventVersion(_ event: EKEvent) -> String {
         event.lastModifiedDate.map(eventIdentityDate)
             ?? "eventkit-local:\(event.calendarItemIdentifier)"

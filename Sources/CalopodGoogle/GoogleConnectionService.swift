@@ -4,17 +4,12 @@ import CalopodStore
 import CryptoKit
 import Foundation
 
-/// Manages one Google Calendar Connection end to end: authorization, token
-/// refresh, calendar discovery, and event fetch/write. This is the layer
-/// that turns Google's API and OAuth specifics into the same shape every
-/// other provider connection service exposes.
+/// Manages one Google Connection: authorization, token refresh, calendar discovery and event
+/// fetch/write.
 public struct GoogleConnectionService: RSVPActionProvider {
     private static let provider = ProviderKind.google.rawValue
-    // Two independent cursors per window: a watermark timestamp bounding
-    // which events are fetched, and Google's own sync token for genuinely
-    // incremental (changes-only) refreshes. They're tracked separately
-    // because a sync token can expire and need to fall back to a bounded
-    // full fetch without losing the watermark's own history.
+    // Two cursors per window: an update watermark for bounded reads, and Google's sync token. They
+    // are separate so an expired token can fall back to a full read without losing the watermark.
     private static let boundedWatermarkScope = "google.events.updated-min.v1"
     private static let returnedSyncTokenScope = "google.events.sync-token.v1"
 
@@ -52,10 +47,8 @@ public struct GoogleConnectionService: RSVPActionProvider {
         )
         let tokens = try await oauth.authorize(using: browser)
         try tokenVault.save(tokens, provider: Self.provider, connectionID: connection.id)
-        // Tokens are saved to Keychain before the connection row is
-        // persisted; if the database write then fails, the orphaned tokens
-        // are cleaned up rather than left behind for a connection ID that
-        // was never actually recorded.
+        // Tokens are saved before the connection row; if the database write fails they are removed
+        // again.
         do {
             try state.saveConnection(connection, now: now())
         } catch {
@@ -127,10 +120,7 @@ public struct GoogleConnectionService: RSVPActionProvider {
             )
             refreshMode = watermark == nil ? .full : .incremental
         } catch ProviderFailure.cursorExpired {
-            // Google can reject a stale sync token outright; the recovery is
-            // simply to re-fetch the whole window as a full refresh, which
-            // `EventCache` already knows how to reconcile against what it
-            // has stored.
+            // A rejected sync token is recovered by a full refresh, which the cache can reconcile.
             page = try await calendarClient.events(
                 accessToken: tokens.accessToken,
                 connectionID: connectionID,
@@ -268,10 +258,7 @@ public struct GoogleConnectionService: RSVPActionProvider {
         try state.removeConnection(id: connectionID)
     }
 
-    /// Returns a usable access token, refreshing proactively if it's about
-    /// to expire (a 60-second buffer) rather than waiting for a request to
-    /// actually fail with 401 — avoiding a class of spurious failures on
-    /// every provider call this connection makes.
+    /// Returns a usable access token, refreshing 60 seconds early rather than waiting for a 401.
     private func validTokens(connectionID: String) async throws -> OAuthTokens {
         guard var tokens = try tokenVault.tokens(provider: Self.provider, connectionID: connectionID) else {
             throw ProviderFailure.authorizationRequired
@@ -288,9 +275,7 @@ public struct GoogleConnectionService: RSVPActionProvider {
         return SHA256.hash(data: input).map { String(format: "%02x", $0) }.joined()
     }
 
-    // Cursors are scoped to the exact window they were fetched for, so a
-    // later request against a different date range never mistakes another
-    // range's stale cursor for its own.
+    // Cursors are scoped to their window so another date range never reuses them.
     private func cursorScope(prefix: String, start: Date, end: Date) -> String {
         let window = "\(start.timeIntervalSinceReferenceDate.bitPattern)|\(end.timeIntervalSinceReferenceDate.bitPattern)"
         let digest = SHA256.hash(data: Data(window.utf8))

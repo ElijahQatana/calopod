@@ -2,11 +2,8 @@
 import CalopodEventKit
 import Foundation
 
-/// Launches the separate EventKit Host app and exchanges one request/response
-/// with it. The host runs as its own signed app (not a library linked into
-/// this process) because it's the process macOS actually grants or denies
-/// Calendar access to — this runner just drives it and reads back the
-/// result.
+/// Launches the EventKit host app and exchanges one request and response. The host is its own
+/// signed app because macOS grants Calendar access per process.
 struct EventKitHostRunner: Sendable {
     private let appURL: URL
     private let launcherURL: URL
@@ -45,12 +42,9 @@ struct EventKitHostRunner: Sendable {
         }
     }
 
-    /// Finds the EventKit Host app: an explicit, validated absolute path
-    /// from `CALOPOD_EVENTKIT_HOST_APP` first (required for a LaunchAgent,
-    /// whose working directory can't be relied on), otherwise a search
-    /// upward from the resolved executable for packaged `eventkit-host`
-    /// or development `.build/eventkit-host` output. Installed command
-    /// symlinks must resolve to the service payload before this search.
+    /// Finds the host app: an absolute `CALOPOD_EVENTKIT_HOST_APP` first (required for a
+    /// LaunchAgent), otherwise searches up from the executable for `eventkit-host` or
+    /// `.build/eventkit-host`. Installed symlinks must resolve to the service payload first.
     static func resolveAppURL(
         variables: [String: String],
         executableURL: URL
@@ -102,12 +96,8 @@ struct EventKitHostRunner: Sendable {
         }
     }
 
-    // Communicates with the host over a private temp directory of files
-    // (request/response/logs) rather than pipes, since the host is launched
-    // through `open` as its own app rather than as a direct child process
-    // this code controls a pipe to. The directory is created fresh per call,
-    // permissioned to the owner only (it can carry calendar content), and
-    // always cleaned up afterward.
+    // Talks to the host through files in a fresh owner-only temp directory, since `open` launches
+    // it as its own app and there is no pipe. It is removed afterwards.
     private func runApp(
         arguments: [String],
         requestData: Data? = nil,
@@ -140,11 +130,8 @@ struct EventKitHostRunner: Sendable {
         let process = Process()
         process.executableURL = launcherURL
         process.arguments = [
-            // -W waits for the launched app to exit before `open` returns
-            // (so the response file is guaranteed complete once this call
-            // continues); -n always launches a fresh instance rather than
-            // reusing one already running, since a lingering instance could
-            // otherwise serve a stale or concurrent request.
+            // `-W` waits for the app to exit so the response file is complete; `-n` forces a fresh
+            // instance so a running one can't serve a stale request.
             "-W", "-n",
             "--stdout", stdoutURL.path,
             "--stderr", stderrURL.path,

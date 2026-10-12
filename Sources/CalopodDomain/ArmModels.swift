@@ -1,6 +1,5 @@
-/// What an Arm is allowed to expose on its target calendar. `busy` mirrors
-/// only free/busy state; `fullDetails` (used exclusively by the Main
-/// calendar) carries title, location, and notes as well.
+/// What an Arm may put on its target. `busy` is timing only; `fullDetails` (Main calendar) adds
+/// title, location and notes.
 public enum ArmRuleMode: String, CaseIterable, Codable, Sendable {
     case busy
     case fullDetails = "full-details"

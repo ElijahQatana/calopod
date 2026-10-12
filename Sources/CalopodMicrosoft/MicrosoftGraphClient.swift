@@ -20,9 +20,7 @@ public struct MicrosoftCalendar: Equatable, Sendable {
     }
 }
 
-/// Thin, direct client over the Microsoft Graph v1.0 calendar API. Like
-/// `GoogleCalendarClient`, this holds no OAuth or connection state —
-/// `MicrosoftConnectionService` supplies a fresh access token per call.
+/// Thin client over Microsoft Graph v1.0. Like the Google client it holds no auth state.
 public struct MicrosoftGraphClient: Sendable {
     private let transport: any HTTPTransport
     private let baseURL: URL
@@ -64,10 +62,8 @@ public struct MicrosoftGraphClient: Sendable {
         deltaLink: String? = nil,
         responseIdentityScope: ResponseIdentityScope = .unverified
     ) async throws -> ProviderEventPage {
-        // A stored delta link resumes exactly where the last fetch left off;
-        // a link that fails to even parse as a URL is treated the same as an
-        // expired cursor, so the caller falls back to a bounded full fetch
-        // rather than failing outright on corrupted cursor state.
+        // A stored delta link resumes the last fetch. One that isn't a valid URL is treated as
+        // expired, so we fall back to a full read.
         let initialURL: URL
         let followsCursor: Bool
         if let deltaLink {
@@ -251,10 +247,8 @@ public struct MicrosoftGraphClient: Sendable {
             followsCursor: false
         )
 
-        // Unlike create, an update sends the ownership marker as a second,
-        // separate PATCH to the extension resource rather than embedding it
-        // in the event body — open extensions can be created inline with an
-        // event but are updated through their own resource URL.
+        // On update the marker goes in a separate PATCH to the extension; on create it is embedded
+        // in the event body.
         let extensionURL = eventURL
             .appendingPathComponent("extensions")
             .appendingPathComponent("com.calopod.managed")
@@ -300,12 +294,10 @@ public struct MicrosoftGraphClient: Sendable {
         )
     }
 
-    // `IdType="ImmutableId"` asks Graph for event IDs that stay stable across
-    // calendar moves and updates — without it, an ID this client persisted
-    // as a mirror mapping's target could silently stop resolving. `followsCursor`
-    // matters for status mapping: a 404 only means "the delta cursor is
-    // gone" when this request was itself following one; a 404 on a plain
-    // lookup is a normal not-found.
+    // `IdType="ImmutableId"` keeps event IDs stable across moves, so a stored mapping keeps
+    // resolving.
+    // `followsCursor` matters for status mapping: a 404 means "delta cursor gone" only when
+    // following one.
     private func send(
         request original: URLRequest,
         accessToken: String,
@@ -336,10 +328,7 @@ public struct MicrosoftGraphClient: Sendable {
         }
     }
 
-    // Graph's pagination and delta links are opaque, provider-returned
-    // URLs; this confirms one still points at the expected Graph host before
-    // it's ever fetched, rather than blindly following a URL from a response
-    // body.
+    // Next and delta links are opaque, so check they still point at the Graph host before fetching.
     private func validatedLink(_ url: URL) throws -> URL {
         guard url.scheme?.lowercased() == baseURL.scheme?.lowercased(),
               url.host?.lowercased() == baseURL.host?.lowercased(),
@@ -623,10 +612,8 @@ private struct MicrosoftEvent: Decodable {
     var managedSnapshot: ManagedEventSnapshot {
         let markerExtension = extensions?.first(where: { $0.isCalopodMarker })
         let decoded = OwnershipMarkerCodec.marker(fields: markerExtension?.markerFields)
-        // A Calopod extension that's present but decodes to `.absent` (every
-        // field empty or missing) is a corrupted marker, not truly no
-        // marker — reported as `.invalid` so it isn't mistaken for an
-        // ordinary unmanaged event.
+        // An extension that is present but empty is a corrupted marker, so report `.invalid` rather
+        // than unmanaged.
         let markerStatus: ManagedEventMarkerStatus = if markerExtension != nil,
                                                         decoded.status == .absent {
             .invalid

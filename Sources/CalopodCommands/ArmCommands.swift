@@ -33,11 +33,7 @@ public struct ArmCommand: ParsableCommand {
     public init() {}
 }
 
-/// Changes an existing Arm's Rule or preferred writer. Deliberately separate
-/// from `ArmAddCommand`: both operations are configuration-only (no
-/// calendar write ever happens here), but updating an existing Arm and
-/// creating a new one have different validation needs, so keeping them
-/// distinct commands avoids one doing double duty.
+/// Changes an Arm's name, Rule or preferred writer. Configuration only; never writes to a calendar.
 public struct ArmUpdateCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "update",
@@ -103,11 +99,8 @@ public struct ArmUpdateCommand: ParsableCommand {
     }
 }
 
-/// Creates a new Arm. All the actual safety checks (cycles, duplicate
-/// routes, read-only targets, mismatched configurations) live in
-/// `ArmConfigurationService.createArm`; this command's job is just to
-/// collect the arguments and translate that service's typed errors into
-/// user-facing messages.
+/// Creates an Arm. The safety checks live in `ArmConfigurationService.createArm`; this maps its
+/// errors to messages.
 public struct ArmAddCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "add",

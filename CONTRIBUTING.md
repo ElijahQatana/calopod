@@ -1,10 +1,10 @@
 # Contributing
 
-Calopod is intended to become an open-source project. Work in this repository should be safe to publish from the moment it is committed.
+Thanks for helping with Calopod. Everything in this repository is public, so keep personal data out of it.
 
 ## Start with an issue
 
-Every change starts with a GitHub issue assigned to a milestone. Keep the change focused on that issue and use a closing reference in the pull request, such as `Closes #123`.
+For anything bigger than a small fix, open an issue first so we can agree on the approach. Keep each pull request focused on one change, and link the issue, for example `Closes #123`.
 
 ## Protect personal information
 
@@ -21,7 +21,7 @@ If realistic data is required to reproduce a bug, create a fresh synthetic case 
 
 ## Git identity
 
-Configure an identity approved for public use in this repository. Prefer a GitHub-provided noreply address when a personal email should remain private.
+Commit with an identity you're happy to make public. A GitHub noreply address works if you'd rather not share your email.
 
 Check the effective identity before committing:
 

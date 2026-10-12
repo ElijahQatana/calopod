@@ -6,10 +6,7 @@ public enum EventRefreshError: Error {
     case invalidScope
 }
 
-/// One source event as persisted after `EventNormalizer` has processed it —
-/// the shape every other part of the sync engine (planning, Availability)
-/// reads, so it never has to know which provider or connection an event
-/// actually came from.
+/// One source event as stored after normalization, independent of provider.
 public struct StoredNormalizedInstance: Codable, Equatable, Sendable {
     public let sourceKeyHash: String
     public let connectionID: String
@@ -83,8 +80,7 @@ public struct StoredNormalizedInstance: Codable, Equatable, Sendable {
     }
 }
 
-/// Persisted form of a provider's incremental-sync cursor for one scope,
-/// read back on the next fetch so it can resume instead of re-scanning.
+/// A provider cursor for one scope, read back on the next fetch.
 public struct StoredCursorUpdate: Equatable, Sendable {
     public let scopeKey: String
     public let value: String
@@ -104,9 +100,8 @@ public struct StoredCursorUpdate: Equatable, Sendable {
     }
 }
 
-/// The last known health of a Connection: whether its most recent fetch
-/// succeeded, and if not, since when and why — the data behind `doctor`-style
-/// diagnostics without exposing anything about the calendar content itself.
+/// The last known health of a Connection: whether the latest fetch worked and, if not, since when
+/// and why. No calendar content.
 public struct StoredConnectionHealth: Equatable, Sendable {
     public let connectionID: String
     public let status: String
@@ -116,10 +111,8 @@ public struct StoredConnectionHealth: Equatable, Sendable {
 }
 
 extension LocalStateRepository {
-    /// Stores one page of normalized events and reconciles what a full
-    /// refresh implies was deleted — all inside one transaction, so a crash
-    /// mid-refresh can never leave stale and fresh event rows mixed
-    /// together.
+    /// Stores a page of events and, for a full refresh, removes what went missing, all in one
+    /// transaction.
     public func applyEventRefresh(
         connectionID: String,
         calendarBindingID: String,
@@ -146,12 +139,8 @@ extension LocalStateRepository {
                 removed: removedSourceKeyHashes, excluded: excludedSourceKeyHashes,
                 windowStart: windowStart, windowEnd: windowEnd, isFullRefresh: isFullRefresh, now: now
             )
-            // Every instance written in this refresh is tagged with a new
-            // generation number. On a full refresh, any existing row in the
-            // window that *didn't* get this generation's tag was absent from
-            // the provider's page and is therefore gone — the cleanup below
-            // deletes exactly those rows instead of requiring the caller to
-            // diff old and new event lists itself.
+            // Rows written in this refresh get a new generation number. On a full refresh, rows in
+            // the window without it were absent from the page and are deleted.
             let previousGeneration = try Int64.fetchOne(
                 database,
                 sql: "SELECT MAX(seen_generation) FROM normalized_instances WHERE calendar_binding_id = ?",
@@ -230,11 +219,8 @@ extension LocalStateRepository {
                 )
             }
 
-            // Only a full refresh can safely infer deletions this way — an
-            // incremental page only ever reports what changed, so anything
-            // it doesn't mention says nothing about whether older events in
-            // the window still exist. Incremental deletions instead rely
-            // entirely on the explicit `cancelledSourceKeyHashes` above.
+            // Only a full refresh can infer deletions this way. An incremental page only lists
+            // changes, so deletions there come from `cancelledSourceKeyHashes`.
             if isFullRefresh {
                 try database.execute(
                     sql: """
