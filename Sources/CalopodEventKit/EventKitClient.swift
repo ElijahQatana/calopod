@@ -6,8 +6,7 @@ import Foundation
 /// Seam between `EventKitClient` and the real EventKit store, so tests can
 /// substitute a fake gateway instead of touching the user's actual Calendar
 /// data (or requiring Calendar permission at all).
-@MainActor
-public protocol EventKitGateway: AnyObject {
+public protocol EventKitGateway: Actor {
     var authorizationStatus: EventKitAccessStatus { get }
     func requestFullAccess() async throws
     func calendars() -> [EventKitCalendarSnapshot]
@@ -43,8 +42,7 @@ public protocol EventKitGateway: AnyObject {
 /// operation except checking or requesting access first confirms full
 /// access is actually granted, so a permission regression fails loudly with
 /// `.permissionDenied` rather than silently returning partial or stale data.
-@MainActor
-public final class EventKitClient {
+public final class EventKitClient: Sendable {
     private let gateway: any EventKitGateway
 
     public init(gateway: any EventKitGateway) {
@@ -56,55 +54,55 @@ public final class EventKitClient {
     }
 
     public var authorizationStatus: EventKitAccessStatus {
-        gateway.authorizationStatus
+        get async { await gateway.authorizationStatus }
     }
 
     // Only prompts when the status is genuinely undecided; re-requesting
     // after a user has already denied or restricted access would just
     // re-show a system dialog macOS won't act on differently.
     public func requestFullAccess() async throws -> EventKitAccessStatus {
-        if gateway.authorizationStatus == .notDetermined {
+        if await gateway.authorizationStatus == .notDetermined {
             try await gateway.requestFullAccess()
         }
-        return gateway.authorizationStatus
+        return await gateway.authorizationStatus
     }
 
-    public func calendars() throws -> [EventKitCalendarSnapshot] {
-        try requireFullAccess()
-        return gateway.calendars()
+    public func calendars() async throws -> [EventKitCalendarSnapshot] {
+        try await requireFullAccess()
+        return await gateway.calendars()
     }
 
     public func events(
         calendarIDs: [String],
         from start: Date,
         through end: Date
-    ) throws -> [ProviderEvent] {
-        try requireFullAccess()
+    ) async throws -> [ProviderEvent] {
+        try await requireFullAccess()
         guard !calendarIDs.isEmpty, start < end else {
             throw ProviderFailure.invalidResponse
         }
-        return gateway.events(calendarIDs: calendarIDs, from: start, through: end)
+        return await gateway.events(calendarIDs: calendarIDs, from: start, through: end)
     }
 
-    public func changeNotifications() -> AsyncStream<Void> {
-        gateway.changeNotifications()
+    public func changeNotifications() async -> AsyncStream<Void> {
+        await gateway.changeNotifications()
     }
 
     public func managedEvents(
         calendarID: String,
         from start: Date,
         through end: Date
-    ) throws -> [ManagedEventSnapshot] {
-        try requireFullAccess()
-        return gateway.managedEvents(calendarID: calendarID, from: start, through: end)
+    ) async throws -> [ManagedEventSnapshot] {
+        try await requireFullAccess()
+        return await gateway.managedEvents(calendarID: calendarID, from: start, through: end)
     }
 
     public func createManagedEvent(
         calendarID: String,
         request: ManagedEventWriteRequest
-    ) throws -> ManagedEventWriteResult {
-        try requireFullAccess()
-        return try gateway.createManagedEvent(calendarID: calendarID, request: request)
+    ) async throws -> ManagedEventWriteResult {
+        try await requireFullAccess()
+        return try await gateway.createManagedEvent(calendarID: calendarID, request: request)
     }
 
     public func updateManagedEvent(
@@ -112,9 +110,9 @@ public final class EventKitClient {
         providerEventID: String,
         expectedVersion: String?,
         request: ManagedEventWriteRequest
-    ) throws -> ManagedEventWriteResult {
-        try requireFullAccess()
-        return try gateway.updateManagedEvent(
+    ) async throws -> ManagedEventWriteResult {
+        try await requireFullAccess()
+        return try await gateway.updateManagedEvent(
             calendarID: calendarID,
             providerEventID: providerEventID,
             expectedVersion: expectedVersion,
@@ -126,25 +124,24 @@ public final class EventKitClient {
         calendarID: String,
         providerEventID: String,
         expectedVersion: String?
-    ) throws {
-        try requireFullAccess()
-        try gateway.deleteManagedEvent(
+    ) async throws {
+        try await requireFullAccess()
+        try await gateway.deleteManagedEvent(
             calendarID: calendarID,
             providerEventID: providerEventID,
             expectedVersion: expectedVersion
         )
     }
 
-    private func requireFullAccess() throws {
-        guard gateway.authorizationStatus == .fullAccess else {
+    private func requireFullAccess() async throws {
+        guard await gateway.authorizationStatus == .fullAccess else {
             throw ProviderFailure.permissionDenied
         }
     }
 }
 
 /// The real `EventKitGateway`, backed directly by `EKEventStore`.
-@MainActor
-private final class LiveEventKitGateway: EventKitGateway {
+private actor LiveEventKitGateway: EventKitGateway {
     private let store = EKEventStore()
 
     var authorizationStatus: EventKitAccessStatus {
@@ -159,8 +156,8 @@ private final class LiveEventKitGateway: EventKitGateway {
     }
 
     func requestFullAccess() async throws {
-        // The async overload isn't isolated, so older toolchains reject sending
-        // the main-actor store into it. The callback form stays on this actor.
+        // Older toolchains reject sending the store into the async overload,
+        // so use the callback form and keep the store on this actor.
         _ = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Bool, Error>) in
             store.requestFullAccessToEvents { granted, error in
                 if let error {
@@ -317,7 +314,8 @@ private final class LiveEventKitGateway: EventKitGateway {
     }
 
     func changeNotifications() -> AsyncStream<Void> {
-        AsyncStream { continuation in
+        let store = store
+        return AsyncStream { continuation in
             let token = ObserverToken(
                 NotificationCenter.default.addObserver(
                 forName: .EKEventStoreChanged,
@@ -456,7 +454,6 @@ private final class LiveEventKitGateway: EventKitGateway {
 /// Maps a managed payload onto the EventKit fields Calopod can safely own.
 /// Organizer and attendee fields remain untouched because EventKit exposes
 /// them as read-only and native participant writes could send invitations.
-@MainActor
 enum EventKitManagedEventPresentation {
     static func apply(_ request: ManagedEventWriteRequest, to event: EKEvent) throws {
         event.title = request.payload.title ?? ""

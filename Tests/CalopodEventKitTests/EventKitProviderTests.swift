@@ -7,12 +7,10 @@ import Foundation
 import Testing
 
 @Suite("EventKit access")
-@MainActor
 struct EventKitClientTests {
     @Test("Permission is requested only while undecided")
     func deliberatePermissionRequest() async throws {
-        let gateway = StubEventKitGateway(status: .notDetermined)
-        gateway.statusAfterRequest = .fullAccess
+        let gateway = StubEventKitGateway(status: .notDetermined, statusAfterRequest: .fullAccess)
         let client = EventKitClient(gateway: gateway)
 
         let status = try await client.requestFullAccess()
@@ -20,79 +18,78 @@ struct EventKitClientTests {
 
         #expect(status == .fullAccess)
         #expect(secondStatus == .fullAccess)
-        #expect(gateway.requestCount == 1)
+        #expect(await gateway.requestCount == 1)
     }
 
     @Test("Denied access blocks calendar reads")
-    func deniedAccess() throws {
+    func deniedAccess() async {
         let client = EventKitClient(gateway: StubEventKitGateway(status: .denied))
 
-        #expect(throws: ProviderFailure.permissionDenied) {
-            try client.calendars()
+        await #expect(throws: ProviderFailure.permissionDenied) {
+            try await client.calendars()
         }
     }
 
     @Test("Event reads require an explicit calendar selection")
-    func explicitSelection() throws {
+    func explicitSelection() async throws {
         let gateway = StubEventKitGateway(status: .fullAccess)
         let client = EventKitClient(gateway: gateway)
         let start = Date(timeIntervalSince1970: 1_000)
 
-        #expect(throws: ProviderFailure.invalidResponse) {
-            try client.events(
+        await #expect(throws: ProviderFailure.invalidResponse) {
+            try await client.events(
                 calendarIDs: [],
                 from: start,
                 through: start.addingTimeInterval(3_600)
             )
         }
-        _ = try client.events(
+        _ = try await client.events(
             calendarIDs: ["selected-calendar"],
             from: start,
             through: start.addingTimeInterval(3_600)
         )
-        #expect(gateway.lastCalendarIDs == ["selected-calendar"])
+        #expect(await gateway.lastCalendarIDs == ["selected-calendar"])
     }
 
     @Test("Store notifications are exposed as invalidation signals")
     func changes() async {
         let gateway = StubEventKitGateway(status: .fullAccess)
         let client = EventKitClient(gateway: gateway)
-        let stream = client.changeNotifications()
+        let stream = await client.changeNotifications()
         var iterator = stream.makeAsyncIterator()
 
-        gateway.signalChange()
+        await gateway.signalChange()
 
         _ = await iterator.next()
     }
 
     @Test("Managed writes stay scoped to the selected target")
-    func managedWrites() throws {
+    func managedWrites() async throws {
         let gateway = StubEventKitGateway(status: .fullAccess)
         let client = EventKitClient(gateway: gateway)
         let request = eventKitManagedRequest()
 
-        let created = try client.createManagedEvent(calendarID: "target", request: request)
-        let updated = try client.updateManagedEvent(
+        let created = try await client.createManagedEvent(calendarID: "target", request: request)
+        let updated = try await client.updateManagedEvent(
             calendarID: "target",
             providerEventID: created.providerEventID,
             expectedVersion: created.providerVersion,
             request: request
         )
-        try client.deleteManagedEvent(
+        try await client.deleteManagedEvent(
             calendarID: "target",
             providerEventID: updated.providerEventID,
             expectedVersion: updated.providerVersion
         )
 
-        #expect(gateway.lastManagedCalendarID == "target")
-        #expect(gateway.lastManagedRequest == request)
-        #expect(gateway.deletedProviderEventID == updated.providerEventID)
+        #expect(await gateway.lastManagedCalendarID == "target")
+        #expect(await gateway.lastManagedRequest == request)
+        #expect(await gateway.deletedProviderEventID == updated.providerEventID)
     }
 
     @Test("Managed target reads stay scoped to the selected target")
-    func managedReads() throws {
-        let gateway = StubEventKitGateway(status: .fullAccess)
-        gateway.managedSnapshots = [
+    func managedReads() async throws {
+        let expected = [
             ManagedEventSnapshot(
                 providerEventID: "synthetic-event",
                 providerVersion: "v1",
@@ -101,17 +98,18 @@ struct EventKitClientTests {
                 provenance: eventKitManagedRequest().provenance
             ),
         ]
+        let gateway = StubEventKitGateway(status: .fullAccess, managedSnapshots: expected)
         let client = EventKitClient(gateway: gateway)
         let start = Date(timeIntervalSince1970: 1_000)
 
-        let snapshots = try client.managedEvents(
+        let snapshots = try await client.managedEvents(
             calendarID: "target",
             from: start,
             through: start.addingTimeInterval(3_600)
         )
 
-        #expect(gateway.lastManagedCalendarID == "target")
-        #expect(snapshots == gateway.managedSnapshots)
+        #expect(await gateway.lastManagedCalendarID == "target")
+        #expect(snapshots == expected)
     }
 
     @Test("Full details use native fields without alerts or invitees")
@@ -286,8 +284,7 @@ struct EventKitConnectionServiceTests {
     }
 }
 
-@MainActor
-private final class StubEventKitGateway: EventKitGateway {
+private actor StubEventKitGateway: EventKitGateway {
     var authorizationStatus: EventKitAccessStatus
     var statusAfterRequest: EventKitAccessStatus
     var requestCount = 0
@@ -298,9 +295,14 @@ private final class StubEventKitGateway: EventKitGateway {
     var managedSnapshots: [ManagedEventSnapshot] = []
     private var continuation: AsyncStream<Void>.Continuation?
 
-    init(status: EventKitAccessStatus) {
+    init(
+        status: EventKitAccessStatus,
+        statusAfterRequest: EventKitAccessStatus? = nil,
+        managedSnapshots: [ManagedEventSnapshot] = []
+    ) {
         authorizationStatus = status
-        statusAfterRequest = status
+        self.statusAfterRequest = statusAfterRequest ?? status
+        self.managedSnapshots = managedSnapshots
     }
 
     func requestFullAccess() async throws {

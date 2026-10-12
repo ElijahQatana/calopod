@@ -44,12 +44,12 @@ struct EventKitHostMain {
                     throw ProviderFailure.invalidResponse
                 }
                 let request = try JSONDecoder().decode(EventKitHostRequest.self, from: requestData)
-                response = try handle(request, client: client)
+                response = try await handle(request, client: client)
             }
             try write(response)
             exit(response.errorCode == nil ? 0 : 77)
         } catch let error as ProviderFailure {
-            let status = client.authorizationStatus
+            let status = await client.authorizationStatus
             let code: String
             switch error {
             case .permissionDenied:
@@ -62,7 +62,7 @@ struct EventKitHostMain {
         } catch {
             try? write(
                 EventKitHostResponse(
-                    status: client.authorizationStatus,
+                    status: await client.authorizationStatus,
                     errorCode: "host-failure"
                 )
             )
@@ -77,22 +77,22 @@ struct EventKitHostMain {
     private static func handle(
         _ request: EventKitHostRequest,
         client: EventKitClient
-    ) throws -> EventKitHostResponse {
+    ) async throws -> EventKitHostResponse {
         switch request.operation {
         case .permissionStatus:
-            return EventKitHostResponse(status: client.authorizationStatus)
+            return EventKitHostResponse(status: await client.authorizationStatus)
         case .calendars:
             return EventKitHostResponse(
-                status: client.authorizationStatus,
-                calendars: try client.calendars()
+                status: await client.authorizationStatus,
+                calendars: try await client.calendars()
             )
         case .events:
             guard let start = request.start, let end = request.end else {
                 throw ProviderFailure.invalidResponse
             }
             return EventKitHostResponse(
-                status: client.authorizationStatus,
-                events: try client.events(
+                status: await client.authorizationStatus,
+                events: try await client.events(
                     calendarIDs: request.calendarIDs,
                     from: start,
                     through: end
@@ -106,8 +106,8 @@ struct EventKitHostMain {
                 throw ProviderFailure.invalidResponse
             }
             return EventKitHostResponse(
-                status: client.authorizationStatus,
-                managedEvents: try client.managedEvents(
+                status: await client.authorizationStatus,
+                managedEvents: try await client.managedEvents(
                     calendarID: request.calendarIDs[0],
                     from: start,
                     through: end
@@ -118,8 +118,8 @@ struct EventKitHostMain {
                 throw ProviderFailure.invalidResponse
             }
             return EventKitHostResponse(
-                status: client.authorizationStatus,
-                managedEvent: try client.createManagedEvent(
+                status: await client.authorizationStatus,
+                managedEvent: try await client.createManagedEvent(
                     calendarID: request.calendarIDs[0],
                     request: managed
                 )
@@ -131,8 +131,8 @@ struct EventKitHostMain {
                 throw ProviderFailure.invalidResponse
             }
             return EventKitHostResponse(
-                status: client.authorizationStatus,
-                managedEvent: try client.updateManagedEvent(
+                status: await client.authorizationStatus,
+                managedEvent: try await client.updateManagedEvent(
                     calendarID: request.calendarIDs[0],
                     providerEventID: providerEventID,
                     expectedVersion: request.expectedProviderVersion,
@@ -144,12 +144,12 @@ struct EventKitHostMain {
                   let providerEventID = request.providerEventID else {
                 throw ProviderFailure.invalidResponse
             }
-            try client.deleteManagedEvent(
+            try await client.deleteManagedEvent(
                 calendarID: request.calendarIDs[0],
                 providerEventID: providerEventID,
                 expectedVersion: request.expectedProviderVersion
             )
-            return EventKitHostResponse(status: client.authorizationStatus)
+            return EventKitHostResponse(status: await client.authorizationStatus)
         }
     }
 
