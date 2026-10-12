@@ -103,6 +103,22 @@ plutil -lint "$plist_path" >/dev/null
 [ "$(stat -f '%Lp' "$service_root/logs/agent.stdout.log")" = "600" ]
 [ "$(stat -f '%Lp' "$service_root/logs/agent.stderr.log")" = "600" ]
 
+! plutil -extract EnvironmentVariables.CALOPOD_GOOGLE_CLIENT_ID raw "$plist_path" >/dev/null 2>&1
+! plutil -extract EnvironmentVariables.CALOPOD_MICROSOFT_CLIENT_ID raw "$plist_path" >/dev/null 2>&1
+(
+  export CALOPOD_GOOGLE_CLIENT_ID=synthetic-google-id
+  export CALOPOD_MICROSOFT_CLIENT_ID=synthetic-microsoft-id
+  export CALOPOD_MICROSOFT_TENANT=organizations
+  run_service install \
+    --interval-seconds 600 \
+    --jitter-seconds 30 \
+    --lookback-days 1 \
+    --horizon-days 30 >/dev/null
+)
+[ "$(plutil -extract EnvironmentVariables.CALOPOD_GOOGLE_CLIENT_ID raw "$plist_path")" = "synthetic-google-id" ]
+[ "$(plutil -extract EnvironmentVariables.CALOPOD_MICROSOFT_CLIENT_ID raw "$plist_path")" = "synthetic-microsoft-id" ]
+[ "$(plutil -extract EnvironmentVariables.CALOPOD_MICROSOFT_TENANT raw "$plist_path")" = "organizations" ]
+
 printf '#!/bin/sh\nexit 2\n' > "$agent_source"
 printf '#!/bin/sh\nexit 2\n' > "$cli_source"
 chmod 700 "$cli_source"

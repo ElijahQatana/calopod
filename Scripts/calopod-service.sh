@@ -197,6 +197,17 @@ render_plist() {
   plutil -insert EnvironmentVariables.CALOPOD_AGENT_JITTER_SECONDS -string "$jitter_seconds" "$destination"
   plutil -insert EnvironmentVariables.CALOPOD_AGENT_LOOKBACK_DAYS -string "$lookback_days" "$destination"
   plutil -insert EnvironmentVariables.CALOPOD_AGENT_HORIZON_DAYS -string "$horizon_days" "$destination"
+  # Public client configuration for direct Google and Microsoft Connections.
+  # Tokens never go in the plist.
+  if [ -n "${CALOPOD_GOOGLE_CLIENT_ID:-}" ]; then
+    plutil -insert EnvironmentVariables.CALOPOD_GOOGLE_CLIENT_ID -string "$CALOPOD_GOOGLE_CLIENT_ID" "$destination"
+  fi
+  if [ -n "${CALOPOD_MICROSOFT_CLIENT_ID:-}" ]; then
+    plutil -insert EnvironmentVariables.CALOPOD_MICROSOFT_CLIENT_ID -string "$CALOPOD_MICROSOFT_CLIENT_ID" "$destination"
+  fi
+  if [ -n "${CALOPOD_MICROSOFT_TENANT:-}" ]; then
+    plutil -insert EnvironmentVariables.CALOPOD_MICROSOFT_TENANT -string "$CALOPOD_MICROSOFT_TENANT" "$destination"
+  fi
   plutil -insert RunAtLoad -bool true "$destination"
   plutil -insert KeepAlive -bool true "$destination"
   plutil -insert ProcessType -string Background "$destination"

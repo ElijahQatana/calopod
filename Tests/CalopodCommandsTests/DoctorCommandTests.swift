@@ -4,6 +4,11 @@ import Foundation
 import Testing
 
 @Test
+func missingClientIDIsAKnownFailureCategory() {
+    #expect(genericFailureCategory("client-id") == "client-id")
+}
+
+@Test
 func providerDoctorCheckAggregatesWithoutConnectionDetails() throws {
     let repository = LocalStateRepository(database: try CalopodDatabase.inMemory())
     let connection = StoredConnection(
