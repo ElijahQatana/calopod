@@ -25,6 +25,7 @@ extension LocalStateRepository {
         now: Date = Date()
     ) throws -> String {
         try database.writeTransaction { database in
+            try pruneSyncHistory(database, now: now)
             try database.execute(
                 sql: """
                     UPDATE sync_runs
