@@ -285,6 +285,17 @@ public struct SyncEngine: Sendable {
                   let targetProvider = ProviderKind(rawValue: targetConnection.provider) else {
                 throw CalopodRuntimeError.invalidConfiguration("arm-target")
             }
+            let batch: ManagedEventBatchPerformer?
+            #if os(macOS)
+            if targetProvider == .eventKit {
+                let host = try EventKitHostRunner(environment: environment)
+                batch = { try await host.performMutations($0, calendarID: target.providerCalendarID) }
+            } else {
+                batch = nil
+            }
+            #else
+            batch = nil
+            #endif
             let summary: ManagedEventLifecycleSummary
             do {
                 summary = try await convergence.converge(
@@ -292,21 +303,22 @@ public struct SyncEngine: Sendable {
                     arm: arm,
                     targetProvider: targetProvider,
                     initialObservations: observationsByArm[arm.id] ?? [],
-                    window: window
-                ) {
-                    try await managedTargetSnapshots(
-                        target: target,
-                        from: window.start,
-                        through: window.end,
-                        repository: repository
-                    )
-                } perform: { mutation in
-                    try await performManagedMutation(
-                        mutation,
-                        target: target,
-                        repository: repository
-                    )
-                }
+                    window: window,
+                    readSnapshots: {
+                        try await managedTargetSnapshots(
+                            target: target,
+                            from: window.start,
+                            through: window.end,
+                            repository: repository
+                        )
+                    }, performBatch: batch, perform: { mutation in
+                        try await performManagedMutation(
+                            mutation,
+                            target: target,
+                            repository: repository
+                        )
+                    }
+                )
             } catch ManagedEventConvergenceError.didNotConverge {
                 throw CalopodRuntimeError.convergenceFailed
             }
@@ -713,6 +725,7 @@ public func syncFailureCategory(_ error: Error) -> String {
         case .busy: "busy"
         case .missingEventKitHost, .invalidEventKitHostPath, .eventKitHostUntrusted:
             "eventkit-host"
+        case .eventKitHostVersionMismatch: "eventkit-host-version"
         case .eventKitHostFailed: "eventkit-host-response"
         case .eventKitHostTimedOut: "eventkit-host-timeout"
         case .missingGoogleClientID, .missingMicrosoftClientID: "client-id"
@@ -728,6 +741,7 @@ public func syncFailureCategory(_ error: Error) -> String {
         case .convergenceFailed: "convergence"
         }
     }
+    if error is ManagedEventBatchError { return "managed-event-batch" }
     if error is SecretStoreError { return "credential-access" }
     guard let provider = error as? ProviderFailure else { return "local-state" }
     return switch provider {

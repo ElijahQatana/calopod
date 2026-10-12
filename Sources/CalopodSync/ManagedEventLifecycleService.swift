@@ -18,6 +18,9 @@ public enum ManagedEventMutationResult: Sendable {
     case deleted
 }
 
+public typealias ManagedEventBatchPerformer = @Sendable ([[ManagedEventMutation]]) async throws
+    -> [[Result<ManagedEventMutationResult, ProviderFailure>]]
+
 public enum ManagedEventLifecycleError: Error, Equatable, Sendable {
     case ambiguousMapping
     case ambiguousRepair(SyncPlanReason)
@@ -296,6 +299,99 @@ public struct ManagedEventLifecycleService: Sendable {
         )
     }
 
+    // Validate the whole pass before writing, then persist each confirmed result.
+    public func applyBatch(
+        items: [SyncPlanItem],
+        arm: StoredArm,
+        observations: [TargetEventObservation],
+        perform: ManagedEventBatchPerformer
+    ) async throws -> ManagedEventLifecycleSummary {
+        let relevant = items.filter { $0.armID == arm.id }
+        guard Set(relevant.map(\.mirrorKey)).count == relevant.count,
+              let mappings = Dictionary(uniquelyKeyed:
+                try repository.mirrorMappings(armID: arm.id).map { ($0.mirrorKey, $0) }) else {
+            throw ManagedEventLifecycleError.ambiguousMapping
+        }
+        let grouped = Dictionary(grouping: observations.filter { $0.mirrorKey != nil },
+                                 by: { $0.mirrorKey! })
+        var batches: [[ManagedEventMutation]] = []
+        for item in relevant {
+            let verified = (grouped[item.mirrorKey] ?? []).filter { $0.ownershipStatus == .verified }
+            let mapping = mappings[item.mirrorKey]
+            var mutations: [ManagedEventMutation] = []
+            switch item.action {
+            case .create:
+                mutations = [.create(try writeRequest(item: item, arm: arm))]
+            case .update, .remove:
+                guard let mapping, verified.count == 1, let target = verified.first,
+                      target.providerEventID == mapping.providerEventID else {
+                    throw ManagedEventLifecycleError.missingVerifiedTarget
+                }
+                let version = target.providerVersion ?? mapping.providerVersion
+                if item.action == .remove {
+                    mutations = [.delete(providerEventID: target.providerEventID, expectedVersion: version)]
+                } else {
+                    mutations = [.update(providerEventID: target.providerEventID, expectedVersion: version,
+                                         request: try writeRequest(item: item, arm: arm))]
+                }
+            case .noOp:
+                break
+            case .repair:
+                guard repairIsDeterministic(item, observationsByMirror: grouped) else {
+                    throw ManagedEventLifecycleError.ambiguousRepair(item.reason)
+                }
+                switch item.reason {
+                case .targetMissing:
+                    if item.payload != nil {
+                        mutations = [.create(try writeRequest(item: item, arm: arm))]
+                    }
+                case .verifiedDuplicates:
+                    let survivor = verified.sorted {
+                        duplicateOrder($0, $1, mappedProviderEventID: mapping?.providerEventID)
+                    }[0]
+                    mutations = [.update(providerEventID: survivor.providerEventID,
+                                         expectedVersion: survivor.providerVersion,
+                                         request: try writeRequest(item: item, arm: arm))]
+                    mutations += verified.filter { $0.providerEventID != survivor.providerEventID }
+                        .sorted { $0.providerEventID < $1.providerEventID }
+                        .map { .delete(providerEventID: $0.providerEventID, expectedVersion: $0.providerVersion) }
+                case .mappingMissing, .providerIdentityChanged:
+                    break
+                default:
+                    throw ManagedEventLifecycleError.ambiguousRepair(item.reason)
+                }
+            }
+            batches.append(mutations)
+        }
+        let results = batches.allSatisfy(\.isEmpty) ? batches.map { _ in [] } : try await perform(batches)
+        guard results.count == batches.count,
+              zip(results, batches).allSatisfy({ $0.count == $1.count }) else {
+            throw ProviderFailure.invalidResponse
+        }
+        var writes = 0
+        var reconciliations = 0
+        var noOps = 0
+        var failedItems: [Int] = []
+        for (index, item) in relevant.enumerated() {
+            let replies = MutationReplies(results[index])
+            do {
+                let summary = try await apply(items: [item], arm: arm, observations: observations) { _ in
+                    try await replies.next()
+                }
+                writes += summary.providerWriteCount
+                reconciliations += summary.mappingReconciliationCount
+                noOps += summary.noOpCount
+            } catch {
+                failedItems.append(index)
+            }
+        }
+        guard failedItems.isEmpty else {
+            throw ManagedEventBatchError(failedItemIndices: failedItems)
+        }
+        return ManagedEventLifecycleSummary(providerWriteCount: writes,
+                                            mappingReconciliationCount: reconciliations, noOpCount: noOps)
+    }
+
     /// Whether a `.repair` item has exactly the evidence its reason expects,
     /// so `apply` can act on it without guessing. Any repair reason not
     /// listed here (`ownershipUnverified`, snapshot-incomplete states, and so
@@ -420,5 +516,22 @@ public struct ManagedEventLifecycleService: Sendable {
             ownershipKeyID: key.id,
             updatedAt: now
         )
+    }
+}
+
+public struct ManagedEventBatchError: Error, Equatable, Sendable {
+    public let failedItemIndices: [Int]
+}
+
+private actor MutationReplies {
+    private var replies: [Result<ManagedEventMutationResult, ProviderFailure>]
+
+    init(_ replies: [Result<ManagedEventMutationResult, ProviderFailure>]) {
+        self.replies = replies
+    }
+
+    func next() throws -> ManagedEventMutationResult {
+        guard !replies.isEmpty else { throw ProviderFailure.invalidResponse }
+        return try replies.removeFirst().get()
     }
 }
