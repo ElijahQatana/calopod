@@ -8,6 +8,25 @@ import Foundation
 /// packaged per-user layout without depending on the current directory.
 struct EventKitHostRunner {
     private let appURL: URL
+    private let launcherURL: URL
+    private let standardLimit: TimeInterval
+    private let permissionLimit: TimeInterval
+    private let verifyHost: (URL) throws -> Void
+
+    /// Lets tests stand in for `open` and shorten the limits.
+    init(
+        appURL: URL,
+        launcherURL: URL,
+        standardLimit: TimeInterval,
+        permissionLimit: TimeInterval,
+        verifyHost: @escaping (URL) throws -> Void = EventKitHostSignature.verify(appURL:)
+    ) {
+        self.appURL = appURL
+        self.launcherURL = launcherURL
+        self.standardLimit = standardLimit
+        self.permissionLimit = permissionLimit
+        self.verifyHost = verifyHost
+    }
 
     init(
         environment: [String: String] = ProcessInfo.processInfo.environment,
@@ -18,6 +37,10 @@ struct EventKitHostRunner {
             environment: environment,
             executableURL: executableURL
         )
+        launcherURL = URL(fileURLWithPath: "/usr/bin/open")
+        standardLimit = EventKitHostLimits.standard
+        permissionLimit = EventKitHostLimits.permissionRequest
+        verifyHost = EventKitHostSignature.verify(appURL:)
         let executableURL = appURL
             .appendingPathComponent("Contents/MacOS/CalopodEventKitHost")
         guard FileManager.default.isExecutableFile(atPath: executableURL.path) else {
@@ -58,18 +81,27 @@ struct EventKitHostRunner {
     }
 
     func requestPermission() throws -> EventKitHostResponse {
-        try runApp(arguments: ["--request-permission"])
+        try runApp(
+            arguments: ["--request-permission"],
+            limit: permissionLimit
+        )
     }
 
     func perform(_ request: EventKitHostRequest) throws -> EventKitHostResponse {
         let data = try JSONEncoder().encode(request)
-        return try runApp(arguments: [], requestData: data)
+        return try runApp(arguments: [], requestData: data, limit: standardLimit)
     }
 
     private func runApp(
         arguments: [String],
-        requestData: Data? = nil
+        requestData: Data? = nil,
+        limit: TimeInterval
     ) throws -> EventKitHostResponse {
+        do {
+            try verifyHost(appURL)
+        } catch {
+            throw CommandEnvironmentError.eventKitHostUntrusted
+        }
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("calopod-eventkit-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(
@@ -101,7 +133,7 @@ struct EventKitHostRunner {
         }
 
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        process.executableURL = launcherURL
         process.arguments = [
             "-W", "-n",
             "--stdout", stdoutURL.path,
@@ -112,14 +144,15 @@ struct EventKitHostRunner {
         process.arguments?.append(contentsOf: appArguments)
         let launcherStderr = try FileHandle(forWritingTo: launcherStderrURL)
         process.standardError = launcherStderr
+        let finished: Bool
         do {
-            try process.run()
+            finished = try runWithinLimit(process, limit: limit)
         } catch {
             try? launcherStderr.close()
             throw CommandEnvironmentError.eventKitHostFailed
         }
-        process.waitUntilExit()
         try? launcherStderr.close()
+        guard finished else { throw CommandEnvironmentError.eventKitHostTimedOut }
 
         let data = try Data(contentsOf: stdoutURL)
         guard let response = try? JSONDecoder().decode(EventKitHostResponse.self, from: data) else {
