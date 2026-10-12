@@ -205,7 +205,7 @@ private actor LiveEventKitGateway: EventKitGateway {
                 seriesID: $0.hasRecurrenceRules ? $0.calendarItemExternalIdentifier : nil,
                 originalStart: $0.occurrenceDate.map(eventIdentityDate),
                 start: $0.startDate,
-                end: $0.endDate,
+                end: EventKitAllDayDates.exclusiveEnd($0.endDate, isAllDay: $0.isAllDay, in: .current),
                 isAllDay: $0.isAllDay,
                 availability: availability($0.availability),
                 isCancelled: $0.status == .canceled,
@@ -231,7 +231,7 @@ private actor LiveEventKitGateway: EventKitGateway {
                     },
                     sourceType: sourceType($0.calendar.source.sourceType)
                 ),
-                // All-day dates are midnights in the Mac's zone.
+                // Floating all-day dates are returned in the Mac's zone.
                 timeZoneIdentifier: $0.isAllDay ? TimeZone.current.identifier : nil
             )
         }
@@ -381,7 +381,7 @@ private actor LiveEventKitGateway: EventKitGateway {
         if event.startDate < event.endDate {
             payload = DesiredEventPayload(
                 startsAt: event.startDate,
-                endsAt: event.endDate,
+                endsAt: EventKitAllDayDates.exclusiveEnd(event.endDate, isAllDay: event.isAllDay, in: .current) ?? event.endDate,
                 isAllDay: event.isAllDay,
                 availability: availability(event.availability).rawValue,
                 title: event.title,
@@ -471,8 +471,7 @@ enum EventKitManagedEventPresentation {
         event.url = try OwnershipMarkerCodec.markerURL(request.provenance)
     }
 
-    /// All-day dates are re-read as midnights in the Mac's zone, which is
-    /// how EventKit stores them, so the day matches the source's own day.
+    /// EventKit includes the end day; shared payloads use an exclusive end.
     static func dates(for payload: DesiredEventPayload, in zone: TimeZone) -> (Date, Date) {
         guard payload.isAllDay else { return (payload.startsAt, payload.endsAt) }
         let days = AllDayDate.days(
@@ -482,7 +481,7 @@ enum EventKitManagedEventPresentation {
         )
         return (
             AllDayDate.midnight(of: days.start, in: zone) ?? payload.startsAt,
-            AllDayDate.midnight(of: days.end, in: zone) ?? payload.endsAt
+            (AllDayDate.midnight(of: days.end, in: zone) ?? payload.endsAt).addingTimeInterval(-1)
         )
     }
 
@@ -493,6 +492,17 @@ enum EventKitManagedEventPresentation {
         case "unavailable", "out-of-office": .unavailable
         default: .busy
         }
+    }
+}
+
+enum EventKitAllDayDates {
+    static func exclusiveEnd(_ end: Date?, isAllDay: Bool, in zone: TimeZone) -> Date? {
+        guard isAllDay, let end else { return end }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        let components = calendar.dateComponents([.hour, .minute, .second], from: end)
+        guard components.hour == 23, components.minute == 59, components.second == 59 else { return end }
+        return calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: end)) ?? end
     }
 }
 
