@@ -155,8 +155,12 @@ func doctorReport(controller: LaunchAgentController) throws -> DoctorReport {
                 warnings.append("Grant Calendar access, then refresh the Mac Connection.")
             }
         } catch {
-            items.append(doctorItem("calendar-permission", "failed", "eventkit-host"))
-            warnings.append("Verify the EventKit host signature and reinstall the user service.")
+            var category = "eventkit-host"
+            if case CommandEnvironmentError.eventKitHostTimedOut = error {
+                category = "eventkit-host-timeout"
+            }
+            items.append(doctorItem("calendar-permission", "failed", category))
+            warnings.append(actionForFailure(category))
         }
     }
 
@@ -261,6 +265,7 @@ func genericFailureCategory(_ value: String?) -> String {
         "cursor",
         "eventkit-host",
         "eventkit-host-response",
+        "eventkit-host-timeout",
         "interrupted",
         "local-state",
         "permission",
@@ -290,6 +295,8 @@ private func actionForFailure(_ category: String?) -> String {
         "Reconnect the affected calendar account."
     case "permission":
         "Grant Calendar access, then refresh the Mac Connection."
+    case "eventkit-host-timeout":
+        "The Calendar host did not respond in time. Retry, or restart the user service."
     case "eventkit-host", "eventkit-host-response":
         "Verify the EventKit host signature and reinstall the user service."
     case "local-state":

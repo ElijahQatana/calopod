@@ -9,12 +9,31 @@ import Foundation
 /// result.
 struct EventKitHostRunner {
     private let appURL: URL
+    private let launcherURL: URL
+    private let standardLimit: TimeInterval
+    private let permissionLimit: TimeInterval
+
+    /// Lets tests stand in for `open` and shorten the limits.
+    init(
+        appURL: URL,
+        launcherURL: URL,
+        standardLimit: TimeInterval,
+        permissionLimit: TimeInterval
+    ) {
+        self.appURL = appURL
+        self.launcherURL = launcherURL
+        self.standardLimit = standardLimit
+        self.permissionLimit = permissionLimit
+    }
 
     init(environment: CalopodRuntimeEnvironment) throws {
         appURL = try Self.resolveAppURL(
             variables: environment.variables,
             executableURL: environment.executableURL
         )
+        launcherURL = URL(fileURLWithPath: "/usr/bin/open")
+        standardLimit = EventKitHostLimits.standard
+        permissionLimit = EventKitHostLimits.permissionRequest
         let executableURL = appURL
             .appendingPathComponent("Contents/MacOS/CalopodEventKitHost")
         guard FileManager.default.isExecutableFile(atPath: executableURL.path) else {
@@ -61,12 +80,22 @@ struct EventKitHostRunner {
     }
 
     func requestPermission() throws -> EventKitHostResponse {
-        try runApp(arguments: ["--request-permission"])
+        try runApp(
+            arguments: ["--request-permission"],
+            limit: permissionLimit
+        )
     }
 
-    func perform(_ request: EventKitHostRequest) throws -> EventKitHostResponse {
+    func perform(_ request: EventKitHostRequest) async throws -> EventKitHostResponse {
         let data = try JSONEncoder().encode(request)
-        return try runApp(arguments: [], requestData: data)
+        // The launcher wait blocks a thread, so keep it off the cooperative pool.
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global().async {
+                continuation.resume(with: Result {
+                    try runApp(arguments: [], requestData: data, limit: standardLimit)
+                })
+            }
+        }
     }
 
     // Communicates with the host over a private temp directory of files
@@ -77,7 +106,8 @@ struct EventKitHostRunner {
     // always cleaned up afterward.
     private func runApp(
         arguments: [String],
-        requestData: Data? = nil
+        requestData: Data? = nil,
+        limit: TimeInterval
     ) throws -> EventKitHostResponse {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("calopod-eventkit-\(UUID().uuidString)", isDirectory: true)
@@ -110,7 +140,7 @@ struct EventKitHostRunner {
         }
 
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        process.executableURL = launcherURL
         process.arguments = [
             // -W waits for the launched app to exit before `open` returns
             // (so the response file is guaranteed complete once this call
@@ -126,14 +156,15 @@ struct EventKitHostRunner {
         process.arguments?.append(contentsOf: appArguments)
         let launcherStderr = try FileHandle(forWritingTo: launcherStderrURL)
         process.standardError = launcherStderr
+        let finished: Bool
         do {
-            try process.run()
+            finished = try runWithinLimit(process, limit: limit)
         } catch {
             try? launcherStderr.close()
             throw CalopodRuntimeError.eventKitHostFailed
         }
-        process.waitUntilExit()
         try? launcherStderr.close()
+        guard finished else { throw CalopodRuntimeError.eventKitHostTimedOut }
 
         let data = try Data(contentsOf: stdoutURL)
         guard let response = try? JSONDecoder().decode(EventKitHostResponse.self, from: data) else {
