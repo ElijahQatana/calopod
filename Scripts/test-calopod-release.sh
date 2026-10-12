@@ -69,11 +69,7 @@ run_installer() {
   env \
     CALOPOD_RELEASE_TEST_MODE=1 \
     CALOPOD_RELEASE_TEST_HOME="$test_home" \
-    "$bundle_root/install" \
-      --interval-seconds 600 \
-      --jitter-seconds 30 \
-      --lookback-days 1 \
-      --horizon-days 30
+    "$bundle_root/install" "$@"
 }
 
 run_installer >/dev/null
@@ -96,6 +92,52 @@ uninstall_link="$test_home/.local/bin/calopod-uninstall"
 [ "$(readlink "$uninstall_link")" = "$service_root/release/uninstall" ]
 [ "$(stat -f '%Lp' "$service_root")" = "700" ]
 [ "$(stat -f '%Lp' "$service_root/release/VERSION")" = "600" ]
+
+assert_schedule() {
+  [ "$(plutil -extract EnvironmentVariables.CALOPOD_AGENT_INTERVAL_SECONDS raw -o - "$plist_path")" = "$1" ]
+  [ "$(plutil -extract EnvironmentVariables.CALOPOD_AGENT_JITTER_SECONDS raw -o - "$plist_path")" = "$2" ]
+  [ "$(plutil -extract EnvironmentVariables.CALOPOD_AGENT_LOOKBACK_DAYS raw -o - "$plist_path")" = "$3" ]
+  [ "$(plutil -extract EnvironmentVariables.CALOPOD_AGENT_HORIZON_DAYS raw -o - "$plist_path")" = "$4" ]
+}
+assert_schedule 600 30 1 30
+run_installer --interval-seconds 900 --jitter-seconds 0 --lookback-days 2 --horizon-days 45 >/dev/null
+assert_schedule 900 0 2 45
+run_installer >/dev/null
+assert_schedule 900 0 2 45
+run_installer --horizon-days 60 >/dev/null
+assert_schedule 900 0 2 60
+
+for option in interval-seconds jitter-seconds lookback-days horizon-days; do
+  for value in '' invalid -1; do
+    if run_installer "--$option" "$value" >"$test_root/invalid-output" 2>&1; then
+      echo "The release installer accepted an invalid schedule value." >&2
+      exit 1
+    fi
+    grep -q -- "--$option" "$test_root/invalid-output"
+    assert_schedule 900 0 2 60
+  done
+  if run_installer "--$option" >"$test_root/invalid-output" 2>&1; then
+    echo "The release installer accepted a missing schedule value." >&2
+    exit 1
+  fi
+  grep -q 'requires a value' "$test_root/invalid-output"
+done
+for option in interval-seconds horizon-days; do
+  if run_installer "--$option" 0 >"$test_root/invalid-output" 2>&1; then
+    echo "The release installer accepted a zero interval or horizon." >&2
+    exit 1
+  fi
+  grep -q 'must be greater than zero' "$test_root/invalid-output"
+done
+
+plutil -remove EnvironmentVariables.CALOPOD_AGENT_HORIZON_DAYS "$plist_path"
+if run_installer >"$test_root/invalid-output" 2>&1; then
+  echo "The release installer replaced an unreadable saved schedule." >&2
+  exit 1
+fi
+grep -q 'saved schedule could not be read' "$test_root/invalid-output"
+run_installer --horizon-days 60 >/dev/null
+assert_schedule 900 0 2 60
 
 rm "$bundle_root/SIGNING"
 write_checksums
@@ -144,5 +186,13 @@ env \
 [ ! -e "$uninstall_link" ]
 [ "$(cat "$state_root/state.sqlite")" = "state-sentinel" ]
 [ "$(cat "$state_root/keychain-sentinel")" = "keychain-sentinel" ]
+
+unset CALOPOD_SERVICE_TEST_FAILURE_POINT
+run_installer --lookback-days 0 >/dev/null
+assert_schedule 600 30 0 30
+env \
+  CALOPOD_RELEASE_TEST_MODE=1 \
+  CALOPOD_RELEASE_TEST_HOME="$test_home" \
+  "$service_root/release/uninstall" >/dev/null
 
 echo "Release installer checks passed."

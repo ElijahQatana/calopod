@@ -3,12 +3,13 @@
 set -efu
 
 umask 077
-setup_mode=main-busy
+setup_mode=choose
 case "$#:${1:-}" in
   0:) ;;
+  1:--basic) setup_mode=main-busy ;;
   1:--arms) setup_mode=arms ;;
-  1:--help|1:-h) echo "Usage: calopod-setup [--arms]"; exit 0 ;;
-  *) echo "Usage: calopod-setup [--arms]" >&2; exit 64 ;;
+  1:--help|1:-h) echo "Usage: calopod-setup [--basic | --arms]"; exit 0 ;;
+  *) echo "Usage: calopod-setup [--basic | --arms]" >&2; exit 64 ;;
 esac
 script_root=$(CDPATH= cd -- "$(dirname "$0")" && pwd -P)
 test_mode=${CALOPOD_SETUP_TEST_MODE:-0}
@@ -291,6 +292,19 @@ configure_custom_arms() {
 }
 
 echo "Calopod guided setup"
+if [ "$setup_mode" = "choose" ]; then
+  echo "1) Basic: one full-details Main calendar and one Busy-only calendar."
+  echo "2) Custom Arms: choose sources, destinations, and Rules for each Arm."
+  while :; do
+    printf 'Setup choice [1]: ' >&2
+    IFS= read -r choice || fail "Setup was interrupted." 75
+    case "$choice" in
+      ''|1|basic|Basic) setup_mode=main-busy; break ;;
+      2|custom|Custom) setup_mode=arms; break ;;
+      *) echo "Choose 1 for Basic or 2 for Custom Arms." >&2 ;;
+    esac
+  done
+fi
 if [ "$setup_mode" = "arms" ]; then
   echo "This configures custom Arms using Calendars on this Mac."
   echo "Original events stay unchanged. Managed copies are never copied onward."
@@ -463,22 +477,7 @@ done
 printf 'Dry run: %s create, %s update, %s removal, %s repair, %s no-op, %s warning.\n' \
   "$creates" "$updates" "$removals" "$repairs" "$no_ops" "$warning_count"
 
-if [ "$setup_mode" = "arms" ]; then
-  echo "Automatic sync remains disabled. Apply and verify a manual sync before enabling it."
-else
-if [ "$was_enabled" = "true" ]; then
-  enable_prompt="Re-enable automatic sync now?"
-else
-  enable_prompt="Enable automatic sync now?"
-fi
-if prompt_yes "$enable_prompt"; then
-  enable_file="$temporary_root/enable.json"
-  run_json "$enable_file" agent enable
-else
-  echo "Automatic sync remains disabled."
-fi
-
-fi
+echo "Automatic sync remains disabled. Apply and verify a manual sync before enabling it."
 
 doctor_file="$temporary_root/doctor.json"
 if run_json "$doctor_file" doctor; then

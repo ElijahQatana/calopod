@@ -6,27 +6,28 @@ accept root access.
 Install the release without loading the background service:
 
 ```sh
-./install \
-  --interval-seconds 600 \
-  --jitter-seconds 30 \
-  --lookback-days 1 \
-  --horizon-days 30
+./install
 ```
+
+Fresh installs use a 600-second interval, 30-second jitter, 1-day lookback,
+and 30-day horizon. Upgrades preserve the schedule. Each scheduling flag is
+an optional override; run `./install --help` for the flags.
 
 The installer adds `calopod`, `calopod-setup`, and `calopod-uninstall` links under
 `~/.local/bin`. Add that directory to `PATH` if it is not already available in
 your shell.
 
-Configure Calendars on this Mac, Main, Busy, and automatic sync:
+Choose Basic or Custom Arms for Calendars on this Mac:
 
 ```sh
 calopod-setup
 ```
 
-The setup command asks before creating missing state or enabling automatic
-sync. Use fresh empty targets for the default Main and Busy setup. Use
-`calopod-setup --arms` to configure reciprocal routes between existing
-calendars. New state must not reuse copies from an old Calopod setup.
+Basic configures one full-details Main calendar and one Busy-only calendar,
+using fresh empty targets. Custom Arms configures individual routes between
+existing calendars. Use `--basic` or `--arms` to skip the choice. Setup asks
+before creating missing state and leaves automatic sync disabled until a
+manual sync is verified. New state must not reuse copies from an old setup.
 
 Remove installed executables and service files while preserving SQLite state
 and Keychain material:
