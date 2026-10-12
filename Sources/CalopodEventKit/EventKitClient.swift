@@ -159,7 +159,17 @@ private final class LiveEventKitGateway: EventKitGateway {
     }
 
     func requestFullAccess() async throws {
-        _ = try await store.requestFullAccessToEvents()
+        // The async overload isn't isolated, so older toolchains reject sending
+        // the main-actor store into it. The callback form stays on this actor.
+        _ = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Bool, Error>) in
+            store.requestFullAccessToEvents { granted, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: granted)
+                }
+            }
+        }
     }
 
     func calendars() -> [EventKitCalendarSnapshot] {
