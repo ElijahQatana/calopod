@@ -147,8 +147,11 @@ let package = Package(
             dependencies: [
                 "CalopodDomain",
                 "CalopodEventKit",
+                "CalopodGoogle",
+                "CalopodMicrosoft",
                 "CalopodProviders",
                 "CalopodStore",
+                "CalopodSync",
             ]
         ),
         .testTarget(
