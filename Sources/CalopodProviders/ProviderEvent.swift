@@ -27,6 +27,8 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
     public let start: Date?
     public let end: Date?
     public let isAllDay: Bool
+    /// Zone of an all-day event's dates, when the provider reports one.
+    public let timeZoneIdentifier: String?
     public let availability: ProviderAvailability
     public let tombstoneEvidence: ProviderTombstoneEvidence?
     public let isCancelled: Bool
@@ -66,7 +68,8 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
         organizer: EventParticipant? = nil,
         attendees: [EventParticipant] = [],
         responseMetadata: EventResponse? = nil,
-        tombstoneEvidence: ProviderTombstoneEvidence? = nil
+        tombstoneEvidence: ProviderTombstoneEvidence? = nil,
+        timeZoneIdentifier: String? = nil
     ) {
         self.provider = provider
         self.connectionID = connectionID
@@ -77,6 +80,7 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
         self.start = start
         self.end = end
         self.isAllDay = isAllDay
+        self.timeZoneIdentifier = timeZoneIdentifier
         self.availability = availability
         self.tombstoneEvidence = tombstoneEvidence
         self.isCancelled = isCancelled
@@ -119,7 +123,8 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
             organizer: organizer,
             attendees: attendees,
             responseMetadata: responseMetadata,
-            tombstoneEvidence: tombstoneEvidence
+            tombstoneEvidence: tombstoneEvidence,
+            timeZoneIdentifier: timeZoneIdentifier
         )
     }
 }

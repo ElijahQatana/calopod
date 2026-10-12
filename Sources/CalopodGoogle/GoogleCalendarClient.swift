@@ -374,8 +374,13 @@ public struct GoogleCalendarClient: Sendable {
         let start: [String: String]
         let end: [String: String]
         if payload.isAllDay {
-            start = ["date": GoogleDate.dateOnly(payload.startsAt)]
-            end = ["date": GoogleDate.dateOnly(payload.endsAt)]
+            let days = AllDayDate.days(
+                startsAt: payload.startsAt,
+                endsAt: payload.endsAt,
+                timeZoneIdentifier: payload.timeZoneIdentifier
+            )
+            start = ["date": days.start]
+            end = ["date": days.end]
         } else {
             start = ["dateTime": RFC3339.string(from: payload.startsAt)]
             end = ["dateTime": RFC3339.string(from: payload.endsAt)]
@@ -429,17 +434,6 @@ public struct GoogleCalendarClient: Sendable {
 private struct GoogleManagedEventResponse: Decodable {
     let id: String
     let etag: String?
-}
-
-private enum GoogleDate {
-    static func dateOnly(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
-    }
 }
 
 private func decodeBase32(_ value: String) -> Data? {
@@ -609,7 +603,8 @@ private struct GoogleEvent: Decodable {
             url: hangoutLink ?? conferenceData?.videoURI ?? htmlLink,
             organizer: organizer?.participant,
             attendees: (attendees ?? []).map(\.participant),
-            responseMetadata: currentUserResponse(scope: responseIdentityScope)
+            responseMetadata: currentUserResponse(scope: responseIdentityScope),
+            timeZoneIdentifier: start?.allDayZone(fallbackTimeZone: fallbackTimeZone)?.identifier
         )
     }
 
@@ -665,7 +660,8 @@ private struct GoogleEvent: Decodable {
                     ? nil
                     : visibility == "private" || visibility == "confidential",
                 location: location,
-                notes: description
+                notes: description,
+                timeZoneIdentifier: start?.allDayZone(fallbackTimeZone: fallbackTimeZone)?.identifier
             )
         } else {
             payload = nil
@@ -776,14 +772,13 @@ private struct GoogleEventTime: Decodable {
         guard let dateOnly else {
             return nil
         }
-        let zone = timeZone.flatMap(TimeZone.init(identifier:)) ?? fallbackTimeZone
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = zone
-        let parts = dateOnly.split(separator: "-").compactMap { Int($0) }
-        guard parts.count == 3 else {
-            return nil
-        }
-        return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
+        return AllDayDate.midnight(of: dateOnly, in: allDayZone(fallbackTimeZone: fallbackTimeZone) ?? fallbackTimeZone)
+    }
+
+    /// Zone an all-day date is read in; nil for timed events.
+    func allDayZone(fallbackTimeZone: TimeZone) -> TimeZone? {
+        guard dateOnly != nil else { return nil }
+        return timeZone.flatMap(TimeZone.init(identifier:)) ?? fallbackTimeZone
     }
 }
 

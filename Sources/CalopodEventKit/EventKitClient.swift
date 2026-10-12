@@ -230,7 +230,9 @@ private actor LiveEventKitGateway: EventKitGateway {
                                                     status: $0.participantStatus)
                     },
                     sourceType: sourceType($0.calendar.source.sourceType)
-                )
+                ),
+                // All-day dates are midnights in the Mac's zone.
+                timeZoneIdentifier: $0.isAllDay ? TimeZone.current.identifier : nil
             )
         }
     }
@@ -385,7 +387,8 @@ private actor LiveEventKitGateway: EventKitGateway {
                 title: event.title,
                 isPrivate: nil,
                 location: event.location,
-                notes: event.notes
+                notes: event.notes,
+                timeZoneIdentifier: event.isAllDay ? TimeZone.current.identifier : nil
             )
         } else {
             payload = nil
@@ -457,14 +460,30 @@ private actor LiveEventKitGateway: EventKitGateway {
 enum EventKitManagedEventPresentation {
     static func apply(_ request: ManagedEventWriteRequest, to event: EKEvent) throws {
         event.title = request.payload.title ?? ""
-        event.startDate = request.payload.startsAt
-        event.endDate = request.payload.endsAt
         event.isAllDay = request.payload.isAllDay
+        let (startDate, endDate) = dates(for: request.payload, in: .current)
+        event.startDate = startDate
+        event.endDate = endDate
         event.availability = availability(request.payload.availability)
         event.location = request.payload.location
         event.notes = request.payload.notes
         event.alarms = nil
         event.url = try OwnershipMarkerCodec.markerURL(request.provenance)
+    }
+
+    /// All-day dates are re-read as midnights in the Mac's zone, which is
+    /// how EventKit stores them, so the day matches the source's own day.
+    static func dates(for payload: DesiredEventPayload, in zone: TimeZone) -> (Date, Date) {
+        guard payload.isAllDay else { return (payload.startsAt, payload.endsAt) }
+        let days = AllDayDate.days(
+            startsAt: payload.startsAt,
+            endsAt: payload.endsAt,
+            timeZoneIdentifier: payload.timeZoneIdentifier
+        )
+        return (
+            AllDayDate.midnight(of: days.start, in: zone) ?? payload.startsAt,
+            AllDayDate.midnight(of: days.end, in: zone) ?? payload.endsAt
+        )
     }
 
     private static func availability(_ value: String) -> EKEventAvailability {

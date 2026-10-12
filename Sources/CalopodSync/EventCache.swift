@@ -221,7 +221,8 @@ public enum EventNormalizer {
                 organizer: event.organizer,
                 attendees: event.attendees,
                 currentUserResponse: event.currentUserResponse,
-                providerSeriesID: event.seriesID
+                providerSeriesID: event.seriesID,
+                timeZoneIdentifier: event.isAllDay ? event.timeZoneIdentifier : nil
             )
             observations.append(instance)
             if isInRange { instances.append(instance) }

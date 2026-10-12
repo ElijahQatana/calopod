@@ -36,6 +36,8 @@ public struct DesiredEventPayload: Codable, Equatable, Sendable {
     public let startsAt: Date
     public let endsAt: Date
     public let isAllDay: Bool
+    /// Zone the all-day dates were read in. Only set for all-day events.
+    public let timeZoneIdentifier: String?
     public let availability: String
     public let title: String?
     public let isPrivate: Bool?
@@ -50,11 +52,13 @@ public struct DesiredEventPayload: Codable, Equatable, Sendable {
         title: String?,
         isPrivate: Bool?,
         location: String? = nil,
-        notes: String? = nil
+        notes: String? = nil,
+        timeZoneIdentifier: String? = nil
     ) {
         self.startsAt = startsAt
         self.endsAt = endsAt
         self.isAllDay = isAllDay
+        self.timeZoneIdentifier = timeZoneIdentifier
         self.availability = availability
         self.title = title
         self.isPrivate = isPrivate

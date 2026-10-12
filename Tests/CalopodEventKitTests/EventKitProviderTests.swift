@@ -419,3 +419,29 @@ private func eventKitFullDetailsRequest() -> ManagedEventWriteRequest {
         )
     )
 }
+
+@Suite("EventKit all-day dates")
+@MainActor
+struct EventKitAllDayTests {
+    @Test("A source day lands on the same day in the Mac's zone", arguments: [
+        "Asia/Tokyo", "Europe/Paris", "America/Los_Angeles",
+    ])
+    func sameDay(sourceZone: String) throws {
+        var source = Calendar(identifier: .gregorian)
+        source.timeZone = TimeZone(identifier: sourceZone)!
+        let start = source.date(from: DateComponents(year: 2026, month: 10, day: 5))!
+        let payload = DesiredEventPayload(
+            startsAt: start, endsAt: source.date(byAdding: .day, value: 1, to: start)!,
+            isAllDay: true, availability: "busy", title: "Busy", isPrivate: nil,
+            timeZoneIdentifier: sourceZone
+        )
+        let mac = TimeZone(identifier: "America/New_York")!
+
+        let (first, last) = EventKitManagedEventPresentation.dates(for: payload, in: mac)
+
+        var local = Calendar(identifier: .gregorian)
+        local.timeZone = mac
+        #expect(local.dateComponents([.year, .month, .day, .hour], from: first) == DateComponents(year: 2026, month: 10, day: 5, hour: 0))
+        #expect(local.dateComponents([.year, .month, .day, .hour], from: last) == DateComponents(year: 2026, month: 10, day: 6, hour: 0))
+    }
+}

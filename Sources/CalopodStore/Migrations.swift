@@ -15,6 +15,7 @@ extension CalopodDatabase {
         "v11_inbox_context_settings",
         "v12_inbox_rsvp_actions",
         "v13_inbox_review_sessions",
+        "v14_all_day_time_zone",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -337,6 +338,12 @@ extension CalopodDatabase {
                     );
                 END;
                 """)
+        }
+
+        migrator.registerMigration("v14_all_day_time_zone") { database in
+            try database.alter(table: "normalized_instances") { table in
+                table.add(column: "time_zone", .text)
+            }
         }
 
         return migrator

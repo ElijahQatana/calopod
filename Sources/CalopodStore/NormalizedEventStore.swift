@@ -20,6 +20,7 @@ public struct StoredNormalizedInstance: Codable, Equatable, Sendable {
     public let startsAt: Date
     public let endsAt: Date
     public let isAllDay: Bool
+    public let timeZoneIdentifier: String?
     public let availability: String
     public let isCancelled: Bool
     public let isPrivate: Bool
@@ -54,7 +55,8 @@ public struct StoredNormalizedInstance: Codable, Equatable, Sendable {
         organizer: EventParticipant? = nil,
         attendees: [EventParticipant] = [],
         currentUserResponse: EventResponse = .unavailable,
-        providerSeriesID: String? = nil
+        providerSeriesID: String? = nil,
+        timeZoneIdentifier: String? = nil
     ) {
         self.sourceKeyHash = sourceKeyHash
         self.connectionID = connectionID
@@ -65,6 +67,7 @@ public struct StoredNormalizedInstance: Codable, Equatable, Sendable {
         self.startsAt = startsAt
         self.endsAt = endsAt
         self.isAllDay = isAllDay
+        self.timeZoneIdentifier = timeZoneIdentifier
         self.availability = availability
         self.isCancelled = isCancelled
         self.isPrivate = isPrivate
@@ -164,8 +167,8 @@ extension LocalStateRepository {
                              provider_event_id, recurrence_id, starts_at, ends_at,
                              is_all_day, availability, is_cancelled, content_fingerprint,
                              seen_generation, title, is_private, provider_updated_at,
-                             location, notes, url, organizer_json, attendees_json, response_json, provider_series_id)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             location, notes, url, organizer_json, attendees_json, response_json, provider_series_id, time_zone)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(source_key_hash) DO UPDATE SET
                             connection_id = excluded.connection_id,
                             calendar_binding_id = excluded.calendar_binding_id,
@@ -187,7 +190,8 @@ extension LocalStateRepository {
                             organizer_json = excluded.organizer_json,
                             attendees_json = excluded.attendees_json,
                             response_json = excluded.response_json,
-                            provider_series_id = excluded.provider_series_id
+                            provider_series_id = excluded.provider_series_id,
+                            time_zone = excluded.time_zone
                         """,
                     arguments: [
                         instance.sourceKeyHash,
@@ -212,6 +216,7 @@ extension LocalStateRepository {
                         try encodeEventDetails(instance.attendees),
                         try encodeEventDetails(instance.currentUserResponse),
                         instance.providerSeriesID,
+                        instance.timeZoneIdentifier,
                     ]
                 )
             }
@@ -296,7 +301,7 @@ extension LocalStateRepository {
                            provider_event_id, recurrence_id, starts_at, ends_at,
                            is_all_day, availability, is_cancelled, content_fingerprint,
                            title, is_private, provider_updated_at,
-                           location, notes, url, organizer_json, attendees_json, response_json, provider_series_id
+                           location, notes, url, organizer_json, attendees_json, response_json, provider_series_id, time_zone
                     FROM normalized_instances
                     WHERE calendar_binding_id IN (\(normalizedEventQuestionMarks(count: calendarBindingIDs.count)))
                       AND ends_at > ?
@@ -381,7 +386,8 @@ func normalizedInstance(_ row: Row) -> StoredNormalizedInstance {
         organizer: decodeEventDetails(row["organizer_json"]),
         attendees: decodeEventDetails(row["attendees_json"]) ?? [],
         currentUserResponse: decodeEventDetails(row["response_json"]) ?? .unavailable,
-        providerSeriesID: row["provider_series_id"]
+        providerSeriesID: row["provider_series_id"],
+        timeZoneIdentifier: row["time_zone"]
     )
 }
 

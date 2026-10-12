@@ -284,12 +284,15 @@ public enum SyncPlanner {
         payload: DesiredEventPayload,
         ruleMode: ArmRuleMode
     ) -> String {
-        digestHex(
+        // All-day events compare by calendar day, so a mirror read back in
+        // the target calendar's zone still matches its source.
+        let (start, end) = allDayIdentity(payload)
+        return digestHex(
             fields: [
                 "calopod-desired-v1",
                 ruleMode.rawValue,
-                dateIdentity(payload.startsAt),
-                dateIdentity(payload.endsAt),
+                start,
+                end,
                 payload.isAllDay ? "1" : "0",
                 payload.availability,
                 payload.title ?? "",
@@ -297,6 +300,17 @@ public enum SyncPlanner {
                 payload.location ?? "",
                 payload.notes ?? "",
             ]
+        )
+    }
+
+    private static func allDayIdentity(_ payload: DesiredEventPayload) -> (String, String) {
+        guard payload.isAllDay else {
+            return (dateIdentity(payload.startsAt), dateIdentity(payload.endsAt))
+        }
+        return AllDayDate.days(
+            startsAt: payload.startsAt,
+            endsAt: payload.endsAt,
+            timeZoneIdentifier: payload.timeZoneIdentifier
         )
     }
 
@@ -315,7 +329,8 @@ public enum SyncPlanner {
                 title: "Busy",
                 isPrivate: nil,
                 location: nil,
-                notes: nil
+                notes: nil,
+                timeZoneIdentifier: source.isAllDay ? source.timeZoneIdentifier : nil
             )
         case .fullDetails:
             DesiredEventPayload(
@@ -326,7 +341,8 @@ public enum SyncPlanner {
                 title: source.title,
                 isPrivate: targetProvider == .eventKit ? nil : source.isPrivate,
                 location: source.location,
-                notes: fullDetailsNotes(source)
+                notes: fullDetailsNotes(source),
+                timeZoneIdentifier: source.isAllDay ? source.timeZoneIdentifier : nil
             )
         }
     }
