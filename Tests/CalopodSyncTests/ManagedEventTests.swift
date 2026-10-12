@@ -27,6 +27,8 @@ struct ManagedEventOwnershipTests {
 
         try OwnershipMarkerCodec.verify(decoded, key: key)
         #expect(decoded == marker)
+        #expect(marker.schemaVersion == 1)
+        #expect(marker.authenticationTag == "6s5Y92qncxvb2RSURs5QvHJmlSiU6wThsC_jVVr5hwA")
 
         let changed = ManagedEventProvenance(
             configurationID: marker.configurationID,
@@ -36,6 +38,30 @@ struct ManagedEventOwnershipTests {
             ruleMode: .fullDetails,
             ownershipKeyID: marker.ownershipKeyID,
             authenticationTag: marker.authenticationTag
+        )
+        #expect(throws: OwnershipMarkerError.signatureMismatch) {
+            try OwnershipMarkerCodec.verify(changed, key: key)
+        }
+    }
+
+    @Test("Versioned EventKit markers sign the target binding")
+    func targetBoundMarker() throws {
+        let key = OwnershipKeyMaterial(id: "synthetic-key", bytes: Data(repeating: 7, count: 32))
+        let marker = try OwnershipMarkerCodec.sign(
+            configurationID: "synthetic-configuration", armID: "synthetic-arm",
+            mirrorKey: "synthetic-mirror", sourceKeyHash: "synthetic-source",
+            ruleMode: .busy, key: key, targetBindingID: "synthetic-target"
+        )
+        let url = try OwnershipMarkerCodec.markerURL(marker)
+        #expect(url.pathComponents[1] == "v2")
+        let decoded = try OwnershipMarkerCodec.marker(from: url)
+        #expect(decoded == marker)
+        try OwnershipMarkerCodec.verify(decoded, key: key)
+        let changed = ManagedEventProvenance(
+            schemaVersion: marker.schemaVersion, configurationID: marker.configurationID,
+            armID: marker.armID, mirrorKey: marker.mirrorKey, sourceKeyHash: marker.sourceKeyHash,
+            ruleMode: marker.ruleMode, ownershipKeyID: marker.ownershipKeyID,
+            authenticationTag: marker.authenticationTag, targetBindingID: "other-target"
         )
         #expect(throws: OwnershipMarkerError.signatureMismatch) {
             try OwnershipMarkerCodec.verify(changed, key: key)
@@ -144,6 +170,8 @@ struct ManagedEventOwnershipTests {
         )
 
         try OwnershipMarkerCodec.verify(request.provenance, key: key)
+        #expect(request.provenance.schemaVersion == 2)
+        #expect(request.provenance.targetBindingID == arm.targetBindingID)
         #expect(request.payload.title == "Busy")
         #expect(request.payload.isPrivate == nil)
         #expect(mapping.providerEventID == "provider-created")

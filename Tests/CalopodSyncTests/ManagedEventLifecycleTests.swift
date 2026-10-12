@@ -31,7 +31,7 @@ struct ManagedEventLifecycleTests {
 
         let observation = try #require(
             ManagedTargetObserver(secretStore: fixture.secrets)
-                .observations(snapshots: [snapshot], arm: fixture.arm, mappings: [])
+                .observations(snapshots: [snapshot], arm: fixture.arm, mappings: [lifecycleMapping(id: "one")])
                 .first
         )
 
@@ -40,6 +40,108 @@ struct ManagedEventLifecycleTests {
         #expect(observation.providerVersion == "v1")
         #expect(observation.contentFingerprint == item.desiredFingerprint)
         #expect(observation.ownershipKeyID == key.id)
+    }
+
+    @Test("Copied EventKit markers block repair without provider writes", arguments: [1, 2])
+    func copiedEventKitMarker(version: Int) async throws {
+        let fixture = try LifecycleFixture()
+        let mapping = lifecycleMapping(id: "one")
+        try fixture.repository.saveMirrorMapping(mapping)
+        let key = try OwnershipKeyVault(secretStore: fixture.secrets)
+            .loadOrCreate(configurationID: fixture.arm.configurationID)
+        let item = lifecyclePlanItem(id: "one", action: .create)
+        let signed = try OwnershipMarkerCodec.sign(
+            configurationID: fixture.arm.configurationID,
+            armID: fixture.arm.id,
+            mirrorKey: item.mirrorKey,
+            sourceKeyHash: item.sourceKeyHash!,
+            ruleMode: fixture.arm.ruleMode,
+            key: key,
+            targetBindingID: version == 2 ? fixture.arm.targetBindingID : nil
+        )
+        let marker = try OwnershipMarkerCodec.marker(from: OwnershipMarkerCodec.markerURL(signed))
+        let snapshots = [mapping.providerEventID, "copied-event"].map {
+            ManagedEventSnapshot(
+                providerEventID: $0, providerVersion: "v1", payload: item.payload,
+                markerStatus: .parsed, provenance: marker
+            )
+        }
+        let observer = ManagedTargetObserver(secretStore: fixture.secrets)
+        let window = try SyncWindow(
+            start: Date(timeIntervalSince1970: 1_000),
+            end: Date(timeIntervalSince1970: 8_000)
+        )
+        let source = lifecycleSource(id: "one", startsAt: 2_000)
+        let noOpRecorder = LifecycleMutationRecorder()
+        let service = ManagedEventLifecycleService(repository: fixture.repository, secretStore: fixture.secrets)
+        for _ in 0..<2 {
+            let currentMappings = try fixture.repository.mirrorMappings(armID: fixture.arm.id)
+            let current = try observer.observations(
+                snapshots: [snapshots[0]], arm: fixture.arm, mappings: currentMappings
+            )
+            let plan = SyncPlanner.plan(
+                arm: fixture.arm, targetProvider: .eventKit, sources: [source], mappings: currentMappings,
+                targetEvents: current, window: window, sourceSnapshotComplete: true
+            )
+            #expect(plan.items.map(\.action) == [.noOp])
+            let summary = try await service.apply(items: plan.items, arm: fixture.arm, observations: current) { mutation in
+                await noOpRecorder.record(mutation)
+                return .deleted
+            }
+            #expect(summary.providerWriteCount == 0)
+        }
+        #expect(await noOpRecorder.mutations.isEmpty)
+        let currentMappings = try fixture.repository.mirrorMappings(armID: fixture.arm.id)
+        for mapped in [[mapping], []] {
+            let observations = try observer.observations(
+                snapshots: snapshots, arm: fixture.arm, mappings: mapped
+            )
+            #expect(observations.first { $0.providerEventID == "copied-event" }?.ownershipStatus == .wrongTarget)
+            let plan = SyncPlanner.plan(
+                arm: fixture.arm, targetProvider: .eventKit, sources: [source], mappings: mapped,
+                targetEvents: observations, window: window, sourceSnapshotComplete: true
+            )
+            #expect(plan.items.map(\.reason) == [.ownershipUnverified])
+            let recorder = LifecycleMutationRecorder()
+            await #expect(throws: ManagedEventLifecycleError.ambiguousRepair(.ownershipUnverified)) {
+                try await ManagedEventLifecycleService(
+                    repository: fixture.repository, secretStore: fixture.secrets
+                ).apply(items: plan.items, arm: fixture.arm, observations: observations) { mutation in
+                    await recorder.record(mutation)
+                    return .deleted
+                }
+            }
+            #expect(await recorder.mutations.isEmpty)
+            #expect(try fixture.repository.mirrorMappings(armID: fixture.arm.id) == currentMappings)
+        }
+    }
+
+    @Test("EventKit ownership rejects a marker for another target or mapped source")
+    func mismatchedEventKitTarget() throws {
+        let fixture = try LifecycleFixture()
+        let mapping = lifecycleMapping(id: "one")
+        let key = try OwnershipKeyVault(secretStore: fixture.secrets)
+            .loadOrCreate(configurationID: fixture.arm.configurationID)
+        let marker = try OwnershipMarkerCodec.sign(
+            configurationID: fixture.arm.configurationID, armID: fixture.arm.id,
+            mirrorKey: mapping.mirrorKey, sourceKeyHash: mapping.sourceKeyHash,
+            ruleMode: fixture.arm.ruleMode, key: key, targetBindingID: "other-target"
+        )
+        let snapshot = ManagedEventSnapshot(
+            providerEventID: mapping.providerEventID, providerVersion: "v1",
+            payload: lifecyclePayload(), markerStatus: .parsed, provenance: marker
+        )
+        let observer = ManagedTargetObserver(secretStore: fixture.secrets)
+        let observations = try observer.observations(snapshots: [snapshot], arm: fixture.arm, mappings: [mapping])
+        #expect(observations.first?.ownershipStatus == .wrongTarget)
+        let otherMapping = StoredMirrorMapping(
+            mirrorKey: lifecycleMapping(id: "two").mirrorKey, armID: mapping.armID,
+            sourceKeyHash: "source-two", providerEventID: mapping.providerEventID,
+            providerVersion: "v1", desiredFingerprint: "old", ownershipKeyID: key.id,
+            updatedAt: mapping.updatedAt
+        )
+        let mismatched = try observer.observations(snapshots: [snapshot], arm: fixture.arm, mappings: [otherMapping])
+        #expect(mismatched.first?.ownershipStatus == .invalidMarker)
     }
 
     @Test("Missing markers on mapped targets are never treated as owned")

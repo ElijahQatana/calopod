@@ -1,3 +1,4 @@
+import CalopodDomain
 import CalopodProviders
 import CalopodStore
 import Foundation
@@ -25,11 +26,12 @@ public struct ManagedTargetObserver: Sendable {
     public func observations(
         snapshots: [ManagedEventSnapshot],
         arm: StoredArm,
-        mappings: [StoredMirrorMapping]
+        mappings: [StoredMirrorMapping],
+        targetProvider: ProviderKind = .eventKit
     ) throws -> [TargetEventObservation] {
         let ownershipKey = try keyVault.load(configurationID: arm.configurationID)
         let mappingsByProviderID = Dictionary(
-            mappings.map { ($0.providerEventID, $0) },
+            mappings.filter { $0.armID == arm.id }.map { ($0.providerEventID, $0) },
             uniquingKeysWith: { first, _ in first }
         )
 
@@ -118,14 +120,19 @@ public struct ManagedTargetObserver: Sendable {
                 let mappedMarkerMismatch = mapped.map {
                     $0.mirrorKey != marker.mirrorKey || $0.sourceKeyHash != marker.sourceKeyHash
                 } ?? false
-                if marker.schemaVersion != 1
+                if ![1, 2].contains(marker.schemaVersion)
                     || marker.mirrorKey != expectedMirror
                     || mappedMarkerMismatch {
                     status = .invalidMarker
                 } else if let ownershipKey,
                           ownershipKey.id == marker.ownershipKeyID,
                           (try? OwnershipMarkerCodec.verify(marker, key: ownershipKey)) != nil {
-                    status = .verified
+                    if (marker.schemaVersion == 2 && marker.targetBindingID != arm.targetBindingID)
+                        || (targetProvider == .eventKit && mapped == nil) {
+                        status = .wrongTarget
+                    } else {
+                        status = .verified
+                    }
                 } else if ownershipKey == nil {
                     status = .unknownConfiguration
                 } else {

@@ -157,6 +157,9 @@ public struct SyncEngine: Sendable {
                   let targetConnection = try repository.connection(id: target.connectionID) else {
                 throw CalopodRuntimeError.invalidConfiguration("arm-target")
             }
+            guard let targetProvider = ProviderKind(rawValue: targetConnection.provider) else {
+                throw CalopodRuntimeError.invalidConfiguration("target-provider")
+            }
             // Checked during planning (not just before applying) so a
             // non-preferred device's dry-run plan and its eventual apply
             // guard (below) agree on which Arms are blocked, rather than a
@@ -195,7 +198,8 @@ public struct SyncEngine: Sendable {
                 observations = try observer.observations(
                     snapshots: snapshots,
                     arm: arm,
-                    mappings: mappings
+                    mappings: mappings,
+                    targetProvider: targetProvider
                 )
                 targetComplete = true
             } catch {
@@ -207,9 +211,6 @@ public struct SyncEngine: Sendable {
                 )
             }
             observationsByArm[arm.id] = observations
-            guard let targetProvider = ProviderKind(rawValue: targetConnection.provider) else {
-                throw CalopodRuntimeError.invalidConfiguration("target-provider")
-            }
             let plan = SyncPlanner.plan(
                 arm: arm,
                 targetProvider: targetProvider,
