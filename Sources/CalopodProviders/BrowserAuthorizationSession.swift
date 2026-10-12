@@ -42,12 +42,15 @@ public final class LoopbackBrowserAuthorizationSession: BrowserAuthorizationSess
     private let timeoutSeconds: UInt64
     private let redirectHost: String
     private let callbackPath: String
+    private let openURL: @Sendable (URL) -> Bool
 
     public init(
         timeoutSeconds: UInt64 = 300,
         redirectHost: String = "127.0.0.1",
-        callbackPath: String = "/oauth/callback"
+        callbackPath: String = "/oauth/callback",
+        openURL: @escaping @Sendable (URL) -> Bool = { NSWorkspace.shared.open($0) }
     ) {
+        self.openURL = openURL
         self.timeoutSeconds = timeoutSeconds
         self.redirectHost = redirectHost
         self.callbackPath = callbackPath.hasPrefix("/") ? callbackPath : "/\(callbackPath)"
@@ -58,6 +61,7 @@ public final class LoopbackBrowserAuthorizationSession: BrowserAuthorizationSess
     ) async throws -> BrowserAuthorizationResult {
         let redirectHost = self.redirectHost
         let callbackPath = self.callbackPath
+        let openURL = self.openURL
         return try await withCheckedThrowingContinuation { continuation in
             let queue = DispatchQueue(label: "com.calopod.oauth-loopback")
             let parameters = NWParameters.tcp
@@ -87,7 +91,7 @@ public final class LoopbackBrowserAuthorizationSession: BrowserAuthorizationSess
                                 BrowserAuthorizationContext(redirectURI: callback, state: state)
                             )
                             DispatchQueue.main.async {
-                                if !NSWorkspace.shared.open(url) {
+                                if !openURL(url) {
                                     coordinator.finish(.failure(ProviderFailure.authorizationRequired))
                                 }
                             }
@@ -108,46 +112,27 @@ public final class LoopbackBrowserAuthorizationSession: BrowserAuthorizationSess
                     connection.start(queue: queue)
                     connection.receive(minimumIncompleteLength: 1, maximumLength: 16_384) {
                         data, _, _, error in
-                        if let error {
-                            coordinator.finish(.failure(error))
-                            return
-                        }
-                        guard let data,
-                              let request = String(data: data, encoding: .utf8),
-                              let target = request.split(separator: " ").dropFirst().first,
-                              let callback = URL(string: "http://\(redirectHost)\(target)"),
-                              let components = URLComponents(url: callback, resolvingAgainstBaseURL: false),
-                              components.path == callbackPath,
+                        // Anything that is not the real callback is answered and
+                        // dropped, so a stray local connection cannot end the flow.
+                        guard error == nil,
+                              let data,
+                              let values = Self.callbackValues(
+                                  in: data,
+                                  redirectHost: redirectHost,
+                                  callbackPath: callbackPath,
+                                  state: state
+                              ),
                               let redirectURI = coordinator.redirectURI else {
-                            coordinator.finish(.failure(ProviderFailure.invalidResponse))
+                            Self.reply("404 Not Found", body: "Not found.", on: connection)
                             return
                         }
 
-                        let values = Dictionary(
-                            uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") }
-                        )
-                        let responseBody = "Authorization received. You can close this tab."
-                        let response = """
-                            HTTP/1.1 200 OK\r
-                            Content-Type: text/plain; charset=utf-8\r
-                            Content-Length: \(responseBody.utf8.count)\r
-                            Connection: close\r
-                            \r
-                            \(responseBody)
-                            """
-                        connection.send(
-                            content: Data(response.utf8),
-                            completion: .contentProcessed { _ in connection.cancel() }
+                        Self.reply(
+                            "200 OK",
+                            body: "Authorization received. You can close this tab.",
+                            on: connection
                         )
 
-                        // The state value round-trips through the provider
-                        // unchanged; requiring it to match is what stops a
-                        // stray or malicious request to this loopback port
-                        // from being accepted as a real authorization result.
-                        guard values["state"] == state else {
-                            coordinator.finish(.failure(ProviderFailure.invalidResponse))
-                            return
-                        }
                         if values["error"] == "access_denied" {
                             coordinator.finish(.failure(ProviderFailure.consentDenied))
                             return
@@ -177,6 +162,45 @@ public final class LoopbackBrowserAuthorizationSession: BrowserAuthorizationSess
                 continuation.resume(throwing: error)
             }
         }
+    }
+    /// Returns the query values of a request for the callback path whose
+    /// `state` matches, or nil for anything else. The state round-trips
+    /// through the provider unchanged, so requiring it is what stops an
+    /// unrelated request from being taken as the authorization result.
+    /// Repeated keys keep their first value.
+    static func callbackValues(
+        in request: Data,
+        redirectHost: String,
+        callbackPath: String,
+        state: String
+    ) -> [String: String]? {
+        guard let text = String(data: request, encoding: .utf8),
+              let target = text.split(separator: " ").dropFirst().first,
+              let url = URL(string: "http://\(redirectHost)\(target)"),
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              components.path == callbackPath else {
+            return nil
+        }
+        var values: [String: String] = [:]
+        for item in components.queryItems ?? [] where values[item.name] == nil {
+            values[item.name] = item.value ?? ""
+        }
+        return values["state"] == state ? values : nil
+    }
+
+    private static func reply(_ status: String, body: String, on connection: NWConnection) {
+        let response = """
+            HTTP/1.1 \(status)\r
+            Content-Type: text/plain; charset=utf-8\r
+            Content-Length: \(body.utf8.count)\r
+            Connection: close\r
+            \r
+            \(body)
+            """
+        connection.send(
+            content: Data(response.utf8),
+            completion: .contentProcessed { _ in connection.cancel() }
+        )
     }
 }
 
