@@ -262,7 +262,13 @@ install_service() {
   [ -d "$host_source" ] || fail "Build the EventKit host before installing it." 66
   [ -x "$host_source/Contents/MacOS/CalopodEventKitHost" ] \
     || fail "The EventKit host executable is missing." 66
-  if [ "$test_mode" != "1" ]; then
+  if [ "$test_mode" = "1" ]; then
+    # Test mode skips the signature check, so only allow hosts inside the test root.
+    case "$host_source" in
+      "$(dirname "$home_root")"/*) ;;
+      *) fail "The test host is outside the expected temporary directory." 78 ;;
+    esac
+  else
     codesign --verify --deep --strict "$host_source" >/dev/null 2>&1 \
       || fail "The EventKit host signature is invalid." 65
   fi

@@ -147,6 +147,29 @@ for failure_point in after-staging after-backup after-service after-plist; do
   [ "$(cat "$state_root/keychain-sentinel")" = "keychain-sentinel" ]
 done
 
+outside_host=$(mktemp -d "${TMPDIR:-/tmp}/calopod-outside-host.XXXXXX")
+mkdir -p "$outside_host/Calopod EventKit Host.app/Contents/MacOS"
+printf '#!/bin/sh\nexit 0\n' > "$outside_host/Calopod EventKit Host.app/Contents/MacOS/CalopodEventKitHost"
+chmod 700 "$outside_host/Calopod EventKit Host.app/Contents/MacOS/CalopodEventKitHost"
+outside_error=$(env \
+  CALOPOD_SERVICE_TEST_MODE=1 \
+  CALOPOD_SERVICE_TEST_HOME="$test_home" \
+  CALOPOD_SERVICE_TEST_CLI_SOURCE="$cli_source" \
+  CALOPOD_SERVICE_TEST_AGENT_SOURCE="$agent_source" \
+  CALOPOD_SERVICE_TEST_HOST_SOURCE="$outside_host/Calopod EventKit Host.app" \
+  CALOPOD_SERVICE_RELEASE_SOURCE="$release_source" \
+  "$repository_root/Scripts/calopod-service.sh" install \
+  --interval-seconds 600 --jitter-seconds 30 --lookback-days 1 --horizon-days 30 2>&1 >/dev/null) && {
+  echo "Test mode accepted a host outside the test directory." >&2
+  rm -rf "$outside_host"
+  exit 1
+}
+case "$outside_error" in
+  *"outside the expected temporary directory"*) ;;
+  *) echo "Unexpected test-mode failure: $outside_error" >&2; exit 1 ;;
+esac
+rm -rf "$outside_host"
+
 if run_service install \
   --interval-seconds 0 \
   --jitter-seconds 30 \

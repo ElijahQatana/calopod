@@ -705,7 +705,8 @@ public func syncFailureCategory(_ error: Error) -> String {
     if let runtime = error as? CalopodRuntimeError {
         return switch runtime {
         case .busy: "busy"
-        case .missingEventKitHost, .invalidEventKitHostPath: "eventkit-host"
+        case .missingEventKitHost, .invalidEventKitHostPath, .eventKitHostUntrusted:
+            "eventkit-host"
         case .eventKitHostFailed: "eventkit-host-response"
         case .eventKitHostTimedOut: "eventkit-host-timeout"
         case .missingGoogleClientID, .missingMicrosoftClientID, .invalidConfiguration:
