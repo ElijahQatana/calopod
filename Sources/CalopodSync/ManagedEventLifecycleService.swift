@@ -370,9 +370,8 @@ public struct ManagedEventLifecycleService: Sendable {
     }
 
     /// Builds the provider write payload plus a signed ownership marker.
-    /// The marker is what lets a later sync (possibly on another device)
-    /// recognize this exact event as Calopod's own without relying on the
-    /// provider's event ID, which can change.
+    /// EventKit markers sign the target binding and require the stored
+    /// provider event ID when a later sync verifies ownership.
     private func writeRequest(
         item: SyncPlanItem,
         arm: StoredArm
@@ -384,13 +383,16 @@ public struct ManagedEventLifecycleService: Sendable {
             throw ManagedEventLifecycleError.invalidPlanItem
         }
         let key = try keyVault.loadOrCreate(configurationID: arm.configurationID)
+        let binding = try repository.calendarBinding(id: arm.targetBindingID)
+        let connection = try binding.flatMap { try repository.connection(id: $0.connectionID) }
         let marker = try OwnershipMarkerCodec.sign(
             configurationID: arm.configurationID,
             armID: arm.id,
             mirrorKey: item.mirrorKey,
             sourceKeyHash: sourceKeyHash,
             ruleMode: arm.ruleMode,
-            key: key
+            key: key,
+            targetBindingID: connection?.provider == "eventkit" ? arm.targetBindingID : nil
         )
         return ManagedEventWriteRequest(
             desiredFingerprint: desiredFingerprint,

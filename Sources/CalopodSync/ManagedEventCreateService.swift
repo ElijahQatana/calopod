@@ -36,13 +36,16 @@ public struct ManagedEventCreateService: Sendable {
             throw ManagedEventCreateError.invalidPlanItem
         }
         let ownershipKey = try keyVault.loadOrCreate(configurationID: arm.configurationID)
+        let binding = try repository.calendarBinding(id: arm.targetBindingID)
+        let connection = try binding.flatMap { try repository.connection(id: $0.connectionID) }
         let provenance = try OwnershipMarkerCodec.sign(
             configurationID: arm.configurationID,
             armID: arm.id,
             mirrorKey: item.mirrorKey,
             sourceKeyHash: sourceKeyHash,
             ruleMode: arm.ruleMode,
-            key: ownershipKey
+            key: ownershipKey,
+            targetBindingID: connection?.provider == "eventkit" ? arm.targetBindingID : nil
         )
         let result = try await perform(
             ManagedEventWriteRequest(

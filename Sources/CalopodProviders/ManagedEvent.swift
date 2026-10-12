@@ -4,8 +4,8 @@ import CryptoKit
 import Foundation
 
 /// The signed ownership marker written onto every managed event, proving it
-/// belongs to a specific configuration and Arm without relying on a
-/// provider-assigned event ID. Decoded from the target event's marker field
+/// belongs to a specific configuration and Arm. EventKit ownership also
+/// requires the mapped provider event ID. Decoded from the target event's marker field
 /// and cryptographically verified by `OwnershipMarkerCodec.verify` before
 /// anything downstream trusts it.
 public struct ManagedEventProvenance: Codable, Equatable, Sendable {
@@ -17,6 +17,7 @@ public struct ManagedEventProvenance: Codable, Equatable, Sendable {
     public let ruleMode: ArmRuleMode
     public let ownershipKeyID: String
     public let authenticationTag: String
+    public let targetBindingID: String?
 
     public init(
         schemaVersion: Int = 1,
@@ -26,7 +27,8 @@ public struct ManagedEventProvenance: Codable, Equatable, Sendable {
         sourceKeyHash: String,
         ruleMode: ArmRuleMode,
         ownershipKeyID: String,
-        authenticationTag: String
+        authenticationTag: String,
+        targetBindingID: String? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.configurationID = configurationID
@@ -36,6 +38,7 @@ public struct ManagedEventProvenance: Codable, Equatable, Sendable {
         self.ruleMode = ruleMode
         self.ownershipKeyID = ownershipKeyID
         self.authenticationTag = authenticationTag
+        self.targetBindingID = targetBindingID
     }
 }
 
@@ -202,30 +205,35 @@ public enum OwnershipMarkerCodec {
         mirrorKey: String,
         sourceKeyHash: String,
         ruleMode: ArmRuleMode,
-        key: OwnershipKeyMaterial
+        key: OwnershipKeyMaterial,
+        targetBindingID: String? = nil
     ) throws -> ManagedEventProvenance {
         guard key.bytes.count >= 32 else { throw OwnershipMarkerError.invalidKey }
+        let schemaVersion = targetBindingID == nil ? 1 : 2
         let fields = canonicalFields(
-            schemaVersion: 1,
-            configurationID: configurationID,
-            armID: armID,
-            mirrorKey: mirrorKey,
-            sourceKeyHash: sourceKeyHash,
-            ruleMode: ruleMode,
-            ownershipKeyID: key.id
-        )
-        let authentication = HMAC<SHA256>.authenticationCode(
-            for: Data(fields.utf8),
-            using: SymmetricKey(data: key.bytes)
-        )
-        return ManagedEventProvenance(
+            schemaVersion: schemaVersion,
             configurationID: configurationID,
             armID: armID,
             mirrorKey: mirrorKey,
             sourceKeyHash: sourceKeyHash,
             ruleMode: ruleMode,
             ownershipKeyID: key.id,
-            authenticationTag: base64URL(Data(authentication))
+            targetBindingID: targetBindingID
+        )
+        let authentication = HMAC<SHA256>.authenticationCode(
+            for: Data(fields.utf8),
+            using: SymmetricKey(data: key.bytes)
+        )
+        return ManagedEventProvenance(
+            schemaVersion: schemaVersion,
+            configurationID: configurationID,
+            armID: armID,
+            mirrorKey: mirrorKey,
+            sourceKeyHash: sourceKeyHash,
+            ruleMode: ruleMode,
+            ownershipKeyID: key.id,
+            authenticationTag: base64URL(Data(authentication)),
+            targetBindingID: targetBindingID
         )
     }
 
@@ -237,6 +245,10 @@ public enum OwnershipMarkerCodec {
         _ marker: ManagedEventProvenance,
         key: OwnershipKeyMaterial
     ) throws {
+        guard (marker.schemaVersion == 1 && marker.targetBindingID == nil)
+                || (marker.schemaVersion == 2 && marker.targetBindingID?.isEmpty == false) else {
+            throw OwnershipMarkerError.invalidMarker
+        }
         guard marker.ownershipKeyID == key.id, key.bytes.count >= 32,
               let supplied = dataFromBase64URL(marker.authenticationTag) else {
             throw OwnershipMarkerError.invalidMarker
@@ -248,7 +260,8 @@ public enum OwnershipMarkerCodec {
             mirrorKey: marker.mirrorKey,
             sourceKeyHash: marker.sourceKeyHash,
             ruleMode: marker.ruleMode,
-            ownershipKeyID: marker.ownershipKeyID
+            ownershipKeyID: marker.ownershipKeyID,
+            targetBindingID: marker.targetBindingID
         )
         guard HMAC<SHA256>.isValidAuthenticationCode(
             supplied,
@@ -259,7 +272,7 @@ public enum OwnershipMarkerCodec {
         }
     }
 
-    /// Encodes a marker as a `calopod://managed/v1/…` URL for providers (like
+    /// Encodes a versioned `calopod://managed/` URL for providers (like
     /// EventKit) whose event model has a URL field but no room for custom
     /// key/value metadata. This URL field is reserved for the ownership
     /// marker; a source event's own meeting link is carried in notes
@@ -268,7 +281,7 @@ public enum OwnershipMarkerCodec {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         let encoded = base64URL(try encoder.encode(CompactOwnershipMarker(marker)))
-        guard let url = URL(string: "calopod://managed/v1/\(encoded)") else {
+        guard let url = URL(string: "calopod://managed/v\(marker.schemaVersion)/\(encoded)") else {
             throw OwnershipMarkerError.invalidMarker
         }
         return url
@@ -276,9 +289,12 @@ public enum OwnershipMarkerCodec {
 
     public static func marker(from url: URL) throws -> ManagedEventProvenance {
         guard url.scheme == "calopod", url.host == "managed",
-              url.pathComponents.count == 3, url.pathComponents[1] == "v1",
+              url.pathComponents.count == 3, ["v1", "v2"].contains(url.pathComponents[1]),
               let data = dataFromBase64URL(url.pathComponents[2]),
               let compact = try? JSONDecoder().decode(CompactOwnershipMarker.self, from: data) else {
+            throw OwnershipMarkerError.invalidMarker
+        }
+        guard url.pathComponents[1] == "v\(compact.v)" else {
             throw OwnershipMarkerError.invalidMarker
         }
         return compact.marker
@@ -291,9 +307,10 @@ public enum OwnershipMarkerCodec {
         mirrorKey: String,
         sourceKeyHash: String,
         ruleMode: ArmRuleMode,
-        ownershipKeyID: String
+        ownershipKeyID: String,
+        targetBindingID: String?
     ) -> String {
-        [
+        var fields = [
             String(schemaVersion),
             configurationID,
             armID,
@@ -301,7 +318,9 @@ public enum OwnershipMarkerCodec {
             sourceKeyHash,
             ruleMode.rawValue,
             ownershipKeyID,
-        ].map { "\($0.utf8.count):\($0)" }.joined(separator: "|")
+        ]
+        if schemaVersion == 2 { fields.append(targetBindingID ?? "") }
+        return fields.map { "\($0.utf8.count):\($0)" }.joined(separator: "|")
     }
 
     private static func base64URL(_ data: Data) -> String {
@@ -368,6 +387,7 @@ private struct CompactOwnershipMarker: Codable {
     let r: ArmRuleMode
     let k: String
     let t: String
+    let b: String?
 
     init(_ marker: ManagedEventProvenance) {
         v = marker.schemaVersion
@@ -378,6 +398,7 @@ private struct CompactOwnershipMarker: Codable {
         r = marker.ruleMode
         k = marker.ownershipKeyID
         t = marker.authenticationTag
+        b = marker.targetBindingID
     }
 
     var marker: ManagedEventProvenance {
@@ -389,7 +410,8 @@ private struct CompactOwnershipMarker: Codable {
             sourceKeyHash: s,
             ruleMode: r,
             ownershipKeyID: k,
-            authenticationTag: t
+            authenticationTag: t,
+            targetBindingID: b
         )
     }
 }

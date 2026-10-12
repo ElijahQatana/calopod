@@ -88,7 +88,8 @@ public struct ManagedEventConvergenceService: Sendable {
             observations = try observer.observations(
                 snapshots: try await readSnapshots(),
                 arm: arm,
-                mappings: mappings
+                mappings: mappings,
+                targetProvider: targetProvider
             )
             let sources = try repository.normalizedInstances(
                 calendarBindingIDs: arm.sourceBindingIDs,
