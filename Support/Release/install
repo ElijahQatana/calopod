@@ -45,9 +45,11 @@ resolve_home() {
 usage() {
   cat <<'EOF'
 Usage:
-  ./install \
-    --interval-seconds N --jitter-seconds N \
-    --lookback-days N --horizon-days N
+  ./install [--interval-seconds N] [--jitter-seconds N] \
+    [--lookback-days N] [--horizon-days N]
+
+Fresh defaults: interval 600 seconds, jitter 30 seconds, lookback 1 day,
+horizon 30 days. Upgrades preserve saved values unless overridden.
 EOF
 }
 
@@ -70,21 +72,25 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --interval-seconds)
       [ "$#" -ge 2 ] || fail "--interval-seconds requires a value." 64
+      [ -n "$2" ] || fail "--interval-seconds requires a value." 64
       interval_seconds=$2
       shift 2
       ;;
     --jitter-seconds)
       [ "$#" -ge 2 ] || fail "--jitter-seconds requires a value." 64
+      [ -n "$2" ] || fail "--jitter-seconds requires a value." 64
       jitter_seconds=$2
       shift 2
       ;;
     --lookback-days)
       [ "$#" -ge 2 ] || fail "--lookback-days requires a value." 64
+      [ -n "$2" ] || fail "--lookback-days requires a value." 64
       lookback_days=$2
       shift 2
       ;;
     --horizon-days)
       [ "$#" -ge 2 ] || fail "--horizon-days requires a value." 64
+      [ -n "$2" ] || fail "--horizon-days requires a value." 64
       horizon_days=$2
       shift 2
       ;;
@@ -171,6 +177,25 @@ fi
 
 home_root=$(resolve_home)
 service_root="$home_root/Library/Application Support/Calopod/Service"
+plist_path="$home_root/Library/LaunchAgents/pro.elijahquintana.calopod.agent.plist"
+schedule_value() {
+  override=$1
+  key=$2
+  default=$3
+  if [ -n "$override" ]; then
+    printf '%s\n' "$override"
+  elif [ -e "$plist_path" ]; then
+    /usr/bin/plutil -extract "EnvironmentVariables.$key" raw -o - "$plist_path" 2>/dev/null \
+      || fail "The saved schedule could not be read. Supply an explicit override or repair the service property list." 65
+  else
+    printf '%s\n' "$default"
+  fi
+}
+interval_seconds=$(schedule_value "$interval_seconds" CALOPOD_AGENT_INTERVAL_SECONDS 600)
+jitter_seconds=$(schedule_value "$jitter_seconds" CALOPOD_AGENT_JITTER_SECONDS 30)
+lookback_days=$(schedule_value "$lookback_days" CALOPOD_AGENT_LOOKBACK_DAYS 1)
+horizon_days=$(schedule_value "$horizon_days" CALOPOD_AGENT_HORIZON_DAYS 30)
+
 installed_cli="$service_root/bin/calopod"
 installed_host="$service_root/eventkit-host/Calopod EventKit Host.app"
 installed_setup="$service_root/release/calopod-setup.sh"

@@ -22,8 +22,9 @@ The terminal-first preview is packaged as a versioned per-user bundle for
 Apple Silicon Macs running macOS 14 or newer. Build, verification, installation,
 upgrade, and removal are documented in
 [docs/CLI_PREVIEW_INSTALL.md](docs/CLI_PREVIEW_INSTALL.md).
-After installation, `calopod-setup` guides the initial Calendars on this Mac,
-Main, Busy, schedule, dry-run, and health-check configuration.
+After installation, `calopod-setup` lets you choose Basic (one full-details
+Main calendar and one Busy-only calendar) or Custom Arms for Calendars on this
+Mac, then guides the schedule, dry run, and health check.
 
 ## Development
 

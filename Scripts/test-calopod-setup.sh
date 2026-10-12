@@ -29,15 +29,23 @@ run_setup() {
     < "$input_file" > "$output_file" 2>&1
 }
 
+if run_setup /dev/null "$fixture_root/interrupted-output"; then
+  echo "Setup accepted an interrupted mode choice." >&2
+  exit 1
+fi
+[ ! -s "$call_log" ]
+
 first_input="$fixture_root/first-input"
 first_output="$fixture_root/first-output"
-printf 'y\n1\n2\ny\n3\ny\n\n\n\n\ny\n' > "$first_input"
+printf 'invalid\n1\ny\n1\n2\ny\n3\ny\n\n\n\n\n' > "$first_input"
 run_setup "$first_input" "$first_output"
 
+grep -q 'Choose 1 for Basic or 2 for Custom Arms.' "$first_output"
+! grep -q '^agent enable ' "$call_log"
 [ -f "$state_path" ]
 [ -f "$fixture_root/main-configured" ]
 [ -f "$fixture_root/busy-configured" ]
-[ -f "$fixture_root/enabled" ]
+[ ! -f "$fixture_root/enabled" ]
 grep -q '^agent interval --seconds 600 --jitter-seconds 30 --lookback-days 1 --horizon-days 30 --format json$' "$call_log"
 grep -q '^sync --dry-run --day ' "$call_log"
 grep -q 'Dry run: 1 create, 0 update, 0 removal, 0 repair, 1 no-op, 0 warning.' "$first_output"
@@ -47,7 +55,8 @@ grep -q 'Setup complete.' "$first_output"
 
 second_input="$fixture_root/second-input"
 second_output="$fixture_root/second-output"
-printf '\n\n\n\ny\n' > "$second_input"
+: > "$fixture_root/enabled"
+printf '\n\n\n\n\n' > "$second_input"
 run_setup "$second_input" "$second_output"
 
 [ "$(grep -c '^main configure ' "$call_log")" -eq 1 ]
@@ -55,12 +64,12 @@ run_setup "$second_input" "$second_output"
 grep -q 'Existing Main configuration found; preserving it.' "$second_output"
 grep -q 'Existing Busy configuration found; preserving it.' "$second_output"
 grep -q 'Automatic sync was stopped while setup changes configuration.' "$second_output"
-[ -f "$fixture_root/enabled" ]
+[ ! -f "$fixture_root/enabled" ]
 
 /bin/rm -f "$fixture_root/main-configured"
 busy_only_input="$fixture_root/busy-only-input"
 busy_only_output="$fixture_root/busy-only-output"
-printf '2\ny\n\n\n\n\nn\n' > "$busy_only_input"
+printf '1\n2\ny\n\n\n\n\n' > "$busy_only_input"
 run_setup "$busy_only_input" "$busy_only_output"
 
 [ -f "$fixture_root/main-configured" ]
@@ -70,7 +79,7 @@ grep -q 'Main calendar configured.' "$busy_only_output"
 
 : > "$fixture_root/source-unavailable"
 third_output="$fixture_root/third-output"
-if run_setup /dev/null "$third_output"; then
+if run_setup /dev/null "$third_output" --basic; then
   echo "Setup accepted an unavailable configured source." >&2
   exit 1
 fi
@@ -82,8 +91,8 @@ grep -q 'An existing source calendar is unavailable.' "$third_output"
 : > "$call_log"
 custom_input="$fixture_root/custom-input"
 custom_output="$fixture_root/custom-output"
-printf 'y\n1,3\n2\ny\n\nWork route\ny\n2\n1\ny\nfull-details\ny\n\ny\n3\n1\ny\n\n\ny\n1,2\n3\ny\nfull-details\ny\n\nn\n\n\n\n\n' > "$custom_input"
-run_setup "$custom_input" "$custom_output" --arms
+printf '2\ny\n1,3\n2\ny\n\nWork route\ny\n2\n1\ny\nfull-details\ny\n\ny\n3\n1\ny\n\n\ny\n1,2\n3\ny\nfull-details\ny\n\nn\n\n\n\n\n' > "$custom_input"
+run_setup "$custom_input" "$custom_output"
 [ "$(cat "$fixture_root/custom-arm-count")" -eq 4 ]
 [ ! -f "$fixture_root/enabled" ]
 grep -q '^arm add --source a --source c --target b --rule busy --name Work route --format json$' "$call_log"
