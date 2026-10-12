@@ -67,7 +67,7 @@ public struct SupportBackupCommand: ParsableCommand {
         do {
             let environment = try supportEnvironment()
             let lock = try ProcessLock.acquire(at: environment.stateLocation.lockURL)
-            _ = lock
+            defer { withExtendedLifetime(lock) {} }
             let summary = try LocalStateBackup.create(
                 from: environment.stateLocation.databaseURL.path,
                 at: outputPath
@@ -144,13 +144,7 @@ public struct SupportRestoreCommand: ParsableCommand {
             let snapshot = try controller.snapshot()
             try requireServiceStoppedForRestore(snapshot)
             let environment = try supportEnvironment(snapshot: snapshot)
-            try environment.stateLocation.prepareDirectory()
-            let lock = try ProcessLock.acquire(at: environment.stateLocation.lockURL)
-            _ = lock
-            let summary = try LocalStateBackup.restore(
-                from: backupPath,
-                to: environment.stateLocation.databaseURL.path
-            )
+            let summary = try environment.restoreState(from: backupPath)
             try writeBackupResult(
                 command: "support.restore",
                 message: "Local state was restored from the verified backup.",

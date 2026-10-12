@@ -49,6 +49,8 @@ public struct InboxRefreshCommand: AsyncParsableCommand {
     public func run() async throws {
         do {
             let requested = try resolveRange(range, default: .none)
+            let lock = try CommandEnvironment.writerLock()
+            defer { withExtendedLifetime(lock) {} }
             let repository = try CommandEnvironment.repository()
             let sources = try selectedCalendarSources(connectionID: connection, calendarID: calendar, repository: repository)
             let resolved: ResolvedDateRange
@@ -66,8 +68,6 @@ public struct InboxRefreshCommand: AsyncParsableCommand {
                 resolved = ResolvedDateRange(window: try schedule.window(containing: Date(), calendar: localCalendar),
                     timeZoneIdentifier: localCalendar.timeZone.identifier)
             }
-            let lock = try ProcessLock.acquire(at: CommandEnvironment.runtimeEnvironment().stateLocation.lockURL)
-            defer { withExtendedLifetime(lock) {} }
             let refresh = await refreshCalendarSources(sources, from: resolved.window.start, through: resolved.window.end, repository: repository)
             try OutputRenderer.write(command: "inbox.refresh", payload: inboxRefreshPayload(refresh, range: resolved),
                 warnings: refresh.warnings, format: output.format, showIDs: output.ids)
@@ -82,7 +82,9 @@ public struct InboxInspectCommand: AsyncParsableCommand {
     public init() {}
     public func run() async throws {
         do {
-            let repository = try CommandEnvironment.repository()
+            let read = try CommandEnvironment.runtimeEnvironment().readOnlyState()
+            defer { withExtendedLifetime(read) {} }
+            let repository = read.repository
             try OutputRenderer.write(command: "inbox.inspect", payload: try InboxCLI.inspect(itemID, repository: repository),
                 format: output.format, showIDs: output.ids, human: output.localContext(repository: repository))
         } catch { try failCommand(error) }
@@ -96,6 +98,8 @@ public struct InboxAcknowledgeCommand: AsyncParsableCommand {
     public init() {}
     public func run() async throws {
         do {
+            let lock = try CommandEnvironment.writerLock()
+            defer { withExtendedLifetime(lock) {} }
             let repository = try CommandEnvironment.repository()
             try OutputRenderer.write(command: "inbox.acknowledge", payload: try InboxCLI.acknowledge(itemID, repository: repository),
                 format: output.format, showIDs: output.ids, human: output.localContext(repository: repository))
@@ -105,7 +109,9 @@ public struct InboxAcknowledgeCommand: AsyncParsableCommand {
 
 private func writeInbox(options: InboxOptions, activity: Bool, all: Bool = false) throws {
     let resolved = try resolveRange(options.range, default: .none)
-    let repository = try CommandEnvironment.repository()
+    let read = try CommandEnvironment.runtimeEnvironment().readOnlyState()
+    defer { withExtendedLifetime(read) {} }
+    let repository = read.repository
     let payload = try InboxCLI.list(repository: repository, options: options, range: resolved, activity: activity, all: all)
     try OutputRenderer.write(command: activity ? "inbox.activity" : "inbox", payload: payload,
         format: options.output.format, showIDs: options.output.ids, human: options.output.localContext(repository: repository))

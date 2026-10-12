@@ -2,6 +2,7 @@ import ArgumentParser
 import CalopodDomain
 import CalopodEventKit
 import CalopodProviders
+import CalopodRuntime
 import CalopodStore
 import CalopodSync
 import Foundation
@@ -19,11 +20,48 @@ struct CalendarRefreshSummary: Sendable {
     let warnings: [String]
 }
 
-// This file backs the read-only `events`/`availability` commands: it
-// refreshes the local cache from selected source calendars, the same way
-// `CalopodRuntime`'s sync engine does, but stops there — there is no
-// planning or target-writing here, since these commands never touch a
-// managed target calendar at all.
+struct CalendarCommandRead {
+    let repository: LocalStateRepository
+    let sources: [CalendarReadSource]
+    let refresh: CalendarRefreshSummary
+    let readState: CalopodStateRead?
+    let writerLock: ProcessLock?
+}
+
+func calendarCommandRead(
+    environment: CalopodRuntimeEnvironment,
+    cached: Bool,
+    connectionID: String?,
+    calendarID: String?,
+    range: ResolvedDateRange,
+    readSource: ((CalendarReadSource, Date, Date) async throws -> ProviderEventPage)? = nil
+) async throws -> CalendarCommandRead {
+    let readState: CalopodStateRead?
+    let writerLock: ProcessLock?
+    let repository: LocalStateRepository
+    if cached {
+        let state = try environment.readOnlyState()
+        readState = state
+        writerLock = nil
+        repository = state.repository
+    } else {
+        try environment.stateLocation.prepareDirectory()
+        writerLock = try ProcessLock.acquire(at: environment.stateLocation.lockURL)
+        readState = nil
+        repository = try environment.repository()
+    }
+    let sources = try selectedCalendarSources(connectionID: connectionID, calendarID: calendarID, repository: repository)
+    let refresh: CalendarRefreshSummary
+    if cached {
+        refresh = CalendarRefreshSummary(ingestion: EventIngestionSummary(), selectedSourceCount: sources.count,
+            refreshedSourceCount: 0, failedSourceCount: 0,
+            warnings: ["Retained local data only; freshness and coverage of the requested range are not guaranteed. Run inbox refresh or omit --cached after sync finishes."])
+    } else {
+        refresh = await refreshCalendarSources(sources, from: range.window.start, through: range.window.end,
+            repository: repository, readSource: readSource)
+    }
+    return CalendarCommandRead(repository: repository, sources: sources, refresh: refresh, readState: readState, writerLock: writerLock)
+}
 
 func selectedCalendarSources(
     connectionID: String?,
