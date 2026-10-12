@@ -305,7 +305,17 @@ func agentStatusPayload(
     controller: LaunchAgentController,
     now: Date = Date()
 ) throws -> CommandPayload {
-    let snapshot = try controller.snapshot()
+    let snapshot: LaunchAgentSnapshot
+    do {
+        snapshot = try controller.snapshot()
+    } catch is AgentServiceConfigurationError {
+        return CommandPayload(
+            status: "failed",
+            message: "The automatic-sync configuration is invalid.",
+            installed: true,
+            failureCategory: "configuration"
+        )
+    }
     guard let configuration = snapshot.configuration else {
         return CommandPayload(
             status: "not-installed",

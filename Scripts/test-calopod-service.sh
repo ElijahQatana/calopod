@@ -97,6 +97,8 @@ plutil -lint "$plist_path" >/dev/null
 [ "$(plutil -extract EnvironmentVariables.CALOPOD_AGENT_HORIZON_DAYS raw "$plist_path")" = "30" ]
 [ "$(plutil -extract RunAtLoad raw "$plist_path")" = "true" ]
 [ "$(plutil -extract KeepAlive raw "$plist_path")" = "true" ]
+[ "$(plutil -extract ThrottleInterval raw "$plist_path")" = "30" ]
+[ "$(plutil -extract KeepAlive raw "$plist_path")" = "true" ]
 [ "$(stat -f '%Lp' "$plist_path")" = "600" ]
 [ "$(stat -f '%Lp' "$service_root/logs/agent.stdout.log")" = "600" ]
 [ "$(stat -f '%Lp' "$service_root/logs/agent.stderr.log")" = "600" ]
