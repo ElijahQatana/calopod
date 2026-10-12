@@ -39,6 +39,7 @@ public struct ManagedEventConvergenceService: Sendable {
         window: SyncWindow,
         maximumMutationPasses: Int = 3,
         readSnapshots: @Sendable () async throws -> [ManagedEventSnapshot],
+        performBatch: ManagedEventBatchPerformer? = nil,
         perform: @Sendable (ManagedEventMutation) async throws -> ManagedEventMutationResult
     ) async throws -> ManagedEventLifecycleSummary {
         var items = initialItems.filter { $0.armID == arm.id }
@@ -58,12 +59,16 @@ public struct ManagedEventConvergenceService: Sendable {
         }
 
         for pass in 0..<maximumMutationPasses {
-            let summary = try await lifecycle.apply(
-                items: items,
-                arm: arm,
-                observations: observations,
-                perform: perform
-            )
+            let summary: ManagedEventLifecycleSummary
+            if let performBatch {
+                summary = try await lifecycle.applyBatch(
+                    items: items, arm: arm, observations: observations, perform: performBatch
+                )
+            } else {
+                summary = try await lifecycle.apply(
+                    items: items, arm: arm, observations: observations, perform: perform
+                )
+            }
             providerWrites += summary.providerWriteCount
             reconciliations += summary.mappingReconciliationCount
             noOps += summary.noOpCount

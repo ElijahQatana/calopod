@@ -8,6 +8,7 @@ public enum CalopodRuntimeError: Error, Equatable, Sendable {
     case invalidStatePath
     case invalidEventKitHostPath
     case missingEventKitHost
+    case eventKitHostVersionMismatch
     case eventKitHostFailed
     case eventKitHostTimedOut
     case eventKitHostUntrusted

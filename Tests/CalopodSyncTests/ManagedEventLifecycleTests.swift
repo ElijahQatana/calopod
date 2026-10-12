@@ -7,6 +7,51 @@ import Testing
 
 @Suite("Managed event lifecycle")
 struct ManagedEventLifecycleTests {
+    @Test
+    func batchRefusesUnverifiedTargetsBeforeAnyWrites() async throws {
+        let fixture = try LifecycleFixture()
+        try fixture.repository.saveMirrorMapping(lifecycleMapping(id: "one"))
+        await #expect(throws: ManagedEventLifecycleError.missingVerifiedTarget) {
+            _ = try await ManagedEventLifecycleService(
+                repository: fixture.repository, secretStore: fixture.secrets
+            ).applyBatch(
+                items: [lifecyclePlanItem(id: "two", action: .create),
+                        lifecyclePlanItem(id: "one", action: .remove)],
+                arm: fixture.arm, observations: []
+            ) { _ in
+                Issue.record("Unexpected batch write")
+                return []
+            }
+        }
+        #expect(try fixture.repository.mirrorMappings(armID: fixture.arm.id).count == 1)
+    }
+
+    @Test
+    func batchFailureKeepsSuccessfulMappingsAndReportsEachFailedItem() async throws {
+        let fixture = try LifecycleFixture()
+        let items = (0..<4).map { lifecyclePlanItem(id: "batch-\($0)", action: .create) }
+        do {
+            _ = try await ManagedEventLifecycleService(
+                repository: fixture.repository, secretStore: fixture.secrets
+            ).applyBatch(items: items, arm: fixture.arm, observations: []) { batches in
+                #expect(batches.count == 4)
+                return batches.enumerated().map { index, batch in
+                    batch.map { _ in
+                        if index == 1 || index == 3 { return .failure(.httpStatus(412)) }
+                        return .success(.written(ManagedEventWriteResult(
+                            providerEventID: "created-\(index)", providerVersion: "v1"
+                        )))
+                    }
+                }
+            }
+            Issue.record("Expected partial failure")
+        } catch let error as ManagedEventBatchError {
+            #expect(error.failedItemIndices == [1, 3])
+        }
+        let mappings = try fixture.repository.mirrorMappings(armID: fixture.arm.id)
+        #expect(Set(mappings.map(\.providerEventID)) == ["created-0", "created-2"])
+    }
+
     @Test("Target observations require a valid signed marker")
     func observesVerifiedOwnership() throws {
         let fixture = try LifecycleFixture()
@@ -523,8 +568,8 @@ struct ManagedEventLifecycleTests {
         #expect(stored.providerVersion == "survivor-version")
     }
 
-    @Test("Post-write reads repair a concurrent duplicate and converge")
-    func convergesAfterConcurrentCreate() async throws {
+    @Test("Post-write reads repair a concurrent duplicate and converge", arguments: [false, true])
+    func convergesAfterConcurrentCreate(useBatch: Bool) async throws {
         let fixture = try LifecycleFixture()
         let source = lifecycleSource(id: "one", startsAt: 2_000)
         let window = try SyncWindow(
@@ -555,17 +600,28 @@ struct ManagedEventLifecycleTests {
             secretStore: fixture.secrets
         )
 
+        let batch: ManagedEventBatchPerformer = { batches in
+            var results: [[Result<ManagedEventMutationResult, ProviderFailure>]] = []
+            for batch in batches {
+                var replies: [Result<ManagedEventMutationResult, ProviderFailure>] = []
+                for mutation in batch {
+                    replies.append(.success(try await provider.perform(mutation)))
+                }
+                results.append(replies)
+            }
+            return results
+        }
         let summary = try await service.converge(
             initialItems: initial.items,
             arm: fixture.arm,
             targetProvider: .google,
             initialObservations: [],
-            window: window
-        ) {
-            await provider.readSnapshots()
-        } perform: { mutation in
-            try await provider.perform(mutation)
-        }
+            window: window,
+            readSnapshots: { await provider.readSnapshots() },
+            performBatch: useBatch ? batch : nil, perform: { mutation in
+                try await provider.perform(mutation)
+            }
+        )
 
         #expect(summary.providerWriteCount == 3)
         #expect(await provider.readCount == 2)

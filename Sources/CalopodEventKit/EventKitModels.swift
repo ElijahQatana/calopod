@@ -45,6 +45,7 @@ public struct EventKitCalendarSnapshot: Codable, Equatable, Sendable {
 /// host runs out-of-process because it's the process macOS actually grants
 /// (or denies) Calendar access to.
 public enum EventKitHostOperation: String, Codable, Sendable {
+    case batch
     case permissionStatus
     case calendars
     case events
@@ -58,6 +59,8 @@ public enum EventKitHostOperation: String, Codable, Sendable {
 /// whichever of the operation-specific fields it needs (unused fields are
 /// simply left nil for a given operation).
 public struct EventKitHostRequest: Codable, Sendable {
+    public let protocolVersion: Int?
+    public let batches: [[EventKitHostRequest]]?
     public let operation: EventKitHostOperation
     public let calendarIDs: [String]
     public let start: Date?
@@ -68,6 +71,8 @@ public struct EventKitHostRequest: Codable, Sendable {
 
     public init(
         operation: EventKitHostOperation,
+        protocolVersion: Int? = nil,
+        batches: [[EventKitHostRequest]]? = nil,
         calendarIDs: [String] = [],
         start: Date? = nil,
         end: Date? = nil,
@@ -75,6 +80,8 @@ public struct EventKitHostRequest: Codable, Sendable {
         providerEventID: String? = nil,
         expectedProviderVersion: String? = nil
     ) {
+        self.protocolVersion = protocolVersion
+        self.batches = batches
         self.operation = operation
         self.calendarIDs = calendarIDs
         self.start = start
@@ -89,6 +96,8 @@ public struct EventKitHostRequest: Codable, Sendable {
 /// even on failure, so a caller can distinguish a permission problem from an
 /// operation-specific error captured in `errorCode`.
 public struct EventKitHostResponse: Codable, Sendable {
+    public let protocolVersion: Int?
+    public let batches: [[EventKitHostResponse]]?
     public let status: EventKitAccessStatus
     public let calendars: [EventKitCalendarSnapshot]
     public let events: [ProviderEvent]
@@ -98,12 +107,16 @@ public struct EventKitHostResponse: Codable, Sendable {
 
     public init(
         status: EventKitAccessStatus,
+        protocolVersion: Int? = nil,
+        batches: [[EventKitHostResponse]]? = nil,
         calendars: [EventKitCalendarSnapshot] = [],
         events: [ProviderEvent] = [],
         managedEvents: [ManagedEventSnapshot] = [],
         managedEvent: ManagedEventWriteResult? = nil,
         errorCode: String? = nil
     ) {
+        self.protocolVersion = protocolVersion
+        self.batches = batches
         self.status = status
         self.calendars = calendars
         self.events = events

@@ -149,6 +149,8 @@ private func commandFailure(_ error: Error) -> (message: String, exitCode: Calop
                 "The EventKit host is unavailable. Reinstall Calopod or rebuild it from source.",
                 .invalidConfiguration
             )
+        case .eventKitHostVersionMismatch:
+            return ("The Calendar host version does not support batched sync. Install the matching release.", .invalidConfiguration)
         case .eventKitHostFailed:
             return (
                 "The EventKit host did not return a valid response. Verify its signature and Calendar access.",

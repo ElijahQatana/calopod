@@ -78,7 +78,17 @@ struct EventKitHostMain {
         _ request: EventKitHostRequest,
         client: EventKitClient
     ) async throws -> EventKitHostResponse {
+        if request.operation == .batch {
+            return await EventKitHostBatch.handle(
+                request, status: await client.authorizationStatus
+            ) { item in
+                try await handle(item, client: client)
+            }
+        }
+
         switch request.operation {
+        case .batch:
+            throw ProviderFailure.invalidResponse
         case .permissionStatus:
             return EventKitHostResponse(status: await client.authorizationStatus)
         case .calendars:
