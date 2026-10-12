@@ -12,6 +12,12 @@ enum CommandEnvironment {
         try CalopodRuntimeEnvironment()
     }
 
+    static func writerLock() throws -> ProcessLock {
+        let environment = try runtimeEnvironment()
+        try environment.stateLocation.prepareDirectory()
+        return try ProcessLock.acquire(at: environment.stateLocation.lockURL)
+    }
+
     static func repository() throws -> LocalStateRepository {
         try runtimeEnvironment().repository()
     }
@@ -94,6 +100,9 @@ func failCommand(_ error: Error) throws -> Never {
 }
 
 private func commandFailure(_ error: Error) -> (message: String, exitCode: CalopodExitCode) {
+    if error is CalopodDatabaseError {
+        return ("Local state needs an upgrade. Run a writable command after sync finishes, then retry the read.", .localStateFailure)
+    }
     if let control = error as? LaunchAgentControlError {
         return switch control {
         case .notInstalled:
@@ -139,7 +148,7 @@ private func commandFailure(_ error: Error) -> (message: String, exitCode: Calop
     if let runtime = error as? CalopodRuntimeError {
         switch runtime {
         case .busy:
-            return ("Another sync is already running.", .temporaryFailure)
+            return ("Another Calopod operation is using local state.", .temporaryFailure)
         case .invalidStatePath:
             return ("The local state path must be an absolute writable path.", .invalidConfiguration)
         case .invalidEventKitHostPath:

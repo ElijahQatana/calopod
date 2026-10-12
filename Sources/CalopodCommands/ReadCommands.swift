@@ -93,9 +93,7 @@ public struct CalendarsCommand: AsyncParsableCommand {
 
 }
 
-/// Lists normalized source events for a range. This refreshes the local
-/// cache first — the same read path `availability` uses — but, like the rest
-/// of `CombinedRead`, never touches a managed target calendar.
+/// Lists source events from the local cache, refreshing unless --cached is supplied.
 public struct EventsCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "events",
@@ -104,6 +102,9 @@ public struct EventsCommand: AsyncParsableCommand {
 
     @OptionGroup public var range: DateRangeOptions
     @OptionGroup public var output: OutputOptions
+
+    @Flag(name: .long, help: "Read retained local data without refreshing sources.")
+    public var cached = false
 
     @Option(name: .long, help: "Limit events to one Connection. Uses every enabled selected Connection when omitted.")
     public var connection: String?
@@ -117,20 +118,14 @@ public struct EventsCommand: AsyncParsableCommand {
         let resolved = try resolveRange(range, default: .currentDay)
         guard let resolved else { return }
         do {
-            let repository = try CommandEnvironment.repository()
-            let sources = try selectedCalendarSources(
-                connectionID: connection,
-                calendarID: calendar,
-                repository: repository
+            let read = try await calendarCommandRead(
+                environment: CommandEnvironment.runtimeEnvironment(),
+                cached: cached, connectionID: connection, calendarID: calendar, range: resolved
             )
-            let lock = try ProcessLock.acquire(at: CommandEnvironment.runtimeEnvironment().stateLocation.lockURL)
-            defer { withExtendedLifetime(lock) {} }
-            let refresh = await refreshCalendarSources(
-                sources,
-                from: resolved.window.start,
-                through: resolved.window.end,
-                repository: repository
-            )
+            defer { withExtendedLifetime(read) {} }
+            let repository = read.repository
+            let sources = read.sources
+            let refresh = read.refresh
             let events = try repository.normalizedInstances(
                 calendarBindingIDs: sources.map(\.calendar.id),
                 from: resolved.window.start,
@@ -139,7 +134,7 @@ public struct EventsCommand: AsyncParsableCommand {
             try OutputRenderer.write(
                 command: "events",
                 payload: CommandPayload(
-                    status: refresh.failedSourceCount == 0 ? "ok" : "partial",
+                    status: cached || refresh.failedSourceCount != 0 ? "partial" : "ok",
                     message: events.isEmpty ? "No events were found." : "Events in the requested range.",
                     count: events.count,
                     range: RangeOutput(range: resolved),
@@ -203,6 +198,9 @@ public struct AvailabilityCommand: AsyncParsableCommand {
     @OptionGroup public var range: DateRangeOptions
     @OptionGroup public var output: OutputOptions
 
+    @Flag(name: .long, help: "Read retained local data without refreshing sources.")
+    public var cached = false
+
     @Option(name: .long, help: "Limit Availability to one Connection identifier.")
     public var connection: String?
 
@@ -215,20 +213,14 @@ public struct AvailabilityCommand: AsyncParsableCommand {
         let resolved = try resolveRange(range, default: .currentDay)
         guard let resolved else { return }
         do {
-            let repository = try CommandEnvironment.repository()
-            let sources = try selectedCalendarSources(
-                connectionID: connection,
-                calendarID: calendar,
-                repository: repository
+            let read = try await calendarCommandRead(
+                environment: CommandEnvironment.runtimeEnvironment(),
+                cached: cached, connectionID: connection, calendarID: calendar, range: resolved
             )
-            let lock = try ProcessLock.acquire(at: CommandEnvironment.runtimeEnvironment().stateLocation.lockURL)
-            defer { withExtendedLifetime(lock) {} }
-            let refresh = await refreshCalendarSources(
-                sources,
-                from: resolved.window.start,
-                through: resolved.window.end,
-                repository: repository
-            )
+            defer { withExtendedLifetime(read) {} }
+            let repository = read.repository
+            let sources = read.sources
+            let refresh = read.refresh
             let events = try repository.normalizedInstances(
                 calendarBindingIDs: sources.map(\.calendar.id),
                 from: resolved.window.start,
@@ -248,7 +240,7 @@ public struct AvailabilityCommand: AsyncParsableCommand {
             try OutputRenderer.write(
                 command: "availability",
                 payload: CommandPayload(
-                    status: refresh.failedSourceCount == 0 ? "ok" : "partial",
+                    status: cached || refresh.failedSourceCount != 0 ? "partial" : "ok",
                     message: intervals.isEmpty
                         ? "No Availability intervals were found."
                         : "Availability in the requested range.",

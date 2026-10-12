@@ -124,10 +124,28 @@ public enum LocalStateBackup {
               isDirectory.boolValue else {
             throw LocalStateBackupError.invalidPath
         }
-        for suffix in ["-wal", "-shm"] where fileManager.fileExists(
-            atPath: stateURL.path + suffix
-        ) {
-            throw LocalStateBackupError.stateBusy
+        // Recover an interrupted WAL writer before moving the current state.
+        // The caller must exclude writers and readers for the whole restore.
+        let hasSidecars = ["-wal", "-shm"].contains { fileManager.fileExists(atPath: stateURL.path + $0) }
+        if hasSidecars {
+            guard fileManager.fileExists(atPath: stateURL.path) else { throw LocalStateBackupError.stateBusy }
+            var configuration = Configuration()
+            configuration.busyMode = .timeout(2)
+            let database = try DatabaseQueue(path: stateURL.path, configuration: configuration)
+            do {
+                try database.writeWithoutTransaction { database in
+                    try database.execute(sql: "PRAGMA wal_checkpoint(TRUNCATE)")
+                    guard try String.fetchOne(database, sql: "PRAGMA journal_mode = DELETE") == "delete" else {
+                        throw LocalStateBackupError.stateBusy
+                    }
+                }
+                try database.close()
+            } catch {
+                throw LocalStateBackupError.stateBusy
+            }
+            for suffix in ["-wal", "-shm"] where fileManager.fileExists(atPath: stateURL.path + suffix) {
+                try fileManager.removeItem(atPath: stateURL.path + suffix)
+            }
         }
 
         let token = UUID().uuidString

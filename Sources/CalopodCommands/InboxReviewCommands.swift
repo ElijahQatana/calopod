@@ -28,6 +28,8 @@ public struct InboxConfigCommand: AsyncParsableCommand {
     public init() {}
     public func run() async throws {
         do {
+            let lock = try CommandEnvironment.writerLock()
+            defer { withExtendedLifetime(lock) {} }
             let state = try CommandEnvironment.repository()
             let settings = try context.resolve(state.inboxContextSettings())
             try state.saveInboxContextSettings(settings)
