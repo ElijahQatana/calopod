@@ -181,22 +181,30 @@ enum InboxCLI {
         var items: [CommandItem]
         if activity {
             let bindings = Set(snapshot.sources.map(\.bindingID))
-            let rows = try Set(snapshot.sources.map(\.connectionID)).flatMap { try repository.inboxActivity(connectionID: $0, includeAcknowledged: all) }
-                .filter { bindings.contains($0.event.calendarBindingID) }
-                .filter { entry in
-                    if full.events.contains(where: { $0.event.sourceKeyHash == entry.sourceKeyHash }) { return true }
-                    return try repository.inboxObservation(sourceKeyHash: entry.sourceKeyHash)?.tombstone != nil
-                }
-                .filter { entry in
-                    if !options.excludeMaybe { return true }
-                    return try repository.inboxObservation(sourceKeyHash: entry.sourceKeyHash)?.event.currentUserResponse.state != .tentative
-                }
-                .filter { entry in
-                    guard let window = range?.window else { return true }
-                    return [entry.event, entry.previousEvent].compactMap { $0 }.contains { $0.endsAt > window.start && $0.startsAt < window.end }
-                }
-                .filter { entry in !options.conflicts || query.rows.contains(where: { $0.item.event.sourceKeyHash == entry.sourceKeyHash && $0.reasons.contains(.conflict) }) }
-                .sorted { ($0.observedAt, $0.sourceKeyHash, $0.revision) > ($1.observedAt, $1.sourceKeyHash, $1.revision) }
+            let connectionIDs: Set<String> = Set(snapshot.sources.map(\.connectionID))
+            var rows: [InboxActivity] = []
+            for connectionID in connectionIDs {
+                rows += try repository.inboxActivity(connectionID: connectionID, includeAcknowledged: all)
+            }
+            rows = rows.filter { (entry: InboxActivity) -> Bool in bindings.contains(entry.event.calendarBindingID) }
+            rows = try rows.filter { (entry: InboxActivity) -> Bool in
+                if full.events.contains(where: { $0.event.sourceKeyHash == entry.sourceKeyHash }) { return true }
+                return try repository.inboxObservation(sourceKeyHash: entry.sourceKeyHash)?.tombstone != nil
+            }
+            rows = try rows.filter { (entry: InboxActivity) -> Bool in
+                if !options.excludeMaybe { return true }
+                return try repository.inboxObservation(sourceKeyHash: entry.sourceKeyHash)?.event.currentUserResponse.state != .tentative
+            }
+            rows = rows.filter { (entry: InboxActivity) -> Bool in
+                guard let window = range?.window else { return true }
+                return [entry.event, entry.previousEvent].compactMap { $0 }.contains { $0.endsAt > window.start && $0.startsAt < window.end }
+            }
+            rows = rows.filter { (entry: InboxActivity) -> Bool in
+                !options.conflicts || query.rows.contains(where: { $0.item.event.sourceKeyHash == entry.sourceKeyHash && $0.reasons.contains(.conflict) })
+            }
+            rows.sort { (a: InboxActivity, b: InboxActivity) -> Bool in
+                (a.observedAt, a.sourceKeyHash, a.revision) > (b.observedAt, b.sourceKeyHash, b.revision)
+            }
             items = try rows.map { entry in item(entry.event, revision: entry.revision, activity: entry,
                 row: query.rows.first { $0.item.event.sourceKeyHash == entry.sourceKeyHash }, observation: try repository.inboxObservation(sourceKeyHash: entry.sourceKeyHash), context: full, details: false) }
         } else {
