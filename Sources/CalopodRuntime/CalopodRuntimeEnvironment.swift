@@ -38,6 +38,10 @@ public struct CalopodStateLocation: Equatable, Sendable {
         databaseURL.appendingPathExtension("lock")
     }
 
+    public var accessLockURL: URL {
+        databaseURL.appendingPathExtension("access.lock")
+    }
+
     public init(
         environment: [String: String] = ProcessInfo.processInfo.environment,
         applicationSupportURL: URL? = nil
@@ -141,6 +145,21 @@ public struct CalopodRuntimeEnvironment: Sendable {
         return repository
     }
 
+    public func readOnlyState() throws -> CalopodStateRead {
+        let lock = try ProcessLock.acquire(at: stateLocation.accessLockURL, shared: true)
+        let database = try CalopodDatabase(path: stateLocation.databaseURL.path, readonly: true)
+        return CalopodStateRead(repository: LocalStateRepository(database: database), lock: lock)
+    }
+
+    public func restoreState(from backupPath: String) throws -> LocalStateBackupSummary {
+        try stateLocation.prepareDirectory()
+        let writerLock = try ProcessLock.acquire(at: stateLocation.lockURL)
+        defer { withExtendedLifetime(writerLock) {} }
+        let accessLock = try ProcessLock.acquire(at: stateLocation.accessLockURL)
+        defer { withExtendedLifetime(accessLock) {} }
+        return try LocalStateBackup.restore(from: backupPath, to: stateLocation.databaseURL.path)
+    }
+
     public func googleService(
         repository: LocalStateRepository,
         requireClientID: Bool = true
@@ -176,5 +195,16 @@ public struct CalopodRuntimeEnvironment: Sendable {
             tokenVault: OAuthTokenVault(secretStore: KeychainSecretStore()),
             state: repository
         )
+    }
+}
+
+/// Holds the shared recovery lock until the caller finishes using local state.
+public final class CalopodStateRead: @unchecked Sendable {
+    public let repository: LocalStateRepository
+    private let lock: ProcessLock
+
+    init(repository: LocalStateRepository, lock: ProcessLock) {
+        self.repository = repository
+        self.lock = lock
     }
 }

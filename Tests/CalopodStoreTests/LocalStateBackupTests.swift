@@ -93,26 +93,62 @@ func localStateRestoreReplacesStateAndPreservesBackup() throws {
 }
 
 @Test
-func localStateRestoreRejectsStateWithSQLiteSidecars() throws {
+func localStateBackupAndRestoreRecoverWALContents() throws {
+    let fixture = try BackupFixture()
+    defer { fixture.remove() }
+    let database = try CalopodDatabase(path: fixture.stateURL.path)
+    try database.write { db in
+        try db.execute(sql: "INSERT INTO configurations VALUES (?, ?, ?)", arguments: ["retained", Date(), Date()])
+    }
+    try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fixture.stateURL.path)
+    #expect(FileManager.default.fileExists(atPath: fixture.stateURL.path + "-wal"))
+    _ = try LocalStateBackup.create(from: fixture.stateURL.path, at: fixture.backupURL.path)
+    #expect(try fixture.configurationIDs(at: fixture.backupURL) == ["retained"])
+    for suffix in ["-wal", "-shm"] {
+        #expect(!FileManager.default.fileExists(atPath: fixture.backupURL.path + suffix))
+    }
+
+    // Copy the on-disk WAL state to simulate an interrupted process.
+    let interruptedURL = fixture.root.appendingPathComponent("interrupted.sqlite")
+    for suffix in ["", "-wal", "-shm"] {
+        try FileManager.default.copyItem(atPath: fixture.stateURL.path + suffix, toPath: interruptedURL.path + suffix)
+    }
+    #expect(try fixture.configurationIDs(at: interruptedURL) == ["retained"])
+    let summary = try LocalStateBackup.restore(from: fixture.backupURL.path, to: interruptedURL.path)
+    #expect(summary.migrationCount == 14)
+    #expect(try fixture.configurationIDs(at: interruptedURL) == ["retained"])
+    for suffix in ["-wal", "-shm"] {
+        #expect(!FileManager.default.fileExists(atPath: interruptedURL.path + suffix))
+    }
+    let reopened = try CalopodDatabase(path: interruptedURL.path)
+    #expect(try reopened.read { try String.fetchOne($0, sql: "PRAGMA journal_mode") } == "wal")
+    withExtendedLifetime(database) {}
+}
+
+@Test
+func localStateRestoreRefusesAnOpenWALConnection() throws {
     let fixture = try BackupFixture()
     defer { fixture.remove() }
     try fixture.seed("original")
-    _ = try LocalStateBackup.create(
-        from: fixture.stateURL.path,
-        at: fixture.backupURL.path
-    )
-    FileManager.default.createFile(
-        atPath: fixture.stateURL.path + "-wal",
-        contents: Data()
-    )
-
+    let database = try CalopodDatabase(path: fixture.stateURL.path)
+    _ = try LocalStateBackup.create(from: fixture.stateURL.path, at: fixture.backupURL.path)
     #expect(throws: LocalStateBackupError.stateBusy) {
-        try LocalStateBackup.restore(
-            from: fixture.backupURL.path,
-            to: fixture.stateURL.path
-        )
+        try LocalStateBackup.restore(from: fixture.backupURL.path, to: fixture.stateURL.path)
     }
     #expect(try fixture.configurationIDs(at: fixture.stateURL) == ["original"])
+    withExtendedLifetime(database) {}
+}
+
+@Test
+func localStateRestoreCanReplaceDamagedStateWithoutSidecars() throws {
+    let fixture = try BackupFixture()
+    defer { fixture.remove() }
+    try fixture.seed("original")
+    _ = try LocalStateBackup.create(from: fixture.stateURL.path, at: fixture.backupURL.path)
+    let damagedURL = fixture.root.appendingPathComponent("damaged.sqlite")
+    try Data("damaged".utf8).write(to: damagedURL)
+    _ = try LocalStateBackup.restore(from: fixture.backupURL.path, to: damagedURL.path)
+    #expect(try fixture.configurationIDs(at: damagedURL) == ["original"])
 }
 
 private struct BackupFixture {

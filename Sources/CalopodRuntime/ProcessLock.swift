@@ -13,20 +13,21 @@ public final class ProcessLock: @unchecked Sendable {
         self.descriptor = descriptor
     }
 
-    /// Opens (creating if needed) and exclusively, non-blockingly locks the
-    /// file at `url`. `LOCK_NB` is what turns a would-be wait into an
+    /// Opens (creating if needed) and non-blockingly locks the file at `url`.
+    /// Shared locks let local readers coexist while excluding restore.
+    /// `LOCK_NB` is what turns a would-be wait into an
     /// immediate `.busy` failure — callers report a safe "sync already
     /// running" rather than queuing behind another writer. `FD_CLOEXEC`
     /// keeps the descriptor from leaking into any child process spawned
     /// while the lock is held, and the permissions are pinned to
     /// owner-only, matching every other private state file.
-    public static func acquire(at url: URL) throws -> ProcessLock {
+    public static func acquire(at url: URL, shared: Bool = false) throws -> ProcessLock {
         let descriptor = open(url.path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
         guard descriptor >= 0 else {
             throw CalopodRuntimeError.invalidStatePath
         }
         _ = fcntl(descriptor, F_SETFD, FD_CLOEXEC)
-        guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else {
+        guard flock(descriptor, (shared ? LOCK_SH : LOCK_EX) | LOCK_NB) == 0 else {
             close(descriptor)
             throw CalopodRuntimeError.busy
         }
