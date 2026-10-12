@@ -115,7 +115,7 @@ func localStateBackupAndRestoreRecoverWALContents() throws {
     }
     #expect(try fixture.configurationIDs(at: interruptedURL) == ["retained"])
     let summary = try LocalStateBackup.restore(from: fixture.backupURL.path, to: interruptedURL.path)
-    #expect(summary.migrationCount == 14)
+    #expect(summary.migrationCount == CalopodDatabase.supportedMigrationIdentifiers.count)
     #expect(try fixture.configurationIDs(at: interruptedURL) == ["retained"])
     for suffix in ["-wal", "-shm"] {
         #expect(!FileManager.default.fileExists(atPath: interruptedURL.path + suffix))
