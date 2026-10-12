@@ -7,12 +7,12 @@ import Foundation
 /// this process) because it's the process macOS actually grants or denies
 /// Calendar access to — this runner just drives it and reads back the
 /// result.
-struct EventKitHostRunner {
+struct EventKitHostRunner: Sendable {
     private let appURL: URL
     private let launcherURL: URL
     private let standardLimit: TimeInterval
     private let permissionLimit: TimeInterval
-    private let verifyHost: (URL) throws -> Void
+    private let verifyHost: @Sendable (URL) throws -> Void
 
     /// Lets tests stand in for `open` and shorten the limits.
     init(
@@ -20,7 +20,7 @@ struct EventKitHostRunner {
         launcherURL: URL,
         standardLimit: TimeInterval,
         permissionLimit: TimeInterval,
-        verifyHost: @escaping (URL) throws -> Void = EventKitHostSignature.verify(appURL:)
+        verifyHost: @escaping @Sendable (URL) throws -> Void = EventKitHostSignature.verify(appURL:)
     ) {
         self.appURL = appURL
         self.launcherURL = launcherURL
