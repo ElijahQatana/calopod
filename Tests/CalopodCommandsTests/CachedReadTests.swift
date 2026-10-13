@@ -62,7 +62,7 @@ func restoreExcludesCachedReadersUntilTheyFinish() throws {
     }
     #expect(try read?.repository.connections().count == 1)
     read = nil
-    #expect(try fixture.environment.restoreState(from: fixture.backupURL.path).migrationCount == 14)
+    #expect(try fixture.environment.restoreState(from: fixture.backupURL.path).migrationCount == CalopodDatabase.supportedMigrationIdentifiers.count)
     let restoreLock = try ProcessLock.acquire(at: fixture.environment.stateLocation.accessLockURL)
     defer { withExtendedLifetime(restoreLock) {} }
     #expect(throws: CalopodRuntimeError.busy) { try fixture.environment.readOnlyState() }
