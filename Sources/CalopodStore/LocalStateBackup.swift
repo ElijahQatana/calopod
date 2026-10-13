@@ -9,13 +9,16 @@ public enum LocalStateBackupError: Error, Equatable, Sendable {
     case backupNotPrivate
     case unsupportedSchema
     case stateBusy
+    case keyUnavailable
 }
 
 public struct LocalStateBackupSummary: Equatable, Sendable {
     public let migrationCount: Int
+    public let isEncrypted: Bool
 
-    public init(migrationCount: Int) {
+    public init(migrationCount: Int, isEncrypted: Bool = false) {
         self.migrationCount = migrationCount
+        self.isEncrypted = isEncrypted
     }
 }
 
@@ -23,6 +26,7 @@ public enum LocalStateBackup {
     public static func create(
         from sourcePath: String,
         at backupPath: String,
+        secrets: any SecretStore,
         fileManager: FileManager = .default
     ) throws -> LocalStateBackupSummary {
         let sourceURL = try existingRegularFile(
@@ -47,13 +51,26 @@ public enum LocalStateBackup {
         let database = try CalopodDatabase(path: sourceURL.path)
         try database.backup(toPath: stagingURL.path)
         try makePrivate(stagingURL, fileManager: fileManager)
-        let summary = try verify(at: stagingURL.path, fileManager: fileManager)
-        try fileManager.moveItem(at: stagingURL, to: backupURL)
-        return summary
+        let summary = try verifyPlain(at: stagingURL.path, fileManager: fileManager)
+        let sealedURL = stagingURL.appendingPathExtension("sealed")
+        defer { try? fileManager.removeItem(at: sealedURL) }
+        let sealed = try BackupEncryption.seal(try Data(contentsOf: stagingURL), secrets: secrets)
+        guard fileManager.createFile(
+            atPath: sealedURL.path,
+            contents: sealed,
+            attributes: [.posixPermissions: 0o600]
+        ) else {
+            throw LocalStateBackupError.invalidPath
+        }
+        try fileManager.moveItem(at: sealedURL, to: backupURL)
+        return LocalStateBackupSummary(migrationCount: summary.migrationCount, isEncrypted: true)
     }
 
+    /// Checks an encrypted or older plain backup. Encrypted files are opened in a private
+    /// temporary copy that is removed afterwards.
     public static func verify(
         at backupPath: String,
+        secrets: any SecretStore,
         fileManager: FileManager = .default
     ) throws -> LocalStateBackupSummary {
         let backupURL = try existingRegularFile(
@@ -61,11 +78,52 @@ public enum LocalStateBackup {
             missing: .backupInvalid,
             fileManager: fileManager
         )
-        let attributes = try fileManager.attributesOfItem(atPath: backupURL.path)
+        try requirePrivate(backupURL, fileManager: fileManager)
+        guard try BackupEncryption.isEncrypted(backupURL) else {
+            return try verifyPlain(at: backupURL.path, fileManager: fileManager)
+        }
+        let plainURL = backupURL.deletingLastPathComponent()
+            .appendingPathComponent(".calopod-verify-\(UUID().uuidString).sqlite")
+        defer { try? fileManager.removeItem(at: plainURL) }
+        try writeDecrypted(backupURL, to: plainURL, secrets: secrets, fileManager: fileManager)
+        let summary = try verifyPlain(at: plainURL.path, fileManager: fileManager)
+        return LocalStateBackupSummary(migrationCount: summary.migrationCount, isEncrypted: true)
+    }
+
+    private static func writeDecrypted(
+        _ backupURL: URL,
+        to plainURL: URL,
+        secrets: any SecretStore,
+        fileManager: FileManager
+    ) throws {
+        let plain = try BackupEncryption.open(try Data(contentsOf: backupURL), secrets: secrets)
+        guard fileManager.createFile(
+            atPath: plainURL.path,
+            contents: plain,
+            attributes: [.posixPermissions: 0o600]
+        ) else {
+            throw LocalStateBackupError.invalidPath
+        }
+    }
+
+    private static func requirePrivate(_ url: URL, fileManager: FileManager) throws {
+        let attributes = try fileManager.attributesOfItem(atPath: url.path)
         guard let permissions = attributes[.posixPermissions] as? NSNumber,
               permissions.intValue & 0o077 == 0 else {
             throw LocalStateBackupError.backupNotPrivate
         }
+    }
+
+    private static func verifyPlain(
+        at backupPath: String,
+        fileManager: FileManager
+    ) throws -> LocalStateBackupSummary {
+        let backupURL = try existingRegularFile(
+            at: backupPath,
+            missing: .backupInvalid,
+            fileManager: fileManager
+        )
+        try requirePrivate(backupURL, fileManager: fileManager)
 
         var configuration = Configuration()
         configuration.readonly = true
@@ -107,6 +165,7 @@ public enum LocalStateBackup {
     public static func restore(
         from backupPath: String,
         to statePath: String,
+        secrets: any SecretStore,
         fileManager: FileManager = .default
     ) throws -> LocalStateBackupSummary {
         let backupURL = try existingRegularFile(
@@ -116,7 +175,7 @@ public enum LocalStateBackup {
         )
         let stateURL = try absoluteFileURL(statePath)
         guard backupURL != stateURL else { throw LocalStateBackupError.invalidPath }
-        _ = try verify(at: backupURL.path, fileManager: fileManager)
+        _ = try verify(at: backupURL.path, secrets: secrets, fileManager: fileManager)
 
         let parent = stateURL.deletingLastPathComponent()
         var isDirectory: ObjCBool = false
@@ -157,9 +216,14 @@ public enum LocalStateBackup {
             try? fileManager.removeItem(at: rollbackURL)
         }
 
-        try fileManager.copyItem(at: backupURL, to: stagingURL)
+        let isEncrypted = try BackupEncryption.isEncrypted(backupURL)
+        if isEncrypted {
+            try writeDecrypted(backupURL, to: stagingURL, secrets: secrets, fileManager: fileManager)
+        } else {
+            try fileManager.copyItem(at: backupURL, to: stagingURL)
+        }
         try makePrivate(stagingURL, fileManager: fileManager)
-        _ = try verify(at: stagingURL.path, fileManager: fileManager)
+        _ = try verifyPlain(at: stagingURL.path, fileManager: fileManager)
 
         if fileManager.fileExists(atPath: stateURL.path) {
             try fileManager.moveItem(at: stateURL, to: rollbackURL)
@@ -168,12 +232,12 @@ public enum LocalStateBackup {
         do {
             try fileManager.moveItem(at: stagingURL, to: stateURL)
             try makePrivate(stateURL, fileManager: fileManager)
-            let summary = try verify(at: stateURL.path, fileManager: fileManager)
+            let summary = try verifyPlain(at: stateURL.path, fileManager: fileManager)
             if movedCurrentState {
                 try fileManager.removeItem(at: rollbackURL)
                 movedCurrentState = false
             }
-            return summary
+            return LocalStateBackupSummary(migrationCount: summary.migrationCount, isEncrypted: isEncrypted)
         } catch {
             try? fileManager.removeItem(at: stateURL)
             if movedCurrentState {

@@ -26,7 +26,7 @@ calopod support backup --output "$PWD/calopod-state-backup.sqlite"
 calopod support verify --backup "$PWD/calopod-state-backup.sqlite"
 ```
 
-The backup is a single-file copy of Calopod's database on this Mac. It holds your settings and the event details Calopod has cached (see [What Calopod stores](#what-calopod-stores)), unencrypted, so keep it somewhere protected. It doesn't include Keychain items, so it won't work on a different Mac.
+The backup is a single-file copy of Calopod's database on this Mac. It holds your settings and the event details Calopod has cached (see [What Calopod stores](#what-calopod-stores)). It's encrypted with a key that Calopod keeps in your Keychain, and `verify` reports `Backup encrypted: yes`. That key doesn't leave this Mac, so a backup can't be opened on a different one, and if you lose the Keychain item you lose the backup. Backups made by earlier versions are plain files; they still verify and restore.
 
 To restore:
 
@@ -44,7 +44,7 @@ Restore waits for any running sync, refresh or cached read to finish and refuses
 
 To keep the inbox, change detection, replies and full-details copies working, Calopod caches event details from your calendars, including events marked private: titles, notes, locations, links, organizer and attendee names and emails, times, and your response. It also keeps connection and calendar names and the inbox history.
 
-All of this sits in a SQLite file that only your user can read. Calopod doesn't encrypt it or hide private events, so anything running as you can read it. FileVault protects the disk, but a copy of the file elsewhere is unprotected. Sign-in tokens and the signing key are in the Keychain instead. History older than 90 days is cleaned up automatically.
+All of this sits in a SQLite file that only your user can read. Calopod doesn't encrypt it or hide private events, so anything running as you can read it. FileVault protects the disk. Backups are encrypted; a copy of the live file is not. Sign-in tokens and the signing key are in the Keychain instead. History older than 90 days is cleaned up automatically.
 
 ## Calendar permission problems
 

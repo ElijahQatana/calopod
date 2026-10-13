@@ -3,6 +3,7 @@ import CalopodDomain
 import CalopodRuntime
 import CalopodStore
 import CalopodSync
+import CalopodTestSupport
 import Foundation
 import Testing
 
@@ -47,7 +48,7 @@ func cachedCalendarAndInboxReadsProceedUnderSyncLock() async throws {
             connectionID: nil, calendarID: nil, range: fixture.range)
     }
     #expect(throws: CalopodRuntimeError.busy) {
-        try fixture.environment.restoreState(from: fixture.backupURL.path)
+        try fixture.environment.restoreState(from: fixture.backupURL.path, secrets: fixture.secrets)
     }
     #expect(try fixture.environment.readOnlyState().repository.connections().count == 1)
 }
@@ -58,11 +59,11 @@ func restoreExcludesCachedReadersUntilTheyFinish() throws {
     defer { fixture.remove() }
     var read: CalopodStateRead? = try fixture.environment.readOnlyState()
     #expect(throws: CalopodRuntimeError.busy) {
-        try fixture.environment.restoreState(from: fixture.backupURL.path)
+        try fixture.environment.restoreState(from: fixture.backupURL.path, secrets: fixture.secrets)
     }
     #expect(try read?.repository.connections().count == 1)
     read = nil
-    #expect(try fixture.environment.restoreState(from: fixture.backupURL.path).migrationCount == CalopodDatabase.supportedMigrationIdentifiers.count)
+    #expect(try fixture.environment.restoreState(from: fixture.backupURL.path, secrets: fixture.secrets).migrationCount == CalopodDatabase.supportedMigrationIdentifiers.count)
     let restoreLock = try ProcessLock.acquire(at: fixture.environment.stateLocation.accessLockURL)
     defer { withExtendedLifetime(restoreLock) {} }
     #expect(throws: CalopodRuntimeError.busy) { try fixture.environment.readOnlyState() }
@@ -81,6 +82,7 @@ private struct CachedStateFixture {
     let environment: CalopodRuntimeEnvironment
     let backupURL: URL
     let range: ResolvedDateRange
+    let secrets = MemorySecretStore()
 
     init() throws {
         range = ResolvedDateRange(window: try SyncWindow(start: Date(timeIntervalSince1970: 100),
@@ -109,7 +111,7 @@ private struct CachedStateFixture {
                 windowStart: range.window.start, windowEnd: range.window.end, instances: [event],
                 cancelledSourceKeyHashes: [], isFullRefresh: true, cursorUpdates: [])
         }
-        _ = try LocalStateBackup.create(from: location.databaseURL.path, at: backupURL.path)
+        _ = try LocalStateBackup.create(from: location.databaseURL.path, at: backupURL.path, secrets: secrets)
     }
 
     func remove() { try? FileManager.default.removeItem(at: root) }

@@ -252,6 +252,7 @@ enum HumanOutputRenderer {
         }
         if let count = payload.busyArmCount { lines.append("Busy Arms: \(count)") }
         if let valid = payload.backupValid { lines.append("Backup valid: \(valid ? "yes" : "no")") }
+        if let encrypted = payload.backupEncrypted { lines.append("Backup encrypted: \(encrypted ? "yes" : "no")") }
         if let count = payload.migrationCount { lines.append("Migrations: \(count)") }
         lines.append(contentsOf: warnings.map { "Warning: \(clean($0))" })
         return lines.flatMap { wrap($0, width: max(10, width)) }.joined(separator: "\n")

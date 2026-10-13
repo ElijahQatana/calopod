@@ -79,6 +79,7 @@ public struct CommandPayload: Codable, Equatable, Sendable {
     public let mainConfigured: Bool?
     public let busyArmCount: Int?
     public let backupValid: Bool?
+    public let backupEncrypted: Bool?
     public let migrationCount: Int?
     public let ingestion: EventIngestionSummary?
     public let review: SyncReviewSummary?
@@ -118,6 +119,7 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         mainConfigured: Bool? = nil,
         busyArmCount: Int? = nil,
         backupValid: Bool? = nil,
+        backupEncrypted: Bool? = nil,
         migrationCount: Int? = nil,
         ingestion: EventIngestionSummary? = nil,
         review: SyncReviewSummary? = nil
@@ -156,6 +158,7 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         self.mainConfigured = mainConfigured
         self.busyArmCount = busyArmCount
         self.backupValid = backupValid
+        self.backupEncrypted = backupEncrypted
         self.migrationCount = migrationCount
         self.ingestion = ingestion
         self.review = review

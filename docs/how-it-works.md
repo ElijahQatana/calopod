@@ -54,7 +54,7 @@ EventKit change notifications say something changed, not what, so Calopod always
 
 ## Local state and secrets
 
-SQLite holds the settings, cached events (including titles, notes, attendees and private events), copy mappings, run history and the inbox's response history. It's owner-only but not encrypted. It never holds tokens, passwords or the ownership key. Those live in the Keychain, and secrets are never taken as command arguments.
+SQLite holds the settings, cached events (including titles, notes, attendees and private events), copy mappings, run history and the inbox's response history. It's owner-only but not encrypted. Backups are sealed with AES-GCM using a random key in the Keychain (`BackupEncryption`), and restore decrypts them into a staging file before the usual checks. It never holds tokens, passwords or the ownership key. Those live in the Keychain, and secrets are never taken as command arguments.
 
 The event cache is stored per account, calendar and time window. A cursor only advances in the same transaction that saves the events it covers. Malformed or out-of-range events are dropped and only counted.
 

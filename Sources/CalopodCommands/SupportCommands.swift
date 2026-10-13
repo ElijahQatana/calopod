@@ -70,7 +70,8 @@ public struct SupportBackupCommand: ParsableCommand {
             defer { withExtendedLifetime(lock) {} }
             let summary = try LocalStateBackup.create(
                 from: environment.stateLocation.databaseURL.path,
-                at: outputPath
+                at: outputPath,
+                secrets: KeychainSecretStore()
             )
             try writeBackupResult(
                 command: "support.backup",
@@ -102,7 +103,7 @@ public struct SupportVerifyCommand: ParsableCommand {
 
     public func run() throws {
         do {
-            let summary = try LocalStateBackup.verify(at: backupPath)
+            let summary = try LocalStateBackup.verify(at: backupPath, secrets: KeychainSecretStore())
             try writeBackupResult(
                 command: "support.verify",
                 message: "The private local-state backup is valid.",
@@ -267,6 +268,7 @@ private func writeBackupResult(
             status: "ok",
             message: message,
             backupValid: true,
+            backupEncrypted: summary.isEncrypted,
             migrationCount: summary.migrationCount
         ),
         format: format
