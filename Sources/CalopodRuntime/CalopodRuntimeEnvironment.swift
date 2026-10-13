@@ -137,13 +137,20 @@ public struct CalopodRuntimeEnvironment: Sendable {
         return CalopodStateRead(repository: LocalStateRepository(database: database), lock: lock)
     }
 
-    public func restoreState(from backupPath: String) throws -> LocalStateBackupSummary {
+    public func restoreState(
+        from backupPath: String,
+        secrets: any SecretStore = KeychainSecretStore()
+    ) throws -> LocalStateBackupSummary {
         try stateLocation.prepareDirectory()
         let writerLock = try ProcessLock.acquire(at: stateLocation.lockURL)
         defer { withExtendedLifetime(writerLock) {} }
         let accessLock = try ProcessLock.acquire(at: stateLocation.accessLockURL)
         defer { withExtendedLifetime(accessLock) {} }
-        return try LocalStateBackup.restore(from: backupPath, to: stateLocation.databaseURL.path)
+        return try LocalStateBackup.restore(
+            from: backupPath,
+            to: stateLocation.databaseURL.path,
+            secrets: secrets
+        )
     }
 
     public func googleService(

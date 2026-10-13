@@ -135,6 +135,8 @@ private func commandFailure(_ error: Error) -> (message: String, exitCode: Calop
             ("The local-state backup must allow access only to its owner.", .permissionDenied)
         case .unsupportedSchema:
             ("The local-state backup was created by an unsupported version.", .invalidConfiguration)
+        case .keyUnavailable:
+            ("The backup key is not in this Mac's Keychain, so the backup can't be opened here.", .permissionDenied)
         case .stateBusy:
             ("Local state is still in use. Stop the service and other Calopod commands.", .temporaryFailure)
         }

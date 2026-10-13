@@ -100,7 +100,7 @@ let package = Package(
         ),
         .target(
             name: "CalopodTestSupport",
-            dependencies: ["CalopodDomain"],
+            dependencies: ["CalopodDomain", "CalopodStore"],
             path: "Tests/Support"
         ),
         .testTarget(
@@ -119,7 +119,7 @@ let package = Package(
         ),
         .testTarget(
             name: "CalopodStoreTests",
-            dependencies: ["CalopodDomain", "CalopodStore"]
+            dependencies: ["CalopodDomain", "CalopodStore", "CalopodTestSupport"]
         ),
         .testTarget(
             name: "CalopodProvidersTests",
@@ -136,7 +136,7 @@ let package = Package(
         ),
         .testTarget(
             name: "CalopodCommandsTests",
-            dependencies: ["CalopodCommands", "CalopodStore"]
+            dependencies: ["CalopodCommands", "CalopodStore", "CalopodTestSupport"]
         ),
         .testTarget(
             name: "CalopodGoogleTests",
