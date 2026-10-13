@@ -2,7 +2,7 @@
 
 [![Calopod: many calendars, one schedule](assets/share.png)](https://calopod.elijahquintana.pro)
 
-*One schedule. Many calendars.* More at [calopod.elijahquintana.pro](https://calopod.elijahquintana.pro).
+*Many calendars. One schedule.* More at [calopod.elijahquintana.pro](https://calopod.elijahquintana.pro).
 
 If your calendars live in different places (work, personal, a side project), each one only knows about its own events. Calopod runs on your Mac, reads the calendars you pick, and keeps them in step:
 
