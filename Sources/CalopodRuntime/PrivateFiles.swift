@@ -1,8 +1,7 @@
 import Foundation
 
-/// Creates owner-only files and directories with the mode set by the
-/// creating call, so there is no window where they exist with looser
-/// permissions. The requested mode is only ever narrowed by the umask.
+/// Creates owner-only files and directories with the mode set at creation, so there's no window
+/// with looser permissions. The umask can only narrow it.
 public enum PrivateFiles {
     /// Creates `url` as a directory with mode 0700. Missing parents are
     /// created normally. Returns false if the directory already existed.

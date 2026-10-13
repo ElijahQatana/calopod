@@ -1,9 +1,8 @@
 import CalopodStore
 import Foundation
 
-/// An OAuth token pair for one connection. Stored in Keychain via
-/// `OAuthTokenVault`, never in SQLite, since these are live credentials
-/// rather than sync state.
+/// An OAuth token pair for one connection. Kept in the Keychain via `OAuthTokenVault`, never
+/// SQLite.
 public struct OAuthTokens: Codable, Equatable, Sendable {
     public let accessToken: String
     public let refreshToken: String
@@ -41,8 +40,7 @@ public struct OAuthTokens: Codable, Equatable, Sendable {
     }
 }
 
-/// Keychain-backed storage for OAuth tokens, keyed by provider and
-/// connection so multiple accounts on the same provider never collide.
+/// Keychain storage for OAuth tokens, keyed by provider and connection.
 public struct OAuthTokenVault: Sendable {
     private let secretStore: any SecretStore
 

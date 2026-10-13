@@ -2,19 +2,12 @@ import CalopodDomain
 import CalopodEventKit
 import CalopodStore
 
-/// Blocks the same calendar account from being synced twice — once through
-/// macOS's own EventKit copy of an account, and once through a direct
-/// Google or Microsoft connection to that same account — which would
-/// otherwise double every event. Detection is heuristic
-/// (`EventKitSourceClassifier` guesses at account type from EventKit's loose
-/// source metadata), so this only warns or blocks selection; it never
-/// silently deduplicates on someone's behalf.
+/// Stops the same account being synced twice, once through the Mac's Calendar app and once through
+/// a direct
+/// Google or Microsoft connection. The match is a guess from loose EventKit metadata, so it only
+/// warns or blocks.
 enum CalendarSelectionSafety {
-    /// Checked before actually selecting a calendar: returns a blocking
-    /// message if selecting `binding` would create the overlap in either
-    /// direction — an EventKit calendar that looks like an account already
-    /// selected directly, or a direct connection to a provider EventKit
-    /// already has a selected calendar for.
+    /// Returns a blocking message if selecting `binding` would select the same account both ways.
     static func conflictMessage(
         selecting binding: StoredCalendarBinding,
         on connection: StoredConnection,
@@ -55,10 +48,8 @@ enum CalendarSelectionSafety {
         return nil
     }
 
-    /// Non-blocking counterpart to `conflictMessage`, used when listing or
-    /// refreshing EventKit calendars: flags any that look like they overlap
-    /// with an already-connected direct provider, without preventing the
-    /// listing itself.
+    /// Non-blocking version for listings: flags EventKit calendars that look like a connected
+    /// direct account.
     static func warnings(
         for bindings: [StoredCalendarBinding],
         connection: StoredConnection,

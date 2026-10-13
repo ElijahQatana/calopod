@@ -1,12 +1,8 @@
 import CalopodDomain
 import Foundation
 
-/// Best-effort guess at which hosted provider an EventKit calendar's source
-/// actually belongs to (macOS exposes Exchange/Google/iCloud accounts as
-/// EventKit sources with only loosely structured type/label metadata). Used
-/// to warn against adding the same account twice — once through EventKit
-/// and once through a direct Google/Microsoft connection — never to make
-/// sync decisions on its own.
+/// Best-effort guess at which provider an EventKit source belongs to, from loose type and label
+/// metadata. Only used to warn about duplicate accounts.
 public enum EventKitSourceClassifier {
     public static func likelyDirectProvider(
         sourceType: String?,

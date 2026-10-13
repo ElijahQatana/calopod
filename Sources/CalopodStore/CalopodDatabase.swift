@@ -1,10 +1,7 @@
 import Foundation
 import GRDB
 
-/// Owns the single GRDB connection to Calopod's SQLite operational ledger
-/// and runs schema migrations on writable opens. Every store type (`LocalStateRepository`
-/// and friends) reads and writes through this rather than opening its own
-/// connection, so all access goes through one consistent migration state.
+/// Owns the one GRDB connection and runs migrations on open. Every store goes through it.
 public final class CalopodDatabase: @unchecked Sendable {
     private let writer: any DatabaseWriter
 
@@ -34,8 +31,7 @@ public final class CalopodDatabase: @unchecked Sendable {
         try migrate()
     }
 
-    /// An ephemeral, in-memory database for tests — same schema and
-    /// migrations as the real thing, but nothing touches disk.
+    /// An in-memory database for tests, with the same schema.
     public static func inMemory() throws -> CalopodDatabase {
         var configuration = Configuration()
         configuration.prepareDatabase { database in

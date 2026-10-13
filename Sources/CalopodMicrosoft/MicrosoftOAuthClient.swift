@@ -4,10 +4,8 @@ import Foundation
 import FoundationNetworking
 #endif
 
-/// Endpoints and client identity for one Microsoft Entra (Azure AD) app
-/// registration. `tenant` selects which directory can sign in — `"common"`
-/// (the default) allows both personal Microsoft accounts and any work/school
-/// account.
+/// Endpoints and client identity for an Entra app registration. `tenant` picks who can sign in;
+/// `"common"` allows personal and work accounts.
 public struct MicrosoftOAuthConfiguration: Sendable {
     public let clientID: String
     public let tenant: String
@@ -30,10 +28,8 @@ public struct MicrosoftOAuthConfiguration: Sendable {
     }
 }
 
-/// Runs the Microsoft identity platform's OAuth authorization-code flow (via
-/// PKCE) and refreshes access tokens. `offline_access` is requested
-/// explicitly — unlike Google, Microsoft only issues a refresh token when a
-/// scope asks for one.
+/// Runs the Microsoft authorization-code flow (PKCE) and refreshes tokens. `offline_access` is
+/// requested because Microsoft only issues a refresh token when asked.
 public struct MicrosoftOAuthClient: Sendable {
     public static let scopes = [
         "offline_access",
@@ -100,9 +96,7 @@ public struct MicrosoftOAuthClient: Sendable {
             throw tokenFailure(response, refreshing: true)
         }
 
-        // Microsoft may rotate the refresh token on any refresh call; when it
-        // does, the new one must replace the stored one or the next refresh
-        // will fail with an already-invalidated token.
+        // Microsoft may rotate the refresh token; the new one must replace the stored one.
         if let replacementRefreshToken = payload.refreshToken {
             return OAuthTokens(
                 accessToken: payload.accessToken,
@@ -148,9 +142,7 @@ public struct MicrosoftOAuthClient: Sendable {
         )
     }
 
-    // The tenant value is interpolated directly into the authorize and token
-    // endpoint URLs, so it's restricted to a safe character set here rather
-    // than trusted as opaque configuration.
+    // The tenant goes into endpoint URLs, so restrict it to a safe character set.
     private func validateConfiguration() throws {
         guard !configuration.clientID.isEmpty else {
             throw ProviderFailure.configurationMissing("Microsoft OAuth client ID")
@@ -170,10 +162,8 @@ public struct MicrosoftOAuthClient: Sendable {
         return try await transport.send(request)
     }
 
-    // Distinguishes "the organization's Conditional Access policy requires
-    // more from the user" (MFA, device compliance, re-consent) from an
-    // ordinary auth failure, since the former needs a specific "go do this
-    // in your account" message rather than a generic re-authorize prompt.
+    // Conditional Access (MFA, device compliance, re-consent) needs a specific message, unlike an
+    // ordinary auth failure.
     private func tokenFailure(_ response: HTTPResponse, refreshing: Bool) -> ProviderFailure {
         let payload = try? JSONDecoder().decode(MicrosoftOAuthError.self, from: response.body)
         if payload?.error == "interaction_required"

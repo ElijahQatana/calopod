@@ -33,9 +33,7 @@ public enum DateRangeInputError: Error, Equatable, CustomStringConvertible {
     }
 }
 
-/// A validated `SyncWindow` plus the timezone identifier it was resolved
-/// against — kept alongside the window so a caller can echo back which
-/// timezone date-only input was interpreted in.
+/// A validated window plus the time zone used for date-only input.
 public struct ResolvedDateRange: Equatable, Sendable {
     public let window: SyncWindow
     public let timeZoneIdentifier: String
@@ -46,9 +44,8 @@ public struct ResolvedDateRange: Equatable, Sendable {
     }
 }
 
-/// The `--day` / `--from` / `--through` / `--timezone` flags shared by every
-/// command that operates over a date range, so each command gets identical
-/// parsing and error messages instead of reimplementing this itself.
+/// The `--day`, `--from`, `--through` and `--timezone` flags shared by commands that take a date
+/// range.
 public struct DateRangeOptions: ParsableArguments {
     @Option(name: .long, help: "One local calendar day in YYYY-MM-DD form.")
     public var day: String?
@@ -78,9 +75,7 @@ public struct DateRangeOptions: ParsableArguments {
     }
 }
 
-/// The actual parsing and validation behind `DateRangeOptions`, split out so
-/// it can be tested directly against raw string input without going through
-/// ArgumentParser.
+/// Parsing and validation, split out so it can be tested without ArgumentParser.
 public struct DateRangeResolver: Sendable {
     public let day: String?
     public let from: String?
@@ -104,10 +99,8 @@ public struct DateRangeResolver: Sendable {
         now: Date = Date(),
         systemTimeZone: TimeZone = .current
     ) throws -> ResolvedDateRange? {
-        // `--day` and `--from`/`--through` are two different ways to express
-        // the same window; accepting both would leave an ambiguous case
-        // (which one wins if they disagree), so it's rejected outright
-        // instead of picking a winner silently.
+        // `--day` and `--from`/`--through` describe the same window, so using both is rejected
+        // rather than picking one.
         if day != nil, from != nil || through != nil {
             throw DateRangeInputError.conflictingDayAndRange
         }
@@ -194,10 +187,8 @@ public struct DateRangeResolver: Sendable {
             throw DateRangeInputError.invalidDate(value)
         }
 
-        // `Calendar.date(from:)` normalizes an out-of-range day (e.g.
-        // 2026-02-30) into the nearest valid date rather than failing, so the
-        // result is converted back to components and compared against the
-        // original input to catch exactly that case.
+        // `Calendar.date(from:)` rolls 2026-02-30 over to a valid date, so compare the components
+        // back to catch it.
         let verified = calendar.dateComponents([.year, .month, .day], from: date)
         guard verified.year == year, verified.month == month, verified.day == day else {
             throw DateRangeInputError.invalidDate(value)
@@ -206,10 +197,7 @@ public struct DateRangeResolver: Sendable {
         return date
     }
 
-    // An RFC 3339 timestamp must carry its own UTC offset — one that's
-    // missing would force a silent guess at which timezone it means, which
-    // is exactly the ambiguity a full timestamp (as opposed to a bare date)
-    // is supposed to remove.
+    // A timestamp must carry its own UTC offset, otherwise we would be guessing the time zone.
     private func timestamp(_ value: String) throws -> Date {
         guard value.contains("T"), hasExplicitOffset(value) else {
             throw DateRangeInputError.invalidTimestamp(value)

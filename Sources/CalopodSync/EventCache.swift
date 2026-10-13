@@ -30,10 +30,8 @@ public enum EventCacheError: Error {
     case incompleteRead
 }
 
-/// Applies one complete provider read to the local normalized-event store.
-/// This is the boundary between "whatever a provider just returned" and the
-/// stable, provider-agnostic `StoredNormalizedInstance` shape the rest of
-/// the sync engine (planning, Availability) actually works with.
+/// Applies a provider read to the local store, turning raw provider events into the shared
+/// `StoredNormalizedInstance`.
 public struct EventCache: Sendable {
     private let repository: LocalStateRepository
 
@@ -128,10 +126,7 @@ public enum EventNormalizer {
         var ingestion = EventIngestionSummary()
 
         for event in events {
-            // Defends against a page that somehow contains events for the
-            // wrong connection or calendar (a provider bug, or a stale
-            // cache); silently accepting them would attribute events to the
-            // wrong source.
+            // Guard against a page with events for the wrong connection or calendar.
             guard event.provider == connection.provider,
                   event.connectionID == connection.id,
                   event.calendarID == calendar.providerCalendarID,
@@ -176,9 +171,7 @@ public enum EventNormalizer {
             if !isInRange { ingestion.outOfRangeCount += 1 }
 
             let recurrenceID = event.originalStart ?? event.seriesID
-            // Fingerprints the full event content (not just identity) so a
-            // later refresh can tell a real edit apart from an unchanged
-            // event returned again by the provider.
+            // Fingerprint the full content so a real edit can be told from an unchanged event.
             let fingerprint = digest(
                 fields: [
                     event.provider,

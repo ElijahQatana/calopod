@@ -3,11 +3,8 @@ import CalopodStore
 import CryptoKit
 import Foundation
 
-/// The signed ownership marker written onto every managed event, proving it
-/// belongs to a specific configuration and Arm. EventKit ownership also
-/// requires the mapped provider event ID. Decoded from the target event's marker field
-/// and cryptographically verified by `OwnershipMarkerCodec.verify` before
-/// anything downstream trusts it.
+/// The signed ownership marker on every managed event. Verified by `OwnershipMarkerCodec.verify`
+/// before anything trusts it.
 public struct ManagedEventProvenance: Codable, Equatable, Sendable {
     public let schemaVersion: Int
     public let configurationID: String
@@ -42,9 +39,8 @@ public struct ManagedEventProvenance: Codable, Equatable, Sendable {
     }
 }
 
-/// Everything a provider client needs to create or update one managed
-/// event: the desired content and the signed provenance that will let a
-/// later sync recognize it.
+/// What a provider client needs to create or update a managed event: the content and the signed
+/// marker.
 public struct ManagedEventWriteRequest: Codable, Equatable, Sendable {
     public let desiredFingerprint: String
     public let payload: DesiredEventPayload
@@ -61,9 +57,7 @@ public struct ManagedEventWriteRequest: Codable, Equatable, Sendable {
     }
 }
 
-/// What a provider handed back after a write: the identity and version
-/// needed to address this event again (an update, a delete, or a later
-/// conditional write).
+/// What a provider returns after a write: the identity and version to address the event again.
 public struct ManagedEventWriteResult: Codable, Equatable, Sendable {
     public let providerEventID: String
     public let providerVersion: String?
@@ -74,19 +68,15 @@ public struct ManagedEventWriteResult: Codable, Equatable, Sendable {
     }
 }
 
-/// Whether a target event's marker field could be decoded at all, before any
-/// cryptographic or identity check runs against it. See
-/// `ManagedTargetObserver` for how this feeds into full ownership
-/// classification.
+/// Whether a marker could be decoded at all, before any signature check. See
+/// `ManagedTargetObserver`.
 public enum ManagedEventMarkerStatus: String, Codable, Equatable, Sendable {
     case absent
     case invalid
     case parsed
 }
 
-/// A raw read of one event currently on the target calendar, as a provider
-/// client reports it. This is the input `ManagedTargetObserver` classifies
-/// into a `TargetEventObservation`.
+/// A raw read of one event on the target calendar. `ManagedTargetObserver` classifies it.
 public struct ManagedEventSnapshot: Codable, Equatable, Sendable {
     public let providerEventID: String
     public let providerVersion: String?
@@ -115,10 +105,8 @@ public struct ManagedEventSnapshot: Codable, Equatable, Sendable {
     }
 }
 
-/// The symmetric key used to sign and verify ownership markers for one
-/// configuration. Lives in Keychain (see `OwnershipKeyVault`), never in
-/// SQLite, since it's what makes a marker unforgeable rather than just
-/// self-reported.
+/// The key that signs ownership markers for one configuration. It lives in the Keychain, never
+/// SQLite.
 public struct OwnershipKeyMaterial: Equatable, Sendable {
     public let id: String
     public let bytes: Data
@@ -135,15 +123,10 @@ public enum OwnershipMarkerError: Error, Equatable, Sendable {
     case signatureMismatch
 }
 
-/// Encodes and decodes ownership markers, and signs/verifies them with
-/// HMAC-SHA256 so a marker can't be forged or edited by anything other than
-/// Calopod holding the matching `OwnershipKeyMaterial`.
+/// Encodes, signs (HMAC-SHA256) and verifies ownership markers.
 public enum OwnershipMarkerCodec {
-    /// Parses whatever key/value fields a provider returned for an event's
-    /// marker (if that provider exposes custom fields directly) into a
-    /// `ManagedEventProvenance`. Returns `.absent` when there's no marker at
-    /// all, and `.invalid` when fields exist but don't form a complete,
-    /// well-typed marker.
+    /// Parses a provider's marker fields. `.absent` means no marker; `.invalid` means fields exist
+    /// but are incomplete.
     public static func marker(fields: [String: String]?) -> (
         status: ManagedEventMarkerStatus,
         provenance: ManagedEventProvenance?
@@ -195,10 +178,8 @@ public enum OwnershipMarkerCodec {
         )
     }
 
-    /// Signs a new marker over its canonical fields with the configuration's
-    /// ownership key. The signature (`authenticationTag`) is what
-    /// `verify` checks later — anyone can read a marker's fields, but only
-    /// someone holding the key can produce one that verifies.
+    /// Signs a marker over its canonical fields. Anyone can read them; only the key holder can
+    /// produce a tag that verifies.
     public static func sign(
         configurationID: String,
         armID: String,
@@ -237,10 +218,8 @@ public enum OwnershipMarkerCodec {
         )
     }
 
-    /// Recomputes the HMAC over the marker's canonical fields and checks it
-    /// against `authenticationTag`. This is the actual proof step: a marker
-    /// that decodes cleanly but fails here is treated as untrustworthy, not
-    /// merely unusual.
+    /// Recomputes the HMAC and compares it to `authenticationTag`. A marker that decodes but fails
+    /// here is untrusted.
     public static func verify(
         _ marker: ManagedEventProvenance,
         key: OwnershipKeyMaterial
@@ -272,11 +251,8 @@ public enum OwnershipMarkerCodec {
         }
     }
 
-    /// Encodes a versioned `calopod://managed/` URL for providers (like
-    /// EventKit) whose event model has a URL field but no room for custom
-    /// key/value metadata. This URL field is reserved for the ownership
-    /// marker; a source event's own meeting link is carried in notes
-    /// instead, never here.
+    /// Encodes a marker as a versioned `calopod://managed/` URL for providers like EventKit that
+    /// have a URL field but no custom metadata. A source's own meeting link goes in notes instead.
     public static func markerURL(_ marker: ManagedEventProvenance) throws -> URL {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
@@ -339,10 +315,7 @@ public enum OwnershipMarkerCodec {
     }
 }
 
-/// Keychain-backed storage for one configuration's ownership signing key.
-/// `loadOrCreate` is what every write path calls, so the first write for a
-/// configuration transparently provisions its key rather than requiring a
-/// separate setup step.
+/// Keychain storage for a configuration's ownership key. `loadOrCreate` creates it on first write.
 public struct OwnershipKeyVault: Sendable {
     private let secretStore: any SecretStore
 

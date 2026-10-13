@@ -1,9 +1,7 @@
 import CalopodProviders
 import Foundation
 
-/// The Calendar-access permission state as reported by the EventKit host
-/// process. `writeOnly` and `notDetermined` both need user action before
-/// sync can proceed; only `fullAccess` allows reading event content.
+/// Calendar permission as reported by the host. Only `fullAccess` lets Calopod read event content.
 public enum EventKitAccessStatus: String, Codable, Sendable {
     case notDetermined = "not-determined"
     case restricted
@@ -13,9 +11,7 @@ public enum EventKitAccessStatus: String, Codable, Sendable {
     case unknown
 }
 
-/// One EventKit calendar as reported by the host process, including its
-/// source (account) metadata — used both for display and for
-/// `EventKitSourceClassifier`'s direct-provider duplicate detection.
+/// One calendar as reported by the host, with its account metadata for duplicate-source detection.
 public struct EventKitCalendarSnapshot: Codable, Equatable, Sendable {
     public let id: String
     public let title: String
@@ -41,9 +37,8 @@ public struct EventKitCalendarSnapshot: Codable, Equatable, Sendable {
     }
 }
 
-/// One request Calopod can send to the separate EventKit host process. The
-/// host runs out-of-process because it's the process macOS actually grants
-/// (or denies) Calendar access to.
+/// A request Calopod can send to the host. The host is a separate process because macOS grants
+/// Calendar access per app.
 public enum EventKitHostOperation: String, Codable, Sendable {
     case batch
     case permissionStatus
@@ -55,9 +50,7 @@ public enum EventKitHostOperation: String, Codable, Sendable {
     case deleteManagedEvent
 }
 
-/// Wire format for one call to the EventKit host: which operation, and
-/// whichever of the operation-specific fields it needs (unused fields are
-/// simply left nil for a given operation).
+/// Wire format for a host call: the operation plus whichever fields it needs.
 public struct EventKitHostRequest: Codable, Sendable {
     public let protocolVersion: Int?
     public let batches: [[EventKitHostRequest]]?
@@ -92,9 +85,8 @@ public struct EventKitHostRequest: Codable, Sendable {
     }
 }
 
-/// Wire format for the EventKit host's reply. `status` is always populated,
-/// even on failure, so a caller can distinguish a permission problem from an
-/// operation-specific error captured in `errorCode`.
+/// Wire format for the host's reply. `status` is always set so a permission problem can be told
+/// apart from an operation error.
 public struct EventKitHostResponse: Codable, Sendable {
     public let protocolVersion: Int?
     public let batches: [[EventKitHostResponse]]?

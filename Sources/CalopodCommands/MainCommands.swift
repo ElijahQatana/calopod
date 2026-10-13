@@ -16,10 +16,8 @@ public struct MainCommand: ParsableCommand {
     public init() {}
 }
 
-/// Creates the single Main calendar Arm. `ArmConfigurationService` enforces
-/// that only one Main calendar can exist and that it always uses the Full
-/// details Rule, so this command just surfaces those rules' errors rather
-/// than re-checking them itself.
+/// Creates the Main calendar Arm. `ArmConfigurationService` enforces one Main calendar and the Full
+/// details Rule.
 public struct MainConfigureCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "configure",

@@ -20,10 +20,8 @@ public struct BrowserAuthorizationResult: Sendable {
     }
 }
 
-/// Runs an OAuth authorization-code flow through the system browser rather
-/// than an embedded web view, so the user authenticates in their normal,
-/// already-signed-in browser session. `makeURL` builds the provider-specific
-/// authorize URL once this session has a redirect URI ready to receive it.
+/// Runs an OAuth flow in the system browser so the user signs in where they already are. `makeURL`
+/// builds the authorize URL once the redirect URI is known.
 public protocol BrowserAuthorizationSession: Sendable {
     func authorize(
         makeURL: @escaping @Sendable (BrowserAuthorizationContext) throws -> URL
@@ -34,10 +32,8 @@ public protocol BrowserAuthorizationSession: Sendable {
 import AppKit
 import Network
 
-/// Opens the default browser at the provider's authorize URL and receives
-/// the redirect on a one-shot local HTTP listener bound to an ephemeral
-/// loopback port — the standard "loopback redirect" pattern for native apps
-/// that can't register a fixed redirect URI in advance.
+/// Opens the browser and receives the redirect on a one-shot listener on an ephemeral loopback
+/// port.
 public final class LoopbackBrowserAuthorizationSession: BrowserAuthorizationSession, @unchecked Sendable {
     private let timeoutSeconds: UInt64
     private let redirectHost: String
@@ -163,11 +159,9 @@ public final class LoopbackBrowserAuthorizationSession: BrowserAuthorizationSess
             }
         }
     }
-    /// Returns the query values of a request for the callback path whose
-    /// `state` matches, or nil for anything else. The state round-trips
-    /// through the provider unchanged, so requiring it is what stops an
-    /// unrelated request from being taken as the authorization result.
-    /// Repeated keys keep their first value.
+    /// Returns the query values of a callback request whose `state` matches, or nil. Requiring
+    /// `state` stops unrelated requests being taken as the result. Repeated keys keep the first
+    /// value.
     static func callbackValues(
         in request: Data,
         redirectHost: String,
@@ -204,9 +198,8 @@ public final class LoopbackBrowserAuthorizationSession: BrowserAuthorizationSess
     }
 }
 
-/// Guards the listener's single continuation against being resumed twice —
-/// the redirect callback, a listener failure, and the timeout can all race
-/// to finish the flow, and only the first should count.
+/// Guards the single continuation. The callback, a listener failure and the timeout can race; only
+/// the first counts.
 private final class AuthorizationCoordinator: @unchecked Sendable {
     private let listener: NWListener
     private let continuation: CheckedContinuation<BrowserAuthorizationResult, any Error>

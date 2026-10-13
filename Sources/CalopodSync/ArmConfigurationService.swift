@@ -2,9 +2,7 @@ import CalopodDomain
 import CalopodStore
 import Foundation
 
-/// Reasons an Arm cannot be created or changed. Each case maps to one
-/// invariant enforced before anything is persisted, so callers can show a
-/// precise, actionable message instead of a generic failure.
+/// Reasons an Arm can't be created or changed, so callers can show a specific message.
 public enum ArmConfigurationError: Error, Equatable, Sendable, CustomStringConvertible {
     case invalidName
     case noSources
@@ -58,12 +56,8 @@ public enum ArmConfigurationError: Error, Equatable, Sendable, CustomStringConve
     }
 }
 
-/// Creates and updates Arms: the sync and publish relationships that route
-/// one or more source calendars to a single target calendar. This is the
-/// only place new Arms are validated, so every safety rule that keeps
-/// routing sane (no self-routes, no duplicate routes, one Main calendar, a
-/// single preferred writer per EventKit target) lives here rather than
-/// being re-checked by each caller.
+/// Creates and updates Arms. All routing rules are checked here: no self-routes or duplicates, one
+/// Main calendar, one preferred writer per EventKit target.
 public struct ArmConfigurationService: Sendable {
     private let repository: LocalStateRepository
 
@@ -159,9 +153,7 @@ public struct ArmConfigurationService: Sendable {
         now: Date = Date()
     ) throws -> StoredArm {
         let name = try normalizedName(name)
-        // Validation runs cheapest-and-most-local checks first (shape of the
-        // input) before touching the repository, so a malformed request never
-        // pays for a lookup it was always going to fail.
+        // Cheap input checks run before any repository lookup.
         if isMain && ruleMode != .fullDetails {
             throw ArmConfigurationError.mainCalendarRuleFixed
         }
@@ -228,10 +220,8 @@ public struct ArmConfigurationService: Sendable {
             routes[sourceID, default: []].insert(targetBindingID)
         }
 
-        // EventKit calendars are only safe to write from one device at a
-        // time (there is no server-side conflict resolution like the hosted
-        // providers have), so a new Arm targeting EventKit locks in the
-        // creating device as the sole writer up front.
+        // EventKit has no server-side conflict handling, so a new EventKit Arm makes its creating
+        // device the only writer.
         let preferredWriterDeviceID: String?
         if targetConnection.provider == ProviderKind.eventKit.rawValue {
             preferredWriterDeviceID = try repository.currentDevice(
@@ -270,10 +260,8 @@ public struct ArmConfigurationService: Sendable {
     }
 }
 
-/// Gate on whether *this* device is allowed to write to an Arm's target.
-/// Hosted providers (Google, Microsoft) tolerate writes from any device, but
-/// an EventKit target has exactly one preferred writer recorded on the Arm;
-/// every other device must skip applying and leave that target alone.
+/// Whether this device may write to an Arm's target. Google and Microsoft allow any device; an
+/// EventKit target has one preferred writer.
 public enum ArmWriterPolicy {
     public static func allowsApply(
         arm: StoredArm,
