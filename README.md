@@ -11,6 +11,10 @@ If your calendars live in different places (work, personal, a side project), eac
 - **Availability.** Your combined free and busy time across everything you selected.
 - **An inbox.** Invitations that need an answer, changes you haven't seen, and conflicts, with Yes, No and Maybe replies for Google and Microsoft invitations.
 
+<p align="center">
+  <img src="assets/calopod-sync-dark.gif" alt="A dentist appointment is copied from Personal to Work and Client as Busy blocks, a quarterly standup moves from Client to Work with full details, and one event from each calendar is synced into Main with full details." width="720">
+</p>
+
 It never edits or deletes events it didn't create. Sign-in tokens go in your Keychain, and everything else stays on your Mac.
 
 ## Words you'll see
