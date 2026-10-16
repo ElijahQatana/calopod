@@ -48,7 +48,7 @@ struct Sidebar: View {
 
     private var brand: some View {
         HStack(spacing: 9) {
-            SquidBadge()
+            SquidBadge(size: rail ? 40 : 32)
             if !rail { Text("Calopod").font(Theme.title(.title3)) }
         }
         .padding(.horizontal, rail ? 0 : 6)
@@ -91,13 +91,19 @@ struct Sidebar: View {
         return term.isEmpty ? screens : screens.filter { $0.title.localizedCaseInsensitiveContains(term) }
     }
 
+    /// A capsule in the full sidebar, a rounded square sized to the icon in the rail.
+    private var rowShape: AnyShape {
+        rail ? AnyShape(RoundedRectangle(cornerRadius: 14, style: .continuous)) : AnyShape(Capsule())
+    }
+
     private func row(_ screen: Screen) -> some View {
         let selected = navigation.selection == screen
         let count = screen == .inbox ? inboxCount : 0
         return Button { navigation.selection = screen } label: {
             HStack(spacing: 10) {
                 Image(systemName: screen.symbol)
-                    .frame(width: 20)
+                    .font(rail ? .system(size: 22) : nil)
+                    .frame(width: rail ? 28 : 20)
                     .foregroundStyle(selected ? Theme.onAccent : Color.primary.opacity(0.62))
                     .overlay(alignment: .topTrailing) {
                         if rail && count > 0 { dot(selected: selected).offset(x: 5, y: -3) }
@@ -111,10 +117,10 @@ struct Sidebar: View {
             .font(.callout.weight(selected ? .semibold : .regular))
             .foregroundStyle(selected ? Theme.onAccent : .primary)
             .padding(.horizontal, rail ? 0 : 12)
-            .frame(width: rail ? 44 : nil, height: rail ? 40 : 34)
+            .frame(width: rail ? 44 : nil, height: rail ? 44 : 34)
             .frame(maxWidth: rail ? nil : .infinity, alignment: .leading)
-            .background(Capsule().fill(selected ? Theme.accent : .clear))
-            .contentShape(Capsule())
+            .background(rowShape.fill(selected ? Theme.accent : .clear))
+            .contentShape(rowShape)
         }
         .buttonStyle(.plain)
         .help(screen.title)
@@ -137,7 +143,7 @@ struct Sidebar: View {
 
     private var status: some View {
         HStack(spacing: 8) {
-            Circle().fill(statusColor).frame(width: 8, height: 8)
+            Circle().fill(statusColor).frame(width: rail ? 10 : 8, height: rail ? 10 : 8)
             if !rail { Text(statusText).font(.callout).foregroundStyle(.secondary) }
             if !rail { Spacer(minLength: 0) }
         }
@@ -185,12 +191,14 @@ struct SidebarToggle: View {
 
 /// The app mark on an accent tile, like the app icon.
 private struct SquidBadge: View {
+    let size: CGFloat
+
     var body: some View {
         RoundedRectangle(cornerRadius: 9, style: .continuous)
             .fill(Theme.accent)
-            .frame(width: 32, height: 32)
+            .frame(width: size, height: size)
             .overlay {
-                Image(nsImage: SquidMark.menuBarImage(height: 20))
+                Image(nsImage: SquidMark.menuBarImage(height: size * 0.625))
                     .renderingMode(.template)
                     .foregroundStyle(Theme.onAccent)
             }
