@@ -45,4 +45,10 @@ final class ThemeTests: XCTestCase {
             XCTAssertLessThan(sidebar.max()!, content)
         }
     }
+
+    func testFrameTintStaysThinSoTheDesktopCarries() throws {
+        for name in [NSAppearance.Name.aqua, .darkAqua] {
+            XCTAssertLessThanOrEqual(try alpha(Theme.frameTint, name), 0.15)
+        }
+    }
 }
