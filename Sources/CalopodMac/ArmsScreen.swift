@@ -5,8 +5,6 @@ import SwiftUI
 struct ArmsScreen: View {
     let model: SetupModel
 
-    @State private var mainSources = Set<String>()
-    @State private var mainTarget: String?
     @State private var armSources = Set<String>()
     @State private var armTarget: String?
     @State private var armRule: ArmRuleMode = .busy
@@ -18,38 +16,11 @@ struct ArmsScreen: View {
             if let busy = model.busy { Section { BusyLine(text: busy) } }
             if let notice = model.notice { Section { Banner(kind: .error, text: notice) } }
 
-            mainSection
-            ForEach((model.snapshot?.arms ?? []).filter { !$0.isMain }) { armSection($0) }
+            ForEach(model.snapshot?.arms ?? []) { armSection($0) }
             newArmSection
         }
         .formStyle(.grouped)
         .task { await model.reload() }
-    }
-
-    // MARK: Main calendar
-
-    @ViewBuilder
-    private var mainSection: some View {
-        Section {
-            if let main = model.snapshot?.arms.first(where: \.isMain) {
-                route(main)
-                removeControl(main.id, title: "Remove Main calendar")
-            } else {
-                picker(sources: $mainSources, target: $mainTarget)
-                Button("Set as Main calendar") {
-                    guard let target = mainTarget else { return }
-                    Task {
-                        await model.configureMain(sources: Array(mainSources), target: target)
-                        mainSources = []
-                        mainTarget = nil
-                    }
-                }
-                .disabled(model.isBusy || mainSources.isEmpty || mainTarget == nil)
-            }
-            Hint { Text("One calendar that shows everything you do, in full detail. Nothing changes until a sync runs.") }
-        } header: {
-            Text("Main calendar")
-        }
     }
 
     private static let ruleOptions: [(label: String, value: ArmRuleMode)] = [
@@ -61,13 +32,18 @@ struct ArmsScreen: View {
     private func armSection(_ arm: SetupArm) -> some View {
         Section {
             route(arm)
-            PillPicker(
-                options: Self.ruleOptions,
-                selection: Binding(
-                    get: { arm.rule },
-                    set: { value in Task { await model.setRule(arm.id, value) } }
+            if arm.isMain {
+                // The Main calendar always copies full details, so its rule is not a choice.
+                LabeledContent("Shows") { Text("Full details") }
+            } else {
+                PillPicker(
+                    options: Self.ruleOptions,
+                    selection: Binding(
+                        get: { arm.rule },
+                        set: { value in Task { await model.setRule(arm.id, value) } }
+                    )
                 )
-            )
+            }
             Toggle(
                 "Enabled",
                 isOn: Binding(

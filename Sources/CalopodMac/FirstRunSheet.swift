@@ -10,7 +10,7 @@ struct FirstRunSheet: View {
     let navigation: AppNavigation
 
     @Environment(\.dismiss) private var dismiss
-    @State private var mainTarget: String?
+    @State private var fullTarget: String?
     @State private var busyTarget: String?
     @State private var targetsConfirmed = false
     @State private var previewed = false
@@ -187,12 +187,12 @@ struct FirstRunSheet: View {
         } else {
             Text("Your \(sourceIDs.count) chosen calendars are copied into two others. Each target should be a fresh, empty calendar that only Calopod uses.")
             route(
-                "Main calendar", "Everything, with full details.",
-                existing: setup.mainArm, target: $mainTarget, other: busyTarget)
+                "Full details", "Everything, with titles, locations and notes.",
+                existing: setup.fullDetailsArm, target: $fullTarget, other: busyTarget)
             route(
-                "Busy blocks", "Only the time, shown as Busy.",
-                existing: setup.busyArm, target: $busyTarget, other: mainTarget)
-            if setup.mainArm == nil || setup.busyArm == nil {
+                "Busy only", "Only the time, shown as Busy.",
+                existing: setup.busyArm, target: $busyTarget, other: fullTarget)
+            if setup.fullDetailsArm == nil || setup.busyArm == nil {
                 Toggle("These targets are fresh and empty, and only Calopod will use them.", isOn: $targetsConfirmed)
                     .font(.callout)
             }
@@ -264,20 +264,18 @@ struct FirstRunSheet: View {
     // MARK: Actions on step 3
 
     private var canSave: Bool {
-        let mainReady = setup.mainArm != nil || mainTarget != nil
+        let fullReady = setup.fullDetailsArm != nil || fullTarget != nil
         let busyReady = setup.busyArm != nil || busyTarget != nil
-        let needsConfirm = setup.mainArm == nil || setup.busyArm == nil
-        return mainReady && busyReady && (!needsConfirm || targetsConfirmed)
+        let needsConfirm = setup.fullDetailsArm == nil || setup.busyArm == nil
+        return fullReady && busyReady && (!needsConfirm || targetsConfirmed)
     }
 
-    /// Records Main and Busy, then asks for the usual dry run. No calendar is written.
+    /// Records the two arms, then asks for the usual dry run. No calendar is written.
     private func saveAndPreview() async {
-        if setup.mainArm == nil, let target = mainTarget {
-            await setup.configureMain(sources: sourceIDs, target: target)
-        }
-        if setup.notice == nil, setup.busyArm == nil, let target = busyTarget {
-            await setup.addArm(sources: sourceIDs, target: target, rule: .busy, name: nil)
-        }
+        await setup.setUpTwoArms(
+            sources: sourceIDs,
+            fullDetailsTarget: setup.fullDetailsArm == nil ? fullTarget : nil,
+            busyTarget: setup.busyArm == nil ? busyTarget : nil)
         guard setup.notice == nil else { return }
         await service.previewSync()
         previewed = true

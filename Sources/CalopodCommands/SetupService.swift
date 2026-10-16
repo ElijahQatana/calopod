@@ -170,12 +170,22 @@ public struct SetupService: Sendable {
         }
     }
 
-    public func configureMain(sourceIDs: [String], targetID: String) throws {
+    /// The quick setup: one arm with full details and one that only shows Busy, both fed by the
+    /// same sources. A nil target means that arm already exists. The full-details arm is stored
+    /// as the Main calendar when none exists yet, so `calopod main` and calopod-setup still see it.
+    public func setUpTwoArms(sourceIDs: [String], fullDetailsTargetID: String?, busyTargetID: String?) throws {
         let repository = try makeRepository()
-        _ = try ArmConfigurationService(repository: repository).configureMainCalendar(
-            sourceBindingIDs: sourceIDs,
-            targetBindingID: targetID
-        )
+        let arms = ArmConfigurationService(repository: repository)
+        if let target = fullDetailsTargetID {
+            if try repository.arms().contains(where: \.isMain) {
+                _ = try arms.createArm(sourceBindingIDs: sourceIDs, targetBindingID: target, ruleMode: .fullDetails)
+            } else {
+                _ = try arms.configureMainCalendar(sourceBindingIDs: sourceIDs, targetBindingID: target)
+            }
+        }
+        if let target = busyTargetID {
+            _ = try arms.createArm(sourceBindingIDs: sourceIDs, targetBindingID: target, ruleMode: .busy)
+        }
     }
 
     public func addArm(

@@ -31,8 +31,8 @@ final class SetupModel {
         }
     }
 
-    var mainArm: SetupArm? { snapshot?.arms.first(where: \.isMain) }
-    var busyArm: SetupArm? { snapshot?.arms.first { !$0.isMain && $0.rule == .busy && $0.isEnabled } }
+    var fullDetailsArm: SetupArm? { snapshot?.arms.first { $0.rule == .fullDetails } }
+    var busyArm: SetupArm? { snapshot?.arms.first { $0.rule == .busy && $0.isEnabled } }
 
     func reload() async {
         let service = service
@@ -65,9 +65,12 @@ final class SetupModel {
         await run(nil) { try service.setSelected(calendarID: calendarID, selected: selected) }
     }
 
-    func configureMain(sources: [String], target: String) async {
+    func setUpTwoArms(sources: [String], fullDetailsTarget: String?, busyTarget: String?) async {
         let service = service
-        await run("Saving…") { try service.configureMain(sourceIDs: sources, targetID: target) }
+        await run("Saving…") {
+            try service.setUpTwoArms(
+                sourceIDs: sources, fullDetailsTargetID: fullDetailsTarget, busyTargetID: busyTarget)
+        }
     }
 
     func addArm(sources: [String], target: String, rule: ArmRuleMode, name: String?) async {
