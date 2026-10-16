@@ -53,8 +53,12 @@ struct StatusView: View {
 
     private func controls(_ status: AgentControlStatus) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Button("Sync Now") { Task { await model.syncNow() } }
-                .disabled(model.isBusy)
+            if let preview = model.pendingPreview {
+                previewCard(preview)
+            } else {
+                Button("Preview Sync…") { Task { await model.previewSync() } }
+                    .disabled(model.isBusy)
+            }
             Toggle("Automatic sync", isOn: Binding(
                 get: { status.enabled },
                 set: { value in Task { await model.setEnabled(value) } }
@@ -77,6 +81,43 @@ struct StatusView: View {
             }
             .disabled(model.isBusy)
         }
+    }
+
+    private func previewCard(_ preview: SyncPreview) -> some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(Self.summaryLine(preview)).font(.callout.bold())
+                if preview.removals > 0 {
+                    Label("Includes removals of copies Calopod made earlier.", systemImage: "exclamationmark.triangle")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+                ForEach(preview.lines.prefix(6)) { line in
+                    Text("\(line.action.capitalized) · \(line.armName) — \(line.reason)")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if preview.lines.count > 6 {
+                    Text("and \(preview.lines.count - 6) more").font(.caption).foregroundStyle(.secondary)
+                }
+                ForEach(preview.warnings, id: \.self) { warning in
+                    Text(warning).font(.caption).foregroundStyle(.orange)
+                }
+                HStack {
+                    Button("Apply") { Task { await model.applyPreview() } }
+                        .keyboardShortcut(.defaultAction)
+                    Button("Cancel") { model.discardPreview() }
+                }
+                .disabled(model.isBusy)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private static func summaryLine(_ preview: SyncPreview) -> String {
+        [("create", preview.creates), ("update", preview.updates),
+         ("remove", preview.removals), ("repair", preview.repairs)]
+            .filter { $0.1 > 0 }
+            .map { "\($0.1) to \($0.0)" }
+            .joined(separator: ", ")
     }
 
     @ViewBuilder

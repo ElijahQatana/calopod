@@ -14,6 +14,7 @@ final class ServiceModel {
     private(set) var busyAction: String?
     private(set) var notice: String?
     private(set) var lastRunSummary: String?
+    private(set) var pendingPreview: SyncPreview?
     private(set) var registration: ServiceRegistration.State = .unavailable
 
     private let service = AgentControlService()
@@ -54,7 +55,34 @@ final class ServiceModel {
         }
     }
 
-    func syncNow() async {
+    /// Plans a sync first. Nothing is written until the user applies the preview.
+    func previewSync() async {
+        guard busyAction == nil else { return }
+        let service = service
+        busyAction = "Planning sync…"
+        notice = nil
+        pendingPreview = nil
+        do {
+            let preview = try await Task.detached { try await service.preview() }.value
+            if preview.changeCount == 0 {
+                lastRunSummary = "Everything is up to date. Nothing to change."
+            } else {
+                pendingPreview = preview
+            }
+        } catch {
+            notice = service.message(for: error)
+        }
+        busyAction = nil
+        await refresh()
+    }
+
+    func discardPreview() {
+        pendingPreview = nil
+    }
+
+    /// Applies after a preview. The engine re-plans and re-checks ownership at write time.
+    func applyPreview() async {
+        pendingPreview = nil
         let service = service
         await perform("Syncing…") {
             let report = try await service.syncNow()
