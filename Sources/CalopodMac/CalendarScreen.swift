@@ -172,7 +172,7 @@ struct CalendarScreen: View {
 }
 
 /// Lays chips out left to right and wraps to a new line when the row is full.
-private struct FlowLayout: Layout {
+struct FlowLayout: Layout {
     var spacing: CGFloat
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
