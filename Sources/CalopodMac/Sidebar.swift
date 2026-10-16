@@ -205,38 +205,16 @@ private struct SquidBadge: View {
     }
 }
 
-/// Rounded glass on macOS 26, a plain material before that.
+/// A flat tinted panel over the window blur. The window has the only live blur, so
+/// scrolling the page next to it does not re-blur the sidebar.
 private struct GlassPanel: ViewModifier {
     private let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     func body(content: Content) -> some View {
-        #if compiler(>=6.2)
-        if reduceTransparency {
-            solid(content)
-        } else if #available(macOS 26, *) {
-            content
-                .glassEffect(.regular.tint(Theme.glassFill), in: shape)
-                .overlay(shape.strokeBorder(Theme.glassEdge, lineWidth: 1))
-        } else {
-            plain(content)
-        }
-        #else
-        if reduceTransparency { solid(content) } else { plain(content) }
-        #endif
-    }
-
-    private func solid(_ content: Content) -> some View {
         content
-            .background(shape.fill(Theme.pane))
-            .overlay(shape.strokeBorder(Theme.paneLine, lineWidth: 1))
-    }
-
-    private func plain(_ content: Content) -> some View {
-        content
-            .background(shape.fill(.ultraThinMaterial))
-            .background(shape.fill(Theme.glassFill))
-            .overlay(shape.strokeBorder(Theme.glassEdge, lineWidth: 1))
+            .background(shape.fill(reduceTransparency ? Theme.pane : Theme.glassFill))
+            .overlay(shape.strokeBorder(reduceTransparency ? Theme.paneLine : Theme.glassEdge, lineWidth: 1))
     }
 }
 
