@@ -24,8 +24,8 @@ enum Theme {
 
     // Window, panels and glass. The window tint is a warm wash over the blurred desktop.
     static let windowTint = Color(
-        light: Color(red: 1, green: 0.62, blue: 0.36).opacity(0.16),
-        dark: Color(red: 0.92, green: 0.43, blue: 0.16).opacity(0.14))
+        light: Color(red: 1, green: 0.56, blue: 0.28).opacity(0.28),
+        dark: Color(red: 0.92, green: 0.43, blue: 0.16).opacity(0.22))
     static let pane = Color(light: .white, dark: Color(red: 0x17 / 255, green: 0x14 / 255, blue: 0x12 / 255))
     static let group = Color(
         light: Color(red: 0xf6 / 255, green: 0xf4 / 255, blue: 0xf1 / 255),
@@ -35,14 +35,22 @@ enum Theme {
         dark: Color(red: 1, green: 0.94, blue: 0.86).opacity(0.06))
     // Panel fills over the blurred desktop. Lower opacity lets more wallpaper through.
     // The inner fill is more opaque than the card so text on it stays readable.
+    // The sidebar is lighter than the window around it, brightest at the top left.
     static let glassFill = Color(
-        light: Color.white.opacity(0.24), dark: Color(red: 0.15, green: 0.125, blue: 0.11).opacity(0.30))
+        light: Color.white.opacity(0.34), dark: Color(red: 0.20, green: 0.17, blue: 0.145).opacity(0.38))
+    static let glassSheen = Color(
+        light: Color.white.opacity(0.66), dark: Color(red: 0.34, green: 0.29, blue: 0.25).opacity(0.58))
     static let cardFill = Color(
         light: Color.white.opacity(0.46), dark: Color(red: 0x17 / 255, green: 0x14 / 255, blue: 0x12 / 255).opacity(0.44))
     static let innerFill = Color(
         light: Color.white.opacity(0.55), dark: Color(red: 0x20 / 255, green: 0x1c / 255, blue: 0x19 / 255).opacity(0.58))
+    // Edge highlight: crisp on the top and left, fading toward the bottom right.
     static let glassEdge = Color(
-        light: Color.white.opacity(0.7), dark: Color(red: 1, green: 0.94, blue: 0.86).opacity(0.14))
+        light: Color.white.opacity(0.95), dark: Color(red: 1, green: 0.94, blue: 0.86).opacity(0.34))
+    static let glassEdgeFade = Color(
+        light: Color.white.opacity(0.25), dark: Color(red: 1, green: 0.94, blue: 0.86).opacity(0.07))
+    static let panelShadow = Color(
+        light: Color(red: 0.28, green: 0.13, blue: 0).opacity(0.30), dark: Color.black.opacity(0.45))
 
     static let cardRadius: CGFloat = 20
     static let controlRadius: CGFloat = 12
@@ -72,7 +80,38 @@ struct PanelFill<S: Shape>: ViewModifier {
     }
 }
 
+/// Highlighted edge and a soft shadow that lifts a panel off the window. The shadow is
+/// cut out under the panel so it does not darken the translucent fill.
+struct PanelChrome<S: InsettableShape>: ViewModifier {
+    let shape: S
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                if reduceTransparency {
+                    shape.strokeBorder(Theme.paneLine, lineWidth: 1)
+                } else {
+                    shape.strokeBorder(
+                        LinearGradient(
+                            colors: [Theme.glassEdge, Theme.glassEdgeFade],
+                            startPoint: .topLeading, endPoint: .bottomTrailing),
+                        lineWidth: 1)
+                }
+            }
+            .background {
+                shape.fill(Theme.panelShadow).shadow(color: Theme.panelShadow, radius: 9, y: 3)
+                    .mask {
+                        Rectangle().padding(-40).overlay { shape.fill(.black).blendMode(.destinationOut) }
+                            .compositingGroup()
+                    }
+            }
+    }
+}
+
 extension View {
+    func panelChrome<S: InsettableShape>(_ shape: S) -> some View { modifier(PanelChrome(shape: shape)) }
+
     func panelFill<S: Shape>(_ level: PanelFill<S>.Level, in shape: S) -> some View {
         modifier(PanelFill(level: level, shape: shape))
     }
