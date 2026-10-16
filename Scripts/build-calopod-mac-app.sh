@@ -25,6 +25,15 @@ rm -rf "$bundle_root"
 mkdir -p "$contents_root/MacOS" "$contents_root/Resources" "$contents_root/Library/LaunchAgents"
 sed "s/__VERSION__/$version/" "$repository_root/Support/Mac/Info.plist" > "$contents_root/Info.plist"
 cp "$repository_root/Support/Mac/$agent_plist_name" "$contents_root/Library/LaunchAgents/$agent_plist_name"
+# Public OAuth client IDs for direct Google and Microsoft Connections. Never put secrets here.
+for pair in CalopodGoogleClientID:CALOPOD_GOOGLE_CLIENT_ID \
+  CalopodMicrosoftClientID:CALOPOD_MICROSOFT_CLIENT_ID \
+  CalopodMicrosoftTenant:CALOPOD_MICROSOFT_TENANT; do
+  value=$(printenv "${pair#*:}" || true)
+  if [ -n "$value" ]; then
+    plutil -insert "${pair%%:*}" -string "$value" "$contents_root/Info.plist"
+  fi
+done
 plutil -lint "$contents_root/Info.plist" "$contents_root/Library/LaunchAgents/$agent_plist_name" >/dev/null
 "$repository_root/Scripts/build-calopod-icon.sh" "$contents_root/Resources"
 cp "$binary_root/calopod-mac" "$contents_root/MacOS/CalopodMac"

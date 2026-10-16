@@ -3,6 +3,7 @@ import SwiftUI
 
 struct StatusView: View {
     let model: ServiceModel
+    @Environment(\.openWindow) private var openWindow
 
     private static let intervals: [(label: String, seconds: Int)] = [
         ("5 minutes", 300), ("10 minutes", 600), ("15 minutes", 900),
@@ -16,6 +17,10 @@ struct StatusView: View {
                 controls(status)
                 Divider()
                 overview
+            }
+            Button("Set Up Calendars…") {
+                NSApplication.shared.activate(ignoringOtherApps: true)
+                openWindow(id: "setup")
             }
             backgroundService
             if let notice = model.notice {
