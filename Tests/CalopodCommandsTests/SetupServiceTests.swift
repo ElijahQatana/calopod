@@ -2,6 +2,7 @@
 import CalopodDomain
 import CalopodRuntime
 import CalopodStore
+import CalopodSync
 import Foundation
 import Testing
 
@@ -34,22 +35,60 @@ struct SetupServiceTests {
         return (SetupService(makeRepository: { repository }), repository, root)
     }
 
-    @Test("selecting calendars and configuring the Main calendar shows up in the snapshot")
-    func mainCalendarRoundTrip() throws {
-        let (service, _, root) = try makeService()
+    @Test("quick setup makes one full-details arm and one busy arm, and skips what exists")
+    func twoArmSetup() throws {
+        let (service, repository, root) = try makeService()
         defer { try? FileManager.default.removeItem(at: root) }
-
+        try repository.replaceCalendarBindings(connectionID: "mac", bindings: [
+            StoredCalendarBinding(id: "work", connectionID: "mac", providerCalendarID: "w",
+                displayLabel: "Work", isSelected: false, isReadOnly: false),
+            StoredCalendarBinding(id: "main", connectionID: "mac", providerCalendarID: "m",
+                displayLabel: "Main", isSelected: false, isReadOnly: false),
+            StoredCalendarBinding(id: "busy", connectionID: "mac", providerCalendarID: "b",
+                displayLabel: "Busy", isSelected: false, isReadOnly: false),
+        ])
         try service.setSelected(calendarID: "work", selected: true)
-        try service.setSelected(calendarID: "main", selected: true)
-        #expect(try service.snapshot().hasMainCalendar == false)
 
-        try service.configureMain(sourceIDs: ["work"], targetID: "main")
-        let snapshot = try service.snapshot()
-        let main = try #require(snapshot.arms.first)
-        #expect(snapshot.hasMainCalendar)
-        #expect(main.sourceNames == ["Work"])
-        #expect(main.targetName == "Main")
-        #expect(main.rule == .fullDetails)
+        try service.setUpTwoArms(sourceIDs: ["work"], fullDetailsTargetID: "main", busyTargetID: "busy")
+        let arms = try service.snapshot().arms
+        #expect(arms.count == 2)
+        let full = try #require(arms.first { $0.rule == .fullDetails })
+        let busy = try #require(arms.first { $0.rule == .busy })
+        #expect(full.targetName == "Main" && busy.targetName == "Busy")
+        #expect(full.sourceNames == ["Work"] && busy.sourceNames == ["Work"])
+        // Stored as Main, like `calopod main configure`, so the CLI still recognizes it.
+        #expect(full.isMain && !busy.isMain)
+
+        try service.setUpTwoArms(sourceIDs: ["work"], fullDetailsTargetID: nil, busyTargetID: nil)
+        #expect(try service.snapshot().arms.count == 2)
+    }
+
+    @Test("a second full-details arm is a plain arm and an existing Main stays listed")
+    func existingMainStaysAnArm() throws {
+        let (service, repository, root) = try makeService()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try repository.replaceCalendarBindings(connectionID: "mac", bindings: [
+            StoredCalendarBinding(id: "work", connectionID: "mac", providerCalendarID: "w",
+                displayLabel: "Work", isSelected: false, isReadOnly: false),
+            StoredCalendarBinding(id: "main", connectionID: "mac", providerCalendarID: "m",
+                displayLabel: "Main", isSelected: false, isReadOnly: false),
+            StoredCalendarBinding(id: "other", connectionID: "mac", providerCalendarID: "o",
+                displayLabel: "Other", isSelected: false, isReadOnly: false),
+        ])
+        try service.setSelected(calendarID: "work", selected: true)
+        try ArmConfigurationService(repository: repository)
+            .configureMainCalendar(sourceBindingIDs: ["work"], targetBindingID: "main")
+
+        try service.setUpTwoArms(sourceIDs: ["work"], fullDetailsTargetID: "other", busyTargetID: nil)
+        let arms = try service.snapshot().arms
+        #expect(arms.count == 2)
+        #expect(arms.filter(\.isMain).count == 1)
+        #expect(arms.allSatisfy { $0.rule == .fullDetails })
+
+        let main = try #require(arms.first { $0.isMain })
+        try service.setArmEnabled(armID: main.id, enabled: false)
+        try service.removeArm(armID: main.id)
+        #expect(try service.snapshot().arms.count == 1)
     }
 
     @Test("an unselected source is rejected with a plain message")
@@ -59,7 +98,7 @@ struct SetupServiceTests {
 
         try service.setSelected(calendarID: "main", selected: true)
         #expect(throws: (any Error).self) {
-            try service.configureMain(sourceIDs: ["work"], targetID: "main")
+            try service.setUpTwoArms(sourceIDs: ["work"], fullDetailsTargetID: "main", busyTargetID: nil)
         }
         #expect(try service.snapshot().arms.isEmpty)
     }
