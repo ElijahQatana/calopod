@@ -3,6 +3,7 @@ import SwiftUI
 
 struct CalendarsScreen: View {
     let model: SetupModel
+    private let colors = CalendarColors.shared
 
     var body: some View {
         Form {
@@ -38,7 +39,8 @@ struct CalendarsScreen: View {
                                 set: { value in Task { await model.setSelected(calendar.id, value) } }
                             )
                         ) {
-                            HStack(spacing: 6) {
+                            HStack(spacing: 8) {
+                                CalendarColorDot(calendarID: calendar.id, colors: colors)
                                 Text(calendar.name)
                                 if calendar.isReadOnly {
                                     Text("read-only").font(.caption).foregroundStyle(.secondary)
@@ -69,6 +71,9 @@ struct CalendarsScreen: View {
         }
         .formStyle(.grouped)
         .task { await model.reload() }
+        .onChange(of: model.snapshot) { _, snapshot in
+            colors.assignMissing(to: (snapshot?.connections ?? []).flatMap { $0.calendars.map(\.id) })
+        }
     }
 
     private func addButton(_ title: String, _ symbol: String, _ provider: SetupProvider) -> some View {
