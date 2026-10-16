@@ -316,6 +316,18 @@ func agentStatusPayload(
             failureCategory: "configuration"
         )
     }
+    return try agentStatusPayload(
+        snapshot: snapshot,
+        environment: { try installedAgentEnvironment(controller: controller) },
+        now: now
+    )
+}
+
+func agentStatusPayload(
+    snapshot: LaunchAgentSnapshot,
+    environment makeEnvironment: () throws -> CalopodRuntimeEnvironment,
+    now: Date = Date()
+) throws -> CommandPayload {
     guard let configuration = snapshot.configuration else {
         return CommandPayload(
             status: "not-installed",
@@ -333,7 +345,7 @@ func agentStatusPayload(
     var lastSuccessAgeSeconds: Int?
     var failureCategory: String?
     if stateReady {
-        let repository = try installedAgentEnvironment(controller: controller).repository()
+        let repository = try makeEnvironment().repository()
         paused = try repository.agentControl().isPaused
         if let success = try repository.latestSuccessfulSyncRun(trigger: "automatic") {
             let reference = success.finishedAt ?? success.startedAt

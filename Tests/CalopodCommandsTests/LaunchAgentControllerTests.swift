@@ -356,3 +356,107 @@ private struct LaunchAgentFixture {
     }
 }
 #endif
+
+// MARK: - Controls follow whichever service is active
+
+#if os(macOS)
+private let bundledLabel = AgentControlService.bundledLabel
+
+/// A launchd double. `legacyDisabled` marks the source-installed agent disabled, and
+/// `bundledLoaded` makes the app's bundled agent look loaded. Records every launchctl verb.
+private func controlService(
+    fixture: LaunchAgentFixture,
+    legacyDisabled: Bool,
+    bundledLoaded: Bool,
+    bundled: Bool,
+    verbs: Box<[String]>
+) -> AgentControlService {
+    let home = fixture.homeDirectory
+    let state = fixture.stateURL
+    return AgentControlService(
+        bundledAgentExecutable: bundled
+            ? URL(fileURLWithPath: "/Applications/Calopod.app/Contents/MacOS/calopod-agent")
+            : nil,
+        makeController: {
+            try LaunchAgentController(homeDirectory: home, userID: 501) { arguments in
+                verbs.value.append(arguments.first ?? "")
+                switch arguments.first {
+                case "print":
+                    let target = arguments.dropFirst().first ?? ""
+                    return LaunchctlResult(
+                        exitCode: target.hasSuffix(bundledLabel) ? (bundledLoaded ? 0 : 1) : 1,
+                        output: ""
+                    )
+                case "print-disabled":
+                    return LaunchctlResult(
+                        exitCode: 0,
+                        output: legacyDisabled
+                            ? #""pro.elijahquintana.calopod.agent" => disabled"#
+                            : ""
+                    )
+                default:
+                    return LaunchctlResult(exitCode: 0, output: "")
+                }
+            }
+        },
+        baseEnvironment: { ["CALOPOD_STATE_PATH": state.path] }
+    )
+}
+
+@Test
+func afterMovingToTheAppControlsActOnTheBundledAgent() async throws {
+    let fixture = try LaunchAgentFixture()
+    defer { fixture.remove() }
+    let verbs = Box<[String]>([])
+    let service = controlService(
+        fixture: fixture, legacyDisabled: true, bundledLoaded: true, bundled: true, verbs: verbs
+    )
+
+    let status = try service.status()
+    #expect(status.installed)
+    #expect(status.running)
+    #expect(status.enabled)
+    #expect(status.intervalSeconds == 600)
+
+    try service.setInterval(seconds: 300)
+    #expect(try service.status().intervalSeconds == 300)
+    #expect(FileManager.default.fileExists(atPath: fixture.stateURL.path + ".schedule.json"))
+
+    verbs.value.removeAll()
+    try service.setPaused(true)
+    #expect(try service.status().paused)
+    #expect(!verbs.value.contains("bootout"))
+    #expect(!verbs.value.contains("bootstrap"))
+
+    #expect(throws: LaunchAgentControlError.unavailable) { try service.setEnabled(false) }
+}
+
+@Test
+func anEnabledSourceInstalledAgentStillWinsOverTheBundledOne() throws {
+    let fixture = try LaunchAgentFixture()
+    defer { fixture.remove() }
+    let verbs = Box<[String]>([])
+    let service = controlService(
+        fixture: fixture, legacyDisabled: false, bundledLoaded: true, bundled: true, verbs: verbs
+    )
+
+    try service.setInterval(seconds: 900)
+
+    // The source-installed plist is rewritten and no override file is created.
+    #expect(try AgentServiceConfiguration.load(from: fixture.propertyListURL).intervalSeconds == 900)
+    #expect(!FileManager.default.fileExists(atPath: fixture.stateURL.path + ".schedule.json"))
+}
+
+@Test
+func withoutABundledAgentTheStatusReflectsTheSourceInstall() throws {
+    let fixture = try LaunchAgentFixture()
+    defer { fixture.remove() }
+    let service = controlService(
+        fixture: fixture, legacyDisabled: true, bundledLoaded: true, bundled: false, verbs: Box([])
+    )
+
+    let status = try service.status()
+    #expect(status.state == "disabled")
+    #expect(!status.enabled)
+}
+#endif

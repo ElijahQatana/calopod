@@ -201,6 +201,11 @@ struct LaunchAgentController {
         return try AgentServiceConfiguration.load(from: propertyListURL)
     }
 
+    /// Whether launchd has a service with this label loaded, such as the app's bundled agent.
+    func isLoaded(label: String) throws -> Bool {
+        try launchctl(["print", "\(launchDomain)/\(label)"]).exitCode == 0
+    }
+
     private func isLoaded() throws -> Bool {
         try launchctl(["print", serviceTarget]).exitCode == 0
     }
