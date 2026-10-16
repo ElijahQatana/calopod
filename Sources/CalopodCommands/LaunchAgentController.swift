@@ -25,22 +25,29 @@ import Darwin
 struct LaunchAgentController {
     typealias Launchctl = ([String]) throws -> LaunchctlResult
 
+    /// Pauses before each retry of `bootstrap`. launchd can still be tearing a service down right
+    /// after `bootout`, which makes an immediate `bootstrap` fail.
+    static let bootstrapRetryDelays: [TimeInterval] = [0.25, 0.5, 1, 2]
+
     private let homeDirectory: URL
     private let userID: uid_t
     private let fileManager: FileManager
     private let launchctl: Launchctl
+    private let pause: (TimeInterval) -> Void
 
     init(
         homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
         userID: uid_t = getuid(),
         fileManager: FileManager = .default,
-        launchctl: @escaping Launchctl = LaunchAgentController.runLaunchctl
+        launchctl: @escaping Launchctl = LaunchAgentController.runLaunchctl,
+        pause: @escaping (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) }
     ) throws {
         guard userID != 0 else { throw LaunchAgentControlError.rootUnsupported }
         self.homeDirectory = homeDirectory.standardizedFileURL
         self.userID = userID
         self.fileManager = fileManager
         self.launchctl = launchctl
+        self.pause = pause
     }
 
     var propertyListURL: URL {
@@ -70,10 +77,7 @@ struct LaunchAgentController {
         _ = try installedConfiguration()
         try requireSuccess(launchctl(["enable", serviceTarget]), operation: "enable")
         if try !isLoaded() {
-            try requireSuccess(
-                launchctl(["bootstrap", launchDomain, propertyListURL.path]),
-                operation: "bootstrap"
-            )
+            try bootstrap()
         }
         guard try isLoaded(), try !isDisabled() else {
             throw LaunchAgentControlError.operationFailed("enable")
@@ -97,10 +101,7 @@ struct LaunchAgentController {
             try requireSuccess(launchctl(["bootout", serviceTarget]), operation: "bootout")
         }
         if try !isDisabled() {
-            try requireSuccess(
-                launchctl(["bootstrap", launchDomain, propertyListURL.path]),
-                operation: "bootstrap"
-            )
+            try bootstrap()
         }
     }
 
@@ -161,15 +162,27 @@ struct LaunchAgentController {
                 ofItemAtPath: propertyListURL.path
             )
             if wasLoaded, !wasDisabled {
-                _ = try? launchctl(["bootstrap", launchDomain, propertyListURL.path])
+                try? bootstrap()
             }
             throw error
         }
         if wasLoaded, !wasDisabled {
-            try requireSuccess(
-                launchctl(["bootstrap", launchDomain, propertyListURL.path]),
-                operation: "bootstrap"
-            )
+            try bootstrap()
+        }
+    }
+
+    /// Loads the service, retrying while launchd finishes a preceding `bootout`. A failed attempt
+    /// that still leaves the service loaded counts as success.
+    private func bootstrap() throws {
+        var delays = Self.bootstrapRetryDelays[...]
+        while true {
+            let result = try launchctl(["bootstrap", launchDomain, propertyListURL.path])
+            if result.exitCode == 0 { return }
+            if try isLoaded() { return }
+            guard let delay = delays.popFirst() else {
+                throw LaunchAgentControlError.operationFailed("bootstrap")
+            }
+            pause(delay)
         }
     }
 

@@ -135,6 +135,99 @@ func restartLeavesADisabledAgentUnloaded() throws {
     #expect(calls.map(\.first) == ["print", "bootout", "print-disabled"])
 }
 
+/// Simulates launchd: `bootout` unloads, `bootstrap` fails `failures` times before loading.
+private func restartController(
+    fixture: LaunchAgentFixture,
+    failures: Int,
+    loadedDespiteFailure: Bool = false,
+    calls: Box<[String]>,
+    delays: Box<[TimeInterval]>
+) throws -> LaunchAgentController {
+    var loaded = true
+    var remainingFailures = failures
+    return try LaunchAgentController(
+        homeDirectory: fixture.homeDirectory,
+        userID: 501,
+        launchctl: { arguments in
+            calls.value.append(arguments.first ?? "")
+            switch arguments.first {
+            case "print":
+                return LaunchctlResult(exitCode: loaded ? 0 : 1, output: "")
+            case "print-disabled":
+                return LaunchctlResult(exitCode: 0, output: "")
+            case "bootout":
+                loaded = false
+                return LaunchctlResult(exitCode: 0, output: "")
+            case "bootstrap":
+                if remainingFailures > 0 {
+                    remainingFailures -= 1
+                    if loadedDespiteFailure { loaded = true }
+                    return LaunchctlResult(exitCode: 5, output: "")
+                }
+                loaded = true
+                return LaunchctlResult(exitCode: 0, output: "")
+            default:
+                return LaunchctlResult(exitCode: 1, output: "")
+            }
+        },
+        pause: { delays.value.append($0) }
+    )
+}
+
+private final class Box<Value>: @unchecked Sendable {
+    var value: Value
+    init(_ value: Value) { self.value = value }
+}
+
+@Test
+func restartRetriesBootstrapWhileLaunchdFinishesBootout() throws {
+    let fixture = try LaunchAgentFixture()
+    defer { fixture.remove() }
+    let calls = Box<[String]>([])
+    let delays = Box<[TimeInterval]>([])
+    let controller = try restartController(
+        fixture: fixture, failures: 2, calls: calls, delays: delays
+    )
+
+    try controller.restartIfEnabled()
+
+    #expect(calls.value.filter { $0 == "bootstrap" }.count == 3)
+    #expect(delays.value == [0.25, 0.5])
+}
+
+@Test
+func restartReportsFailureWhenBootstrapNeverSucceeds() throws {
+    let fixture = try LaunchAgentFixture()
+    defer { fixture.remove() }
+    let calls = Box<[String]>([])
+    let delays = Box<[TimeInterval]>([])
+    let controller = try restartController(
+        fixture: fixture, failures: 100, calls: calls, delays: delays
+    )
+
+    #expect(throws: LaunchAgentControlError.operationFailed("bootstrap")) {
+        try controller.restartIfEnabled()
+    }
+    #expect(calls.value.filter { $0 == "bootstrap" }.count == 5)
+    #expect(delays.value == LaunchAgentController.bootstrapRetryDelays)
+}
+
+@Test
+func restartAcceptsAFailedBootstrapThatLeftTheServiceLoaded() throws {
+    let fixture = try LaunchAgentFixture()
+    defer { fixture.remove() }
+    let calls = Box<[String]>([])
+    let delays = Box<[TimeInterval]>([])
+    let controller = try restartController(
+        fixture: fixture, failures: 1, loadedDespiteFailure: true, calls: calls, delays: delays
+    )
+
+    try controller.restartIfEnabled()
+
+    #expect(calls.value.filter { $0 == "bootstrap" }.count == 1)
+    #expect(delays.value.isEmpty)
+}
+
 @Test
 func agentStatusDoesNotCreateMissingState() throws {
     let fixture = try LaunchAgentFixture()
