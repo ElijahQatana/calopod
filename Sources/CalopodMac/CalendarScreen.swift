@@ -81,6 +81,7 @@ struct CalendarScreen: View {
             if !model.calendars.isEmpty {
                 FlowLayout(spacing: 6) {
                     ForEach(model.calendars) { calendar in chip(calendar) }
+                    copiesChip
                 }
             }
         }
@@ -130,6 +131,24 @@ struct CalendarScreen: View {
         .accessibilityLabel(calendar.name)
         .accessibilityValue(shown ? "Shown" : "Hidden")
         .help(shown ? "Hide in this view" : "Show in this view")
+    }
+
+    private var copiesChip: some View {
+        let shown = model.showCopies
+        return Button { model.showCopies.toggle() } label: {
+            HStack(spacing: 6) {
+                Image(systemName: shown ? "eye" : "eye.slash").font(.system(size: 11))
+                Text("Calopod copies").font(.system(size: 12)).lineLimit(1)
+            }
+            .padding(.horizontal, 11).padding(.vertical, 4)
+            .background(Capsule().fill(.quaternary))
+            .opacity(shown ? 1 : 0.5)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Calopod copies")
+        .accessibilityValue(shown ? "Shown" : "Hidden")
+        .help(shown ? "Hide the Busy copies Calopod made" : "Show the Busy copies Calopod made")
     }
 
     private var title: String {
