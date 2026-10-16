@@ -19,13 +19,14 @@ struct MainWindow: View {
             .safeAreaInset(edge: .bottom) { sidebarStatus }
         } detail: {
             switch navigation.selection {
-            case .overview: OverviewScreen(model: service, navigation: navigation)
+            case .overview: OverviewScreen(model: service, conflicts: conflicts, navigation: navigation)
             case .calendars: CalendarsScreen(model: setup)
             case .arms: ArmsScreen(model: setup)
             case .conflicts: ConflictsScreen(model: conflicts)
             case .service: ServiceScreen(model: service)
             }
         }
+        .navigationTitle(navigation.selection.title)
         .frame(minWidth: 860, minHeight: 580)
         .tint(Theme.accent)
         .onAppear { NSApplication.shared.activate(ignoringOtherApps: true) }

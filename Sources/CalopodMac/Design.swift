@@ -2,85 +2,14 @@ import SwiftUI
 
 /// The look of the Mac app: calm surfaces, one accent, generous spacing, semantic status colors.
 enum Theme {
-    /// Deep ocean teal, from the squid.
-    static let accent = Color(red: 0.12, green: 0.50, blue: 0.62)
+    /// The user's system accent color, so the app matches the rest of macOS.
+    static let accent = Color.accentColor
     static let good = Color(red: 0.20, green: 0.62, blue: 0.40)
     static let caution = Color(red: 0.88, green: 0.58, blue: 0.14)
     static let bad = Color(red: 0.80, green: 0.28, blue: 0.28)
 
     static let cardRadius: CGFloat = 14
     static let pagePadding: CGFloat = 28
-}
-
-/// A soft rounded surface that holds one idea.
-struct Card<Content: View>: View {
-    var padding: CGFloat = 18
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        content
-            .padding(padding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
-                    .fill(Color(nsColor: .controlBackgroundColor))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
-                    .strokeBorder(.separator.opacity(0.6), lineWidth: 0.5)
-            )
-    }
-}
-
-/// Title and one-line explanation at the top of every screen, with room for a trailing action.
-struct ScreenHeader<Trailing: View>: View {
-    let title: String
-    let subtitle: String
-    @ViewBuilder var trailing: Trailing
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.system(size: 28, weight: .semibold, design: .rounded))
-                Text(subtitle).font(.callout).foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 16)
-            trailing
-        }
-    }
-}
-
-extension ScreenHeader where Trailing == EmptyView {
-    init(title: String, subtitle: String) {
-        self.init(title: title, subtitle: subtitle) { EmptyView() }
-    }
-}
-
-/// Scrolls a screen's content with consistent margins and a readable maximum width.
-struct ScreenScaffold<Content: View>: View {
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) { content }
-                .padding(Theme.pagePadding)
-                .frame(maxWidth: 760, alignment: .leading)
-                .frame(maxWidth: .infinity, alignment: .center)
-        }
-        .background(Color(nsColor: .windowBackgroundColor))
-    }
-}
-
-struct SectionLabel: View {
-    let text: String
-    init(_ text: String) { self.text = text }
-
-    var body: some View {
-        Text(text.uppercased())
-            .font(.caption.weight(.semibold))
-            .tracking(0.6)
-            .foregroundStyle(.secondary)
-    }
 }
 
 /// A small colored dot and word, such as "Running" or "Paused".
@@ -96,24 +25,6 @@ struct StatusPill: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
         .background(Capsule().fill(color.opacity(0.14)))
-    }
-}
-
-/// A number with a caption, for the overview.
-struct StatTile: View {
-    let value: String
-    let caption: String
-    var color: Color = .primary
-
-    var body: some View {
-        Card(padding: 16) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(value)
-                    .font(.system(size: 30, weight: .semibold, design: .rounded))
-                    .foregroundStyle(color)
-                Text(caption).font(.callout).foregroundStyle(.secondary)
-            }
-        }
     }
 }
 
@@ -200,5 +111,17 @@ enum Format {
         case ..<7200: "\(seconds / 60) minutes"
         default: "\(seconds / 3600) hours"
         }
+    }
+}
+
+/// A quiet explanatory line at the end of a form section.
+struct Hint<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        content
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
