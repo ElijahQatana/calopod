@@ -13,8 +13,8 @@ enum SquidMark {
 
     // Arm start x, tentacle end offset from center, end y, curl.
     private static let arms: [(sx: CGFloat, dx: CGFloat, ey: CGFloat, w: CGFloat)] = [
-        (24, -15, 56, -4), (28, -6.5, 50, -2), (31, -2.5, 52, 1),
-        (33, 2.5, 52, -1), (36, 6.5, 50, 2), (40, 15, 56, 4),
+        (24, -15, 56, -4), (27, -8.5, 51, -1.5), (30.5, -3, 53, 0.5),
+        (33.5, 3, 53, -0.5), (37, 8.5, 51, 1.5), (40, 15, 56, 4),
     ]
 
     /// Filled body: mantle with the fins and eye holes (use the even-odd rule).
@@ -33,8 +33,8 @@ enum SquidMark {
             p.addCurve(to: pt(m(23), 26), control1: pt(m(18), 21.5), control2: pt(m(21.5), 22.5))
             p.closeSubpath()
         }
-        for x in [CGFloat(28.6), 35.4] {
-            p.addEllipse(in: CGRect(x: x - 2.4, y: 28.1, width: 4.8, height: 4.8).applying(shift))
+        for x in [CGFloat(27.9), 36.1] {
+            p.addEllipse(in: CGRect(x: x - 3.3, y: 27.2, width: 6.6, height: 6.6).applying(shift))
         }
         return p
     }
