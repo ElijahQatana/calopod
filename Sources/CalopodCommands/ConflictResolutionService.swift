@@ -160,6 +160,16 @@ public struct ConflictResolutionService: Sendable {
         return ConflictBoard(groups: groups, isComplete: result.analysis.isComplete)
     }
 
+    /// Re-reads the selected source calendars into the local copy so the board doesn't depend on
+    /// the last sync. Reads only: no calendar is written. Throws `CalopodRuntimeError.busy` when a
+    /// sync or another reply holds the lock, and leaves the board as it was.
+    public func refresh() async throws {
+        let state = try makeRepository()
+        let lock = try ProcessLock.acquire(at: try makeLockURL())
+        defer { withExtendedLifetime(lock) {} }
+        _ = try await makeRefresh(state)()
+    }
+
     /// One combined projection of every selected reply. Local only; nothing is sent.
     public func preview(_ selections: [ConflictSelection]) throws -> ConflictPreviewSummary {
         let snapshot = try makeRepository().inboxContextSnapshot()
