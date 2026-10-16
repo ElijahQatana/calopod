@@ -78,7 +78,7 @@ struct Sidebar: View {
                 } else {
                     Text("Setup")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.secondary)
                         .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 3)
                 }
                 ForEach(setup) { row($0) }
@@ -98,7 +98,7 @@ struct Sidebar: View {
             HStack(spacing: 10) {
                 Image(systemName: screen.symbol)
                     .frame(width: 20)
-                    .foregroundStyle(selected ? Theme.onAccent : .secondary)
+                    .foregroundStyle(selected ? Theme.onAccent : Color.primary.opacity(0.62))
                     .overlay(alignment: .topTrailing) {
                         if rail && count > 0 { dot(selected: selected).offset(x: 5, y: -3) }
                     }
@@ -132,7 +132,7 @@ struct Sidebar: View {
 
     private func dot(selected: Bool) -> some View {
         Circle().fill(selected ? Theme.onAccent : Theme.bad).frame(width: 9, height: 9)
-            .overlay(Circle().stroke(selected ? Theme.accent : Color(nsColor: .windowBackgroundColor), lineWidth: 2))
+            .overlay(Circle().stroke(selected ? Theme.accent : Theme.pane, lineWidth: 2))
     }
 
     private var status: some View {
@@ -204,7 +204,9 @@ private struct GlassPanel: ViewModifier {
     func body(content: Content) -> some View {
         #if compiler(>=6.2)
         if #available(macOS 26, *) {
-            content.glassEffect(.regular, in: shape)
+            content
+                .glassEffect(.regular.tint(Theme.glassFill), in: shape)
+                .overlay(shape.strokeBorder(Theme.glassEdge, lineWidth: 1))
         } else {
             plain(content)
         }
@@ -215,8 +217,9 @@ private struct GlassPanel: ViewModifier {
 
     private func plain(_ content: Content) -> some View {
         content
-            .background(shape.fill(.regularMaterial))
-            .overlay(shape.strokeBorder(.separator))
+            .background(shape.fill(.ultraThinMaterial))
+            .background(shape.fill(Theme.glassFill))
+            .overlay(shape.strokeBorder(Theme.glassEdge, lineWidth: 1))
     }
 }
 
@@ -257,6 +260,9 @@ struct WindowChrome: NSViewRepresentable {
 
         func apply() {
             guard let window = view?.window else { return }
+            // Let the blurred desktop show through the window.
+            window.isOpaque = false
+            window.backgroundColor = .clear
             if observers.isEmpty {
                 observe(window)
                 // Keep the search field from grabbing focus at launch.

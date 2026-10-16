@@ -21,6 +21,22 @@ enum Theme {
     static let caution = Color(red: 0.80, green: 0.66, blue: 0.10)
     static let bad = Color(red: 0.80, green: 0.28, blue: 0.28)
 
+    // Window, panels and glass. The window tint is a warm wash over the blurred desktop.
+    static let windowTint = Color(
+        light: Color(red: 1, green: 0.62, blue: 0.36).opacity(0.16),
+        dark: Color(red: 0.92, green: 0.43, blue: 0.16).opacity(0.14))
+    static let pane = Color(light: .white, dark: Color(red: 0x17 / 255, green: 0x14 / 255, blue: 0x12 / 255))
+    static let group = Color(
+        light: Color(red: 0xf6 / 255, green: 0xf4 / 255, blue: 0xf1 / 255),
+        dark: Color(red: 0x20 / 255, green: 0x1c / 255, blue: 0x19 / 255))
+    static let paneLine = Color(
+        light: Color(red: 0.10, green: 0.09, blue: 0.07).opacity(0.06),
+        dark: Color(red: 1, green: 0.94, blue: 0.86).opacity(0.06))
+    static let glassFill = Color(
+        light: Color.white.opacity(0.42), dark: Color(red: 0.15, green: 0.125, blue: 0.11).opacity(0.5))
+    static let glassEdge = Color(
+        light: Color.white.opacity(0.7), dark: Color(red: 1, green: 0.94, blue: 0.86).opacity(0.14))
+
     static let cardRadius: CGFloat = 20
     static let controlRadius: CGFloat = 12
     static let pagePadding: CGFloat = 28
