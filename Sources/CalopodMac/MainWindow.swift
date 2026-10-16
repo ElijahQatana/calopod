@@ -6,12 +6,13 @@ struct MainWindow: View {
     let service: ServiceModel
     let setup: SetupModel
     let conflicts: ConflictModel
+    let inbox: InboxModel
 
     var body: some View {
         HStack(spacing: 0) {
             Sidebar(
                 navigation: navigation, state: sidebar, service: service,
-                inboxCount: conflicts.board?.groups.count ?? 0)
+                inboxCount: inbox.count)
             detail
         }
         .padding(Sidebar.inset)
@@ -46,10 +47,7 @@ struct MainWindow: View {
         switch navigation.selection {
         case .overview: OverviewScreen(model: service, conflicts: conflicts, navigation: navigation, setup: setup)
         case .calendar: PlaceholderScreen(screen: .calendar, detail: "Your week at a glance will appear here.")
-        case .inbox:
-            PlaceholderScreen(
-                screen: .inbox, detail: "Events that need your attention will collect here.",
-                action: ("Review overlapping events", { navigation.selection = .conflicts }))
+        case .inbox: InboxScreen(model: inbox, navigation: navigation, colors: .shared)
         case .calendars: CalendarsScreen(model: setup)
         case .arms: ArmsScreen(model: setup)
         case .conflicts: ConflictsScreen(model: conflicts)

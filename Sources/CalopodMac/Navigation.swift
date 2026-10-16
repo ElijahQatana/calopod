@@ -1,3 +1,4 @@
+import CalopodCommands
 import Foundation
 import Observation
 import SwiftUI
@@ -68,9 +69,16 @@ final class SidebarState {
 @Observable
 final class AppNavigation {
     var selection: Screen
+    /// The Inbox filter to show. Set it with `openInbox` from other screens.
+    var inboxFilter: InboxFilter = .all
 
     /// `CALOPOD_START_SCREEN=conflicts` opens on that screen, for screenshots.
     init(environment: [String: String] = ProcessInfo.processInfo.environment) {
         selection = environment["CALOPOD_START_SCREEN"].flatMap(Screen.init(rawValue:)) ?? .overview
+    }
+
+    func openInbox(_ filter: InboxFilter = .all) {
+        inboxFilter = filter
+        selection = .inbox
     }
 }
