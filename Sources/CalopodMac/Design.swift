@@ -42,11 +42,11 @@ enum Theme {
     static let sidebarSheen = Color(
         light: Color.white.opacity(0.40), dark: Color(red: 0.30, green: 0.26, blue: 0.22).opacity(0.36))
     static let sidebarFill = Color(
-        light: Color.white.opacity(0.28), dark: Color(red: 0.12, green: 0.10, blue: 0.09).opacity(0.28))
+        light: Color.white.opacity(0.34), dark: Color(red: 0.12, green: 0.10, blue: 0.09).opacity(0.34))
     static let contentFill = Color(
-        light: Color.white.opacity(0.56), dark: Color(red: 0x17 / 255, green: 0x14 / 255, blue: 0x12 / 255).opacity(0.54))
+        light: Color.white.opacity(0.82), dark: Color(red: 0x17 / 255, green: 0x14 / 255, blue: 0x12 / 255).opacity(0.80))
     static let innerFill = Color(
-        light: Color.white.opacity(0.68), dark: Color(red: 0x20 / 255, green: 0x1c / 255, blue: 0x19 / 255).opacity(0.72))
+        light: Color.white.opacity(0.90), dark: Color(red: 0x20 / 255, green: 0x1c / 255, blue: 0x19 / 255).opacity(0.90))
     static let sidebarInactive = Color(
         light: Color.white.opacity(0.80), dark: Color(red: 0x1b / 255, green: 0x17 / 255, blue: 0x15 / 255).opacity(0.86))
     static let cardInactive = Color(

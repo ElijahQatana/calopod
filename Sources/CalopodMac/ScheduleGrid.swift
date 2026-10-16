@@ -105,7 +105,7 @@ struct ScheduleGrid: View {
         let perDay = days.map { ScheduleLayout.allDay(model.events, on: $0, calendar: model.calendar) }
         if perDay.contains(where: { !$0.isEmpty }) {
             HStack(alignment: .top, spacing: 0) {
-                Text("all-day").font(.system(size: 10)).foregroundStyle(.tertiary)
+                Text("all-day").font(.system(size: 10)).foregroundStyle(.secondary)
                     .frame(width: Self.gutter, alignment: .trailing).padding(.trailing, 6).padding(.top, 3)
                 ForEach(perDay.indices, id: \.self) { index in
                     VStack(spacing: 2) {
@@ -131,7 +131,7 @@ struct ScheduleGrid: View {
         ZStack(alignment: .topTrailing) {
             ForEach(1..<24, id: \.self) { hour in
                 Text(Self.label(hour))
-                    .font(.system(size: 10)).monospacedDigit().foregroundStyle(.tertiary)
+                    .font(.system(size: 10)).monospacedDigit().foregroundStyle(.secondary)
                     .offset(y: CGFloat(hour) * Self.hourHeight - 7)
                     .padding(.trailing, 6)
             }

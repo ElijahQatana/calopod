@@ -43,6 +43,7 @@ final class ThemeTests: XCTestCase {
             let content = try alpha(Theme.contentFill, name)
             XCTAssertLessThan(frame, sidebar.min()!)
             XCTAssertLessThan(sidebar.max()!, content)
+            XCTAssertLessThan(content, try alpha(Theme.innerFill, name))
         }
     }
 
