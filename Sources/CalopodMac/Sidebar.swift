@@ -213,8 +213,17 @@ private struct GlassPanel: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background(shape.fill(reduceTransparency ? Theme.pane : Theme.glassFill))
-            .overlay(shape.strokeBorder(reduceTransparency ? Theme.paneLine : Theme.glassEdge, lineWidth: 1))
+            .background {
+                if reduceTransparency {
+                    shape.fill(Theme.pane)
+                } else {
+                    shape.fill(
+                        LinearGradient(
+                            colors: [Theme.glassSheen, Theme.glassFill],
+                            startPoint: .topLeading, endPoint: .bottomTrailing))
+                }
+            }
+            .panelChrome(shape)
     }
 }
 
