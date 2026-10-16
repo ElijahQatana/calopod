@@ -1,7 +1,6 @@
 import CalopodCommands
 import SwiftUI
 
-/// Install, approve and remove the background service, and set how often it runs.
 struct ServiceScreen: View {
     let model: ServiceModel
 

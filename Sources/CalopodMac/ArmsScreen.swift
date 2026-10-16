@@ -2,7 +2,6 @@ import CalopodCommands
 import CalopodDomain
 import SwiftUI
 
-/// The Main calendar and Arms: which calendars flow into which, and how much detail they show.
 struct ArmsScreen: View {
     let model: SetupModel
 

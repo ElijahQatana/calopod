@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// The app's one window: a sidebar of screens and the selected screen beside it.
 struct MainWindow: View {
     let navigation: AppNavigation
     let service: ServiceModel

@@ -1,7 +1,6 @@
 import CalopodCommands
 import SwiftUI
 
-/// The small menu bar view: how sync is doing and a few quick actions.
 struct MenuPopover: View {
     let model: ServiceModel
     let navigation: AppNavigation

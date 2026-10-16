@@ -14,7 +14,6 @@ final class SetupModel {
 
     var isBusy: Bool { busy != nil }
 
-    /// Every selected calendar across Connections, for choosing Arm sources and targets.
     var selectedCalendars: [(id: String, title: String, isReadOnly: Bool)] {
         (snapshot?.connections ?? []).flatMap { connection in
             connection.calendars.filter(\.isSelected).map {

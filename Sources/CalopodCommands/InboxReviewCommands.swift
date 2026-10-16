@@ -130,8 +130,7 @@ private final class ReviewTerminalInput: @unchecked Sendable {
     }
 }
 
-/// Re-reads every selected source calendar into the local cache, then returns the fresh snapshot.
-/// Writes to no calendar. Shared by the terminal review and the Mac conflict screen.
+/// Rereads the selected calendars into the local cache. Writes to no calendar.
 func inboxReviewRefresh(state: LocalStateRepository) -> InboxReviewSessionController.Refresh {
     {
         let current = try state.inboxContextSnapshot()
@@ -146,7 +145,6 @@ func inboxReviewRefresh(state: LocalStateRepository) -> InboxReviewSessionContro
     }
 }
 
-/// Only Google and Microsoft can send an RSVP.
 func inboxReviewProvider() -> InboxReviewSessionController.Provider {
     { target in
         switch target.provider {

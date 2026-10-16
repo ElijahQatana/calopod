@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// The look of the Mac app: calm surfaces, one accent, generous spacing, semantic status colors.
 enum Theme {
-    /// The user's system accent color, so the app matches the rest of macOS.
+    /// System accent, so the app matches the rest of macOS.
     static let accent = Color.accentColor
     static let good = Color(red: 0.20, green: 0.62, blue: 0.40)
     static let caution = Color(red: 0.88, green: 0.58, blue: 0.14)
@@ -12,7 +11,6 @@ enum Theme {
     static let pagePadding: CGFloat = 28
 }
 
-/// A small colored dot and word, such as "Running" or "Paused".
 struct StatusPill: View {
     let text: String
     let color: Color
@@ -28,7 +26,6 @@ struct StatusPill: View {
     }
 }
 
-/// A short banner for something that needs attention. Never red unless it is an error.
 struct Banner: View {
     enum Kind { case info, caution, error }
     let kind: Kind
@@ -78,7 +75,6 @@ extension ButtonStyle where Self == AccentButtonStyle {
     static var accentFilled: AccentButtonStyle { AccentButtonStyle() }
 }
 
-/// The one prominent button on a screen.
 struct AccentButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
@@ -114,7 +110,6 @@ enum Format {
     }
 }
 
-/// A quiet explanatory line at the end of a form section.
 struct Hint<Content: View>: View {
     @ViewBuilder var content: Content
 

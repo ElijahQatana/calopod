@@ -2,7 +2,7 @@ import CalopodDomain
 import CalopodStore
 import Foundation
 
-/// One explicit choice for one event. `.hold` means no change and is always allowed.
+/// `.hold` means no change and is always allowed.
 public struct ConflictDecision: Equatable, Sendable {
     public let sourceKeyHash: String
     public let choice: InboxConflictChoice
@@ -16,20 +16,16 @@ public struct ConflictDecision: Equatable, Sendable {
 public enum ConflictResolutionError: Error, Equatable, Sendable {
     case unknownEvent(String)
     case duplicateDecision(String)
-    /// The choice is not offered for this event, for example because the provider can't reply.
     case choiceUnavailable(String)
 }
 
-/// What the overlaps would look like if every change were applied. Computed from local data only;
-/// nothing is sent. Shared by the Mac screen and, later, iPhone.
+/// Overlaps after applying every change, from local data only. Nothing is sent.
 public struct ConflictResolutionPreview: Equatable, Sendable {
-    /// Decisions that would send a reply, in the order given.
     public let changes: [ConflictDecision]
-    /// Events left alone.
     public let unchanged: [String]
     public let conflictsBefore: Set<InboxConflictPair>
     public let conflictsAfter: Set<InboxConflictPair>
-    /// False when a source is stale or partly read, so a clean result can't be trusted.
+    /// False when a source is stale or partly read.
     public let isComplete: Bool
 
     public var resolved: Set<InboxConflictPair> { conflictsBefore.subtracting(conflictsAfter) }
@@ -38,8 +34,7 @@ public struct ConflictResolutionPreview: Equatable, Sendable {
 }
 
 public enum ConflictResolutionPlanner {
-    /// Checks every decision against what the event actually allows, then projects the combined
-    /// result. Throws instead of dropping a decision.
+    /// Rejects choices the event doesn't allow, then projects the combined result.
     public static func preview(
         _ decisions: [ConflictDecision],
         in snapshot: InboxContextSnapshot,

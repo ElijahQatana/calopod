@@ -57,8 +57,7 @@ public struct AgentSchedule: Equatable, Sendable {
     }
 }
 
-/// An automatic-sync interval that replaces the installed one. Read by the agent between runs, so
-/// a bundled agent with a fixed plist can still be re-timed. Invalid or missing files are ignored.
+/// An interval from the Mac app that replaces the installed one. A missing or invalid file is ignored.
 public struct AgentScheduleOverride: Codable, Equatable, Sendable {
     public static let minimumIntervalSeconds = 60
     public static let maximumIntervalSeconds = 86_400
@@ -81,7 +80,6 @@ public struct AgentScheduleOverride: Codable, Equatable, Sendable {
         return decoded
     }
 
-    /// Writes the override owner-only, replacing any earlier one.
     public func save(to location: CalopodStateLocation) throws {
         try location.prepareDirectory()
         let data = try JSONEncoder().encode(self)
@@ -97,7 +95,6 @@ public struct AgentScheduleOverride: Codable, Equatable, Sendable {
 }
 
 extension AgentSchedule {
-    /// The same schedule with the interval replaced, when an override exists.
     public func applying(_ override: AgentScheduleOverride?) -> AgentSchedule {
         guard let override,
               let replaced = try? AgentSchedule(
@@ -230,8 +227,7 @@ public struct CalopodAgentRunner: Sendable {
         }
     }
 
-    /// Waits out the interval, but ends the wait early when the override changes so a new interval
-    /// takes effect within `scheduleCheckSeconds`, not after the old interval.
+    /// Ends the wait early when the override changes, so a new interval applies within seconds.
     private func sleepUnlessScheduleChanges() async throws {
         let baseline = AgentScheduleOverride.load(from: environment.stateLocation)
         let delay = schedule.applying(baseline).delay(randomUnit: randomUnit())

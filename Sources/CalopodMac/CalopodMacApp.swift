@@ -9,13 +9,13 @@ struct CalopodMacApp: App {
     @State private var navigation = AppNavigation()
 
     init() {
-        // A menu bar app: no Dock icon even when launched as a bare executable.
+        // No Dock icon, even as a bare executable.
         NSApplication.shared.setActivationPolicy(.accessory)
         AppConfiguration.apply()
     }
 
     var body: some Scene {
-        // Opens at launch and again when the app is opened a second time, so launching is visible.
+        // Opens at launch and on reopen, so launching is visible.
         Window("Calopod", id: "home") {
             MainWindow(navigation: navigation, service: service, setup: setup, conflicts: conflicts)
                 .task { await conflicts.reload() }

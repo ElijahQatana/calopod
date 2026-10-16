@@ -27,13 +27,13 @@ enum Screen: String, CaseIterable, Identifiable {
     }
 }
 
-/// Which screen the main window shows, so the menu bar can open straight to one.
+/// Lets the menu bar open the window on a given screen.
 @MainActor
 @Observable
 final class AppNavigation {
     var selection: Screen
 
-    /// `CALOPOD_START_SCREEN=conflicts` opens straight to a screen, for screenshots and testing.
+    /// `CALOPOD_START_SCREEN=conflicts` opens on that screen, for screenshots.
     init(environment: [String: String] = ProcessInfo.processInfo.environment) {
         selection = environment["CALOPOD_START_SCREEN"].flatMap(Screen.init(rawValue:)) ?? .overview
     }

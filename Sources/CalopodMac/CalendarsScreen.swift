@@ -1,7 +1,6 @@
 import CalopodCommands
 import SwiftUI
 
-/// Connect accounts and choose which calendars Calopod reads.
 struct CalendarsScreen: View {
     let model: SetupModel
 

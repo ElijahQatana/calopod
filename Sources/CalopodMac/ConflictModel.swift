@@ -17,7 +17,6 @@ final class ConflictModel {
 
     var isBusy: Bool { busy != nil }
 
-    /// Everything chosen so far that would send a reply.
     var pendingReplies: [ConflictSelection] {
         selections.compactMap { $0.value == .noChange ? nil : ConflictSelection(eventID: $0.key, choice: $0.value) }
             .sorted { $0.eventID < $1.eventID }
@@ -42,7 +41,6 @@ final class ConflictModel {
         }
     }
 
-    /// Re-reads the calendars, then reloads the board. Reads only.
     func refresh() async {
         guard busy == nil else { return }
         let service = service
