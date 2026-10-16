@@ -208,10 +208,13 @@ private struct SquidBadge: View {
 /// Rounded glass on macOS 26, a plain material before that.
 private struct GlassPanel: ViewModifier {
     private let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     func body(content: Content) -> some View {
         #if compiler(>=6.2)
-        if #available(macOS 26, *) {
+        if reduceTransparency {
+            solid(content)
+        } else if #available(macOS 26, *) {
             content
                 .glassEffect(.regular.tint(Theme.glassFill), in: shape)
                 .overlay(shape.strokeBorder(Theme.glassEdge, lineWidth: 1))
@@ -219,8 +222,14 @@ private struct GlassPanel: ViewModifier {
             plain(content)
         }
         #else
-        plain(content)
+        if reduceTransparency { solid(content) } else { plain(content) }
         #endif
+    }
+
+    private func solid(_ content: Content) -> some View {
+        content
+            .background(shape.fill(Theme.pane))
+            .overlay(shape.strokeBorder(Theme.paneLine, lineWidth: 1))
     }
 
     private func plain(_ content: Content) -> some View {

@@ -32,8 +32,14 @@ enum Theme {
     static let paneLine = Color(
         light: Color(red: 0.10, green: 0.09, blue: 0.07).opacity(0.06),
         dark: Color(red: 1, green: 0.94, blue: 0.86).opacity(0.06))
+    // Panel fills over the blurred desktop. Lower opacity lets more wallpaper through.
+    // The inner fill is more opaque than the card so text on it stays readable.
     static let glassFill = Color(
-        light: Color.white.opacity(0.42), dark: Color(red: 0.15, green: 0.125, blue: 0.11).opacity(0.5))
+        light: Color.white.opacity(0.24), dark: Color(red: 0.15, green: 0.125, blue: 0.11).opacity(0.30))
+    static let cardFill = Color(
+        light: Color.white.opacity(0.46), dark: Color(red: 0x17 / 255, green: 0x14 / 255, blue: 0x12 / 255).opacity(0.44))
+    static let innerFill = Color(
+        light: Color.white.opacity(0.55), dark: Color(red: 0x20 / 255, green: 0x1c / 255, blue: 0x19 / 255).opacity(0.58))
     static let glassEdge = Color(
         light: Color.white.opacity(0.7), dark: Color(red: 1, green: 0.94, blue: 0.86).opacity(0.14))
 
@@ -44,6 +50,30 @@ enum Theme {
     /// New York for screen titles and large moments.
     static func title(_ style: Font.TextStyle = .title2) -> Font {
         .system(style, design: .serif, weight: .semibold)
+    }
+}
+
+/// Frosted fill for a panel, or the solid pane when Reduce Transparency is on.
+struct PanelFill<S: Shape>: ViewModifier {
+    enum Level { case card, inner }
+    let level: Level
+    let shape: S
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    func body(content: Content) -> some View {
+        content.background {
+            if reduceTransparency {
+                shape.fill(level == .card ? Theme.pane : Theme.group)
+            } else {
+                shape.fill(level == .card ? Theme.cardFill : Theme.innerFill)
+            }
+        }
+    }
+}
+
+extension View {
+    func panelFill<S: Shape>(_ level: PanelFill<S>.Level, in shape: S) -> some View {
+        modifier(PanelFill(level: level, shape: shape))
     }
 }
 
