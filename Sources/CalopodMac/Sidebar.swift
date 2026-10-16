@@ -266,17 +266,18 @@ struct WindowChrome: NSViewRepresentable {
         func apply() {
             guard let window = view?.window else { return }
             // Let the blurred desktop show through the window.
-            window.isOpaque = false
-            window.backgroundColor = .clear
-            if observers.isEmpty {
-                observe(window)
-                // Keep the search field from grabbing focus at launch.
-                window.makeFirstResponder(nil)
-            }
+            if window.isOpaque { window.isOpaque = false }
+            if window.backgroundColor != .clear { window.backgroundColor = .clear }
             guard let close = window.standardWindowButton(.closeButton),
                 let titlebar = close.superview,
                 let container = titlebar.superview
             else { return }
+            if observers.isEmpty {
+                observe(window, watching: [container, titlebar] + [.miniaturizeButton, .zoomButton, .closeButton]
+                    .compactMap { window.standardWindowButton($0) })
+                // Keep the search field from grabbing focus at launch.
+                window.makeFirstResponder(nil)
+            }
             let height = WindowChrome.barHeight
             let barFrame = NSRect(
                 x: 0, y: window.frame.height - height, width: window.frame.width, height: height)
@@ -297,19 +298,28 @@ struct WindowChrome: NSViewRepresentable {
             }
         }
 
-        private func observe(_ window: NSWindow) {
+        private func observe(_ window: NSWindow, watching views: [NSView]) {
+            let center = NotificationCenter.default
             let names: [Notification.Name] = [
                 NSWindow.didResizeNotification, NSWindow.didEndLiveResizeNotification,
                 NSWindow.didExitFullScreenNotification, NSWindow.didBecomeKeyNotification,
-                // AppKit lays the title bar out again on its own; put the buttons back.
-                NSWindow.didUpdateNotification,
             ]
-            observers = names.map { name in
-                NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) {
-                    [weak self] _ in
+            var tokens = names.map { name in
+                center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
                     MainActor.assumeIsolated { self?.apply() }
                 }
             }
+            // AppKit lays the title bar out again on its own. Watching the frames of the bar and
+            // buttons catches that without running on every window update.
+            for view in views {
+                view.postsFrameChangedNotifications = true
+                tokens.append(center.addObserver(
+                    forName: NSView.frameDidChangeNotification, object: view, queue: .main
+                ) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.apply() }
+                })
+            }
+            observers = tokens
         }
 
     }
