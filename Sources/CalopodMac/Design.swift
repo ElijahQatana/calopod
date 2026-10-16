@@ -25,10 +25,9 @@ enum Theme {
     // Window, panels and glass. From most to least see-through: the frame around the
     // panels, then the sidebar, then the content card (and the inner fill on it). Each
     // step is gentle. ThemeTests keeps this order.
-    /// The behind-window material. underWindowBackground takes on the wallpaper's average
-    /// color, which smears a split wallpaper into one flat wash. The sidebar material
-    /// blurs the desktop but keeps its shapes visible.
-    static let windowMaterial: NSVisualEffectView.Material = .sidebar
+    /// The behind-window material, the one Zen Browser defaults to. The sidebar and
+    /// underWindowBackground materials both washed the desktop out.
+    static let windowMaterial: NSVisualEffectView.Material = .hudWindow
     static let frameTint = Color(
         light: Color(red: 1, green: 0.56, blue: 0.28).opacity(0.10),
         dark: Color(red: 0.92, green: 0.43, blue: 0.16).opacity(0.08))
