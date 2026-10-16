@@ -46,7 +46,7 @@ struct InboxReviewSheet: View {
                 Text("Review inbox").font(Theme.title())
                 Spacer()
                 if case .summary = model.phase {
-                    Button("Close", action: close).keyboardShortcut(.defaultAction)
+                    Button("Close", action: close).buttonStyle(.accentFilled).keyboardShortcut(.defaultAction)
                 } else if case .start = model.phase {
                     Button("Cancel", action: close).keyboardShortcut(.cancelAction)
                 } else {
@@ -54,11 +54,22 @@ struct InboxReviewSheet: View {
                 }
             }
             if let progress = model.progress, showsProgress {
-                ProgressView(value: Double(progress.reviewed), total: Double(max(progress.total, 1)))
-                    .tint(Theme.accent)
+                bar(Double(progress.reviewed) / Double(max(progress.total, 1)))
                 Text(progressLine(progress)).font(.caption).foregroundStyle(.secondary)
             }
         }
+    }
+
+    private func bar(_ fraction: Double) -> some View {
+        Capsule().fill(.quaternary).frame(height: 6)
+            .overlay(alignment: .leading) {
+                GeometryReader { proxy in
+                    Capsule().fill(Theme.accent).frame(width: proxy.size.width * min(max(fraction, 0), 1))
+                }
+            }
+            .accessibilityElement()
+            .accessibilityLabel("Review progress")
+            .accessibilityValue("\(Int(fraction * 100)) percent")
     }
 
     private var showsProgress: Bool {
@@ -117,8 +128,7 @@ struct InboxReviewSheet: View {
 
     private func cardView(_ card: InboxReviewCardInfo) -> some View {
         let entry = card.entry
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+        return VStack(alignment: .leading, spacing: 14) {
                 Text(entry.title).font(Theme.title(.title3))
                 HStack(spacing: 8) {
                     ForEach(entry.reasons, id: \.self) { StatusPill(text: InboxText.label($0, entry), color: InboxText.tint($0)) }
@@ -137,7 +147,6 @@ struct InboxReviewSheet: View {
                 }
                 actions(card)
                 if !card.neighbors.isEmpty { neighbors(card) }
-            }
         }
     }
 
@@ -173,8 +182,10 @@ struct InboxReviewSheet: View {
                 }
                 .buttonStyle(.plain)
             }
-            Button("Back to the queue  B") { Task { await model.perform(.back) } }
-                .buttonStyle(.link).font(.caption)
+            if model.isJumped {
+                Button("Back to the queue  B") { Task { await model.perform(.back) } }
+                    .buttonStyle(.link).font(.caption)
+            }
         }
     }
 

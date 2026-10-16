@@ -34,6 +34,9 @@ final class InboxReviewModel {
         self.service = service
     }
 
+    /// True while looking at an overlapping event reached with G.
+    var isJumped: Bool { focus != nil }
+
     var keyboardMode: ReviewKeyboard.Mode? {
         switch phase {
         case .card: .card
