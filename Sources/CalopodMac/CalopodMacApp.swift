@@ -11,8 +11,7 @@ struct CalopodMacApp: App {
     @State private var sidebar = SidebarState()
 
     init() {
-        // No Dock icon, even as a bare executable.
-        NSApplication.shared.setActivationPolicy(.accessory)
+        DockPresence.enter()
         AppConfiguration.apply()
     }
 
@@ -23,6 +22,7 @@ struct CalopodMacApp: App {
                 .environment(inbox)
                 .environment(schedule)
                 .task { await inbox.reload() }
+                .dockPresence()
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 980, height: 660)

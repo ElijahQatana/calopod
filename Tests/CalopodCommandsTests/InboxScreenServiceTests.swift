@@ -66,6 +66,18 @@ struct InboxScreenServiceTests {
         #expect(board.lastChecked != nil)
     }
 
+    @Test("Quick incremental reads keep a calendar current, a silent one goes stale", arguments: [
+        (100.0, false), (3000.0, false), (4000.0, true)
+    ])
+    func incrementalReadsKeepCalendarCurrent(secondsSinceLastRead: Double, stale: Bool) throws {
+        let f = try InboxFixture(now: Date().addingTimeInterval(4 * 3600))
+        let last = f.now.addingTimeInterval(-secondsSinceLastRead)
+        try f.refresh([], full: false, at: last)
+        let board = try f.service.board()
+        #expect(board.isComplete == !stale)
+        #expect(board.incompleteCalendars == (stale ? ["Calendar"] : []))
+    }
+
     @Test("The context strip rings overlaps and uses 90 minutes either side")
     func contextStrip() throws {
         let f = try InboxFixture()
@@ -117,11 +129,11 @@ private struct InboxFixture {
                                                actionCapability: RSVPActionCapability(supportedScopes: [.occurrence])))
     }
 
-    func refresh(_ events: [StoredNormalizedInstance]) throws {
+    func refresh(_ events: [StoredNormalizedInstance], full: Bool = true, at time: Date = Date()) throws {
         try state.applyEventRefresh(
             connectionID: "c", calendarBindingID: "cal", windowStart: Date(timeIntervalSince1970: 0),
             windowEnd: Date(timeIntervalSince1970: 400_000), instances: events, cancelledSourceKeyHashes: [],
-            isFullRefresh: true, cursorUpdates: [], now: Date())
+            isFullRefresh: full, cursorUpdates: [], now: time)
     }
 }
 #endif

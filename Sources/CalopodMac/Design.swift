@@ -109,6 +109,8 @@ struct Banner: View {
 struct PillPicker<Value: Hashable>: View {
     let options: [(label: String, value: Value)]
     @Binding var selection: Value
+    /// A white selected pill instead of the accent fill, for toolbars.
+    var quiet = false
 
     var body: some View {
         HStack(spacing: 2) {
@@ -117,11 +119,18 @@ struct PillPicker<Value: Hashable>: View {
                 let selected = option.value == selection
                 Button { selection = option.value } label: {
                     Text(option.label)
-                        .font(.callout.weight(.medium))
-                        .foregroundStyle(selected ? Theme.onAccent : .primary)
-                        .padding(.horizontal, 14).padding(.vertical, 6)
+                        .font(quiet ? .system(size: 12.5, weight: .medium) : .callout.weight(.medium))
+                        .foregroundStyle(selected && !quiet ? Theme.onAccent : .primary)
+                        .padding(.horizontal, quiet ? 12 : 14).padding(.vertical, quiet ? 3 : 6)
                         .frame(maxWidth: .infinity)
-                        .background(Capsule().fill(selected ? Theme.accent : .clear))
+                        .background {
+                            if selected, quiet {
+                                Capsule().fill(Color(nsColor: .windowBackgroundColor))
+                                    .shadow(color: .black.opacity(0.18), radius: 1.5, y: 1)
+                            } else {
+                                Capsule().fill(selected ? Theme.accent : .clear)
+                            }
+                        }
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)

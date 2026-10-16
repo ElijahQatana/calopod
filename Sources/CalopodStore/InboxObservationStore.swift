@@ -218,6 +218,13 @@ func recordInboxObservations(
             starts_at = excluded.starts_at, ends_at = excluded.ends_at, observed_at = excluded.observed_at
             """, arguments: [connectionID, calendarBindingID, windowStart, windowEnd, now])
     }
+    // An incremental read of the window already covered is still a fresh look at it.
+    if !isFullRefresh {
+        try db.execute(sql: """
+            UPDATE inbox_coverage SET observed_at = ?
+            WHERE connection_id = ? AND calendar_binding_id = ? AND starts_at = ? AND ends_at = ?
+            """, arguments: [now, connectionID, calendarBindingID, windowStart, windowEnd])
+    }
     // Bound activity detail to 90 days and 1,000 revisions per Connection.
     // Baselines, latest snapshots, tombstones and acknowledgements are independent.
     try db.execute(sql: """

@@ -60,27 +60,42 @@ struct CalendarScreen: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
                 Text(title).font(Theme.title(.title2)).lineLimit(1).minimumScaleFactor(0.8)
                 Spacer(minLength: 8)
-                PillPicker(options: [("Day", CalendarModel.Mode.day), ("Week", .week)], selection: $model.mode)
-                    .frame(width: 140)
-                Button("Today") { model.goToToday() }.buttonStyle(.bordered).controlSize(.large)
-                Button { model.step(-1) } label: { Image(systemName: "chevron.left") }
-                    .buttonStyle(.circleToolbar).accessibilityLabel("Previous")
-                Button { model.step(1) } label: { Image(systemName: "chevron.right") }
-                    .buttonStyle(.circleToolbar).accessibilityLabel("Next")
+                PillPicker(options: [("Day", CalendarModel.Mode.day), ("Week", .week)], selection: $model.mode, quiet: true)
+                    .fixedSize()
+                Button("Today") { model.goToToday() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 13, weight: .medium))
+                    .padding(.horizontal, 14).frame(height: Self.controlHeight)
+                    .background(Capsule().fill(.quaternary))
+                    .contentShape(Capsule())
+                HStack(spacing: 0) {
+                    stepButton("chevron.left", label: "Previous", by: -1)
+                    stepButton("chevron.right", label: "Next", by: 1)
+                }
+                .background(Capsule().fill(.quaternary))
             }
             if !model.calendars.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(model.calendars) { calendar in chip(calendar) }
-                    }
+                FlowLayout(spacing: 6) {
+                    ForEach(model.calendars) { calendar in chip(calendar) }
                 }
             }
         }
-        .padding(.horizontal, 18).padding(.top, 14).padding(.bottom, 8)
+        .padding(.horizontal, 18).padding(.top, 14).padding(.bottom, 12)
+    }
+
+    private static let controlHeight: CGFloat = 30
+
+    private func stepButton(_ symbol: String, label: String, by direction: Int) -> some View {
+        Button { model.step(direction) } label: {
+            Image(systemName: symbol).font(.system(size: 12, weight: .semibold))
+                .frame(width: 32, height: Self.controlHeight).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 
     @ViewBuilder
@@ -104,9 +119,9 @@ struct CalendarScreen: View {
             HStack(spacing: 6) {
                 Circle().fill(shown ? color : .clear).frame(width: 9, height: 9)
                     .overlay(Circle().strokeBorder(color, lineWidth: 1.5))
-                Text(calendar.name).font(.caption.weight(.medium)).lineLimit(1)
+                Text(calendar.name).font(.system(size: 12)).lineLimit(1)
             }
-            .padding(.horizontal, 10).padding(.vertical, 5)
+            .padding(.horizontal, 11).padding(.vertical, 4)
             .background(Capsule().fill(.quaternary))
             .opacity(shown ? 1 : 0.5)
             .contentShape(Capsule())
@@ -125,5 +140,35 @@ struct CalendarScreen: View {
             return first.formatted(.dateTime.month(.wide).year())
         }
         return "\(first.formatted(.dateTime.month(.abbreviated))) – \(last.formatted(.dateTime.month(.abbreviated).year()))"
+    }
+}
+
+/// Lays chips out left to right and wraps to a new line when the row is full.
+private struct FlowLayout: Layout {
+    var spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        arrange(subviews, width: proposal.width ?? .infinity).size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = arrange(subviews, width: bounds.width)
+        for (subview, origin) in zip(subviews, result.origins) {
+            subview.place(at: CGPoint(x: bounds.minX + origin.x, y: bounds.minY + origin.y), proposal: .unspecified)
+        }
+    }
+
+    private func arrange(_ subviews: Subviews, width: CGFloat) -> (origins: [CGPoint], size: CGSize) {
+        var origins: [CGPoint] = []
+        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, widest: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width { x = 0; y += rowHeight + spacing; rowHeight = 0 }
+            origins.append(CGPoint(x: x, y: y))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+            widest = max(widest, x - spacing)
+        }
+        return (origins, CGSize(width: widest, height: y + rowHeight))
     }
 }

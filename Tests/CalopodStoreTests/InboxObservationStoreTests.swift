@@ -191,6 +191,18 @@ struct InboxObservationStoreTests {
         #expect(try fixture.repository.inboxCoverage(connectionID: "connection", calendarBindingID: "calendar")?.endsAt == fixture.end)
     }
 
+    @Test("An incremental refresh of the same window renews coverage, a different window does not", arguments: [
+        (1000.0, 20000.0, 9000.0), (1000.0, 19000.0, 2000.0), (2000.0, 20000.0, 2000.0)
+    ])
+    func incrementalCoverage(start: Double, end: Double, observed: Double) throws {
+        let fixture = try Fixture()
+        try fixture.refresh([fixture.event()])
+        try fixture.refresh([], full: false, start: start, end: end, now: Date(timeIntervalSince1970: 9000))
+        let coverage = try #require(try fixture.repository.inboxCoverage(connectionID: "connection", calendarBindingID: "calendar"))
+        #expect(coverage.observedAt == Date(timeIntervalSince1970: observed))
+        #expect(coverage.startsAt == fixture.start && coverage.endsAt == fixture.end)
+    }
+
     @Test("Restart preserves private snapshots and acknowledgement")
     func restart() throws {
         let path = FileManager.default.temporaryDirectory.appendingPathComponent("inbox-restart-\(UUID().uuidString).sqlite").path
