@@ -102,6 +102,7 @@ struct MenuPopover: View {
     }
 
     private func show() {
+        DockPresence.enter()
         NSApplication.shared.activate(ignoringOtherApps: true)
         openWindow(id: "home")
     }
