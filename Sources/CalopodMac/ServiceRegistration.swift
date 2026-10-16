@@ -1,17 +1,14 @@
 import ServiceManagement
 
-/// Registers the bundled background agent with macOS (System Settings > Login Items). Only works
-/// from the built `Calopod.app`; a bare `swift run` executable has no bundled agent to register.
+/// Registers the bundled agent with macOS. Only works from the built Calopod.app.
 struct ServiceRegistration: Sendable {
     static let plistName = "pro.elijahquintana.calopod.app-agent.plist"
 
     enum State: Equatable, Sendable {
-        /// Not running from an app bundle, so there is nothing to register.
         case unavailable
         case notRegistered
         case requiresApproval
         case enabled
-        /// The bundle does not contain the agent plist.
         case notFound
     }
 

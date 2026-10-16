@@ -1,7 +1,6 @@
 import CalopodCommands
 import SwiftUI
 
-/// Overlapping events, one decision each, one combined preview, then send.
 struct ConflictsScreen: View {
     let model: ConflictModel
 
@@ -88,7 +87,7 @@ struct ConflictsScreen: View {
                 Label(reason, systemImage: "info.circle")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            // With no reply available the only choice is "No change", so there is nothing to pick.
+            // Nothing to pick when "No change" is the only choice.
             if event.choices.count > 1 {
                 Picker(
                     "Action",

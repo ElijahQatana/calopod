@@ -5,7 +5,6 @@ import CalopodStore
 import CalopodSync
 import Foundation
 
-/// A choice for one event as the Mac screen presents it. "No change" is always available.
 public enum ConflictChoice: String, CaseIterable, Sendable {
     case yes, maybe, no, noChange
 
@@ -27,11 +26,9 @@ public struct ConflictEvent: Identifiable, Equatable, Sendable {
     public let isAllDay: Bool
     public let calendarName: String
     public let provider: String
-    /// The current answer, such as `accepted` or `needs-response`.
     public let response: String
-    /// Always contains `.noChange`; replies appear only when the provider allows them.
+    /// Replies only appear when the provider allows them.
     public let choices: [ConflictChoice]
-    /// Why there are no reply choices, in plain language.
     public let replyUnavailableReason: String?
 }
 
@@ -43,7 +40,7 @@ public struct ConflictGroup: Identifiable, Equatable, Sendable {
 
 public struct ConflictBoard: Equatable, Sendable {
     public let groups: [ConflictGroup]
-    /// False when a source is stale or partly read, so "no conflicts" can't be trusted.
+    /// False when a source is stale or partly read.
     public let isComplete: Bool
 }
 
@@ -65,7 +62,7 @@ public struct ConflictPreviewSummary: Equatable, Sendable {
         public let choice: ConflictChoice
     }
 
-    /// Replies that would be sent. Sending a reply can notify the organizer.
+    /// Sending a reply can notify the organizer.
     public let replies: [Reply]
     public let resolvedCount: Int
     public let remainingCount: Int
@@ -94,9 +91,7 @@ public enum ConflictServiceError: Error, Equatable, Sendable {
     case nothingToApply
 }
 
-/// Backs the Mac conflict screen. Decisions, previews and revalidation come from the shared
-/// inbox core, so nothing here decides what a conflict is. A reply is only sent through the
-/// review session controller, which re-reads the provider and refuses a changed event.
+/// Backs the Mac conflicts screen. What counts as a conflict comes from the shared inbox core.
 public struct ConflictResolutionService: Sendable {
     private let makeRepository: @Sendable () throws -> LocalStateRepository
     private let makeLockURL: @Sendable () throws -> URL
@@ -130,8 +125,7 @@ public struct ConflictResolutionService: Sendable {
 
     // MARK: Reading
 
-    /// Groups the overlapping busy events from the local copy. Instant, and never contacts a
-    /// calendar.
+    /// Groups overlapping events from the local copy. Never contacts a calendar.
     public func board() throws -> ConflictBoard {
         let snapshot = try makeRepository().inboxContextSnapshot()
         let result = InboxAttentionQuery.evaluate(
@@ -160,9 +154,7 @@ public struct ConflictResolutionService: Sendable {
         return ConflictBoard(groups: groups, isComplete: result.analysis.isComplete)
     }
 
-    /// Re-reads the selected source calendars into the local copy so the board doesn't depend on
-    /// the last sync. Reads only: no calendar is written. Throws `CalopodRuntimeError.busy` when a
-    /// sync or another reply holds the lock, and leaves the board as it was.
+    /// Rereads the selected calendars under the sync lock. Throws `busy` if something else holds it.
     public func refresh() async throws {
         let state = try makeRepository()
         let lock = try ProcessLock.acquire(at: try makeLockURL())
@@ -170,7 +162,7 @@ public struct ConflictResolutionService: Sendable {
         _ = try await makeRefresh(state)()
     }
 
-    /// One combined projection of every selected reply. Local only; nothing is sent.
+    /// Local only. Nothing is sent.
     public func preview(_ selections: [ConflictSelection]) throws -> ConflictPreviewSummary {
         let snapshot = try makeRepository().inboxContextSnapshot()
         let result = InboxAttentionQuery.evaluate(snapshot, freshnessCutoff: freshnessCutoff)
@@ -199,9 +191,7 @@ public struct ConflictResolutionService: Sendable {
 
     // MARK: Applying
 
-    /// Sends the chosen replies one at a time. Each is revalidated against a fresh read of the
-    /// calendar and the provider immediately before it is sent, so a changed event is skipped and
-    /// reported instead of being answered. Earlier replies stay sent if a later one fails.
+    /// Sends replies one at a time, each revalidated just before it goes. A changed event is skipped and reported.
     public func apply(_ selections: [ConflictSelection]) async throws -> ConflictApplyReport {
         let replies = selections.filter { $0.choice != .noChange }
         guard !replies.isEmpty else { throw ConflictServiceError.nothingToApply }
@@ -214,7 +204,7 @@ public struct ConflictResolutionService: Sendable {
             filter: InboxAttentionFilter(conflictsOnly: true, bindingIDs: Set(snapshot.sources.map(\.bindingID))),
             freshnessCutoff: cutoff
         )
-        // Validates every selection and stops before sending anything if one is not allowed.
+        // Fails before anything is sent if a choice isn't allowed.
         _ = try ConflictResolutionPlanner.preview(
             selections.map { ConflictDecision(sourceKeyHash: $0.eventID, choice: $0.choice.inbox) },
             in: snapshot, window: queue.analysisWindow, freshnessCutoff: cutoff

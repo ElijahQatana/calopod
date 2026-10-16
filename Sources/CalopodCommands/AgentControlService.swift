@@ -4,7 +4,6 @@ import CalopodRuntime
 import CalopodStore
 import Foundation
 
-/// What the Mac app shows about automatic sync. A public mirror of the `agent status` payload.
 public struct AgentControlStatus: Equatable, Sendable {
     /// One of `ok`, `paused`, `disabled`, `stopped`, `failed`, `not-installed`.
     public let state: String
@@ -38,8 +37,7 @@ public struct AgentControlOverview: Equatable, Sendable {
     public let arms: [ArmLine]
 }
 
-/// What a sync would do, planned without writing any provider data. Counts and reasons only: no
-/// event titles or notes.
+/// Counts and reasons only, no event titles or notes.
 public struct SyncPreview: Equatable, Sendable {
     public struct Line: Identifiable, Equatable, Sendable {
         public let id: String
@@ -61,11 +59,9 @@ public struct SyncPreview: Equatable, Sendable {
     public var changeCount: Int { creates + updates + removals + repairs }
 }
 
-/// The `calopod doctor` checks, for the Mac app's Health section.
 public struct HealthReport: Equatable, Sendable {
     public struct Check: Identifiable, Equatable, Sendable {
         public var id: String { name }
-        /// `installation`, `service`, `state`, `database`, `schedule`, `connections` and so on.
         public let name: String
         /// `ok`, `pending` or `failed`.
         public let state: String
@@ -79,13 +75,11 @@ public struct HealthReport: Equatable, Sendable {
     public let warnings: [String]
 }
 
-/// Stateless entry point the Mac app uses to control the background service. Each call goes
-/// through the same `LaunchAgentController` and runner as the `calopod agent` commands.
+/// Controls the background service for the Mac app, through the same code as `calopod agent`.
 public struct AgentControlService: Sendable {
-    /// Label of the agent bundled in Calopod.app and registered through SMAppService.
     public static let bundledLabel = "pro.elijahquintana.calopod.app-agent"
 
-    /// Schedule baked into the bundled agent's plist (Support/Mac). Keep these in sync.
+    /// Matches the bundled agent's plist in Support/Mac.
     private static let bundledSchedule = (
         interval: 600, jitter: 30, lookbackDays: 1, horizonDays: 4
     )
@@ -94,8 +88,7 @@ public struct AgentControlService: Sendable {
     private let makeController: @Sendable () throws -> LaunchAgentController
     private let baseEnvironment: @Sendable () -> [String: String]
 
-    /// - Parameter bundledAgentExecutable: the `calopod-agent` inside Calopod.app, passed only
-    ///   while that agent is registered. The source-installed LaunchAgent, when present, wins.
+    /// Pass the bundled agent only while it is registered. An enabled source-installed agent still wins.
     public init(bundledAgentExecutable: URL? = nil) {
         self.init(
             bundledAgentExecutable: bundledAgentExecutable,
@@ -114,7 +107,6 @@ public struct AgentControlService: Sendable {
         self.baseEnvironment = baseEnvironment
     }
 
-    /// Everything a control needs to act on whichever service is active.
     private struct Context {
         let snapshot: LaunchAgentSnapshot
         let environment: () throws -> CalopodRuntimeEnvironment
@@ -125,8 +117,7 @@ public struct AgentControlService: Sendable {
     private func context() throws -> Context {
         let controller = try makeController()
         let snapshot = try controller.snapshot()
-        // The source-installed service is used unless the bundled one is registered and the
-        // source-installed one has been disabled, which is what moving to the app does.
+        // Moving to the app disables the source install, which is when the bundled agent takes over.
         if let configuration = snapshot.configuration,
            bundledAgentExecutable == nil || !snapshot.disabled {
             return Context(
@@ -202,8 +193,7 @@ public struct AgentControlService: Sendable {
         )
     }
 
-    /// Starts or stops the source-installed LaunchAgent. The bundled agent is registered and
-    /// removed by the app through SMAppService, not here.
+    /// The bundled agent is registered and removed by the app, not here.
     public func setEnabled(_ enabled: Bool) throws {
         guard !(try context().isBundled) else { throw LaunchAgentControlError.unavailable }
         let controller = try makeController()
@@ -217,14 +207,13 @@ public struct AgentControlService: Sendable {
     public func setPaused(_ paused: Bool) throws {
         let context = try context()
         try context.environment().repository().setAgentPaused(paused)
-        // The agent checks the flag before every run, so only the legacy service is restarted.
+        // The agent reads the flag before each run, so only the source install is restarted.
         if !context.isBundled {
             try makeController().restartIfEnabled()
         }
     }
 
-    /// Changes how often automatic sync runs. The bundled agent picks the new interval up from a
-    /// state-side file within seconds; the source-installed one has it rewritten in its plist.
+    /// The bundled agent reads the new interval from a file. The source install gets its plist rewritten.
     public func setInterval(seconds: Int) throws {
         let context = try context()
         let environment = try context.environment()
@@ -236,7 +225,7 @@ public struct AgentControlService: Sendable {
         }
     }
 
-    /// Runs one bounded synchronization now, ignoring the pause flag, like `agent run-now`.
+    /// Runs one sync now, ignoring the pause flag, like `agent run-now`.
     public func syncNow() async throws -> AgentRunReport {
         let context = try context()
         return await CalopodAgentRunner(
@@ -267,7 +256,7 @@ public struct AgentControlService: Sendable {
         )
     }
 
-    /// Plans one bounded sync over the automatic-sync window without writing to any calendar.
+    /// Dry run over the automatic sync window.
     public func preview() async throws -> SyncPreview {
         let context = try context()
         let environment = try context.environment()
@@ -340,7 +329,6 @@ public struct AgentControlService: Sendable {
         return AgentControlOverview(connections: connections, arms: arms)
     }
 
-    /// Plain-language text for any error thrown by this service.
     public func message(for error: Error) -> String {
         commandFailure(error).message
     }

@@ -4,8 +4,6 @@ import Foundation
 import Observation
 import ServiceManagement
 
-/// Holds what the window shows and routes every action to `AgentControlService`, the same
-/// controller and runner behind `calopod agent ...`. Blocking launchctl work stays off the main actor.
 @MainActor
 @Observable
 final class ServiceModel {
@@ -44,12 +42,10 @@ final class ServiceModel {
 
     var isBusy: Bool { busyAction != nil }
 
-    /// The `calopod-agent` bundled in this app, used when that agent is the registered service.
     private static var bundledAgentExecutable: URL {
         Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/calopod-agent")
     }
 
-    /// Points the controls at the bundled agent once it is registered, and back otherwise.
     private func updateService() {
         let state = registrar.state()
         registration = state
@@ -71,7 +67,6 @@ final class ServiceModel {
         }
     }
 
-    /// Plans a sync first. Nothing is written until the user applies the preview.
     func previewSync() async {
         guard busyAction == nil else { return }
         let service = service
@@ -96,7 +91,7 @@ final class ServiceModel {
         pendingPreview = nil
     }
 
-    /// Applies after a preview. The engine re-plans and re-checks ownership at write time.
+    /// The engine plans again and rechecks ownership when it writes.
     func applyPreview() async {
         pendingPreview = nil
         let service = service
@@ -130,15 +125,12 @@ final class ServiceModel {
         }
     }
 
-    /// True while the source-installed LaunchAgent is still loaded or enabled.
     var legacyServiceActive: Bool {
         guard let status, status.installed else { return false }
         return status.enabled || status.running
     }
 
-    /// Moves automatic sync from the source-installed LaunchAgent to the bundled agent. The legacy
-    /// agent is stopped first so two agents never run, and restored if registration fails. Local
-    /// state is never touched.
+    /// Stops the source-installed agent first so two never run, and restores it if registering fails.
     func installBundledService() async {
         let service = service
         let registrar = registrar

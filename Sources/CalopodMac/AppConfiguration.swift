@@ -1,8 +1,6 @@
 import Foundation
 
-/// Public OAuth client IDs and the EventKit host location, which the shared services read from
-/// the process environment. A Finder-launched app has no shell exports, so they come from the
-/// app's Info.plist (written by the build script) instead.
+/// A Finder-launched app has no shell exports, so the OAuth client IDs come from Info.plist.
 enum AppConfiguration {
     private static let plistKeys: [(plist: String, variable: String)] = [
         ("CalopodGoogleClientID", "CALOPOD_GOOGLE_CLIENT_ID"),
@@ -18,8 +16,7 @@ enum AppConfiguration {
                 setenv(key.variable, value, 1)
             }
         }
-        // Development fallback: a source-installed EventKit host sits in the one location where an
-        // ad-hoc signature is trusted. A team-signed bundled host needs none of this.
+        // Dev builds: ad-hoc signed hosts are only trusted in the source-install location.
         if (environment["CALOPOD_EVENTKIT_HOST_APP"] ?? "").isEmpty {
             let installed = FileManager.default.homeDirectoryForCurrentUser
                 .appendingPathComponent(

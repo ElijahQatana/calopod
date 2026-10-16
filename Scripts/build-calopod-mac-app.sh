@@ -25,7 +25,7 @@ rm -rf "$bundle_root"
 mkdir -p "$contents_root/MacOS" "$contents_root/Resources" "$contents_root/Library/LaunchAgents"
 sed "s/__VERSION__/$version/" "$repository_root/Support/Mac/Info.plist" > "$contents_root/Info.plist"
 cp "$repository_root/Support/Mac/$agent_plist_name" "$contents_root/Library/LaunchAgents/$agent_plist_name"
-# Public OAuth client IDs for direct Google and Microsoft Connections. Never put secrets here.
+# Public OAuth client IDs only, never secrets.
 for pair in CalopodGoogleClientID:CALOPOD_GOOGLE_CLIENT_ID \
   CalopodMicrosoftClientID:CALOPOD_MICROSOFT_CLIENT_ID \
   CalopodMicrosoftTenant:CALOPOD_MICROSOFT_TENANT; do
@@ -38,7 +38,7 @@ plutil -lint "$contents_root/Info.plist" "$contents_root/Library/LaunchAgents/$a
 "$repository_root/Scripts/build-calopod-icon.sh" "$contents_root/Resources"
 cp "$binary_root/calopod-mac" "$contents_root/MacOS/CalopodMac"
 cp "$binary_root/calopod-agent" "$contents_root/MacOS/calopod-agent"
-# The agent finds the host by searching up from its own executable for `eventkit-host`.
+# The agent looks for `eventkit-host` next to its own executable.
 mkdir -p "$contents_root/MacOS/eventkit-host"
 cp -R "$repository_root/.build/eventkit-host/Calopod EventKit Host.app" \
   "$contents_root/MacOS/eventkit-host/"

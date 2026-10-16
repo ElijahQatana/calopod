@@ -25,8 +25,7 @@ import Darwin
 struct LaunchAgentController {
     typealias Launchctl = ([String]) throws -> LaunchctlResult
 
-    /// Pauses before each retry of `bootstrap`. launchd can still be tearing a service down right
-    /// after `bootout`, which makes an immediate `bootstrap` fail.
+    /// Right after `bootout`, launchd can refuse a `bootstrap`.
     static let bootstrapRetryDelays: [TimeInterval] = [0.25, 0.5, 1, 2]
 
     private let homeDirectory: URL
@@ -171,8 +170,7 @@ struct LaunchAgentController {
         }
     }
 
-    /// Loads the service, retrying while launchd finishes a preceding `bootout`. A failed attempt
-    /// that still leaves the service loaded counts as success.
+    /// Retries while launchd finishes a `bootout`. A failed attempt that left the service loaded is fine.
     private func bootstrap() throws {
         var delays = Self.bootstrapRetryDelays[...]
         while true {
@@ -201,7 +199,6 @@ struct LaunchAgentController {
         return try AgentServiceConfiguration.load(from: propertyListURL)
     }
 
-    /// Whether launchd has a service with this label loaded, such as the app's bundled agent.
     func isLoaded(label: String) throws -> Bool {
         try launchctl(["print", "\(launchDomain)/\(label)"]).exitCode == 0
     }

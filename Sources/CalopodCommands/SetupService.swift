@@ -26,7 +26,6 @@ public struct SetupConnection: Identifiable, Equatable, Sendable {
     public let label: String
     public let isEnabled: Bool
     public let calendars: [SetupCalendar]
-    /// Overlap warnings, such as a Mac calendar that duplicates a connected Google account.
     public let warnings: [String]
 }
 
@@ -47,9 +46,7 @@ public struct SetupSnapshot: Equatable, Sendable {
     public var hasMainCalendar: Bool { arms.contains(where: \.isMain) }
 }
 
-/// The Mac app's onboarding and configuration entry point. Every call goes through the same
-/// services, safety checks and repository as the `connection`, `calendars`, `main` and `arm`
-/// commands. None of it writes calendar events; only sync does.
+/// What the Mac app calls for setup. Uses the same services and safety checks as the CLI, and writes no calendar events.
 public struct SetupService: Sendable {
     private let makeRepository: @Sendable () throws -> LocalStateRepository
 
@@ -104,8 +101,6 @@ public struct SetupService: Sendable {
         return SetupSnapshot(connections: connections, arms: arms)
     }
 
-    /// Requests Calendar access (Mac) or opens the browser sign-in (Google, Microsoft), then
-    /// stores the Connection and lists its calendars.
     public func connect(_ provider: SetupProvider) async throws {
         let connection: StoredConnection
         switch provider {
@@ -153,7 +148,7 @@ public struct SetupService: Sendable {
         try CalopodCommands.disconnect(connection)
     }
 
-    /// Selecting is blocked when it would pick the same account through two Connections.
+    /// Blocks picking the same account through two connections.
     public func setSelected(calendarID: String, selected: Bool) throws {
         let repository = try makeRepository()
         guard let binding = try repository.calendarBinding(id: calendarID),
@@ -217,7 +212,6 @@ public struct SetupService: Sendable {
         try repository.removeArm(id: armID)
     }
 
-    /// Plain-language text for any error thrown by this service.
     public func message(for error: Error) -> String {
         switch error {
         case SetupError.notFound:
