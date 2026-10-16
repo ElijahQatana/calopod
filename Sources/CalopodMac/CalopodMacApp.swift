@@ -25,7 +25,7 @@ struct CalopodMacApp: App {
                 .dockPresence()
         }
         .windowStyle(.hiddenTitleBar)
-        .defaultSize(width: 980, height: 660)
+        .defaultSize(width: 1140, height: 700)
         .commands {
             CommandGroup(replacing: .sidebar) {
                 Button(sidebar.isCollapsed ? "Show Sidebar" : "Hide Sidebar") { sidebar.toggle() }
