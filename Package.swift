@@ -19,6 +19,7 @@ let package = Package(
         .library(name: "CalopodRuntime", targets: ["CalopodRuntime"]),
         .executable(name: "calopod", targets: ["CalopodCLI"]),
         .executable(name: "calopod-agent", targets: ["CalopodAgent"]),
+        .executable(name: "calopod-mac", targets: ["CalopodMac"]),
         .executable(name: "calopod-eventkit-host", targets: ["CalopodEventKitHost"]),
     ],
     dependencies: [
@@ -89,6 +90,10 @@ let package = Package(
         .executableTarget(
             name: "CalopodCLI",
             dependencies: ["CalopodCommands"]
+        ),
+        .executableTarget(
+            name: "CalopodMac",
+            dependencies: ["CalopodCommands", "CalopodRuntime"]
         ),
         .executableTarget(
             name: "CalopodAgent",

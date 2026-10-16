@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>pro.elijahquintana.calopod.app-agent</string>
+    <key>BundleProgram</key>
+    <string>Contents/MacOS/calopod-agent</string>
+    <key>AssociatedBundleIdentifiers</key>
+    <array>
+        <string>pro.elijahquintana.calopod</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>CALOPOD_AGENT_INTERVAL_SECONDS</key>
+        <string>600</string>
+        <key>CALOPOD_AGENT_JITTER_SECONDS</key>
+        <string>30</string>
+        <key>CALOPOD_AGENT_LOOKBACK_DAYS</key>
+        <string>1</string>
+        <key>CALOPOD_AGENT_HORIZON_DAYS</key>
+        <string>4</string>
+    </dict>
+    <key>KeepAlive</key>
+    <true/>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+</dict>
+</plist>
