@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Floating sidebar. Full width with labels, or a narrow icon rail.
 struct Sidebar: View {
-    static let width: CGFloat = 226
+    static let width: CGFloat = 240
     static let railWidth: CGFloat = 76
     static let inset: CGFloat = 10
 
@@ -45,24 +45,40 @@ struct Sidebar: View {
 
     private var brand: some View {
         HStack(spacing: 9) {
-            SquidBadge(size: rail ? 40 : 32)
-            if !rail { Text("Calopod").font(Theme.title(.title3)).foregroundStyle(Theme.sidebarLabel) }
+            SquidBadge(size: rail ? 40 : 38)
+            if !rail {
+                Text("Calopod").font(.system(size: 21, weight: .semibold, design: .serif))
+                    .foregroundStyle(Theme.sidebarLabel)
+            }
         }
         .padding(.horizontal, rail ? 0 : 6)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Calopod")
     }
 
+    /// Scrolls instead of clipping when the window is too short for the full list.
+    @ViewBuilder
     private var nav: some View {
-        VStack(alignment: rail ? .center : .leading, spacing: 3) {
+        if rail {
+            navItems
+        } else {
+            ViewThatFits(in: .vertical) {
+                navItems
+                ScrollView(.vertical, showsIndicators: false) { navItems }
+            }
+        }
+    }
+
+    private var navItems: some View {
+        VStack(alignment: rail ? .center : .leading, spacing: rail ? 3 : 4) {
             ForEach(Screen.main) { row($0) }
             if rail {
                 Divider().frame(width: 28).padding(.vertical, 6)
             } else {
                 Text("Setup")
-                    .font(.caption.weight(.semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Theme.sidebarSecondary)
-                    .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 3)
+                    .padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 4)
             }
             ForEach(Screen.setup) { row($0) }
         }
@@ -79,8 +95,8 @@ struct Sidebar: View {
         return Button { navigation.selection = screen } label: {
             HStack(spacing: 10) {
                 Image(systemName: screen.symbol)
-                    .font(rail ? .system(size: 22) : nil)
-                    .frame(width: rail ? 28 : 20)
+                    .font(.system(size: rail ? 22 : 20))
+                    .frame(width: rail ? 28 : 24)
                     .foregroundStyle(selected ? Theme.onAccent : Theme.sidebarSecondary)
                     .overlay(alignment: .topTrailing) {
                         if rail && count > 0 { dot(selected: selected).offset(x: 5, y: -3) }
@@ -91,10 +107,10 @@ struct Sidebar: View {
                     if count > 0 { countBadge(count, selected: selected) }
                 }
             }
-            .font(.callout.weight(.semibold))
+            .font(.system(size: 15, weight: .semibold))
             .foregroundStyle(selected ? Theme.onAccent : Theme.sidebarLabel)
-            .padding(.horizontal, rail ? 0 : 12)
-            .frame(width: rail ? 44 : nil, height: rail ? 44 : 34)
+            .padding(.horizontal, rail ? 0 : 14)
+            .frame(width: rail ? 44 : nil, height: 44)
             .frame(maxWidth: rail ? nil : .infinity, alignment: .leading)
             .background(rowShape.fill(selected ? Theme.accent : .clear))
             .contentShape(rowShape)
@@ -107,9 +123,9 @@ struct Sidebar: View {
 
     private func countBadge(_ count: Int, selected: Bool) -> some View {
         Text("\(count)")
-            .font(.caption.weight(.semibold).monospacedDigit())
+            .font(.system(size: 12, weight: .semibold).monospacedDigit())
             .foregroundStyle(selected ? Theme.onAccent : Theme.accent)
-            .padding(.horizontal, 7)
+            .padding(.horizontal, 9).padding(.vertical, 2)
             .background(Capsule().fill(selected ? Theme.onAccent.opacity(0.2) : Theme.accent.opacity(0.14)))
     }
 
@@ -121,7 +137,7 @@ struct Sidebar: View {
     private var status: some View {
         HStack(spacing: 8) {
             Circle().fill(statusColor).frame(width: rail ? 10 : 8, height: rail ? 10 : 8)
-            if !rail { Text(statusText).font(.callout.weight(.medium)).foregroundStyle(Theme.sidebarSecondary) }
+            if !rail { Text(statusText).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.sidebarSecondary) }
             if !rail { Spacer(minLength: 0) }
         }
         .padding(.horizontal, rail ? 0 : 10)
