@@ -24,8 +24,8 @@ enum Theme {
 
     // Window, panels and glass. The window tint is a warm wash over the blurred desktop.
     static let windowTint = Color(
-        light: Color(red: 1, green: 0.56, blue: 0.28).opacity(0.28),
-        dark: Color(red: 0.92, green: 0.43, blue: 0.16).opacity(0.22))
+        light: Color(red: 1, green: 0.56, blue: 0.28).opacity(0.22),
+        dark: Color(red: 0.92, green: 0.43, blue: 0.16).opacity(0.18))
     static let pane = Color(light: .white, dark: Color(red: 0x17 / 255, green: 0x14 / 255, blue: 0x12 / 255))
     static let group = Color(
         light: Color(red: 0xf6 / 255, green: 0xf4 / 255, blue: 0xf1 / 255),
@@ -33,17 +33,31 @@ enum Theme {
     static let paneLine = Color(
         light: Color(red: 0.10, green: 0.09, blue: 0.07).opacity(0.06),
         dark: Color(red: 1, green: 0.94, blue: 0.86).opacity(0.06))
-    // Panel fills over the blurred desktop. Lower opacity lets more wallpaper through.
-    // The inner fill is more opaque than the card so text on it stays readable.
-    // The sidebar is lighter than the window around it, brightest at the top left.
-    static let glassFill = Color(
-        light: Color.white.opacity(0.34), dark: Color(red: 0.20, green: 0.17, blue: 0.145).opacity(0.38))
+    // Panel fills over the blurred desktop. The sidebar is the most see-through, so the
+    // window blur carries its look. The card and inner fills are more opaque so lists and
+    // the calendar grid stay readable. Inactive windows flatten to near solid, which
+    // also makes them cheap to composite.
     static let glassSheen = Color(
-        light: Color.white.opacity(0.66), dark: Color(red: 0.34, green: 0.29, blue: 0.25).opacity(0.58))
+        light: Color.white.opacity(0.26), dark: Color(red: 0.30, green: 0.26, blue: 0.22).opacity(0.22))
+    static let glassFill = Color(
+        light: Color.white.opacity(0.08), dark: Color(red: 0.12, green: 0.10, blue: 0.09).opacity(0.14))
     static let cardFill = Color(
-        light: Color.white.opacity(0.46), dark: Color(red: 0x17 / 255, green: 0x14 / 255, blue: 0x12 / 255).opacity(0.44))
+        light: Color.white.opacity(0.50), dark: Color(red: 0x17 / 255, green: 0x14 / 255, blue: 0x12 / 255).opacity(0.48))
     static let innerFill = Color(
-        light: Color.white.opacity(0.55), dark: Color(red: 0x20 / 255, green: 0x1c / 255, blue: 0x19 / 255).opacity(0.58))
+        light: Color.white.opacity(0.58), dark: Color(red: 0x20 / 255, green: 0x1c / 255, blue: 0x19 / 255).opacity(0.62))
+    static let sidebarInactive = Color(
+        light: Color.white.opacity(0.80), dark: Color(red: 0x1b / 255, green: 0x17 / 255, blue: 0x15 / 255).opacity(0.86))
+    static let cardInactive = Color(
+        light: Color.white.opacity(0.94), dark: Color(red: 0x17 / 255, green: 0x14 / 255, blue: 0x12 / 255).opacity(0.94))
+    static let innerInactive = Color(
+        light: Color(red: 0xf6 / 255, green: 0xf4 / 255, blue: 0xf1 / 255).opacity(0.96),
+        dark: Color(red: 0x20 / 255, green: 0x1c / 255, blue: 0x19 / 255).opacity(0.96))
+    // Sidebar text sits straight on the wallpaper, so it uses firmer colors than the defaults.
+    static let sidebarLabel = Color(
+        light: Color(red: 0.09, green: 0.06, blue: 0.03), dark: Color(red: 0.99, green: 0.97, blue: 0.94))
+    static let sidebarSecondary = Color(
+        light: Color(red: 0.09, green: 0.06, blue: 0.03).opacity(0.68),
+        dark: Color(red: 0.99, green: 0.97, blue: 0.94).opacity(0.72))
     // Edge highlight: crisp on the top and left, fading toward the bottom right.
     static let glassEdge = Color(
         light: Color.white.opacity(0.95), dark: Color(red: 1, green: 0.94, blue: 0.86).opacity(0.34))
@@ -68,11 +82,14 @@ struct PanelFill<S: Shape>: ViewModifier {
     let level: Level
     let shape: S
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.controlActiveState) private var activeState
 
     func body(content: Content) -> some View {
         content.background {
             if reduceTransparency {
                 shape.fill(level == .card ? Theme.pane : Theme.group)
+            } else if activeState == .inactive {
+                shape.fill(level == .card ? Theme.cardInactive : Theme.innerInactive)
             } else {
                 shape.fill(level == .card ? Theme.cardFill : Theme.innerFill)
             }
@@ -85,6 +102,7 @@ struct PanelFill<S: Shape>: ViewModifier {
 struct PanelChrome<S: InsettableShape>: ViewModifier {
     let shape: S
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.controlActiveState) private var activeState
 
     func body(content: Content) -> some View {
         content
@@ -100,11 +118,14 @@ struct PanelChrome<S: InsettableShape>: ViewModifier {
                 }
             }
             .background {
-                shape.fill(Theme.panelShadow).shadow(color: Theme.panelShadow, radius: 9, y: 3)
-                    .mask {
-                        Rectangle().padding(-40).overlay { shape.fill(.black).blendMode(.destinationOut) }
-                            .compositingGroup()
-                    }
+                // No shadow while the window is in the background.
+                if activeState != .inactive {
+                    shape.fill(Theme.panelShadow).shadow(color: Theme.panelShadow, radius: 9, y: 3)
+                        .mask {
+                            Rectangle().padding(-40).overlay { shape.fill(.black).blendMode(.destinationOut) }
+                                .compositingGroup()
+                        }
+                }
             }
     }
 }
