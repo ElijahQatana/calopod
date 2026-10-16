@@ -4,7 +4,7 @@ import Observation
 import SwiftUI
 
 enum Screen: String, CaseIterable, Identifiable {
-    case overview, calendar, inbox, calendars, arms, conflicts, service
+    case overview, calendar, inbox, calendars, arms, service
 
     var id: String { rawValue }
 
@@ -15,7 +15,6 @@ enum Screen: String, CaseIterable, Identifiable {
         case .inbox: "Inbox"
         case .calendars: "Calendars"
         case .arms: "Arms"
-        case .conflicts: "Conflicts"
         case .service: "Background sync"
         }
     }
@@ -27,20 +26,15 @@ enum Screen: String, CaseIterable, Identifiable {
         case .inbox: "tray"
         case .calendars: "calendar"
         case .arms: "arrow.triangle.branch"
-        case .conflicts: "rectangle.on.rectangle.angled"
         case .service: "clock.arrow.2.circlepath"
         }
     }
 }
 
 extension Screen {
-    /// Screens listed in the sidebar. Conflicts stays reachable from Overview
-    /// and the menu bar until Inbox takes over its flow.
+    /// Screens listed in the sidebar.
     static let main: [Screen] = [.overview, .calendar, .inbox]
     static let setup: [Screen] = [.calendars, .arms, .service]
-
-    /// The sidebar row that shows as selected for this screen.
-    var sidebarRow: Screen { self == .conflicts ? .inbox : self }
 }
 
 /// Whether the sidebar is an icon rail. Remembered across launches.
@@ -72,7 +66,7 @@ final class AppNavigation {
     /// The Inbox filter to show. Set it with `openInbox` from other screens.
     var inboxFilter: InboxFilter = .all
 
-    /// `CALOPOD_START_SCREEN=conflicts` opens on that screen, for screenshots.
+    /// `CALOPOD_START_SCREEN=inbox` opens on that screen, for screenshots.
     init(environment: [String: String] = ProcessInfo.processInfo.environment) {
         selection = environment["CALOPOD_START_SCREEN"].flatMap(Screen.init(rawValue:)) ?? .overview
     }

@@ -3,7 +3,6 @@ import SwiftUI
 
 struct OverviewScreen: View {
     let model: ServiceModel
-    let conflicts: ConflictModel
     let navigation: AppNavigation
     let setup: SetupModel
     @Environment(InboxModel.self) private var inbox
@@ -262,9 +261,9 @@ struct OverviewScreen: View {
         }
     }
 
-    private func glanceRow(_ title: String, _ value: String, _ screen: Screen) -> some View {
+    private func glanceRow(_ title: String, _ value: String, _ screen: Screen, filter: InboxFilter? = nil) -> some View {
         Button {
-            navigation.selection = screen
+            if let filter { navigation.openInbox(filter) } else { navigation.selection = screen }
         } label: {
             LabeledContent(title) {
                 HStack(spacing: 6) {

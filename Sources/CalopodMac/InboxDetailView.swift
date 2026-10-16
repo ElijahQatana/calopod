@@ -82,7 +82,7 @@ struct InboxDetailView: View {
 }
 
 /// The event and its neighbors on a shared time axis. Anything that overlaps it is ringed.
-private struct ContextStrip: View {
+struct ContextStrip: View {
     let detail: InboxDetail
     let colors: CalendarColors
 

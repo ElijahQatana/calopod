@@ -92,7 +92,7 @@ struct Sidebar: View {
     }
 
     private func row(_ screen: Screen) -> some View {
-        let selected = navigation.selection.sidebarRow == screen
+        let selected = navigation.selection == screen
         let count = screen == .inbox ? inboxCount : 0
         return Button { navigation.selection = screen } label: {
             HStack(spacing: 10) {
