@@ -80,3 +80,33 @@ final class WindowBlurTests: XCTestCase {
             "view   NSHostingView wantsLayer=true layerBackground=nil layerOpaque=false")
     }
 }
+
+final class WindowTuningTests: XCTestCase {
+    func testMaterialNames() {
+        XCTAssertEqual(WindowTuning.material("hudWindow"), .hudWindow)
+        XCTAssertEqual(WindowTuning.material(" UnderWindowBackground "), .underWindowBackground)
+        XCTAssertEqual(WindowTuning.material("nonsense"), Theme.windowMaterial)
+        XCTAssertEqual(WindowTuning.material(nil), Theme.windowMaterial)
+    }
+
+    func testAppearanceNames() {
+        XCTAssertEqual(WindowTuning.appearance("darkAqua")?.name, .darkAqua)
+        XCTAssertEqual(WindowTuning.appearance("AQUA")?.name, .aqua)
+        XCTAssertNil(WindowTuning.appearance("system"))
+        XCTAssertNil(WindowTuning.appearance("junk"))
+    }
+
+    func testAlphaIsClampedAndGarbageIgnored() {
+        XCTAssertEqual(WindowTuning.alpha(0.6 as NSNumber), 0.6)
+        XCTAssertEqual(WindowTuning.alpha("0.5"), 0.5)
+        XCTAssertEqual(WindowTuning.alpha(0.05 as NSNumber), 0.2)
+        XCTAssertEqual(WindowTuning.alpha(7 as NSNumber), 1)
+        XCTAssertEqual(WindowTuning.alpha("abc"), 1)
+        XCTAssertEqual(WindowTuning.alpha(nil), 1)
+        XCTAssertEqual(WindowTuning.alpha(Double.nan as NSNumber), 1)
+    }
+
+    func testGlassStrategyParses() {
+        XCTAssertEqual(WindowBlurStrategy.parse("glass"), .glass)
+    }
+}
