@@ -38,6 +38,12 @@ struct CalendarColorDot: View {
                         .accessibilityLabel(option.name)
                     }
                 }
+                if let match = colors.providerMatch(for: calendarID) {
+                    Button { colors.matchProvider(for: calendarID) } label: {
+                        Label("Match \(match.name)", systemImage: "eyedropper")
+                    }
+                    .help("Use \(match.color.name), the closest to the color \(match.name) uses")
+                }
                 Text("Shown only in Calopod on this Mac. The calendar itself is not changed.")
                     .font(.caption).foregroundStyle(.secondary)
                     .frame(width: 6 * 28 + 5 * 8, alignment: .leading)

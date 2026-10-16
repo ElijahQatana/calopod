@@ -32,7 +32,9 @@ struct CalendarScreen: View {
             // Reads the local copy only, so it shows at once even while a sync is running.
             while !Task.isCancelled {
                 await model.reload()
-                colors.assignMissing(to: model.calendars.map(\.id))
+                colors.assignMissing(to: model.calendars.map {
+                    CalendarColorSource(id: $0.id, providerColor: $0.providerColor, provider: $0.provider)
+                })
                 try? await Task.sleep(for: .seconds(30))
             }
         }
