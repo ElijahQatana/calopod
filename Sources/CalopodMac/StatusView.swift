@@ -60,11 +60,13 @@ struct StatusView: View {
                 Button("Preview Sync…") { Task { await model.previewSync() } }
                     .disabled(model.isBusy)
             }
-            Toggle("Automatic sync", isOn: Binding(
-                get: { status.enabled },
-                set: { value in Task { await model.setEnabled(value) } }
-            ))
-            .disabled(model.isBusy)
+            if model.registration != .enabled {
+                Toggle("Automatic sync", isOn: Binding(
+                    get: { status.enabled },
+                    set: { value in Task { await model.setEnabled(value) } }
+                ))
+                .disabled(model.isBusy)
+            }
             Toggle("Pause scheduled syncs", isOn: Binding(
                 get: { status.paused },
                 set: { value in Task { await model.setPaused(value) } }

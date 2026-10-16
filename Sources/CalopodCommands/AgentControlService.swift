@@ -82,10 +82,113 @@ public struct HealthReport: Equatable, Sendable {
 /// Stateless entry point the Mac app uses to control the background service. Each call goes
 /// through the same `LaunchAgentController` and runner as the `calopod agent` commands.
 public struct AgentControlService: Sendable {
-    public init() {}
+    /// Label of the agent bundled in Calopod.app and registered through SMAppService.
+    public static let bundledLabel = "pro.elijahquintana.calopod.app-agent"
+
+    /// Schedule baked into the bundled agent's plist (Support/Mac). Keep these in sync.
+    private static let bundledSchedule = (
+        interval: 600, jitter: 30, lookbackDays: 1, horizonDays: 4
+    )
+
+    private let bundledAgentExecutable: URL?
+    private let makeController: @Sendable () throws -> LaunchAgentController
+    private let baseEnvironment: @Sendable () -> [String: String]
+
+    /// - Parameter bundledAgentExecutable: the `calopod-agent` inside Calopod.app, passed only
+    ///   while that agent is registered. The source-installed LaunchAgent, when present, wins.
+    public init(bundledAgentExecutable: URL? = nil) {
+        self.init(
+            bundledAgentExecutable: bundledAgentExecutable,
+            makeController: { try LaunchAgentController() },
+            baseEnvironment: { ProcessInfo.processInfo.environment }
+        )
+    }
+
+    init(
+        bundledAgentExecutable: URL?,
+        makeController: @escaping @Sendable () throws -> LaunchAgentController,
+        baseEnvironment: @escaping @Sendable () -> [String: String]
+    ) {
+        self.bundledAgentExecutable = bundledAgentExecutable
+        self.makeController = makeController
+        self.baseEnvironment = baseEnvironment
+    }
+
+    /// Everything a control needs to act on whichever service is active.
+    private struct Context {
+        let snapshot: LaunchAgentSnapshot
+        let environment: () throws -> CalopodRuntimeEnvironment
+        let schedule: () throws -> AgentSchedule
+        let isBundled: Bool
+    }
+
+    private func context() throws -> Context {
+        let controller = try makeController()
+        let snapshot = try controller.snapshot()
+        // The source-installed service is used unless the bundled one is registered and the
+        // source-installed one has been disabled, which is what moving to the app does.
+        if let configuration = snapshot.configuration,
+           bundledAgentExecutable == nil || !snapshot.disabled {
+            return Context(
+                snapshot: snapshot,
+                environment: { try installedAgentEnvironment(controller: controller) },
+                schedule: { try AgentSchedule(environment: configuration.environment) },
+                isBundled: false
+            )
+        }
+        guard let executable = bundledAgentExecutable else {
+            return Context(
+                snapshot: snapshot,
+                environment: { throw LaunchAgentControlError.notInstalled },
+                schedule: { throw LaunchAgentControlError.notInstalled },
+                isBundled: false
+            )
+        }
+        let defaults = Self.bundledSchedule
+        var variables = baseEnvironment()
+        variables["CALOPOD_AGENT_INTERVAL_SECONDS"] = String(defaults.interval)
+        variables["CALOPOD_AGENT_JITTER_SECONDS"] = String(defaults.jitter)
+        variables["CALOPOD_AGENT_LOOKBACK_DAYS"] = String(defaults.lookbackDays)
+        variables["CALOPOD_AGENT_HORIZON_DAYS"] = String(defaults.horizonDays)
+        let location = try CalopodStateLocation(environment: variables)
+        let override = AgentScheduleOverride.load(from: location)
+        let loaded = (try? controller.isLoaded(label: Self.bundledLabel)) ?? false
+        let configuration = AgentServiceConfiguration(
+            programURL: executable,
+            stateURL: location.databaseURL,
+            eventKitHostURL: executable.deletingLastPathComponent()
+                .appendingPathComponent("eventkit-host/Calopod EventKit Host.app", isDirectory: true),
+            intervalSeconds: override?.intervalSeconds ?? defaults.interval,
+            jitterSeconds: defaults.jitter,
+            lookbackDays: defaults.lookbackDays,
+            horizonDays: defaults.horizonDays,
+            environment: variables
+        )
+        return Context(
+            snapshot: LaunchAgentSnapshot(
+                installed: true,
+                loaded: loaded,
+                disabled: false,
+                configuration: configuration
+            ),
+            environment: {
+                try CalopodRuntimeEnvironment(
+                    variables: variables,
+                    stateLocation: location,
+                    executableURL: executable
+                )
+            },
+            schedule: { try AgentSchedule(environment: variables).applying(override) },
+            isBundled: true
+        )
+    }
 
     public func status() throws -> AgentControlStatus {
-        let payload = try agentStatusPayload(controller: try LaunchAgentController())
+        let context = try context()
+        let payload = try agentStatusPayload(
+            snapshot: context.snapshot,
+            environment: context.environment
+        )
         return AgentControlStatus(
             state: payload.status,
             message: payload.message,
@@ -99,8 +202,11 @@ public struct AgentControlService: Sendable {
         )
     }
 
+    /// Starts or stops the source-installed LaunchAgent. The bundled agent is registered and
+    /// removed by the app through SMAppService, not here.
     public func setEnabled(_ enabled: Bool) throws {
-        let controller = try LaunchAgentController()
+        guard !(try context().isBundled) else { throw LaunchAgentControlError.unavailable }
+        let controller = try makeController()
         if enabled {
             try controller.enable()
         } else {
@@ -109,39 +215,49 @@ public struct AgentControlService: Sendable {
     }
 
     public func setPaused(_ paused: Bool) throws {
-        let controller = try LaunchAgentController()
-        let environment = try installedAgentEnvironment(controller: controller)
-        try environment.repository().setAgentPaused(paused)
-        try controller.restartIfEnabled()
+        let context = try context()
+        try context.environment().repository().setAgentPaused(paused)
+        // The agent checks the flag before every run, so only the legacy service is restarted.
+        if !context.isBundled {
+            try makeController().restartIfEnabled()
+        }
     }
 
+    /// Changes how often automatic sync runs. The bundled agent picks the new interval up from a
+    /// state-side file within seconds; the source-installed one has it rewritten in its plist.
     public func setInterval(seconds: Int) throws {
-        try LaunchAgentController().updateSchedule(
-            intervalSeconds: seconds,
-            jitterSeconds: nil
-        )
+        let context = try context()
+        let environment = try context.environment()
+        if context.isBundled {
+            try AgentScheduleOverride(intervalSeconds: seconds).save(to: environment.stateLocation)
+        } else {
+            try makeController().updateSchedule(intervalSeconds: seconds, jitterSeconds: nil)
+            AgentScheduleOverride.clear(from: environment.stateLocation)
+        }
     }
 
     /// Runs one bounded synchronization now, ignoring the pause flag, like `agent run-now`.
     public func syncNow() async throws -> AgentRunReport {
-        let controller = try LaunchAgentController()
-        guard let configuration = try controller.snapshot().configuration else {
-            throw LaunchAgentControlError.notInstalled
-        }
-        let environment = try installedAgentEnvironment(controller: controller)
+        let context = try context()
         return await CalopodAgentRunner(
-            environment: environment,
-            schedule: try AgentSchedule(environment: configuration.environment)
+            environment: try context.environment(),
+            schedule: try context.schedule()
         ).runOnce(ignorePause: true)
     }
 
     public func health() throws -> HealthReport {
-        try Self.health(controller: try LaunchAgentController())
+        let context = try context()
+        return Self.healthReport(
+            try doctorReport(snapshot: context.snapshot, environment: context.environment)
+        )
     }
 
     static func health(controller: LaunchAgentController) throws -> HealthReport {
-        let report = try doctorReport(controller: controller)
-        return HealthReport(
+        healthReport(try doctorReport(controller: controller))
+    }
+
+    private static func healthReport(_ report: DoctorReport) -> HealthReport {
+        HealthReport(
             status: report.status,
             message: report.message,
             checks: report.items.map {
@@ -153,12 +269,9 @@ public struct AgentControlService: Sendable {
 
     /// Plans one bounded sync over the automatic-sync window without writing to any calendar.
     public func preview() async throws -> SyncPreview {
-        let controller = try LaunchAgentController()
-        guard let configuration = try controller.snapshot().configuration else {
-            throw LaunchAgentControlError.notInstalled
-        }
-        let environment = try installedAgentEnvironment(controller: controller)
-        let schedule = try AgentSchedule(environment: configuration.environment)
+        let context = try context()
+        let environment = try context.environment()
+        let schedule = try context.schedule()
         let armNames = Dictionary(
             uniqueKeysWithValues: try environment.repository().arms().map { ($0.id, $0.displayName) }
         )
@@ -203,8 +316,7 @@ public struct AgentControlService: Sendable {
     }
 
     public func overview() throws -> AgentControlOverview {
-        let controller = try LaunchAgentController()
-        let repository = try installedAgentEnvironment(controller: controller).repository()
+        let repository = try context().environment().repository()
         let connections = try repository.connections().map { connection in
             AgentControlOverview.ConnectionLine(
                 id: connection.id,

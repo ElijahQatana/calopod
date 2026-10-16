@@ -65,6 +65,16 @@ func doctorReport(controller: LaunchAgentController) throws -> DoctorReport {
             warnings: ["Reinstall the Calopod user service."]
         )
     }
+    return try doctorReport(
+        snapshot: snapshot,
+        environment: { try installedAgentEnvironment(controller: controller) }
+    )
+}
+
+func doctorReport(
+    snapshot: LaunchAgentSnapshot,
+    environment makeEnvironment: () throws -> CalopodRuntimeEnvironment
+) throws -> DoctorReport {
     guard let configuration = snapshot.configuration else {
         return DoctorReport(
             status: "failed",
@@ -109,7 +119,7 @@ func doctorReport(controller: LaunchAgentController) throws -> DoctorReport {
 
     let repository: LocalStateRepository
     do {
-        repository = try installedAgentEnvironment(controller: controller).repository()
+        repository = try makeEnvironment().repository()
     } catch {
         items.append(doctorItem("database", "failed", "local-state"))
         warnings.append("Repair or restore local state before running automatic sync.")

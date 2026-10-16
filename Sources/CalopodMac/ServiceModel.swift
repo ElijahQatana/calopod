@@ -18,7 +18,7 @@ final class ServiceModel {
     private(set) var health: HealthReport?
     private(set) var registration: ServiceRegistration.State = .unavailable
 
-    private let service = AgentControlService()
+    private var service = AgentControlService()
     private let registrar = ServiceRegistration()
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
 
@@ -44,7 +44,22 @@ final class ServiceModel {
 
     var isBusy: Bool { busyAction != nil }
 
+    /// The `calopod-agent` bundled in this app, used when that agent is the registered service.
+    private static var bundledAgentExecutable: URL {
+        Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/calopod-agent")
+    }
+
+    /// Points the controls at the bundled agent once it is registered, and back otherwise.
+    private func updateService() {
+        let state = registrar.state()
+        registration = state
+        service = AgentControlService(
+            bundledAgentExecutable: state == .enabled ? Self.bundledAgentExecutable : nil
+        )
+    }
+
     func refresh() async {
+        if busyAction == nil { updateService() }
         let service = service
         let result = await Task.detached {
             (try? service.status(), try? service.overview(), try? service.health())
@@ -53,7 +68,6 @@ final class ServiceModel {
             status = result.0
             overview = result.1
             health = result.2
-            registration = registrar.state()
         }
     }
 

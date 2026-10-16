@@ -35,6 +35,12 @@ public struct CalopodStateLocation: Equatable, Sendable {
         databaseURL.appendingPathExtension("lock")
     }
 
+    /// Optional automatic-sync interval chosen in the Mac app. A sibling file, not a database
+    /// table, so older Calopod builds keep opening the database unchanged.
+    public var scheduleOverrideURL: URL {
+        databaseURL.appendingPathExtension("schedule.json")
+    }
+
     public var accessLockURL: URL {
         databaseURL.appendingPathExtension("access.lock")
     }
