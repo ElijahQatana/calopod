@@ -19,7 +19,19 @@
         {
           "name": "Squid",
           "image-name": "Squid.svg",
-          "fill": "automatic",
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:1.00000,1.00000,1.00000,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:0.96078,0.65098,0.13725,1.00000"
+              }
+            }
+          ],
           "glass": true,
           "hidden": false,
           "opacity": 1
