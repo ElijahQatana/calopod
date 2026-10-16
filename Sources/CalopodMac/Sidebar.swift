@@ -241,13 +241,13 @@ struct WindowChrome: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSView {
         let view = WindowObserver()
-        view.onWindow = { [weak coordinator = context.coordinator] in coordinator?.apply() }
+        view.onWindow = { [weak coordinator = context.coordinator] in coordinator?.request() }
         context.coordinator.view = view
         return view
     }
 
     func updateNSView(_ view: NSView, context: Context) {
-        DispatchQueue.main.async { context.coordinator.apply() }
+        context.coordinator.request()
     }
 
     final class WindowObserver: NSView {
@@ -262,8 +262,12 @@ struct WindowChrome: NSViewRepresentable {
     final class Coordinator {
         weak var view: NSView?
         private var observers: [NSObjectProtocol] = []
+        private lazy var pass = ApplyCoalescer { [weak self] in self?.apply() }
 
-        func apply() {
+        /// Frame changes made by apply() itself land here too, so asking never runs it inline.
+        func request() { pass.request() }
+
+        private func apply() {
             guard let window = view?.window else { return }
             // Let the blurred desktop show through the window.
             if window.isOpaque { window.isOpaque = false }
@@ -281,8 +285,8 @@ struct WindowChrome: NSViewRepresentable {
             let height = WindowChrome.barHeight
             let barFrame = NSRect(
                 x: 0, y: window.frame.height - height, width: window.frame.width, height: height)
-            if container.frame != barFrame { container.frame = barFrame }
-            if titlebar.frame != container.bounds { titlebar.frame = container.bounds }
+            if !container.frame.isClose(to: barFrame) { container.frame = barFrame }
+            if !titlebar.frame.isClose(to: container.bounds) { titlebar.frame = container.bounds }
 
             // Same spot in both states: centered in the rail, which also fits the full panel.
             let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton]
@@ -294,7 +298,9 @@ struct WindowChrome: NSViewRepresentable {
             for (index, button) in buttons.enumerated() {
                 let origin = NSPoint(
                     x: left + step * CGFloat(index), y: height - top - button.frame.height / 2)
-                if button.frame.origin != origin { button.setFrameOrigin(origin) }
+                if !NSRect(origin: button.frame.origin, size: .zero).isClose(to: NSRect(origin: origin, size: .zero)) {
+                    button.setFrameOrigin(origin)
+                }
             }
         }
 
@@ -306,7 +312,7 @@ struct WindowChrome: NSViewRepresentable {
             ]
             var tokens = names.map { name in
                 center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
-                    MainActor.assumeIsolated { self?.apply() }
+                    MainActor.assumeIsolated { self?.request() }
                 }
             }
             // AppKit lays the title bar out again on its own. Watching the frames of the bar and
@@ -316,11 +322,41 @@ struct WindowChrome: NSViewRepresentable {
                 tokens.append(center.addObserver(
                     forName: NSView.frameDidChangeNotification, object: view, queue: .main
                 ) { [weak self] _ in
-                    MainActor.assumeIsolated { self?.apply() }
+                    MainActor.assumeIsolated { self?.request() }
                 })
             }
             observers = tokens
         }
 
+    }
+}
+
+/// Runs an action once on the next main turn however many requests arrive, and ignores
+/// requests made while it runs, so work that triggers its own notifications cannot loop.
+@MainActor
+final class ApplyCoalescer {
+    private let action: () -> Void
+    private var pending = false
+    private var running = false
+
+    init(_ action: @escaping () -> Void) { self.action = action }
+
+    func request() {
+        guard !pending, !running else { return }
+        pending = true
+        DispatchQueue.main.async { [self] in
+            pending = false
+            running = true
+            defer { running = false }
+            action()
+        }
+    }
+}
+
+extension NSRect {
+    /// Equal within half a point, so rounding by AppKit does not count as a change.
+    func isClose(to other: NSRect, tolerance: CGFloat = 0.5) -> Bool {
+        abs(minX - other.minX) <= tolerance && abs(minY - other.minY) <= tolerance
+            && abs(width - other.width) <= tolerance && abs(height - other.height) <= tolerance
     }
 }
