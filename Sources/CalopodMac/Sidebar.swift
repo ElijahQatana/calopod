@@ -222,7 +222,7 @@ private struct GlassPanel: ViewModifier {
                 } else {
                     shape.fill(
                         LinearGradient(
-                            colors: [Theme.glassSheen, Theme.glassFill],
+                            colors: [Theme.sidebarSheen, Theme.sidebarFill],
                             startPoint: .topLeading, endPoint: .bottomTrailing))
                 }
             }

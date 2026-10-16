@@ -22,10 +22,12 @@ enum Theme {
     static let caution = Color(red: 0.80, green: 0.66, blue: 0.10)
     static let bad = Color(red: 0.80, green: 0.28, blue: 0.28)
 
-    // Window, panels and glass. The window tint is a warm wash over the blurred desktop.
-    static let windowTint = Color(
-        light: Color(red: 1, green: 0.56, blue: 0.28).opacity(0.22),
-        dark: Color(red: 0.92, green: 0.43, blue: 0.16).opacity(0.18))
+    // Window, panels and glass. From most to least see-through: the frame around the
+    // panels, then the sidebar, then the content card (and the inner fill on it). Each
+    // step is gentle. ThemeTests keeps this order.
+    static let frameTint = Color(
+        light: Color(red: 1, green: 0.56, blue: 0.28).opacity(0.10),
+        dark: Color(red: 0.92, green: 0.43, blue: 0.16).opacity(0.08))
     static let pane = Color(light: .white, dark: Color(red: 0x17 / 255, green: 0x14 / 255, blue: 0x12 / 255))
     static let group = Color(
         light: Color(red: 0xf6 / 255, green: 0xf4 / 255, blue: 0xf1 / 255),
@@ -33,16 +35,13 @@ enum Theme {
     static let paneLine = Color(
         light: Color(red: 0.10, green: 0.09, blue: 0.07).opacity(0.06),
         dark: Color(red: 1, green: 0.94, blue: 0.86).opacity(0.06))
-    // Panel fills over the blurred desktop. The sidebar is the most see-through, so the
-    // window blur carries its look. The card and inner fills are more opaque so lists and
-    // the calendar grid stay readable. Inactive windows flatten to near solid, which
-    // also makes them cheap to composite.
-    static let glassSheen = Color(
-        light: Color.white.opacity(0.26), dark: Color(red: 0.30, green: 0.26, blue: 0.22).opacity(0.22))
-    static let glassFill = Color(
-        light: Color.white.opacity(0.08), dark: Color(red: 0.12, green: 0.10, blue: 0.09).opacity(0.14))
-    static let cardFill = Color(
-        light: Color.white.opacity(0.50), dark: Color(red: 0x17 / 255, green: 0x14 / 255, blue: 0x12 / 255).opacity(0.48))
+    // Inactive windows flatten to near solid, which also makes them cheap to composite.
+    static let sidebarSheen = Color(
+        light: Color.white.opacity(0.32), dark: Color(red: 0.30, green: 0.26, blue: 0.22).opacity(0.28))
+    static let sidebarFill = Color(
+        light: Color.white.opacity(0.20), dark: Color(red: 0.12, green: 0.10, blue: 0.09).opacity(0.20))
+    static let contentFill = Color(
+        light: Color.white.opacity(0.46), dark: Color(red: 0x17 / 255, green: 0x14 / 255, blue: 0x12 / 255).opacity(0.44))
     static let innerFill = Color(
         light: Color.white.opacity(0.58), dark: Color(red: 0x20 / 255, green: 0x1c / 255, blue: 0x19 / 255).opacity(0.62))
     static let sidebarInactive = Color(
@@ -91,7 +90,7 @@ struct PanelFill<S: Shape>: ViewModifier {
             } else if activeState == .inactive {
                 shape.fill(level == .card ? Theme.cardInactive : Theme.innerInactive)
             } else {
-                shape.fill(level == .card ? Theme.cardFill : Theme.innerFill)
+                shape.fill(level == .card ? Theme.contentFill : Theme.innerFill)
             }
         }
     }
