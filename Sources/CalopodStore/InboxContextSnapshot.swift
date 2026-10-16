@@ -13,12 +13,14 @@ public struct InboxContextSource: Codable, Equatable, Sendable {
     public let coverage: InboxCoverage?
     public let healthStatus: String?
     public let staleSince: Date?
+    public let providerColor: String?
 
     public init(
         bindingID: String, connectionID: String, connectionLabel: String? = nil,
         calendarLabel: String? = nil, provider: String,
         responseIdentityScope: ResponseIdentityScope = .unverified,
-        coverage: InboxCoverage? = nil, healthStatus: String? = nil, staleSince: Date? = nil
+        coverage: InboxCoverage? = nil, healthStatus: String? = nil, staleSince: Date? = nil,
+        providerColor: String? = nil
     ) {
         self.bindingID = bindingID
         self.connectionID = connectionID
@@ -29,6 +31,7 @@ public struct InboxContextSource: Codable, Equatable, Sendable {
         self.coverage = coverage
         self.healthStatus = healthStatus
         self.staleSince = staleSince
+        self.providerColor = providerColor
     }
 }
 
@@ -72,7 +75,7 @@ extension LocalStateRepository {
         try database.read { db in
             let rows = try Row.fetchAll(db, sql: """
                 SELECT b.id AS binding_id, b.connection_id, b.display_label AS calendar_label,
-                       b.response_identity_scope, c.display_label AS connection_label, c.provider,
+                       b.response_identity_scope, b.provider_color, c.display_label AS connection_label, c.provider,
                        h.status, h.stale_since, v.starts_at, v.ends_at, v.observed_at
                 FROM calendar_bindings b JOIN connections c ON c.id = b.connection_id
                 LEFT JOIN connection_health h ON h.connection_id = c.id
@@ -92,7 +95,8 @@ extension LocalStateRepository {
                     connectionLabel: row["connection_label"], calendarLabel: row["calendar_label"],
                     provider: row["provider"],
                     responseIdentityScope: ResponseIdentityScope(rawValue: row["response_identity_scope"]) ?? .unverified,
-                    coverage: coverage, healthStatus: row["status"], staleSince: row["stale_since"]
+                    coverage: coverage, healthStatus: row["status"], staleSince: row["stale_since"],
+                    providerColor: row["provider_color"]
                 )
             }
             let bindingIDs = Set(sources.map(\.bindingID))

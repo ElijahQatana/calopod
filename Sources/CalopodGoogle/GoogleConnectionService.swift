@@ -69,7 +69,8 @@ public struct GoogleConnectionService: RSVPActionProvider {
                 displayLabel: $0.summary,
                 isSelected: false,
                 isReadOnly: $0.accessRole == "reader" || $0.accessRole == "freeBusyReader",
-                responseIdentityScope: $0.primary ? .authenticatedUser : .unverified
+                responseIdentityScope: $0.primary ? .authenticatedUser : .unverified,
+                providerColor: $0.backgroundColor
             )
         }
         try state.replaceCalendarBindings(connectionID: connectionID, bindings: bindings, now: now())

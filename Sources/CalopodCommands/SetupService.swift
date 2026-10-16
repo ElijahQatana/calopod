@@ -18,6 +18,7 @@ public struct SetupCalendar: Identifiable, Equatable, Sendable {
     public let sourceLabel: String?
     public let isSelected: Bool
     public let isReadOnly: Bool
+    public let providerColor: String?
 }
 
 public struct SetupConnection: Identifiable, Equatable, Sendable {
@@ -77,7 +78,8 @@ public struct SetupService: Sendable {
                         name: $0.displayLabel ?? $0.providerCalendarID,
                         sourceLabel: $0.providerSourceLabel,
                         isSelected: $0.isSelected,
-                        isReadOnly: $0.isReadOnly
+                        isReadOnly: $0.isReadOnly,
+                        providerColor: $0.providerColor
                     )
                 },
                 warnings: try CalendarSelectionSafety.warnings(

@@ -67,7 +67,8 @@ public struct EventKitConnectionService: Sendable {
                 isReadOnly: !$0.allowsContentModifications,
                 providerSourceID: $0.sourceID,
                 providerSourceType: $0.sourceType,
-                providerSourceLabel: $0.sourceTitle
+                providerSourceLabel: $0.sourceTitle,
+                providerColor: ProviderColor.hex($0.color)
             )
         }
         try state.replaceCalendarBindings(connectionID: connectionID, bindings: bindings, now: now)
