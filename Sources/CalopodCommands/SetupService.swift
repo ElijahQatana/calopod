@@ -218,6 +218,19 @@ public struct SetupService: Sendable {
         }
     }
 
+    /// Same name rules as `calopod arm update --name`. An Arm needs a name here, and two Arms
+    /// cannot share one, so the list stays readable.
+    public func renameArm(armID: String, name: String) throws {
+        let repository = try makeRepository()
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw SetupError.blocked("Give the arm a name.") }
+        let taken = try repository.arms().contains {
+            $0.id != armID && $0.displayName.caseInsensitiveCompare(trimmed) == .orderedSame
+        }
+        guard !taken else { throw SetupError.blocked("Another arm already uses that name.") }
+        _ = try ArmConfigurationService(repository: repository).rename(armID: armID, name: trimmed)
+    }
+
     public func removeArm(armID: String) throws {
         let repository = try makeRepository()
         guard try repository.arm(id: armID) != nil else { throw SetupError.notFound }

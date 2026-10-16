@@ -50,9 +50,18 @@ struct ArmsScreen: View {
                     get: { arm.isEnabled },
                     set: { value in Task { await model.setArmEnabled(arm.id, value) } }
                 ))
-            removeControl(arm.id, title: "Remove")
+            if pendingRemoval == arm.id { confirmRemoval(arm.id) }
         } header: {
-            Text(arm.name)
+            HStack(spacing: 8) {
+                ArmTitle(model: model, arm: arm)
+                Spacer(minLength: 8)
+                if pendingRemoval != arm.id {
+                    Button(role: .destructive) { pendingRemoval = arm.id } label: { Text(arm.isMain ? "Remove Main calendar" : "Remove") }
+                        .buttonStyle(.quiet)
+                        .disabled(model.isBusy)
+                }
+            }
+            .textCase(nil)
         }
         .disabled(model.isBusy)
     }
@@ -89,22 +98,16 @@ struct ArmsScreen: View {
         }
     }
 
-    private func removeControl(_ armID: String, title: String) -> some View {
-        Group {
-            if pendingRemoval == armID {
-                HStack {
-                    Text("Remove? Events already copied stay put.").foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Cancel") { pendingRemoval = nil }
-                    Button("Remove", role: .destructive) {
-                        pendingRemoval = nil
-                        Task { await model.removeArm(armID) }
-                    }
-                    .foregroundStyle(Theme.bad)
-                }
-            } else {
-                Button(title, role: .destructive) { pendingRemoval = armID }.foregroundStyle(Theme.bad)
+    private func confirmRemoval(_ armID: String) -> some View {
+        HStack(spacing: 8) {
+            Text("Remove? Events already copied stay put.").foregroundStyle(.secondary)
+            Spacer()
+            Button("Cancel") { pendingRemoval = nil }.buttonStyle(.quiet)
+            Button("Remove", role: .destructive) {
+                pendingRemoval = nil
+                Task { await model.removeArm(armID) }
             }
+            .buttonStyle(.quiet)
         }
         .disabled(model.isBusy)
     }
@@ -129,6 +132,67 @@ struct ArmsScreen: View {
             ForEach(model.selectedCalendars.filter { !$0.isReadOnly }, id: \.id) {
                 Text($0.title).tag(String?.some($0.id))
             }
+        }
+    }
+}
+
+/// The arm's name. Click the pencil, double-click, or use Rename to edit it in place.
+private struct ArmTitle: View {
+    let model: SetupModel
+    let arm: SetupArm
+
+    @State private var editing = false
+    @State private var draft = ""
+    @State private var problem: String?
+    @State private var hovering = false
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if editing {
+                TextField("Name", text: $draft)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 320)
+                    .focused($focused)
+                    .onSubmit { Task { await commit(keepOpenOnError: true) } }
+                    .onExitCommand { editing = false }
+                    .onChange(of: focused) { _, isFocused in
+                        if !isFocused && editing { Task { await commit(keepOpenOnError: false) } }
+                    }
+                if let problem { Text(problem).font(.caption).foregroundStyle(Theme.bad) }
+            } else {
+                HStack(spacing: 6) {
+                    Text(arm.name).font(.headline).foregroundStyle(.primary)
+                    Button { begin() } label: { Image(systemName: "pencil") }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .opacity(hovering ? 1 : 0)
+                        .help("Rename")
+                        .accessibilityLabel("Rename \(arm.name)")
+                }
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) { begin() }
+                .onHover { hovering = $0 }
+                .contextMenu { Button("Rename") { begin() } }
+            }
+        }
+    }
+
+    private func begin() {
+        draft = arm.name
+        problem = nil
+        editing = true
+        focused = true
+    }
+
+    private func commit(keepOpenOnError: Bool) async {
+        guard editing else { return }
+        let name = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if name == arm.name { editing = false; return }
+        if let message = await model.renameArm(arm.id, to: name) {
+            if keepOpenOnError { problem = message; focused = true } else { editing = false }
+        } else {
+            editing = false
         }
     }
 }

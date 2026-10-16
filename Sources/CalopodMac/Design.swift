@@ -250,6 +250,10 @@ extension ButtonStyle where Self == AccentButtonStyle {
     static var accentFilled: AccentButtonStyle { AccentButtonStyle() }
 }
 
+extension ButtonStyle where Self == QuietButtonStyle {
+    static var quiet: QuietButtonStyle { QuietButtonStyle() }
+}
+
 extension ButtonStyle where Self == CircleToolbarButtonStyle {
     static var circleToolbar: CircleToolbarButtonStyle { CircleToolbarButtonStyle() }
 }
@@ -266,6 +270,26 @@ struct AccentButtonStyle: ButtonStyle {
             .background(
                 Capsule().fill(Theme.accent.opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.35))
             )
+    }
+}
+
+/// A low-key capsule button. A destructive role turns the text red, whatever the container is.
+struct QuietButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var hovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        let tint = configuration.role == .destructive ? Theme.bad : Color.primary
+        let fill = configuration.isPressed ? 0.18 : hovering ? 0.12 : 0.07
+        return configuration.label
+            .font(.callout.weight(.medium))
+            .foregroundStyle(configuration.role == .destructive ? Theme.bad : .primary)
+            .padding(.horizontal, 12)
+            .frame(height: 28)
+            .background(Capsule().fill(tint.opacity(fill)))
+            .contentShape(Capsule())
+            .onHover { hovering = $0 }
+            .opacity(isEnabled ? 1 : 0.4)
     }
 }
 
