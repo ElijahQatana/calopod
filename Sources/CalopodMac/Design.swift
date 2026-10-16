@@ -211,14 +211,39 @@ struct AccentButtonStyle: ButtonStyle {
 
 struct CircleToolbarButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
+    @State private var hovering = false
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        let fill = configuration.isPressed ? 0.14 : hovering ? 0.10 : 0.06
+        return configuration.label
             .labelStyle(.iconOnly)
-            .frame(width: 32, height: 32)
-            .background(Circle().fill(.quaternary.opacity(configuration.isPressed ? 2 : 1)))
+            .font(.system(size: 15, weight: .medium))
+            .foregroundStyle(.primary)
+            .frame(width: 30, height: 30)
+            .background(Circle().fill(Color.primary.opacity(fill)))
+            .overlay(Circle().strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5))
             .contentShape(Circle())
+            .onHover { hovering = $0 }
             .opacity(isEnabled ? 1 : 0.4)
+    }
+}
+
+/// The toolbar refresh button. Shows a spinner while it works, without looking disabled.
+struct RefreshButton: View {
+    let busy: Bool
+    let help: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                if busy { ProgressView().controlSize(.small) } else { Image(systemName: "arrow.clockwise") }
+            }
+        }
+        .buttonStyle(.circleToolbar)
+        .allowsHitTesting(!busy)
+        .help(help)
+        .accessibilityLabel(busy ? "Refreshing" : "Refresh")
     }
 }
 
