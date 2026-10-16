@@ -31,7 +31,10 @@ struct EventInspector: View {
             .padding(16)
         }
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.quaternary.opacity(0.5)))
+        .background {
+            let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+            shape.fill(Color(nsColor: .windowBackgroundColor)).overlay(shape.fill(.quaternary.opacity(0.5)))
+        }
     }
 
     @ViewBuilder

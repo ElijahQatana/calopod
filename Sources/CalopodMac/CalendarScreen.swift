@@ -18,6 +18,7 @@ struct CalendarScreen: View {
                     content
                     if side, model.selected != nil { inspector.frame(width: 270).padding([.trailing, .bottom], 12) }
                 }
+                .frame(maxHeight: .infinity)
             }
             .overlay(alignment: .topTrailing) {
                 if !side, model.selected != nil {
@@ -52,7 +53,7 @@ struct CalendarScreen: View {
             ContentUnavailableView("No calendars selected", systemImage: "calendar",
                 description: Text("Choose calendars in Calendars and they will appear here."))
         } else {
-            ScheduleGrid(model: model, colors: colors)
+            ScheduleGrid(model: model, colors: colors).frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

@@ -10,8 +10,29 @@ struct ScheduleGrid: View {
     private static let gutter: CGFloat = 48
     private static let firstHour = 7
 
+    /// Narrower days scroll sideways instead of squeezing event titles.
+    private static let minimumDayWidth: CGFloat = 100
+
     var body: some View {
         let days = model.days
+        GeometryReader { proxy in
+            ScrollViewReader { sideways in
+                ScrollView(.horizontal) {
+                    grid(days)
+                        .frame(
+                            width: max(proxy.size.width, Self.gutter + CGFloat(days.count) * Self.minimumDayWidth),
+                            height: proxy.size.height)
+                }
+                .task(id: days) {
+                    // Keep today in view when the days do not all fit.
+                    try? await Task.sleep(for: .milliseconds(60))
+                    if let today = days.first(where: model.isToday) { sideways.scrollTo(today, anchor: .trailing) }
+                }
+            }
+        }
+    }
+
+    private func grid(_ days: [Date]) -> some View {
         VStack(spacing: 0) {
             dayHeaders(days)
             allDayStrip(days)
@@ -25,20 +46,26 @@ struct ScheduleGrid: View {
                         }
                     }
                     .frame(height: 24 * Self.hourHeight)
-                    .overlay(alignment: .topLeading) {
-                        Color.clear.frame(width: 1, height: 1)
-                            .offset(y: Self.hourHeight * CGFloat(Self.firstHour))
-                            .id("start")
+                    .background(alignment: .topLeading) {
+                        VStack(spacing: 0) {
+                            Color.clear.frame(width: 1, height: Self.hourHeight * CGFloat(Self.firstHour))
+                            Color.clear.frame(width: 1, height: 1).id("start")
+                        }
                     }
                 }
-                .onAppear { proxy.scrollTo("start", anchor: .top) }
+                .frame(maxHeight: .infinity)
+                .task {
+                    // Wait a beat so the content has been laid out before scrolling.
+                    try? await Task.sleep(for: .milliseconds(60))
+                    proxy.scrollTo("start", anchor: .top)
+                }
             }
         }
     }
 
     private func dayHeaders(_ days: [Date]) -> some View {
         HStack(spacing: 0) {
-            Color.clear.frame(width: Self.gutter)
+            Color.clear.frame(width: Self.gutter, height: 1)
             ForEach(days, id: \.self) { day in
                 let today = model.isToday(day)
                 Button {
@@ -58,7 +85,8 @@ struct ScheduleGrid: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .disabled(model.mode == .day)
+                .id(day)
+                .allowsHitTesting(model.mode == .week)
                 .accessibilityLabel(day.formatted(.dateTime.weekday(.wide).month().day()))
             }
         }
@@ -75,11 +103,13 @@ struct ScheduleGrid: View {
                 ForEach(perDay.indices, id: \.self) { index in
                     VStack(spacing: 2) {
                         ForEach(perDay[index]) { event in
-                            ScheduleEventBlock(
-                                event: event, color: colors.color(for: event.calendarID).color,
-                                isSelected: model.selectedID == event.id, height: 20)
-                                .frame(height: 20)
-                                .onTapGesture { model.selectedID = event.id }
+                            Button { model.selectedID = event.id } label: {
+                                ScheduleEventBlock(
+                                    event: event, color: colors.color(for: event.calendarID).color,
+                                    isSelected: model.selectedID == event.id, width: 200, height: 20)
+                            }
+                            .buttonStyle(.plain)
+                            .frame(height: 20)
                         }
                     }
                     .padding(.horizontal, 2)
@@ -125,12 +155,15 @@ private struct DayColumn: View {
                 ForEach(placements) { placement in
                     let slot = (proxy.size.width - 4) / CGFloat(placement.columns)
                     let height = max(CGFloat(placement.height) / 60 * hourHeight - 2, 14)
-                    ScheduleEventBlock(
-                        event: placement.event, color: colors.color(for: placement.event.calendarID).color,
-                        isSelected: model.selectedID == placement.event.id, height: height)
-                        .frame(width: max(slot - 2, 8), height: height)
-                        .offset(x: 2 + slot * CGFloat(placement.column), y: CGFloat(placement.top) / 60 * hourHeight + 1)
-                        .onTapGesture { model.selectedID = placement.event.id }
+                    let width = max(slot - 2, 8)
+                    Button { model.selectedID = placement.event.id } label: {
+                        ScheduleEventBlock(
+                            event: placement.event, color: colors.color(for: placement.event.calendarID).color,
+                            isSelected: model.selectedID == placement.event.id, width: width, height: height)
+                    }
+                    .buttonStyle(.plain)
+                    .frame(width: width, height: height)
+                    .offset(x: 2 + slot * CGFloat(placement.column), y: CGFloat(placement.top) / 60 * hourHeight + 1)
                         .zIndex(model.selectedID == placement.event.id ? 1 : 0)
                 }
                 if model.isToday(day) { NowLine(hourHeight: hourHeight, calendar: model.calendar) }

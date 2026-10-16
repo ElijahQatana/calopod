@@ -33,7 +33,10 @@ enum ScheduleLayout {
                 let end = min(event.endsAt, dayEnd).timeIntervalSince(dayStart) / 60
                 return (event, top, min(max(end, top + minimumMinutes), 1440))
             }
-            .sorted { ($0.top, $0.end, $0.event.id) < ($1.top, $1.end, $1.event.id) }
+            .sorted {
+                // At the same time, real events come first and copies sit to their right.
+                ($0.top, $0.end, $0.event.isCopy ? 1 : 0, $0.event.id) < ($1.top, $1.end, $1.event.isCopy ? 1 : 0, $1.event.id)
+            }
 
         var result: [Placement] = []
         var cluster: [(event: ScheduleEvent, top: Double, end: Double, column: Int)] = []

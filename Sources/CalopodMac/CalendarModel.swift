@@ -11,8 +11,8 @@ final class CalendarModel {
 
     private(set) var schedule: CalendarSchedule?
     private(set) var loadFailed = false
-    var mode: Mode = .week
-    var anchor: Date
+    var mode: Mode = .week { didSet { selectedID = nil } }
+    var anchor: Date { didSet { selectedID = nil } }
     /// Calendars hidden in this view. Not remembered and not shared with other screens.
     private(set) var hidden: Set<String> = []
     var selectedID: String?
