@@ -230,3 +230,70 @@ private actor ConflictRemote: RSVPActionProvider {
     }
 }
 #endif
+
+#if os(macOS)
+@Suite("Mac conflict refresh")
+struct ConflictRefreshTests {
+    private func service(
+        root: URL,
+        state: LocalStateRepository,
+        refreshCalls: RefreshCounter
+    ) -> ConflictResolutionService {
+        let lock = root.appendingPathComponent("review.lock")
+        return ConflictResolutionService(
+            makeRepository: { state },
+            makeLockURL: { lock },
+            makeRefresh: { state in
+                {
+                    refreshCalls.increment()
+                    return try state.inboxContextSnapshot()
+                }
+            },
+            provider: { _ in throw RSVPActionError.unavailable(.unsupported) }
+        )
+    }
+
+    private func makeState() throws -> (URL, LocalStateRepository) {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let state = LocalStateRepository(
+            database: try CalopodDatabase(path: root.appendingPathComponent("state.sqlite").path)
+        )
+        return (root, state)
+    }
+
+    @Test("Refresh re-reads the sources once and releases the lock")
+    func refreshReadsOnce() async throws {
+        let (root, state) = try makeState()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let calls = RefreshCounter()
+        let service = service(root: root, state: state, refreshCalls: calls)
+
+        try await service.refresh()
+
+        #expect(calls.count == 1)
+        let again = try ProcessLock.acquire(at: root.appendingPathComponent("review.lock"))
+        withExtendedLifetime(again) {}
+    }
+
+    @Test("Refresh refuses to run while a sync holds the lock")
+    func refreshWaitsForSync() async throws {
+        let (root, state) = try makeState()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let calls = RefreshCounter()
+        let service = service(root: root, state: state, refreshCalls: calls)
+        let held = try ProcessLock.acquire(at: root.appendingPathComponent("review.lock"))
+        defer { withExtendedLifetime(held) {} }
+
+        await #expect(throws: CalopodRuntimeError.busy) { try await service.refresh() }
+        #expect(calls.count == 0)
+    }
+}
+
+final class RefreshCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+    var count: Int { lock.withLock { value } }
+    func increment() { lock.withLock { value += 1 } }
+}
+#endif

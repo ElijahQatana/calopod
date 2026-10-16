@@ -7,6 +7,13 @@ struct ConflictsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Text("Overlapping events").font(.title3.bold())
+                    Spacer()
+                    Button("Refresh", systemImage: "arrow.clockwise") { Task { await model.refresh() } }
+                        .disabled(model.isBusy)
+                        .help("Re-read your calendars. Nothing is changed.")
+                }
                 if let busy = model.busy {
                     HStack { ProgressView().controlSize(.small); Text(busy) }
                 }

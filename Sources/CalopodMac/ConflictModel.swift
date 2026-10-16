@@ -1,4 +1,5 @@
 import CalopodCommands
+import CalopodRuntime
 import Foundation
 import Observation
 
@@ -39,6 +40,24 @@ final class ConflictModel {
         } catch {
             notice = "Conflicts could not be loaded. Try again."
         }
+    }
+
+    /// Re-reads the calendars, then reloads the board. Reads only.
+    func refresh() async {
+        guard busy == nil else { return }
+        let service = service
+        busy = "Refreshing calendars…"
+        notice = nil
+        report = nil
+        do {
+            try await Task.detached { try await service.refresh() }.value
+        } catch CalopodRuntimeError.busy {
+            notice = "A sync is running. Try again in a moment."
+        } catch {
+            notice = "Some calendars could not be refreshed. What you see may be out of date."
+        }
+        busy = nil
+        await reload()
     }
 
     func reviewChanges() async {
