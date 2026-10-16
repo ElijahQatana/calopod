@@ -23,6 +23,10 @@ struct StatusView: View {
                 NSApplication.shared.activate(ignoringOtherApps: true)
                 openWindow(id: "setup")
             }
+            Button("Resolve Conflicts…") {
+                NSApplication.shared.activate(ignoringOtherApps: true)
+                openWindow(id: "conflicts")
+            }
             backgroundService
             if let notice = model.notice {
                 Text(notice).font(.callout).foregroundStyle(.red)
