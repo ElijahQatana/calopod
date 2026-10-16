@@ -123,6 +123,29 @@ struct SetupServiceTests {
         try service.removeArm(armID: id)
         #expect(try service.snapshot().arms.isEmpty)
     }
+
+    @Test("renaming trims the name and refuses empty, long and repeated names")
+    func renameRules() throws {
+        let (service, _, root) = try makeService()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try service.setSelected(calendarID: "work", selected: true)
+        try service.addArm(sourceIDs: ["work"], targetID: "main", rule: .busy, name: "Busy copy")
+        try service.setSelected(calendarID: "main", selected: true)
+        try service.addArm(sourceIDs: ["main"], targetID: "work", rule: .fullDetails, name: "Details")
+        let arms = try service.snapshot().arms
+        let busy = try #require(arms.first { $0.name == "Busy copy" })
+
+        try service.renameArm(armID: busy.id, name: "  Team busy  ")
+        #expect(try service.snapshot().arms.contains { $0.id == busy.id && $0.name == "Team busy" })
+        // Keeping its own name, even in another case, is fine.
+        try service.renameArm(armID: busy.id, name: "team BUSY")
+
+        for bad in ["   ", "details", String(repeating: "a", count: 201), "two\nlines"] {
+            #expect(throws: (any Error).self) { try service.renameArm(armID: busy.id, name: bad) }
+        }
+        #expect(try service.snapshot().arms.contains { $0.id == busy.id && $0.name == "team BUSY" })
+    }
 }
 #endif
 
