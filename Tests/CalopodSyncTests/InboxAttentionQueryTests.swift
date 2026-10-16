@@ -195,6 +195,15 @@ struct InboxAttentionQueryTests {
         #expect(!none.analysis.isComplete)
     }
 
+    @Test("Events kept from before or after the read window do not make a fully read calendar partial", arguments: [4000.0, 49500.0])
+    func retainedEventsOutsideCoverage(start: Double) throws {
+        let fixture = try AttentionFixture()
+        try fixture.refresh([fixture.event(key: "kept", response: .accepted, start: start)], coverage: window(0, 50000))
+        try fixture.refresh([], coverage: window(5000, 49000), now: date(600))
+        let result = try fixture.query()
+        #expect(result.analysis.isComplete)
+    }
+
     @Test("Pruned change history still queues unread changes, and reading never acknowledges")
     func pruning() throws {
         let fixture = try AttentionFixture()

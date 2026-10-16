@@ -53,7 +53,14 @@ public enum InboxAttentionQuery {
         let window = starts.min().flatMap { start in
             ends.max().flatMap { try? SyncWindow(start: start, end: $0) }
         }
-        let analysis = InboxConflictCalculator.analyze(snapshot, window: window, freshnessCutoff: freshnessCutoff)
+        // A requested date range still has to be covered by what was read.
+        let coverageStarts = snapshot.sources.compactMap { $0.coverage?.startsAt } + (filter.window.map { [$0.start] } ?? [])
+        let coverageEnds = snapshot.sources.compactMap { $0.coverage?.endsAt } + (filter.window.map { [$0.end] } ?? [])
+        let coverageWindow = coverageStarts.min().flatMap { start in
+            coverageEnds.max().flatMap { try? SyncWindow(start: start, end: $0) }
+        }
+        let analysis = InboxConflictCalculator.analyze(
+            snapshot, window: window, freshnessCutoff: freshnessCutoff, coverageWindow: coverageWindow)
         let confirmed = analysis.conflicts.filter(\.isConfirmed)
         var rows: [InboxAttentionRow] = []
         for item in snapshot.events {

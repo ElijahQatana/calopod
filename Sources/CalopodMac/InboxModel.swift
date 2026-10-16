@@ -17,6 +17,7 @@ final class InboxModel {
 
     let review = InboxReviewModel()
     private let service: InboxScreenService
+    private var loads = 0
 
     init(service: InboxScreenService = InboxScreenService()) {
         self.service = service
@@ -28,8 +29,12 @@ final class InboxModel {
 
     func reload() async {
         let service = service
+        loads += 1
+        let load = loads
         do {
-            board = try await Task.detached { try service.board() }.value
+            let loaded = try await Task.detached { try service.board() }.value
+            // Several screens reload at once; an older read must not replace a newer one.
+            if load == loads { board = loaded }
         } catch {
             notice = "The inbox could not be loaded. Try again."
         }
