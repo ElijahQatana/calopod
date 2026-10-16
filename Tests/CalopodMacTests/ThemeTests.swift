@@ -72,4 +72,11 @@ final class WindowBlurTests: XCTestCase {
             "startup: strategy=background isOpaque=false backgroundColor=clear contentView=NSHostingView "
                 + "effect=none isMainWindow=true reduceTransparency=false")
     }
+
+    func testViewLine() {
+        XCTAssertEqual(
+            WindowDiagnostics.viewLine(
+                depth: 1, className: "NSHostingView", wantsLayer: true, background: "nil", layerOpaque: "false"),
+            "view   NSHostingView wantsLayer=true layerBackground=nil layerOpaque=false")
+    }
 }

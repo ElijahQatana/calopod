@@ -57,6 +57,27 @@ enum WindowDiagnostics {
             effect: effectText, isMain: window.isMainWindow,
             reduceTransparency: NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency)
         logger.notice("\(text, privacy: .public)")
+        dumpViews(window.contentView, depth: 0)
+    }
+
+    static func viewLine(depth: Int, className: String, wantsLayer: Bool, background: String, layerOpaque: String)
+        -> String
+    {
+        "view\(String(repeating: "  ", count: depth)) \(className) wantsLayer=\(wantsLayer) "
+            + "layerBackground=\(background) layerOpaque=\(layerOpaque)"
+    }
+
+    /// Looks for an opaque fill: each view's layer background and opacity, a few levels down.
+    @MainActor
+    private static func dumpViews(_ view: NSView?, depth: Int) {
+        guard let view, depth <= 3 else { return }
+        let layer = view.layer
+        let background = layer?.backgroundColor.flatMap { NSColor(cgColor: $0) }.map { String(describing: $0) } ?? "nil"
+        let text = viewLine(
+            depth: depth, className: String(describing: type(of: view)), wantsLayer: view.wantsLayer,
+            background: background, layerOpaque: layer.map { String($0.isOpaque) } ?? "nil")
+        logger.notice("\(text, privacy: .public)")
+        for sub in view.subviews.prefix(8) { dumpViews(sub, depth: depth + 1) }
     }
 
     @MainActor
