@@ -102,4 +102,12 @@ final class ScheduleLayoutTests: XCTestCase {
         XCTAssertEqual(some.count, 1)
         XCTAssertTrue(some[0].contains("Home"))
     }
+
+    func testNarrowBlocksWrapTitlesButStayShort() {
+        XCTAssertEqual(ScheduleLayout.titleLines(width: 60, height: 26, allDay: false), 1)
+        XCTAssertEqual(ScheduleLayout.titleLines(width: 60, height: 52, allDay: false), 2)
+        XCTAssertEqual(ScheduleLayout.titleLines(width: 60, height: 200, allDay: false), 2)
+        XCTAssertEqual(ScheduleLayout.titleLines(width: 120, height: 104, allDay: false), 6)
+        XCTAssertEqual(ScheduleLayout.titleLines(width: 120, height: 104, allDay: true), 1)
+    }
 }
