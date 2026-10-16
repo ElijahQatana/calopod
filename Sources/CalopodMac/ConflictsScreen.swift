@@ -6,20 +6,22 @@ struct ConflictsScreen: View {
 
     var body: some View {
         Form {
+            Section {
+                HStack {
+                    Text("Overlapping events").font(Theme.title())
+                    Spacer()
+                    Button("Refresh", systemImage: "arrow.clockwise") { Task { await model.refresh() } }
+                        .buttonStyle(.circleToolbar)
+                        .disabled(model.isBusy)
+                        .help("Re-read your calendars. Nothing is changed.")
+                }
+            }
             if let busy = model.busy { Section { BusyLine(text: busy) } }
             if let notice = model.notice { Section { Banner(kind: .error, text: notice) } }
             if let report = model.report { reportSection(report) }
             if let preview = model.preview { previewSection(preview) } else { board }
         }
         .formStyle(.grouped)
-        .toolbar {
-            ToolbarItem {
-                Button("Refresh", systemImage: "arrow.clockwise") { Task { await model.refresh() } }
-                    .buttonStyle(.circleToolbar)
-                    .disabled(model.isBusy)
-                    .help("Re-read your calendars. Nothing is changed.")
-            }
-        }
         .task { await model.reload() }
     }
 
