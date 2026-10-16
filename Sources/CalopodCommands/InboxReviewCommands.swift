@@ -68,24 +68,8 @@ public struct InboxReviewCommand: AsyncParsableCommand {
             let controller = InboxReviewSessionController(state: state, lockURL: try CommandEnvironment.runtimeEnvironment().stateLocation.lockURL)
             let window = try InboxAttentionQuery.evaluate(snapshot, freshnessCutoff: Date().addingTimeInterval(-3600)).analysisWindow ??
                 SyncWindow(start: Date(), end: Date().addingTimeInterval(1))
-            let refresh: InboxReviewSessionController.Refresh = {
-                let current = try state.inboxContextSnapshot()
-                if current.sources.contains(where: { ["eventkit", "google", "microsoft"].contains($0.provider) }) {
-                    let sources = try selectedCalendarSources(connectionID: nil, calendarID: nil, repository: state)
-                    for source in sources {
-                        guard let coverage = current.sources.first(where: { $0.bindingID == source.calendar.id })?.coverage else { continue }
-                        _ = await refreshCalendarSources([source], from: coverage.startsAt, through: coverage.endsAt, repository: state)
-                    }
-                }
-                return try state.inboxContextSnapshot()
-            }
-            let provider: InboxReviewSessionController.Provider = { target in
-                switch target.provider {
-                case "google": return try CommandEnvironment.googleService()
-                case "microsoft": return try CommandEnvironment.microsoftService()
-                default: throw RSVPActionError.unavailable(.unsupported)
-                }
-            }
+            let refresh = inboxReviewRefresh(state: state)
+            let provider = inboxReviewProvider()
             let input = ReviewTerminalInput()
             defer { input.close() }
             let session: InboxReviewSession
@@ -143,5 +127,32 @@ private final class ReviewTerminalInput: @unchecked Sendable {
             if bytes.count < 256 { bytes.append(byte) }
         }
         return nil
+    }
+}
+
+/// Re-reads every selected source calendar into the local cache, then returns the fresh snapshot.
+/// Writes to no calendar. Shared by the terminal review and the Mac conflict screen.
+func inboxReviewRefresh(state: LocalStateRepository) -> InboxReviewSessionController.Refresh {
+    {
+        let current = try state.inboxContextSnapshot()
+        if current.sources.contains(where: { ["eventkit", "google", "microsoft"].contains($0.provider) }) {
+            let sources = try selectedCalendarSources(connectionID: nil, calendarID: nil, repository: state)
+            for source in sources {
+                guard let coverage = current.sources.first(where: { $0.bindingID == source.calendar.id })?.coverage else { continue }
+                _ = await refreshCalendarSources([source], from: coverage.startsAt, through: coverage.endsAt, repository: state)
+            }
+        }
+        return try state.inboxContextSnapshot()
+    }
+}
+
+/// Only Google and Microsoft can send an RSVP.
+func inboxReviewProvider() -> InboxReviewSessionController.Provider {
+    { target in
+        switch target.provider {
+        case "google": return try CommandEnvironment.googleService()
+        case "microsoft": return try CommandEnvironment.microsoftService()
+        default: throw RSVPActionError.unavailable(.unsupported)
+        }
     }
 }
