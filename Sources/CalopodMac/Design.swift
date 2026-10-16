@@ -40,13 +40,13 @@ enum Theme {
         dark: Color(red: 1, green: 0.94, blue: 0.86).opacity(0.06))
     // Inactive windows flatten to near solid, which also makes them cheap to composite.
     static let sidebarSheen = Color(
-        light: Color.white.opacity(0.40), dark: Color(red: 0.30, green: 0.26, blue: 0.22).opacity(0.36))
+        light: Color.white.opacity(0.58), dark: Color(red: 0.30, green: 0.26, blue: 0.22).opacity(0.56))
     static let sidebarFill = Color(
-        light: Color.white.opacity(0.38), dark: Color(red: 0.12, green: 0.10, blue: 0.09).opacity(0.38))
+        light: Color.white.opacity(0.52), dark: Color(red: 0.12, green: 0.10, blue: 0.09).opacity(0.52))
     static let contentFill = Color(
-        light: Color.white.opacity(0.88), dark: Color(red: 0x17 / 255, green: 0x14 / 255, blue: 0x12 / 255).opacity(0.86))
+        light: Color.white.opacity(0.93), dark: Color(red: 0x17 / 255, green: 0x14 / 255, blue: 0x12 / 255).opacity(0.91))
     static let innerFill = Color(
-        light: Color.white.opacity(0.94), dark: Color(red: 0x20 / 255, green: 0x1c / 255, blue: 0x19 / 255).opacity(0.94))
+        light: Color.white.opacity(0.97), dark: Color(red: 0x20 / 255, green: 0x1c / 255, blue: 0x19 / 255).opacity(0.97))
     static let sidebarInactive = Color(
         light: Color.white.opacity(0.80), dark: Color(red: 0x1b / 255, green: 0x17 / 255, blue: 0x15 / 255).opacity(0.86))
     static let cardInactive = Color(
