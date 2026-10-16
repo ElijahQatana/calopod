@@ -130,8 +130,7 @@ struct InboxScreen: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.title).lineLimit(1)
                 Text(InboxText.time(entry)).font(.caption).foregroundStyle(.secondary)
-                Text(InboxText.reasons(entry).joined(separator: " · "))
-                    .font(.caption2.weight(.medium)).foregroundStyle(InboxText.tint(entry))
+                InboxText.statusLine(entry).font(.caption2.weight(.medium))
             }
         }
         .padding(.vertical, 2)
@@ -164,6 +163,14 @@ enum InboxText {
     }
 
     static func reasons(_ entry: InboxEntry) -> [String] { entry.reasons.map { label($0, entry) } }
+
+    /// The row's second line: each reason in its own color, so only an overlap reads as a warning.
+    static func statusLine(_ entry: InboxEntry) -> Text {
+        entry.reasons.enumerated().reduce(Text("")) { line, item in
+            let part = Text(label(item.element, entry)).foregroundColor(tint(item.element))
+            return item.offset == 0 ? part : line + Text(" · ").foregroundColor(.secondary) + part
+        }
+    }
 
     static func tint(_ reason: InboxAttentionReason) -> Color {
         switch reason {

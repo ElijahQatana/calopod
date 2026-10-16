@@ -87,19 +87,21 @@ struct ContextStrip: View {
     let colors: CalendarColors
 
     private let laneHeight: CGFloat = 26
+    /// Short events are drawn at least this share of the strip so a title stays readable.
+    private static let minShare = 0.15
 
     var body: some View {
         let span = max(detail.windowEnd.timeIntervalSince(detail.windowStart), 1)
-        let lanes = assignLanes()
+        let lanes = assignLanes(span: span)
         VStack(spacing: 4) {
             GeometryReader { proxy in
                 ZStack(alignment: .topLeading) {
                     ForEach(detail.context) { item in
                         let x = max(0, item.startsAt.timeIntervalSince(detail.windowStart) / span) * proxy.size.width
-                        let width = max(4, min(1, item.endsAt.timeIntervalSince(detail.windowStart) / span) * proxy.size.width - x)
+                        let width = max(Self.minShare * proxy.size.width, min(1, item.endsAt.timeIntervalSince(detail.windowStart) / span) * proxy.size.width - x)
                         block(item)
                             .frame(width: width, height: laneHeight - 4)
-                            .offset(x: x, y: CGFloat(lanes[item.id] ?? 0) * laneHeight)
+                            .offset(x: min(x, max(0, proxy.size.width - width)), y: CGFloat(lanes[item.id] ?? 0) * laneHeight)
                     }
                 }
             }
@@ -125,17 +127,19 @@ struct ContextStrip: View {
             .background(shape.fill(color.opacity(item.isFocused ? 0.45 : 0.22)))
             .overlay(shape.strokeBorder(item.overlapsFocused ? Theme.bad : color.opacity(item.isFocused ? 1 : 0.5),
                                         lineWidth: item.overlapsFocused || item.isFocused ? 2 : 1))
+            .help(item.title)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(item.title + (item.overlapsFocused ? ", overlaps" : item.isFocused ? ", this event" : ""))
     }
 
     /// Places each block in the first row where it does not collide.
-    private func assignLanes() -> [String: Int] {
+    private func assignLanes(span: TimeInterval) -> [String: Int] {
         var ends: [Date] = []
         var result: [String: Int] = [:]
         for item in detail.context.sorted(by: { $0.startsAt < $1.startsAt }) {
             let lane = ends.firstIndex { $0 <= item.startsAt } ?? ends.count
-            if lane == ends.count { ends.append(item.endsAt) } else { ends[lane] = item.endsAt }
+            let end = max(item.endsAt, item.startsAt.addingTimeInterval(span * Self.minShare))
+            if lane == ends.count { ends.append(end) } else { ends[lane] = end }
             result[item.id] = lane
         }
         return result

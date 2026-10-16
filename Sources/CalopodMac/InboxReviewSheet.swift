@@ -33,7 +33,7 @@ struct InboxReviewSheet: View {
 
     private var showsNotice: Bool {
         switch model.phase {
-        case .card, .summary, .problem: true
+        case .card, .problem: true
         default: false
         }
     }
@@ -225,8 +225,14 @@ struct InboxReviewSheet: View {
         }
     }
 
-    private var summary: some View {
-        let progress = model.progress
+    private var summary: some View { ReviewSummary(progress: model.progress, paused: model.paused) }
+}
+
+struct ReviewSummary: View {
+    let progress: InboxReviewProgress?
+    let paused: Bool
+
+    var body: some View {
         let totals = progress?.totals
         return VStack(alignment: .leading, spacing: 14) {
             if let totals {
@@ -238,7 +244,7 @@ struct InboxReviewSheet: View {
                     if totals.failed + totals.unavailable + totals.changed > 0 {
                         count("Not sent", totals.failed + totals.unavailable + totals.changed)
                     }
-                    Divider().gridCellColumns(3)
+                    Divider().gridCellColumns(3).gridCellUnsizedAxes(.horizontal)
                     count("Overlaps resolved", totals.overlapsResolved)
                     count("New overlaps created", totals.overlapsCreated, tint: totals.overlapsCreated > 0 ? Theme.bad : nil)
                     count("Overlaps left", totals.overlapsRemaining)
@@ -262,13 +268,13 @@ struct InboxReviewSheet: View {
     }
 
     private func heading(_ progress: InboxReviewProgress?, _ totals: InboxReviewTotals) -> String {
-        if model.paused { return "Paused" }
+        if paused { return "Paused" }
         return totals.queueReviewed ? "Queue reviewed" : "Review paused"
     }
 
     private func count(_ label: String, _ value: Int, detail: String? = nil, tint: Color? = nil) -> some View {
         GridRow {
-            Text(label).foregroundStyle(.secondary)
+            Text(label).foregroundStyle(.secondary).gridColumnAlignment(.leading)
             Text("\(value)").monospacedDigit().fontWeight(.semibold).foregroundStyle(tint ?? .primary)
             if let detail { Text(detail).font(.caption).foregroundStyle(.secondary) } else { Color.clear.frame(width: 0, height: 0) }
         }

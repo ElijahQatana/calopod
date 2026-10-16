@@ -124,9 +124,10 @@ struct ArmsScreen: View {
                         pendingRemoval = nil
                         Task { await model.removeArm(armID) }
                     }
+                    .foregroundStyle(Theme.bad)
                 }
             } else {
-                Button(title, role: .destructive) { pendingRemoval = armID }
+                Button(title, role: .destructive) { pendingRemoval = armID }.foregroundStyle(Theme.bad)
             }
         }
         .disabled(model.isBusy)
