@@ -16,7 +16,7 @@ final class CalendarCopiesTests: XCTestCase {
     private func event(_ id: String, copy: Bool) -> ScheduleEvent {
         return ScheduleEvent(
             id: id, calendarID: "work", title: id, startsAt: start, endsAt: start.addingTimeInterval(3600),
-            response: .accepted, isCopy: copy, overlaps: [], changedSinceViewed: false)
+            response: .accepted, isCopy: copy, overlaps: [], change: .none)
     }
 
     private func defaults() throws -> UserDefaults {

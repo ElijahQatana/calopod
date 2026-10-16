@@ -47,6 +47,22 @@ struct InboxScreenServiceTests {
         #expect(after.count(.all) == 6)
     }
 
+    @Test("Calendar dots are exactly the events Inbox lists as changed")
+    func calendarDotsMatchInbox() throws {
+        let f = try InboxFixture()
+        func dots() throws -> Set<String> {
+            let schedule = try CalendarScheduleService(makeRepository: { f.state }, now: { f.now }).schedule()
+            return Set(schedule.events.filter { $0.change != .none }.map(\.id))
+        }
+        let board = try f.service.board()
+        #expect(try dots() == Set(board.entries(for: .changed).map(\.id)))
+        #expect(try dots() == ["chg", "mb"])
+
+        try f.service.acknowledge(revisionID: try #require(board.entries.first { $0.id == "mb" }).revisionID)
+        #expect(try dots() == ["chg"])
+        #expect(try dots() == Set(try f.service.board().entries(for: .changed).map(\.id)))
+    }
+
     @Test("Replies come only from the calendar's own choices")
     func detailChoices() throws {
         let f = try InboxFixture()

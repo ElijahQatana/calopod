@@ -17,11 +17,11 @@ final class ScheduleLayoutTests: XCTestCase {
 
     private func event(
         _ id: String, _ start: Date, _ end: Date, response: ScheduleResponse = .accepted,
-        copy: Bool = false, overlaps: [String] = [], changed: Bool = false
+        copy: Bool = false, overlaps: [String] = [], changed: ScheduleChange = .none
     ) -> ScheduleEvent {
         ScheduleEvent(
             id: id, calendarID: "work", title: id, startsAt: start, endsAt: end, response: response,
-            isCopy: copy, overlaps: overlaps, changedSinceViewed: changed)
+            isCopy: copy, overlaps: overlaps, change: changed)
     }
 
     func testWeekStartsOnFirstWeekdayEvenFromSunday() {
@@ -74,11 +74,11 @@ final class ScheduleLayoutTests: XCTestCase {
         XCTAssertEqual(ScheduleLayout.treatment(for: event("c", date(14, 9), date(14, 10), response: .needsResponse)), .needsRSVP)
         XCTAssertEqual(ScheduleLayout.treatment(for: event("d", date(14, 9), date(14, 10), response: .declined)), .declined)
         // A copy stays a copy and never shows an overlap ring or change dot.
-        let copy = event("e", date(14, 9), date(14, 10), response: .needsResponse, copy: true, overlaps: ["x"], changed: true)
+        let copy = event("e", date(14, 9), date(14, 10), response: .needsResponse, copy: true, overlaps: ["x"], changed: .changed)
         XCTAssertEqual(ScheduleLayout.treatment(for: copy), .copy)
         XCTAssertFalse(ScheduleLayout.showsOverlap(copy))
         XCTAssertFalse(ScheduleLayout.showsChange(copy))
-        let flagged = event("f", date(14, 9), date(14, 10), overlaps: ["x"], changed: true)
+        let flagged = event("f", date(14, 9), date(14, 10), overlaps: ["x"], changed: .changed)
         XCTAssertTrue(ScheduleLayout.showsOverlap(flagged))
         XCTAssertTrue(ScheduleLayout.showsChange(flagged))
     }
@@ -109,5 +109,19 @@ final class ScheduleLayoutTests: XCTestCase {
         XCTAssertEqual(ScheduleLayout.titleLines(width: 60, height: 200, allDay: false), 2)
         XCTAssertEqual(ScheduleLayout.titleLines(width: 120, height: 104, allDay: false), 6)
         XCTAssertEqual(ScheduleLayout.titleLines(width: 120, height: 104, allDay: true), 1)
+    }
+
+    func testChangeDotAndWords() {
+        let cases: [(ScheduleChange, Bool, Bool, String?)] = [
+            (.none, false, false, nil),
+            (.changed, false, true, "Changed since you answered"),
+            (.uncertain, false, true, "May have changed"),
+            (.changed, true, false, nil),
+        ]
+        for (change, copy, dot, words) in cases {
+            let e = event("e", date(14, 9), date(14, 10), copy: copy, changed: change)
+            XCTAssertEqual(ScheduleLayout.showsChange(e), dot)
+            XCTAssertEqual(ScheduleLayout.changeText(e), words)
+        }
     }
 }

@@ -85,7 +85,7 @@ struct ScheduleEventBlock: View {
         if treatment == .copy { parts.append("Busy copy") }
         if treatment == .needsRSVP { parts.append("Needs reply") }
         if ScheduleLayout.showsOverlap(event) { parts.append("Overlaps another event") }
-        if ScheduleLayout.showsChange(event) { parts.append("Changed since you last looked") }
+        if let text = ScheduleLayout.changeText(event) { parts.append(text) }
         return parts.joined(separator: ", ")
     }
 }

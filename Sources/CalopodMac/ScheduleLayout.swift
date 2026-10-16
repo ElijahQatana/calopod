@@ -98,7 +98,13 @@ enum ScheduleLayout {
 
     /// Overlap rings and the changed dot sit on top of the base treatment. Copies get neither.
     static func showsOverlap(_ event: ScheduleEvent) -> Bool { !event.isCopy && !event.overlaps.isEmpty }
-    static func showsChange(_ event: ScheduleEvent) -> Bool { !event.isCopy && event.changedSinceViewed }
+    static func showsChange(_ event: ScheduleEvent) -> Bool { !event.isCopy && event.change != .none }
+
+    /// The words for the dot, shared by the inspector and VoiceOver.
+    static func changeText(_ event: ScheduleEvent) -> String? {
+        guard showsChange(event) else { return nil }
+        return event.change == .uncertain ? "May have changed" : "Changed since you answered"
+    }
 
     /// One line per visible calendar whose local copy is old, missing, or does not reach the range.
     static func notices(
