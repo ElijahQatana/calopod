@@ -12,15 +12,12 @@ struct Sidebar: View {
     let service: ServiceModel
     let inboxCount: Int
 
-    @State private var query = ""
-
     private var rail: Bool { state.isCollapsed }
 
     var body: some View {
         VStack(alignment: rail ? .center : .leading, spacing: 12) {
             topRow
             brand
-            if !rail { searchField }
             nav
             Spacer(minLength: 0)
             status
@@ -56,39 +53,19 @@ struct Sidebar: View {
         .accessibilityLabel("Calopod")
     }
 
-    private var searchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            TextField("Search", text: $query).textFieldStyle(.plain)
-        }
-        .font(.callout)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(Capsule().fill(.quaternary))
-        .accessibilityLabel("Search sidebar")
-    }
-
     private var nav: some View {
         VStack(alignment: rail ? .center : .leading, spacing: 3) {
-            ForEach(visible(Screen.main)) { row($0) }
-            let setup = visible(Screen.setup)
-            if !setup.isEmpty {
-                if rail {
-                    Divider().frame(width: 28).padding(.vertical, 6)
-                } else {
-                    Text("Setup")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Theme.sidebarSecondary)
-                        .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 3)
-                }
-                ForEach(setup) { row($0) }
+            ForEach(Screen.main) { row($0) }
+            if rail {
+                Divider().frame(width: 28).padding(.vertical, 6)
+            } else {
+                Text("Setup")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.sidebarSecondary)
+                    .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 3)
             }
+            ForEach(Screen.setup) { row($0) }
         }
-    }
-
-    private func visible(_ screens: [Screen]) -> [Screen] {
-        let term = query.trimmingCharacters(in: .whitespaces)
-        return term.isEmpty ? screens : screens.filter { $0.title.localizedCaseInsensitiveContains(term) }
     }
 
     /// A capsule in the full sidebar, a rounded square sized to the icon in the rail.
