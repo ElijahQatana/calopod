@@ -1,4 +1,5 @@
 #if os(macOS)
+import CalopodDomain
 import CalopodRuntime
 import CalopodStore
 import Foundation
@@ -35,6 +36,29 @@ public struct AgentControlOverview: Equatable, Sendable {
 
     public let connections: [ConnectionLine]
     public let arms: [ArmLine]
+}
+
+/// What a sync would do, planned without writing any provider data. Counts and reasons only: no
+/// event titles or notes.
+public struct SyncPreview: Equatable, Sendable {
+    public struct Line: Identifiable, Equatable, Sendable {
+        public let id: String
+        public let armName: String
+        /// One of `create`, `update`, `remove`, `repair`.
+        public let action: String
+        public let reason: String
+    }
+
+    public let creates: Int
+    public let updates: Int
+    public let removals: Int
+    public let repairs: Int
+    public let noOps: Int
+    public let warnings: [String]
+    /// Every planned change; unchanged events are only counted.
+    public let lines: [Line]
+
+    public var changeCount: Int { creates + updates + removals + repairs }
 }
 
 /// Stateless entry point the Mac app uses to control the background service. Each call goes
@@ -91,6 +115,57 @@ public struct AgentControlService: Sendable {
             environment: environment,
             schedule: try AgentSchedule(environment: configuration.environment)
         ).runOnce(ignorePause: true)
+    }
+
+    /// Plans one bounded sync over the automatic-sync window without writing to any calendar.
+    public func preview() async throws -> SyncPreview {
+        let controller = try LaunchAgentController()
+        guard let configuration = try controller.snapshot().configuration else {
+            throw LaunchAgentControlError.notInstalled
+        }
+        let environment = try installedAgentEnvironment(controller: controller)
+        let schedule = try AgentSchedule(environment: configuration.environment)
+        let armNames = Dictionary(
+            uniqueKeysWithValues: try environment.repository().arms().map { ($0.id, $0.displayName) }
+        )
+        let result = try await SyncEngine(environment: environment).run(
+            SyncRequest(mode: .dryRun, window: try schedule.window(containing: Date())),
+            trigger: .manual
+        )
+        func count(_ action: SyncPlanAction) -> Int {
+            result.items.filter { $0.action == action }.count
+        }
+        return SyncPreview(
+            creates: count(.create),
+            updates: count(.update),
+            removals: count(.remove),
+            repairs: count(.repair),
+            noOps: result.noOpCount + count(.noOp),
+            warnings: result.warnings,
+            lines: result.items.filter { $0.action != .noOp }.map {
+                SyncPreview.Line(
+                    id: $0.id,
+                    armName: armNames[$0.armID] ?? "Unknown Arm",
+                    action: $0.action.rawValue,
+                    reason: Self.reasonText($0.reason)
+                )
+            }
+        )
+    }
+
+    private static func reasonText(_ reason: SyncPlanReason) -> String {
+        switch reason {
+        case .targetMissing: "Not on the target calendar yet"
+        case .targetDiffers: "Target copy is out of date"
+        case .targetMatches: "Already up to date"
+        case .sourceMissing: "No longer on the source calendar"
+        case .verifiedDuplicates: "Duplicate copies found"
+        case .mappingMissing: "Copy exists but is not tracked"
+        case .providerIdentityChanged: "Calendar account changed"
+        case .ownershipUnverified: "Could not confirm Calopod owns this copy"
+        case .sourceSnapshotIncomplete: "Source calendar could not be fully read"
+        case .targetSnapshotIncomplete: "Target calendar could not be fully read"
+        }
     }
 
     public func overview() throws -> AgentControlOverview {
