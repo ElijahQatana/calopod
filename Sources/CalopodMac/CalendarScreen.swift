@@ -2,31 +2,21 @@ import CalopodCommands
 import SwiftUI
 
 struct CalendarScreen: View {
-    @State private var model = CalendarModel()
+    @State private var model: CalendarModel
     private let colors = CalendarColors.shared
 
-    /// Below this width the inspector floats over the grid instead of taking room from it.
-    private static let sideInspectorWidth: CGFloat = 900
+    init(model: CalendarModel = CalendarModel()) { _model = State(initialValue: model) }
 
     var body: some View {
-        GeometryReader { proxy in
-            let side = proxy.size.width >= Self.sideInspectorWidth
-            VStack(spacing: 0) {
-                header
-                notices
-                HStack(alignment: .top, spacing: 0) {
-                    content
-                    if side, model.selected != nil { inspector.frame(width: 270).padding([.trailing, .bottom], 12) }
-                }
-                .frame(maxHeight: .infinity)
+        VStack(spacing: 0) {
+            header
+            notices
+            // The inspector always sits beside the grid; a narrow grid scrolls instead of being covered.
+            HStack(alignment: .top, spacing: 0) {
+                content
+                if model.selected != nil { inspector.frame(width: 270).padding([.trailing, .bottom], 12) }
             }
-            .overlay(alignment: .topTrailing) {
-                if !side, model.selected != nil {
-                    inspector.frame(width: 270).frame(maxHeight: 420)
-                        .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
-                        .padding(12).padding(.top, 96)
-                }
-            }
+            .frame(maxHeight: .infinity)
         }
         .task {
             // Reads the local copy only, so it shows at once even while a sync is running.

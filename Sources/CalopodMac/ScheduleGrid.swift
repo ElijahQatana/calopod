@@ -11,7 +11,7 @@ struct ScheduleGrid: View {
     private static let firstHour = 7
 
     /// Narrower days scroll sideways instead of squeezing event titles.
-    private static let minimumDayWidth: CGFloat = 100
+    private static let minimumDayWidth: CGFloat = 96
 
     var body: some View {
         let days = model.days
@@ -23,10 +23,17 @@ struct ScheduleGrid: View {
                             width: max(proxy.size.width, Self.gutter + CGFloat(days.count) * Self.minimumDayWidth),
                             height: proxy.size.height)
                 }
+                .scrollIndicators(.visible, axes: .horizontal)
                 .task(id: days) {
                     // Keep today in view when the days do not all fit.
                     try? await Task.sleep(for: .milliseconds(60))
-                    if let today = days.first(where: model.isToday) { sideways.scrollTo(today, anchor: .trailing) }
+                    if let today = days.first(where: model.isToday) { sideways.scrollTo(today, anchor: .center) }
+                }
+                .onChange(of: model.selectedID) {
+                    // Bring the selected event's day into view when the inspector narrows the grid.
+                    guard let event = model.selected else { return }
+                    let day = days.first { model.calendar.isDate($0, inSameDayAs: event.startsAt) }
+                    if let day { withAnimation { sideways.scrollTo(day, anchor: .center) } }
                 }
             }
         }
@@ -144,6 +151,8 @@ private struct DayColumn: View {
     let day: Date
     let hourHeight: CGFloat
 
+    private static let crowdedBlockWidth: CGFloat = 64
+
     var body: some View {
         let placements = ScheduleLayout.placements(model.events, on: day, calendar: model.calendar)
         GeometryReader { proxy in
@@ -155,7 +164,9 @@ private struct DayColumn: View {
                 ForEach(placements) { placement in
                     let slot = (proxy.size.width - 4) / CGFloat(placement.columns)
                     let height = max(CGFloat(placement.height) / 60 * hourHeight - 2, 14)
-                    let width = max(slot - 2, 8)
+                    let left = 2 + slot * CGFloat(placement.column)
+                    // Crowded columns overlap a little, later ones on top, so each title keeps some room.
+                    let width = min(max(slot - 2, Self.crowdedBlockWidth), max(proxy.size.width - left - 2, 8))
                     Button { model.selectedID = placement.event.id } label: {
                         ScheduleEventBlock(
                             event: placement.event, color: colors.color(for: placement.event.calendarID).color,
@@ -163,8 +174,8 @@ private struct DayColumn: View {
                     }
                     .buttonStyle(.plain)
                     .frame(width: width, height: height)
-                    .offset(x: 2 + slot * CGFloat(placement.column), y: CGFloat(placement.top) / 60 * hourHeight + 1)
-                        .zIndex(model.selectedID == placement.event.id ? 1 : 0)
+                    .offset(x: left, y: CGFloat(placement.top) / 60 * hourHeight + 1)
+                        .zIndex(model.selectedID == placement.event.id ? 100 : Double(placement.column))
                 }
                 if model.isToday(day) { NowLine(hourHeight: hourHeight, calendar: model.calendar) }
             }
