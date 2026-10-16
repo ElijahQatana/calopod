@@ -49,8 +49,11 @@ public struct InboxConflictAnalysis: Equatable, Sendable {
 public enum InboxConflictCalculator {
     public static func analyze(
         _ snapshot: InboxContextSnapshot, window: SyncWindow?, freshnessCutoff: Date,
-        responseOverride: (key: String, state: EventResponseState)? = nil
+        responseOverride: (key: String, state: EventResponseState)? = nil,
+        responseOverrides: [String: EventResponseState] = [:]
     ) -> InboxConflictAnalysis {
+        var overrides = responseOverrides
+        if let responseOverride { overrides[responseOverride.key] = responseOverride.state }
         let sources = Set(snapshot.sources.map(\.bindingID))
         let unconfirmed = Set(snapshot.events.filter { !$0.isPresenceConfirmed }.map(\.event.sourceKeyHash))
         let events = snapshot.events.map(\.event).filter { event in
@@ -59,7 +62,7 @@ public enum InboxConflictCalculator {
                 && (window.map { event.endsAt > $0.start && event.startsAt < $0.end } ?? true)
         }
         let blocking = events.filter {
-            let response = responseOverride?.key == $0.sourceKeyHash ? responseOverride!.state : $0.currentUserResponse.state
+            let response = overrides[$0.sourceKeyHash] ?? $0.currentUserResponse.state
             return response != .declined && $0.availability != "free"
         }.sorted { ($0.startsAt, $0.sourceKeyHash) < ($1.startsAt, $1.sourceKeyHash) }
         var conflicts: [InboxConflict] = []

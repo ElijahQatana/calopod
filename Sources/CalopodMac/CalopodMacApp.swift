@@ -5,6 +5,7 @@ import SwiftUI
 struct CalopodMacApp: App {
     @State private var model = ServiceModel()
     @State private var setup = SetupModel()
+    @State private var conflicts = ConflictModel()
 
     init() {
         // A menu bar app: no Dock icon even when launched as a bare executable.
@@ -22,6 +23,10 @@ struct CalopodMacApp: App {
 
         Window("Calopod Setup", id: "setup") {
             SetupView(model: setup)
+        }
+
+        Window("Resolve Conflicts", id: "conflicts") {
+            ConflictsView(model: conflicts)
         }
     }
 }
