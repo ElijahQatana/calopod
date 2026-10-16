@@ -1,14 +1,34 @@
 import SwiftUI
 
+extension Color {
+    /// Resolves per appearance, so one token covers light and dark.
+    init(light: Color, dark: Color) {
+        self.init(nsColor: NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(dark) : NSColor(light)
+        })
+    }
+}
+
 enum Theme {
-    /// System accent, so the app matches the rest of macOS.
-    static let accent = Color.accentColor
+    static let accent = Color(
+        light: Color(red: 0xb4 / 255, green: 0x53 / 255, blue: 0x09 / 255),
+        dark: Color(red: 0xf5 / 255, green: 0xa6 / 255, blue: 0x23 / 255))
+    /// Text and icons on top of a filled accent.
+    static let onAccent = Color(light: .white, dark: Color(red: 0.13, green: 0.08, blue: 0.02))
+
+    // Status colors stay clear of the accent hue.
     static let good = Color(red: 0.20, green: 0.62, blue: 0.40)
-    static let caution = Color(red: 0.88, green: 0.58, blue: 0.14)
+    static let caution = Color(red: 0.80, green: 0.66, blue: 0.10)
     static let bad = Color(red: 0.80, green: 0.28, blue: 0.28)
 
-    static let cardRadius: CGFloat = 14
+    static let cardRadius: CGFloat = 20
+    static let controlRadius: CGFloat = 12
     static let pagePadding: CGFloat = 28
+
+    /// New York for screen titles and large moments.
+    static func title(_ style: Font.TextStyle = .title2) -> Font {
+        .system(style, design: .serif, weight: .semibold)
+    }
 }
 
 struct StatusPill: View {
@@ -20,9 +40,20 @@ struct StatusPill: View {
             Circle().fill(color).frame(width: 8, height: 8)
             Text(text).font(.callout.weight(.medium))
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
         .background(Capsule().fill(color.opacity(0.14)))
+    }
+}
+
+struct Chip: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.caption.weight(.medium))
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            .background(Capsule().fill(.quaternary))
     }
 }
 
@@ -53,8 +84,36 @@ struct Banner: View {
             Text(text).font(.callout)
             Spacer(minLength: 0)
         }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(color.opacity(0.10)))
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: Theme.controlRadius, style: .continuous).fill(color.opacity(0.10)))
+    }
+}
+
+/// Segmented control drawn as pills.
+struct PillPicker<Value: Hashable>: View {
+    let options: [(label: String, value: Value)]
+    @Binding var selection: Value
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(options.indices, id: \.self) { index in
+                let option = options[index]
+                let selected = option.value == selection
+                Button { selection = option.value } label: {
+                    Text(option.label)
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(selected ? Theme.onAccent : .primary)
+                        .padding(.horizontal, 14).padding(.vertical, 6)
+                        .frame(maxWidth: .infinity)
+                        .background(Capsule().fill(selected ? Theme.accent : .clear))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        .padding(3)
+        .background(Capsule().fill(.quaternary))
     }
 }
 
@@ -75,19 +134,35 @@ extension ButtonStyle where Self == AccentButtonStyle {
     static var accentFilled: AccentButtonStyle { AccentButtonStyle() }
 }
 
+extension ButtonStyle where Self == CircleToolbarButtonStyle {
+    static var circleToolbar: CircleToolbarButtonStyle { CircleToolbarButtonStyle() }
+}
+
 struct AccentButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.callout.weight(.semibold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 16)
+            .foregroundStyle(Theme.onAccent)
+            .padding(.horizontal, 18)
             .padding(.vertical, 8)
             .background(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(Theme.accent.opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.35))
+                Capsule().fill(Theme.accent.opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.35))
             )
+    }
+}
+
+struct CircleToolbarButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .labelStyle(.iconOnly)
+            .frame(width: 32, height: 32)
+            .background(Circle().fill(.quaternary.opacity(configuration.isPressed ? 2 : 1)))
+            .contentShape(Circle())
+            .opacity(isEnabled ? 1 : 0.4)
     }
 }
 
