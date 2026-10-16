@@ -9,7 +9,12 @@ struct CalendarColor: Identifiable, Equatable, Sendable {
     let light: UInt32
     let dark: UInt32
 
-    var color: Color { Color(light: Self.color(light), dark: Self.color(dark)) }
+    /// Palette colors are built once; a dynamic color costs more than it looks per event block.
+    var color: Color { Self.built[id] ?? make() }
+
+    private static let built = Dictionary(uniqueKeysWithValues: palette.map { ($0.id, $0.make()) })
+
+    private func make() -> Color { Color(light: Self.color(light), dark: Self.color(dark)) }
 
     private static func color(_ hex: UInt32) -> Color {
         Color(

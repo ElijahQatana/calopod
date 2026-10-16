@@ -3,8 +3,9 @@ import SwiftUI
 extension Color {
     /// Resolves per appearance, so one token covers light and dark.
     init(light: Color, dark: Color) {
+        let light = NSColor(light), dark = NSColor(dark)
         self.init(nsColor: NSColor(name: nil) { appearance in
-            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(dark) : NSColor(light)
+            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
         })
     }
 }
