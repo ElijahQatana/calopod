@@ -1,4 +1,5 @@
 import CalopodCommands
+import CalopodSync
 import SwiftUI
 
 struct InboxScreen: View {
@@ -145,14 +146,22 @@ enum InboxText {
         return "\(entry.startsAt.formatted(date: .omitted, time: .shortened)) to \(entry.endsAt.formatted(date: .omitted, time: .shortened))"
     }
 
-    static func reasons(_ entry: InboxEntry) -> [String] {
-        entry.reasons.map {
-            switch $0 {
-            case .needsResponse: "Needs RSVP"
-            case .maybe: "Maybe"
-            case .changedAfterResponse: entry.changeIsUncertain ? "May have changed" : "Changed"
-            case .conflict: entry.overlapCount == 1 ? "1 overlap" : "\(entry.overlapCount) overlaps"
-            }
+    static func label(_ reason: InboxAttentionReason, _ entry: InboxEntry) -> String {
+        switch reason {
+        case .needsResponse: "Needs RSVP"
+        case .maybe: "Maybe"
+        case .changedAfterResponse: entry.changeIsUncertain ? "May have changed" : "Changed"
+        case .conflict: entry.overlapCount == 1 ? "1 overlap" : "\(entry.overlapCount) overlaps"
+        }
+    }
+
+    static func reasons(_ entry: InboxEntry) -> [String] { entry.reasons.map { label($0, entry) } }
+
+    static func tint(_ reason: InboxAttentionReason) -> Color {
+        switch reason {
+        case .needsResponse: Theme.accent
+        case .conflict: Theme.bad
+        case .maybe, .changedAfterResponse: Theme.caution
         }
     }
 

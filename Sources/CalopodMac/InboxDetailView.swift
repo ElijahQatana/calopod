@@ -13,7 +13,7 @@ struct InboxDetailView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(entry.title).font(Theme.title(.title3))
             HStack(spacing: 8) {
-                ForEach(InboxText.reasons(entry), id: \.self) { StatusPill(text: $0, color: InboxText.tint(entry)) }
+                ForEach(entry.reasons, id: \.self) { StatusPill(text: InboxText.label($0, entry), color: InboxText.tint($0)) }
             }
             facts
             VStack(alignment: .leading, spacing: 6) {
