@@ -313,7 +313,7 @@ public struct ConflictResolutionService: Sendable {
         )
     }
 
-    private static func reasonText(_ reasons: [RSVPUnavailableReason]) -> String {
+    static func reasonText(_ reasons: [RSVPUnavailableReason]) -> String {
         if reasons.contains(.providerReadOnly) {
             return "Calopod reads this calendar through your Mac. Reply in the Calendar app."
         }
