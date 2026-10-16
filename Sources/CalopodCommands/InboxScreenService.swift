@@ -154,7 +154,6 @@ public struct InboxScreenService: Sendable {
             snapshot: snapshot, focusedKey: id, settings: try settings ?? state.inboxContextSettings(),
             freshnessCutoff: freshnessCutoff)
         let focused = context.focused.event
-        let overlapping = Set(context.focusedConflicts.flatMap { [$0.pair.first, $0.pair.second] })
         let choices = context.choices.first { $0.sourceKeyHash == id }
             ?? InboxCalendarContextBuilder.choices(for: context.focused, snapshot: snapshot)
         let replies = choices.choices.compactMap(Self.reply)
@@ -162,13 +161,7 @@ public struct InboxScreenService: Sendable {
         return InboxDetail(
             entry: entry(row, in: snapshot),
             windowStart: context.visibleWindow.start, windowEnd: context.visibleWindow.end,
-            context: context.rows.map {
-                InboxContextEntry(
-                    id: $0.event.event.sourceKeyHash, title: $0.event.event.title ?? "Untitled event",
-                    calendarID: $0.event.event.calendarBindingID,
-                    startsAt: $0.visibleInterval.start, endsAt: $0.visibleInterval.end, isFocused: $0.isFocused,
-                    overlapsFocused: $0.event.event.sourceKeyHash != id && overlapping.contains($0.event.event.sourceKeyHash))
-            },
+            context: Self.contextEntries(context, focusedKey: id),
             replies: replies,
             replyNote: replies.isEmpty
                 ? ConflictResolutionService.reasonText(choices.unavailableReasons)
@@ -227,19 +220,35 @@ public struct InboxScreenService: Sendable {
     // MARK: Helpers
 
     private func entry(_ row: InboxAttentionRow, in snapshot: InboxContextSnapshot) -> InboxEntry {
-        let event = row.item.event
+        Self.entry(row.item.event, observation: row.item.observation, source: row.source, reasons: row.reasons,
+                   changeIsUncertain: row.changeTiming == .uncertain, overlapCount: row.conflicts.count)
+    }
+
+    static func entry(_ event: StoredNormalizedInstance, observation: InboxObservation?, source: InboxContextSource,
+                      reasons: [InboxAttentionReason], changeIsUncertain: Bool, overlapCount: Int) -> InboxEntry {
         let organizer = event.organizer.flatMap { $0.name ?? $0.emailAddress }
         return InboxEntry(
             id: event.sourceKeyHash,
-            revisionID: InboxCLI.id(event.sourceKeyHash, row.item.observation?.revision ?? 1),
+            revisionID: InboxCLI.id(event.sourceKeyHash, observation?.revision ?? 1),
             title: event.title?.isEmpty == false ? event.title! : "Untitled event",
             startsAt: event.startsAt, endsAt: event.endsAt, isAllDay: event.isAllDay,
             calendarID: event.calendarBindingID,
-            calendarName: row.source.calendarLabel ?? row.source.connectionLabel ?? "Unknown calendar",
+            calendarName: source.calendarLabel ?? source.connectionLabel ?? "Unknown calendar",
             organizer: organizer, location: event.location,
-            response: event.currentUserResponse.state, reasons: row.reasons,
-            changeIsUncertain: row.changeTiming == .uncertain,
-            overlapCount: row.conflicts.count)
+            response: event.currentUserResponse.state, reasons: reasons,
+            changeIsUncertain: changeIsUncertain, overlapCount: overlapCount)
+    }
+
+    /// The strip of surrounding events. `focusedKey` is the one being looked at.
+    static func contextEntries(_ context: InboxCalendarContext, focusedKey: String) -> [InboxContextEntry] {
+        let overlapping = Set(context.focusedConflicts.flatMap { [$0.pair.first, $0.pair.second] })
+        return context.rows.map {
+            InboxContextEntry(
+                id: $0.event.event.sourceKeyHash, title: $0.event.event.title ?? "Untitled event",
+                calendarID: $0.event.event.calendarBindingID,
+                startsAt: $0.visibleInterval.start, endsAt: $0.visibleInterval.end, isFocused: $0.isFocused,
+                overlapsFocused: $0.event.event.sourceKeyHash != focusedKey && overlapping.contains($0.event.event.sourceKeyHash))
+        }
     }
 
     private func label(of bindingID: String, in snapshot: InboxContextSnapshot) -> String {
