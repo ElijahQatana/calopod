@@ -15,6 +15,7 @@ final class ServiceModel {
     private(set) var notice: String?
     private(set) var lastRunSummary: String?
     private(set) var pendingPreview: SyncPreview?
+    private(set) var health: HealthReport?
     private(set) var registration: ServiceRegistration.State = .unavailable
 
     private let service = AgentControlService()
@@ -46,11 +47,12 @@ final class ServiceModel {
     func refresh() async {
         let service = service
         let result = await Task.detached {
-            (try? service.status(), try? service.overview())
+            (try? service.status(), try? service.overview(), try? service.health())
         }.value
         if busyAction == nil {
             status = result.0
             overview = result.1
+            health = result.2
             registration = registrar.state()
         }
     }
