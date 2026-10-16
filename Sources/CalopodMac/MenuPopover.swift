@@ -77,17 +77,7 @@ struct MenuPopover: View {
         .onTapGesture { open(.calendar) }
     }
 
-    private var waitingCard: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "envelope.badge").foregroundStyle(Theme.accent)
-            Text(inbox.waiting == 1 ? "1 invitation waiting" : "\(inbox.waiting) invitations waiting")
-                .font(.callout.weight(.medium))
-            Spacer(minLength: 0)
-            Button("Review") { openInbox(.needsRSVP) }.buttonStyle(.accentFilled)
-        }
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: Theme.controlRadius, style: .continuous).fill(Theme.accent.opacity(0.12)))
-    }
+    private var waitingCard: some View { WaitingCard(count: inbox.waiting) { openInbox(.needsRSVP) } }
 
     private func row(_ title: String, _ symbol: String, count: Int?, action: @escaping () -> Void) -> some View {
         Button(action: action) {
@@ -135,5 +125,23 @@ struct MenuPopover: View {
         case "failed", "stopped": Theme.bad
         default: .secondary
         }
+    }
+}
+
+struct WaitingCard: View {
+    let count: Int
+    let review: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "envelope.badge").foregroundStyle(Theme.accent)
+            Text(count == 1 ? "1 invitation waiting" : "\(count) invitations waiting")
+                .font(.callout.weight(.medium))
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Button("Review", action: review).buttonStyle(.accentFilled).fixedSize()
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: Theme.controlRadius, style: .continuous).fill(Theme.accent.opacity(0.12)))
     }
 }
