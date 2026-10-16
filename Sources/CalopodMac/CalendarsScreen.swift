@@ -32,23 +32,7 @@ struct CalendarsScreen: View {
             ForEach(model.snapshot?.connections ?? []) { connection in
                 Section {
                     ForEach(connection.warnings, id: \.self) { Banner(kind: .caution, text: $0) }
-                    ForEach(connection.calendars) { calendar in
-                        Toggle(
-                            isOn: Binding(
-                                get: { calendar.isSelected },
-                                set: { value in Task { await model.setSelected(calendar.id, value) } }
-                            )
-                        ) {
-                            HStack(spacing: 8) {
-                                CalendarColorDot(calendarID: calendar.id, colors: colors)
-                                Text(calendar.name)
-                                if calendar.isReadOnly {
-                                    Text("read-only").font(.caption).foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                        .disabled(model.isBusy)
-                    }
+                    CalendarList(connection: connection, model: model, colors: colors)
                 } header: {
                     HStack {
                         Label(connection.label, systemImage: Self.symbol(connection.provider))
@@ -72,11 +56,13 @@ struct CalendarsScreen: View {
         .formStyle(.grouped)
         .task { await model.reload() }
         .onChange(of: model.snapshot) { _, snapshot in
-            colors.assignMissing(to: (snapshot?.connections ?? []).flatMap { connection in
-                connection.calendars.map {
-                    CalendarColorSource(id: $0.id, providerColor: $0.providerColor, provider: connection.provider)
-                }
-            })
+            colors.assignMissing(
+                to: (snapshot?.connections ?? []).flatMap { connection in
+                    connection.calendars.map {
+                        CalendarColorSource(id: $0.id, providerColor: $0.providerColor, provider: connection.provider)
+                    }
+                },
+                ignoring: model.aliases.ignored)
         }
     }
 

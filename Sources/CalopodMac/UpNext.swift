@@ -17,8 +17,10 @@ enum UpNext {
     }
 
     /// Calendars whose copy is old or missing, so the list above may be incomplete.
-    static func staleCalendars(in schedule: CalendarSchedule?) -> [String] {
-        (schedule?.calendars ?? []).filter { $0.freshness != .current }.map(\.name)
+    static func staleCalendars(
+        in schedule: CalendarSchedule?, name: (ScheduleCalendar) -> String = { $0.name }
+    ) -> [String] {
+        (schedule?.calendars ?? []).filter { $0.freshness != .current }.map(name)
     }
 
     /// Text beside the menu bar icon. Nothing when no invitation is waiting.

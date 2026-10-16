@@ -7,6 +7,7 @@ struct EventInspector: View {
     let event: ScheduleEvent
     let calendar: ScheduleCalendar?
     let colors: CalendarColors
+    private let aliases = CalendarAliases.shared
     let close: () -> Void
 
     var body: some View {
@@ -56,7 +57,7 @@ struct EventInspector: View {
             row("Calendar") {
                 HStack(spacing: 6) {
                     Circle().fill(colors.color(for: event.calendarID).color).frame(width: 9, height: 9)
-                    Text([calendar?.name, calendar?.account].compactMap { $0 }.joined(separator: " · "))
+                    Text([calendar.map { aliases.name(for: $0.id, real: $0.name) }, calendar?.account].compactMap { $0 }.joined(separator: " · "))
                 }
             }
             if let organizer = event.organizer { row("Organizer") { Text(organizer) } }
@@ -66,7 +67,7 @@ struct EventInspector: View {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(event.copiedTo.indices, id: \.self) { index in
                             let copy = event.copiedTo[index]
-                            Text("\(copy.calendarName) · \(copy.fullDetails ? "full details" : "busy only")")
+                            Text("\(aliases.name(for: copy.calendarID, real: copy.calendarName)) · \(copy.fullDetails ? "full details" : "busy only")")
                         }
                     }
                 }

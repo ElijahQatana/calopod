@@ -6,6 +6,7 @@ struct InboxDetailView: View {
     let detail: InboxDetail
     let colors: CalendarColors
     let entries: [InboxEntry]
+    private let aliases = CalendarAliases.shared
 
     private var entry: InboxEntry { detail.entry }
 
@@ -40,7 +41,7 @@ struct InboxDetailView: View {
                 Text("Calendar").foregroundStyle(.secondary)
                 HStack(spacing: 6) {
                     Circle().fill(colors.color(for: entry.calendarID).color).frame(width: 9, height: 9)
-                    Text(entry.calendarName)
+                    Text(aliases.name(for: entry.calendarID, real: entry.calendarName))
                 }
             }
         }

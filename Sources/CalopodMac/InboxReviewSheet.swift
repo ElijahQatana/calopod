@@ -7,6 +7,7 @@ struct InboxReviewSheet: View {
     let model: InboxReviewModel
     let colors: CalendarColors
     let close: () -> Void
+    private let aliases = CalendarAliases.shared
 
     @FocusState private var focused: Bool
     @State private var bodyHeight: CGFloat = 0
@@ -136,6 +137,12 @@ struct InboxReviewSheet: View {
         .controlSize(.large)
     }
 
+    /// The account and calendar, with the calendar's local name when there is one.
+    private func account(_ card: InboxReviewCardInfo) -> String {
+        guard let alias = aliases.alias(for: card.entry.calendarID) else { return card.account }
+        return "\(card.connection) / \(alias)"
+    }
+
     private func cardView(_ card: InboxReviewCardInfo) -> some View {
         let entry = card.entry
         return VStack(alignment: .leading, spacing: 14) {
@@ -147,7 +154,7 @@ struct InboxReviewSheet: View {
                 fact("When", entry.startsAt.formatted(.dateTime.weekday(.abbreviated).month().day()) + ", " + InboxText.time(entry))
                 if let place = entry.location, !place.isEmpty { fact("Where", place) }
                 if let organizer = entry.organizer { fact("Organizer", organizer) }
-                fact("Calendar", card.account)
+                fact("Calendar", account(card))
             }
             .font(.callout)
             VStack(alignment: .leading, spacing: 6) {
@@ -188,7 +195,7 @@ struct InboxReviewSheet: View {
                 fact("Event", card.entry.title)
                 fact("Told", card.organizer ?? "The organizer")
                 fact("Answer", InboxReviewModel.name(reply))
-                fact("Sent through", card.account)
+                fact("Sent through", account(card))
                 let overlaps = card.preview(for: reply)?.overlaps ?? []
                 fact("Overlaps after", overlaps.isEmpty ? "None" : overlaps.joined(separator: ", "))
             }

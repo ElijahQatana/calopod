@@ -83,9 +83,9 @@ struct ArmsScreen: View {
 
     private func route(_ arm: SetupArm) -> some View {
         LabeledContent {
-            Text(arm.targetName).fontWeight(.medium)
+            Text(model.targetName(of: arm)).fontWeight(.medium)
         } label: {
-            Text(arm.sourceNames.joined(separator: ", ")).lineLimit(2)
+            Text(model.sourceNames(of: arm).joined(separator: ", ")).lineLimit(2)
         }
     }
 
@@ -111,10 +111,12 @@ struct ArmsScreen: View {
 
     @ViewBuilder
     private func picker(sources: Binding<Set<String>>, target: Binding<String?>) -> some View {
-        if model.selectedCalendars.isEmpty {
+        // Ignored calendars keep syncing but are not offered for new arms.
+        let choices = model.selectedCalendars.filter { !model.aliases.isIgnored($0.id) }
+        if choices.isEmpty {
             Banner(kind: .info, text: "Choose at least one calendar on the Calendars screen first.")
         }
-        ForEach(model.selectedCalendars, id: \.id) { calendar in
+        ForEach(choices, id: \.id) { calendar in
             Toggle(
                 calendar.title,
                 isOn: Binding(
@@ -126,7 +128,7 @@ struct ArmsScreen: View {
         }
         Picker("Copy into", selection: target) {
             Text("Choose a calendar").tag(String?.none)
-            ForEach(model.selectedCalendars.filter { !$0.isReadOnly }, id: \.id) {
+            ForEach(choices.filter { !$0.isReadOnly }, id: \.id) {
                 Text($0.title).tag(String?.some($0.id))
             }
         }

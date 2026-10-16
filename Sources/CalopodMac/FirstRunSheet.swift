@@ -46,11 +46,13 @@ struct FirstRunSheet: View {
             await setup.reload()
         }
         .onChange(of: setup.snapshot) { _, snapshot in
-            colors.assignMissing(to: (snapshot?.connections ?? []).flatMap { connection in
-                connection.calendars.map {
-                    CalendarColorSource(id: $0.id, providerColor: $0.providerColor, provider: connection.provider)
-                }
-            })
+            colors.assignMissing(
+                to: (snapshot?.connections ?? []).flatMap { connection in
+                    connection.calendars.map {
+                        CalendarColorSource(id: $0.id, providerColor: $0.providerColor, provider: connection.provider)
+                    }
+                },
+                ignoring: setup.aliases.ignored)
         }
     }
 
@@ -154,7 +156,8 @@ struct FirstRunSheet: View {
             card {
                 Label(connection.label, systemImage: "calendar").font(.headline)
                 ForEach(connection.warnings, id: \.self) { Banner(kind: .caution, text: $0) }
-                ForEach(connection.calendars) { calendar in
+                // Ignored calendars are left out unless they are already chosen, so nothing chosen is hidden.
+                ForEach(connection.calendars.filter { !setup.aliases.isIgnored($0.id) || $0.isSelected }) { calendar in
                     Toggle(
                         isOn: Binding(
                             get: { calendar.isSelected },
@@ -163,7 +166,7 @@ struct FirstRunSheet: View {
                     ) {
                         HStack(spacing: 8) {
                             CalendarColorDot(calendarID: calendar.id, colors: colors)
-                            Text(calendar.name)
+                            Text(setup.aliases.name(for: calendar))
                             if calendar.isReadOnly {
                                 Text("read-only").font(.caption).foregroundStyle(.secondary)
                             }
@@ -213,7 +216,7 @@ struct FirstRunSheet: View {
             Text(title).font(.headline)
             Text(detail).font(.callout).foregroundStyle(.secondary)
             if let existing {
-                LabeledContent("Copies into") { Text(existing.targetName).fontWeight(.medium) }
+                LabeledContent("Copies into") { Text(setup.targetName(of: existing)).fontWeight(.medium) }
             } else {
                 Picker("Copies into", selection: target) {
                     Text("Choose a calendar").tag(String?.none)

@@ -140,14 +140,15 @@ final class CalendarColors {
 
     /// Gives every calendar without a color one, in the order listed. Mac calendars start with their
     /// Calendar app color; the rest get a suggestion. A color someone chose is never replaced.
-    func assignMissing(to calendars: [CalendarColorSource]) {
+    /// Ignored calendars do not count when picking a suggestion, so they do not use up a color.
+    func assignMissing(to calendars: [CalendarColorSource], ignoring ignored: Set<String> = []) {
         var changed = false
         for source in calendars {
             sources[source.id] = source
             guard choices[source.id].flatMap(CalendarColor.named) == nil else { continue }
             let isMac = source.provider == "eventkit"
             choices[source.id] = (isMac ? source.matched : nil)?.id
-                ?? CalendarColor.suggestion(avoiding: Array(choices.values)).id
+                ?? CalendarColor.suggestion(avoiding: choices.filter { !ignored.contains($0.key) }.map(\.value)).id
             changed = true
         }
         if changed { save() }

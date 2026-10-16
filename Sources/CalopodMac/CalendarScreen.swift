@@ -22,9 +22,11 @@ struct CalendarScreen: View {
             // Reads the local copy only, so it shows at once even while a sync is running.
             while !Task.isCancelled {
                 await model.reload()
-                colors.assignMissing(to: model.calendars.map {
-                    CalendarColorSource(id: $0.id, providerColor: $0.providerColor, provider: $0.provider)
-                })
+                colors.assignMissing(
+                    to: model.calendars.map {
+                        CalendarColorSource(id: $0.id, providerColor: $0.providerColor, provider: $0.provider)
+                    },
+                    ignoring: model.aliases.ignored)
                 try? await Task.sleep(for: .seconds(30))
             }
         }
@@ -78,9 +80,9 @@ struct CalendarScreen: View {
                 }
                 .background(Capsule().fill(.quaternary))
             }
-            if !model.calendars.isEmpty {
+            if !model.chipCalendars.isEmpty {
                 FlowLayout(spacing: 6) {
-                    ForEach(model.calendars) { calendar in chip(calendar) }
+                    ForEach(model.chipCalendars) { calendar in chip(calendar) }
                     copiesChip
                 }
             }
@@ -116,11 +118,12 @@ struct CalendarScreen: View {
     private func chip(_ calendar: ScheduleCalendar) -> some View {
         let shown = !model.hidden.contains(calendar.id)
         let color = colors.color(for: calendar.id).color
+        let name = model.aliases.name(for: calendar.id, real: calendar.name)
         return Button { model.toggle(calendar.id) } label: {
             HStack(spacing: 6) {
                 Circle().fill(shown ? color : .clear).frame(width: 9, height: 9)
                     .overlay(Circle().strokeBorder(color, lineWidth: 1.5))
-                Text(calendar.name).font(.system(size: 12)).lineLimit(1)
+                Text(name).font(.system(size: 12)).lineLimit(1)
             }
             .padding(.horizontal, 11).padding(.vertical, 4)
             .background(Capsule().fill(.quaternary))
@@ -128,7 +131,7 @@ struct CalendarScreen: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(calendar.name)
+        .accessibilityLabel(name)
         .accessibilityValue(shown ? "Shown" : "Hidden")
         .help(shown ? "Hide in this view" : "Show in this view")
     }
