@@ -38,6 +38,8 @@ public struct SetupArm: Identifiable, Equatable, Sendable {
     public let rule: ArmRuleMode
     public let sourceNames: [String]
     public let targetName: String
+    public let sourceIDs: [String]
+    public let targetID: String
 }
 
 public struct SetupSnapshot: Equatable, Sendable {
@@ -97,7 +99,9 @@ public struct SetupService: Sendable {
                 isEnabled: arm.isEnabled,
                 rule: arm.ruleMode,
                 sourceNames: arm.sourceBindingIDs.map { namesByBinding[$0] ?? "Unknown calendar" },
-                targetName: namesByBinding[arm.targetBindingID] ?? "Unknown calendar"
+                targetName: namesByBinding[arm.targetBindingID] ?? "Unknown calendar",
+                sourceIDs: arm.sourceBindingIDs,
+                targetID: arm.targetBindingID
             )
         }
         return SetupSnapshot(connections: connections, arms: arms)

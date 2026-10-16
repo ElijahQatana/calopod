@@ -51,7 +51,7 @@ struct CalendarScheduleServiceTests {
         #expect(byID["a"]?.overlaps == ["Event b"])
         #expect(byID["c"]?.overlaps == [])
         #expect(byID["a"]?.replies == [.yes, .no, .maybe])
-        #expect(byID["c"]?.copiedTo == [ScheduleCopy(calendarName: "Main", fullDetails: false)])
+        #expect(byID["c"]?.copiedTo == [ScheduleCopy(calendarName: "Main", fullDetails: false, calendarID: "main")])
         let copy = try #require(byID["copy:main:c"])
         #expect(copy.isCopy && copy.title == "Busy" && copy.calendarID == "main")
         #expect(copy.replies.isEmpty && copy.replyUnavailableReason != nil)
