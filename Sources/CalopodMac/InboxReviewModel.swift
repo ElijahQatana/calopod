@@ -16,7 +16,10 @@ final class InboxReviewModel {
         case summary
     }
 
-    private(set) var phase = Phase.start
+    private(set) var phase = Phase.start {
+        // The summary has its own wording, so a leftover step message goes.
+        didSet { if case .summary = phase { notice = nil } }
+    }
     private(set) var progress: InboxReviewProgress?
     /// A saved review that can be continued.
     private(set) var saved: InboxReviewProgress?
