@@ -30,16 +30,19 @@ final class CalendarModel {
     @ObservationIgnored private let load: @Sendable () throws -> CalendarSchedule
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored let aliases: CalendarAliases
 
     init(
         calendar: Calendar = .current,
         now: @escaping () -> Date = Date.init,
         defaults: UserDefaults = .standard,
+        aliases: CalendarAliases = .shared,
         load: @escaping @Sendable () throws -> CalendarSchedule = { try CalendarScheduleService().schedule() }
     ) {
         self.calendar = calendar
         self.now = now
         self.defaults = defaults
+        self.aliases = aliases
         self.load = load
         showCopies = defaults.object(forKey: Self.showCopiesKey) as? Bool ?? true
         anchor = now()
@@ -60,8 +63,13 @@ final class CalendarModel {
 
     var calendars: [ScheduleCalendar] { schedule?.calendars ?? [] }
 
+    /// Calendars offered as chips. Ignored ones are left out and their events are not drawn.
+    var chipCalendars: [ScheduleCalendar] { calendars.filter { !aliases.isIgnored($0.id) } }
+
     var events: [ScheduleEvent] {
-        (schedule?.events ?? []).filter { !hidden.contains($0.calendarID) && (showCopies || !$0.isCopy) }
+        (schedule?.events ?? []).filter {
+            !hidden.contains($0.calendarID) && !aliases.isIgnored($0.calendarID) && (showCopies || !$0.isCopy)
+        }
     }
 
     var selected: ScheduleEvent? {
@@ -69,7 +77,9 @@ final class CalendarModel {
     }
 
     var notices: [String] {
-        ScheduleLayout.notices(calendars: calendars, hidden: hidden, range: range, now: now())
+        ScheduleLayout.notices(
+            calendars: chipCalendars, hidden: hidden, range: range, now: now(),
+            name: { [aliases] in aliases.name(for: $0.id, real: $0.name) })
     }
 
     func reload() async {

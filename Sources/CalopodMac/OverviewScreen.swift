@@ -188,7 +188,7 @@ struct OverviewScreen: View {
     private var nextUp: some View {
         if schedule.schedule != nil {
             let events = UpNext.today(in: schedule.schedule, now: Date())
-            let stale = UpNext.staleCalendars(in: schedule.schedule)
+            let stale = UpNext.staleCalendars(in: schedule.schedule, name: { CalendarAliases.shared.name(for: $0.id, real: $0.name) })
             Section("Next up today") {
                 if !stale.isEmpty {
                     Banner(kind: .caution, text: "\(stale.joined(separator: ", ")) is out of date, so events may be missing.")

@@ -11,17 +11,20 @@ final class SetupModel {
     private(set) var notice: String?
 
     private let service: SetupService
+    @ObservationIgnored let aliases: CalendarAliases
 
-    init(service: SetupService = SetupService()) {
+    init(service: SetupService = SetupService(), aliases: CalendarAliases = .shared) {
         self.service = service
+        self.aliases = aliases
     }
 
     var isBusy: Bool { busy != nil }
 
+    /// Every calendar that is a source, ignored or not: they all still sync.
     var selectedCalendars: [(id: String, title: String, isReadOnly: Bool)] {
         (snapshot?.connections ?? []).flatMap { connection in
             connection.calendars.filter(\.isSelected).map {
-                (id: $0.id, title: "\(connection.label) · \($0.name)", isReadOnly: $0.isReadOnly)
+                (id: $0.id, title: "\(connection.label) · \(aliases.name(for: $0))", isReadOnly: $0.isReadOnly)
             }
         }
     }
@@ -29,11 +32,27 @@ final class SetupModel {
     /// Writable calendars that are not sources, which is what calopod-setup offers as targets.
     var targetCandidates: [(id: String, title: String)] {
         (snapshot?.connections ?? []).flatMap { connection in
-            connection.calendars.filter { !$0.isSelected && !$0.isReadOnly }.map {
-                (id: $0.id, title: "\(connection.label) · \($0.name)")
+            connection.calendars.filter { !$0.isSelected && !$0.isReadOnly && !aliases.isIgnored($0.id) }.map {
+                (id: $0.id, title: "\(connection.label) · \(aliases.name(for: $0))")
             }
         }
     }
+
+    /// Calendars any arm reads from or writes to.
+    var armCalendarIDs: Set<String> {
+        Set((snapshot?.arms ?? []).flatMap { $0.sourceIDs + [$0.targetID] })
+    }
+
+    func isInUse(_ calendar: SetupCalendar) -> Bool {
+        CalendarAliases.isInUse(calendar.id, selected: calendar.isSelected, armCalendars: armCalendarIDs)
+    }
+
+    /// Names for an arm's route, with local aliases applied.
+    func sourceNames(of arm: SetupArm) -> [String] {
+        zip(arm.sourceIDs, arm.sourceNames).map { aliases.name(for: $0, real: $1) }
+    }
+
+    func targetName(of arm: SetupArm) -> String { aliases.name(for: arm.targetID, real: arm.targetName) }
 
     var fullDetailsArm: SetupArm? { snapshot?.arms.first { $0.rule == .fullDetails } }
     var busyArm: SetupArm? { snapshot?.arms.first { $0.rule == .busy && $0.isEnabled } }

@@ -102,19 +102,20 @@ enum ScheduleLayout {
 
     /// One line per visible calendar whose local copy is old, missing, or does not reach the range.
     static func notices(
-        calendars: [ScheduleCalendar], hidden: Set<String>, range: Range<Date>, now: Date
+        calendars: [ScheduleCalendar], hidden: Set<String>, range: Range<Date>, now: Date,
+        name: (ScheduleCalendar) -> String = { $0.name }
     ) -> [String] {
         calendars.filter { !hidden.contains($0.id) }.compactMap { calendar in
             switch calendar.freshness {
             case .unread:
-                return "\(calendar.name) has not been read yet, so its events are missing."
+                return "\(name(calendar)) has not been read yet, so its events are missing."
             case .stale(let since):
                 let when = since.map { " It was last read \(Format.ago(max(0, Int(now.timeIntervalSince($0)))))." } ?? ""
-                return "\(calendar.name) could not be read.\(when) Events and overlaps may be missing."
+                return "\(name(calendar)) could not be read.\(when) Events and overlaps may be missing."
             case .current:
                 if let coverage = calendar.coverage,
                    coverage.lowerBound > range.lowerBound || coverage.upperBound < range.upperBound {
-                    return "\(calendar.name) has not been read for these dates, so events may be missing."
+                    return "\(name(calendar)) has not been read for these dates, so events may be missing."
                 }
                 return nil
             }

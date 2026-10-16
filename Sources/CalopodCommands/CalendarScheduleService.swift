@@ -45,8 +45,10 @@ public enum ScheduleResponse: String, Equatable, Sendable {
 public struct ScheduleCopy: Equatable, Sendable {
     public let calendarName: String
     public let fullDetails: Bool
+    public let calendarID: String
 
-    public init(calendarName: String, fullDetails: Bool) {
+    public init(calendarName: String, fullDetails: Bool, calendarID: String = "") {
+        self.calendarID = calendarID
         self.calendarName = calendarName
         self.fullDetails = fullDetails
     }
@@ -182,7 +184,7 @@ public struct CalendarScheduleService: Sendable {
                 response: Self.response(event.currentUserResponse.state),
                 overlaps: overlapping[event.sourceKeyHash] ?? [],
                 changedSinceViewed: item.observation.map { $0.revision > max($0.acknowledgedRevision ?? 0, 1) } ?? false,
-                copiedTo: targets.map { ScheduleCopy(calendarName: calendarName($0.binding), fullDetails: $0.fullDetails) },
+                copiedTo: targets.map { ScheduleCopy(calendarName: calendarName($0.binding), fullDetails: $0.fullDetails, calendarID: $0.binding) },
                 replies: replies,
                 replyUnavailableReason: replies.isEmpty ? ConflictResolutionService.reasonText(choices.unavailableReasons) : nil
             ))
