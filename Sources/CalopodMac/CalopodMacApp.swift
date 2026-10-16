@@ -7,6 +7,7 @@ struct CalopodMacApp: App {
     @State private var setup = SetupModel()
     @State private var conflicts = ConflictModel()
     @State private var inbox = InboxModel()
+    @State private var schedule = CalendarModel()
     @State private var navigation = AppNavigation()
     @State private var sidebar = SidebarState()
 
@@ -20,10 +21,9 @@ struct CalopodMacApp: App {
         // Opens at launch and on reopen, so launching is visible.
         Window("Calopod", id: "home") {
             MainWindow(navigation: navigation, sidebar: sidebar, service: service, setup: setup, conflicts: conflicts, inbox: inbox)
-                .task {
-                    await conflicts.reload()
-                    await inbox.reload()
-                }
+                .environment(inbox)
+                .environment(schedule)
+                .task { await conflicts.reload() }
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 980, height: 660)
@@ -35,10 +35,23 @@ struct CalopodMacApp: App {
         }
 
         MenuBarExtra {
-            MenuPopover(model: service, navigation: navigation)
+            MenuPopover(model: service, navigation: navigation, inbox: inbox, schedule: schedule)
         } label: {
-            Image(nsImage: SquidMark.menuBarImage(alert: service.menuBarAlert))
-                .opacity(service.menuBarDimmed ? 0.5 : 1)
+            HStack(spacing: 3) {
+                Image(nsImage: SquidMark.menuBarImage(alert: service.menuBarAlert))
+                if let text = UpNext.menuBarText(waiting: inbox.waiting) {
+                    Text(text).monospacedDigit()
+                }
+            }
+            .opacity(service.menuBarDimmed ? 0.5 : 1)
+            // Reads the local copy only, so the count stays current with the window closed.
+            .task {
+                while !Task.isCancelled {
+                    await inbox.reload()
+                    await schedule.reload()
+                    try? await Task.sleep(for: .seconds(30))
+                }
+            }
         }
         .menuBarExtraStyle(.window)
     }
