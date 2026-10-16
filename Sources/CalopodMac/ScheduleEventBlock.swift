@@ -66,14 +66,14 @@ struct ScheduleEventBlock: View {
     private var background: some View {
         switch treatment {
         case .copy:
-            shape.fill(Color(nsColor: .windowBackgroundColor))
+            shape.fill(Theme.pane)
                 .overlay { Hatch().clipShape(shape) }
                 .overlay(alignment: .leading) { Rectangle().fill(.tertiary).frame(width: 3) }
         case .needsRSVP:
-            shape.fill(Color(nsColor: .windowBackgroundColor))
+            shape.fill(Theme.pane)
                 .overlay { shape.inset(by: 0.75).strokeBorder(color, style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])) }
         case .tinted, .declined:
-            shape.fill(Color(nsColor: .windowBackgroundColor))
+            shape.fill(Theme.pane)
                 .overlay { shape.fill(color.opacity(0.22)) }
                 .overlay(alignment: .leading) { Rectangle().fill(color).frame(width: 3) }
         }

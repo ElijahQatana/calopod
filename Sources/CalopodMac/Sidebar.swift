@@ -48,7 +48,7 @@ struct Sidebar: View {
 
     private var brand: some View {
         HStack(spacing: 9) {
-            SquidBadge()
+            SquidBadge(size: rail ? 40 : 32)
             if !rail { Text("Calopod").font(Theme.title(.title3)) }
         }
         .padding(.horizontal, rail ? 0 : 6)
@@ -78,7 +78,7 @@ struct Sidebar: View {
                 } else {
                     Text("Setup")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.secondary)
                         .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 3)
                 }
                 ForEach(setup) { row($0) }
@@ -91,14 +91,20 @@ struct Sidebar: View {
         return term.isEmpty ? screens : screens.filter { $0.title.localizedCaseInsensitiveContains(term) }
     }
 
+    /// A capsule in the full sidebar, a rounded square sized to the icon in the rail.
+    private var rowShape: AnyShape {
+        rail ? AnyShape(RoundedRectangle(cornerRadius: 14, style: .continuous)) : AnyShape(Capsule())
+    }
+
     private func row(_ screen: Screen) -> some View {
         let selected = navigation.selection == screen
         let count = screen == .inbox ? inboxCount : 0
         return Button { navigation.selection = screen } label: {
             HStack(spacing: 10) {
                 Image(systemName: screen.symbol)
-                    .frame(width: 20)
-                    .foregroundStyle(selected ? Theme.onAccent : .secondary)
+                    .font(rail ? .system(size: 22) : nil)
+                    .frame(width: rail ? 28 : 20)
+                    .foregroundStyle(selected ? Theme.onAccent : Color.primary.opacity(0.62))
                     .overlay(alignment: .topTrailing) {
                         if rail && count > 0 { dot(selected: selected).offset(x: 5, y: -3) }
                     }
@@ -111,10 +117,10 @@ struct Sidebar: View {
             .font(.callout.weight(selected ? .semibold : .regular))
             .foregroundStyle(selected ? Theme.onAccent : .primary)
             .padding(.horizontal, rail ? 0 : 12)
-            .frame(width: rail ? 44 : nil, height: rail ? 40 : 34)
+            .frame(width: rail ? 44 : nil, height: rail ? 44 : 34)
             .frame(maxWidth: rail ? nil : .infinity, alignment: .leading)
-            .background(Capsule().fill(selected ? Theme.accent : .clear))
-            .contentShape(Capsule())
+            .background(rowShape.fill(selected ? Theme.accent : .clear))
+            .contentShape(rowShape)
         }
         .buttonStyle(.plain)
         .help(screen.title)
@@ -132,12 +138,12 @@ struct Sidebar: View {
 
     private func dot(selected: Bool) -> some View {
         Circle().fill(selected ? Theme.onAccent : Theme.bad).frame(width: 9, height: 9)
-            .overlay(Circle().stroke(selected ? Theme.accent : Color(nsColor: .windowBackgroundColor), lineWidth: 2))
+            .overlay(Circle().stroke(selected ? Theme.accent : Theme.pane, lineWidth: 2))
     }
 
     private var status: some View {
         HStack(spacing: 8) {
-            Circle().fill(statusColor).frame(width: 8, height: 8)
+            Circle().fill(statusColor).frame(width: rail ? 10 : 8, height: rail ? 10 : 8)
             if !rail { Text(statusText).font(.callout).foregroundStyle(.secondary) }
             if !rail { Spacer(minLength: 0) }
         }
@@ -185,12 +191,14 @@ struct SidebarToggle: View {
 
 /// The app mark on an accent tile, like the app icon.
 private struct SquidBadge: View {
+    let size: CGFloat
+
     var body: some View {
         RoundedRectangle(cornerRadius: 9, style: .continuous)
             .fill(Theme.accent)
-            .frame(width: 32, height: 32)
+            .frame(width: size, height: size)
             .overlay {
-                Image(nsImage: SquidMark.menuBarImage(height: 20))
+                Image(nsImage: SquidMark.menuBarImage(height: size * 0.625))
                     .renderingMode(.template)
                     .foregroundStyle(Theme.onAccent)
             }
@@ -204,7 +212,9 @@ private struct GlassPanel: ViewModifier {
     func body(content: Content) -> some View {
         #if compiler(>=6.2)
         if #available(macOS 26, *) {
-            content.glassEffect(.regular, in: shape)
+            content
+                .glassEffect(.regular.tint(Theme.glassFill), in: shape)
+                .overlay(shape.strokeBorder(Theme.glassEdge, lineWidth: 1))
         } else {
             plain(content)
         }
@@ -215,8 +225,9 @@ private struct GlassPanel: ViewModifier {
 
     private func plain(_ content: Content) -> some View {
         content
-            .background(shape.fill(.regularMaterial))
-            .overlay(shape.strokeBorder(.separator))
+            .background(shape.fill(.ultraThinMaterial))
+            .background(shape.fill(Theme.glassFill))
+            .overlay(shape.strokeBorder(Theme.glassEdge, lineWidth: 1))
     }
 }
 
@@ -237,7 +248,6 @@ struct WindowChrome: NSViewRepresentable {
     }
 
     func updateNSView(_ view: NSView, context: Context) {
-        context.coordinator.collapsed = collapsed
         DispatchQueue.main.async { context.coordinator.apply() }
     }
 
@@ -252,11 +262,13 @@ struct WindowChrome: NSViewRepresentable {
     @MainActor
     final class Coordinator {
         weak var view: NSView?
-        var collapsed = false
         private var observers: [NSObjectProtocol] = []
 
         func apply() {
             guard let window = view?.window else { return }
+            // Let the blurred desktop show through the window.
+            window.isOpaque = false
+            window.backgroundColor = .clear
             if observers.isEmpty {
                 observe(window)
                 // Keep the search field from grabbing focus at launch.
@@ -267,21 +279,22 @@ struct WindowChrome: NSViewRepresentable {
                 let container = titlebar.superview
             else { return }
             let height = WindowChrome.barHeight
-            container.frame = NSRect(
+            let barFrame = NSRect(
                 x: 0, y: window.frame.height - height, width: window.frame.width, height: height)
-            titlebar.frame = container.bounds
+            if container.frame != barFrame { container.frame = barFrame }
+            if titlebar.frame != container.bounds { titlebar.frame = container.bounds }
 
-            // Rail: centered in the narrow panel. Expanded: near its left edge.
+            // Same spot in both states: centered in the rail, which also fits the full panel.
             let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton]
                 .compactMap { window.standardWindowButton($0) }
             let step = (buttons.dropFirst().first?.frame.minX ?? 34) - close.frame.minX
             let span = step * 2 + close.frame.width
-            let left = Sidebar.inset + (collapsed ? (Sidebar.railWidth - span) / 2 : 22)
+            let left = Sidebar.inset + (Sidebar.railWidth - span) / 2
             let top = Sidebar.inset + 10 + 16
             for (index, button) in buttons.enumerated() {
                 let origin = NSPoint(
                     x: left + step * CGFloat(index), y: height - top - button.frame.height / 2)
-                button.setFrameOrigin(origin)
+                if button.frame.origin != origin { button.setFrameOrigin(origin) }
             }
         }
 
@@ -289,6 +302,8 @@ struct WindowChrome: NSViewRepresentable {
             let names: [Notification.Name] = [
                 NSWindow.didResizeNotification, NSWindow.didEndLiveResizeNotification,
                 NSWindow.didExitFullScreenNotification, NSWindow.didBecomeKeyNotification,
+                // AppKit lays the title bar out again on its own; put the buttons back.
+                NSWindow.didUpdateNotification,
             ]
             observers = names.map { name in
                 NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) {

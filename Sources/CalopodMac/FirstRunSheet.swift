@@ -40,7 +40,7 @@ struct FirstRunSheet: View {
             footer
         }
         .frame(width: 600, height: 560)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Theme.pane)
         .task {
             progress.begin()
             await setup.reload()

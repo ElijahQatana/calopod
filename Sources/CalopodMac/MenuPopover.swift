@@ -7,6 +7,7 @@ struct MenuPopover: View {
     let inbox: InboxModel
     let schedule: CalendarModel
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -18,7 +19,10 @@ struct MenuPopover: View {
                         Text("Last synced \(Format.ago(age))").font(.caption).foregroundStyle(.secondary)
                     }
                 }
+                Spacer(minLength: 0)
             }
+            .padding(12)
+            .background(Self.card)
             if let busy = model.busyAction { BusyLine(text: busy) }
             if let notice = model.notice { Text(notice).font(.caption).foregroundStyle(Theme.bad) }
 
@@ -31,30 +35,35 @@ struct MenuPopover: View {
 
             if let status = model.status, status.installed {
                 HStack(spacing: 8) {
-                    Button("Preview sync") { open(.overview); Task { await model.previewSync() } }
+                    Button("Preview sync") { open(.overview, keepMenu: true); Task { await model.previewSync() } }
                         .buttonStyle(.accentFilled)
                         .disabled(model.isBusy)
                     if status.enabled {
                         Button(status.paused ? "Resume" : "Pause") {
                             Task { await model.setPaused(!status.paused) }
                         }
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.capsule)
+                        .controlSize(.large)
                         .disabled(model.isBusy)
                     }
                 }
             }
 
-            Divider()
-            row("Open Calopod", "macwindow", count: nil) { open(.overview) }
-            row("Calendar", "calendar.day.timeline.left", count: todayCount) { open(.calendar) }
-            row("Inbox", "tray", count: inbox.count) { openInbox(.all) }
-            Divider()
-            Button("Quit Calopod") { NSApplication.shared.terminate(nil) }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .keyboardShortcut("q")
+            VStack(spacing: 2) {
+                row("Open Calopod", "macwindow", count: nil) { open(.overview) }
+                row("Calendar", "calendar.day.timeline.left", count: todayCount) { open(.calendar) }
+                row("Inbox", "tray", count: inbox.count) { openInbox(.all) }
+                row("Quit Calopod", "power", count: nil, tint: .secondary) { NSApplication.shared.terminate(nil) }
+                    .keyboardShortcut("q")
+            }
         }
-        .padding(16)
-        .frame(width: 280)
+        .padding(14)
+        .frame(width: 290)
+    }
+
+    private static var card: some View {
+        RoundedRectangle(cornerRadius: Theme.cardRadius - 4, style: .continuous).fill(Theme.group)
     }
 
     private var nextEvent: ScheduleEvent? { UpNext.events(in: schedule.schedule, from: Date()).first }
@@ -73,22 +82,19 @@ struct MenuPopover: View {
             }
             Spacer(minLength: 0)
         }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Self.card)
         .contentShape(Rectangle())
         .onTapGesture { open(.calendar) }
     }
 
     private var waitingCard: some View { WaitingCard(count: inbox.waiting) { openInbox(.needsRSVP) } }
 
-    private func row(_ title: String, _ symbol: String, count: Int?, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack {
-                Label(title, systemImage: symbol)
-                Spacer()
-                if let count, count > 0 { Text("\(count)").monospacedDigit().foregroundStyle(.secondary) }
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
+    private func row(
+        _ title: String, _ symbol: String, count: Int?, tint: Color = .primary, action: @escaping () -> Void
+    ) -> some View {
+        MenuRow(title: title, symbol: symbol, count: count, tint: tint, action: action)
     }
 
     private func openInbox(_ filter: InboxFilter) {
@@ -96,15 +102,21 @@ struct MenuPopover: View {
         show()
     }
 
-    private func open(_ screen: Screen) {
+    private func open(_ screen: Screen, keepMenu: Bool = false) {
         navigation.selection = screen
-        show()
+        show(keepMenu: keepMenu)
     }
 
-    private func show() {
+    /// Opens the window, then closes the popover unless it should stay for watching status.
+    private func show(keepMenu: Bool = false) {
         DockPresence.enter()
+        let popover = NSApp.keyWindow.flatMap { $0.title == "Calopod" ? nil : $0 }
         NSApplication.shared.activate(ignoringOtherApps: true)
         openWindow(id: "home")
+        guard !keepMenu else { return }
+        dismiss()
+        // dismiss() is not honored by every popover, so close its window as well.
+        DispatchQueue.main.async { if popover?.isVisible == true { popover?.close() } }
     }
 
     private var title: String {
@@ -142,7 +154,34 @@ struct WaitingCard: View {
             Spacer(minLength: 0)
             Button("Review", action: review).buttonStyle(.accentFilled).fixedSize()
         }
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: Theme.controlRadius, style: .continuous).fill(Theme.accent.opacity(0.12)))
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: Theme.cardRadius - 4, style: .continuous).fill(Theme.accent.opacity(0.12)))
+    }
+}
+
+/// A menu item with a rounded highlight under the pointer.
+private struct MenuRow: View {
+    let title: String
+    let symbol: String
+    let count: Int?
+    let tint: Color
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Label(title, systemImage: symbol).foregroundStyle(tint)
+                Spacer()
+                if let count, count > 0 { Text("\(count)").monospacedDigit().foregroundStyle(.secondary) }
+            }
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: Theme.controlRadius, style: .continuous)
+                    .fill(hovering ? Theme.accent.opacity(0.14) : .clear))
+            .contentShape(RoundedRectangle(cornerRadius: Theme.controlRadius, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
     }
 }

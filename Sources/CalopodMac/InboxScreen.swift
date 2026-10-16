@@ -98,9 +98,8 @@ struct InboxScreen: View {
     // MARK: List and detail
 
     private var split: some View {
-        HStack(alignment: .top, spacing: 18) {
-            list.frame(width: 270)
-            Divider()
+        HStack(alignment: .top, spacing: 20) {
+            list.frame(width: 300)
             detailPane.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
     }
@@ -111,29 +110,10 @@ struct InboxScreen: View {
             ContentUnavailableView("Nothing here", systemImage: "tray",
                                    description: Text("No events match this filter."))
         } else {
-            let days = Dictionary(grouping: entries) { Calendar.current.startOfDay(for: $0.startsAt) }
-            List(selection: Binding(get: { model.selection }, set: { model.selection = $0 })) {
-                ForEach(days.keys.sorted(), id: \.self) { day in
-                    Section(day.formatted(.dateTime.weekday(.wide).month().day())) {
-                        ForEach(days[day] ?? []) { row($0).tag($0.id as String?) }
-                    }
-                }
-            }
-            .listStyle(.sidebar)
-            .scrollContentBackground(.hidden)
+            InboxList(
+                entries: entries, colors: colors,
+                selection: Binding(get: { model.selection }, set: { model.selection = $0 }))
         }
-    }
-
-    private func row(_ entry: InboxEntry) -> some View {
-        HStack(alignment: .top, spacing: 9) {
-            Circle().fill(colors.color(for: entry.calendarID).color).frame(width: 9, height: 9).padding(.top, 5)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(entry.title).lineLimit(1)
-                Text(InboxText.time(entry)).font(.caption).foregroundStyle(.secondary)
-                InboxText.statusLine(entry).font(.caption2.weight(.medium))
-            }
-        }
-        .padding(.vertical, 2)
     }
 
     @ViewBuilder
