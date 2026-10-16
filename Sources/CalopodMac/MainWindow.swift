@@ -46,7 +46,7 @@ struct MainWindow: View {
     private var screen: some View {
         switch navigation.selection {
         case .overview: OverviewScreen(model: service, conflicts: conflicts, navigation: navigation, setup: setup)
-        case .calendar: PlaceholderScreen(screen: .calendar, detail: "Your week at a glance will appear here.")
+        case .calendar: CalendarScreen()
         case .inbox: InboxScreen(model: inbox, navigation: navigation, colors: .shared)
         case .calendars: CalendarsScreen(model: setup)
         case .arms: ArmsScreen(model: setup)
