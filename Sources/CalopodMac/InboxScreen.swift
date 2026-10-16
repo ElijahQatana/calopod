@@ -43,12 +43,12 @@ struct InboxScreen: View {
                 model.review.open(filter: filter)
                 showingReview = true
             }
+            .buttonStyle(.accentFilled)
             .disabled(model.isBusy)
             .help("Go through your inbox one event at a time")
-            Button("Refresh", systemImage: "arrow.clockwise") { Task { await model.refresh() } }
-                .buttonStyle(.circleToolbar)
-                .disabled(model.isBusy)
-                .help("Re-read your calendars. Nothing is changed.")
+            RefreshButton(busy: model.isBusy, help: "Refresh. Re-reads your calendars and changes nothing.") {
+                Task { await model.refresh() }
+            }
         }
     }
 

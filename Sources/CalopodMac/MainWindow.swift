@@ -38,7 +38,7 @@ struct MainWindow: View {
             }
             .panelFill(.card, in: shape)
             .clipShape(shape)
-            .overlay(shape.strokeBorder(Theme.paneLine))
+            .panelChrome(shape)
             .padding(.leading, Sidebar.inset)
     }
 

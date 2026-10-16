@@ -10,10 +10,13 @@ final class SetupModel {
     private(set) var busy: String?
     private(set) var notice: String?
 
-    private let service = SetupService()
+    private let service: SetupService
     @ObservationIgnored let aliases: CalendarAliases
 
-    init(aliases: CalendarAliases = .shared) { self.aliases = aliases }
+    init(service: SetupService = SetupService(), aliases: CalendarAliases = .shared) {
+        self.service = service
+        self.aliases = aliases
+    }
 
     var isBusy: Bool { busy != nil }
 
@@ -108,6 +111,19 @@ final class SetupModel {
     func setArmEnabled(_ armID: String, _ enabled: Bool) async {
         let service = service
         await run(nil) { try service.setArmEnabled(armID: armID, enabled: enabled) }
+    }
+
+    /// Returns a short message when the name is refused, nil when it was saved.
+    func renameArm(_ armID: String, to name: String) async -> String? {
+        guard busy == nil else { return "Wait for the current change to finish." }
+        let service = service
+        do {
+            try await Task.detached { try service.renameArm(armID: armID, name: name) }.value
+        } catch {
+            return service.message(for: error)
+        }
+        await reload()
+        return nil
     }
 
     func removeArm(_ armID: String) async {

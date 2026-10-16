@@ -49,7 +49,7 @@ struct Sidebar: View {
     private var brand: some View {
         HStack(spacing: 9) {
             SquidBadge(size: rail ? 40 : 32)
-            if !rail { Text("Calopod").font(Theme.title(.title3)) }
+            if !rail { Text("Calopod").font(Theme.title(.title3)).foregroundStyle(Theme.sidebarLabel) }
         }
         .padding(.horizontal, rail ? 0 : 6)
         .accessibilityElement(children: .ignore)
@@ -78,7 +78,7 @@ struct Sidebar: View {
                 } else {
                     Text("Setup")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.sidebarSecondary)
                         .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 3)
                 }
                 ForEach(setup) { row($0) }
@@ -104,7 +104,7 @@ struct Sidebar: View {
                 Image(systemName: screen.symbol)
                     .font(rail ? .system(size: 22) : nil)
                     .frame(width: rail ? 28 : 20)
-                    .foregroundStyle(selected ? Theme.onAccent : Color.primary.opacity(0.62))
+                    .foregroundStyle(selected ? Theme.onAccent : Theme.sidebarSecondary)
                     .overlay(alignment: .topTrailing) {
                         if rail && count > 0 { dot(selected: selected).offset(x: 5, y: -3) }
                     }
@@ -114,8 +114,8 @@ struct Sidebar: View {
                     if count > 0 { countBadge(count, selected: selected) }
                 }
             }
-            .font(.callout.weight(selected ? .semibold : .regular))
-            .foregroundStyle(selected ? Theme.onAccent : .primary)
+            .font(.callout.weight(selected ? .semibold : .medium))
+            .foregroundStyle(selected ? Theme.onAccent : Theme.sidebarLabel)
             .padding(.horizontal, rail ? 0 : 12)
             .frame(width: rail ? 44 : nil, height: rail ? 44 : 34)
             .frame(maxWidth: rail ? nil : .infinity, alignment: .leading)
@@ -144,7 +144,7 @@ struct Sidebar: View {
     private var status: some View {
         HStack(spacing: 8) {
             Circle().fill(statusColor).frame(width: rail ? 10 : 8, height: rail ? 10 : 8)
-            if !rail { Text(statusText).font(.callout).foregroundStyle(.secondary) }
+            if !rail { Text(statusText).font(.callout.weight(.medium)).foregroundStyle(Theme.sidebarSecondary) }
             if !rail { Spacer(minLength: 0) }
         }
         .padding(.horizontal, rail ? 0 : 10)
@@ -210,11 +210,23 @@ private struct SquidBadge: View {
 private struct GlassPanel: ViewModifier {
     private let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.controlActiveState) private var activeState
 
     func body(content: Content) -> some View {
         content
-            .background(shape.fill(reduceTransparency ? Theme.pane : Theme.glassFill))
-            .overlay(shape.strokeBorder(reduceTransparency ? Theme.paneLine : Theme.glassEdge, lineWidth: 1))
+            .background {
+                if reduceTransparency {
+                    shape.fill(Theme.pane)
+                } else if activeState == .inactive {
+                    shape.fill(Theme.sidebarInactive)
+                } else {
+                    shape.fill(
+                        LinearGradient(
+                            colors: [Theme.glassSheen, Theme.glassFill],
+                            startPoint: .topLeading, endPoint: .bottomTrailing))
+                }
+            }
+            .panelChrome(shape)
     }
 }
 

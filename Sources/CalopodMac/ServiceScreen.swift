@@ -78,6 +78,7 @@ struct ServiceScreen: View {
             Section {
                 LabeledContent("Status", value: "Installed")
                 Button("Remove", role: .destructive) { Task { await model.removeBundledService() } }
+                    .buttonStyle(.quiet)
                     .disabled(model.isBusy)
                 Hint { Text("Registered with macOS and starts when you sign in.") }
             } header: {

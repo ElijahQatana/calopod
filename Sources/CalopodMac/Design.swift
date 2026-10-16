@@ -24,8 +24,8 @@ enum Theme {
 
     // Window, panels and glass. The window tint is a warm wash over the blurred desktop.
     static let windowTint = Color(
-        light: Color(red: 1, green: 0.62, blue: 0.36).opacity(0.16),
-        dark: Color(red: 0.92, green: 0.43, blue: 0.16).opacity(0.14))
+        light: Color(red: 1, green: 0.56, blue: 0.28).opacity(0.22),
+        dark: Color(red: 0.92, green: 0.43, blue: 0.16).opacity(0.18))
     static let pane = Color(light: .white, dark: Color(red: 0x17 / 255, green: 0x14 / 255, blue: 0x12 / 255))
     static let group = Color(
         light: Color(red: 0xf6 / 255, green: 0xf4 / 255, blue: 0xf1 / 255),
@@ -33,16 +33,38 @@ enum Theme {
     static let paneLine = Color(
         light: Color(red: 0.10, green: 0.09, blue: 0.07).opacity(0.06),
         dark: Color(red: 1, green: 0.94, blue: 0.86).opacity(0.06))
-    // Panel fills over the blurred desktop. Lower opacity lets more wallpaper through.
-    // The inner fill is more opaque than the card so text on it stays readable.
+    // Panel fills over the blurred desktop. The sidebar is the most see-through, so the
+    // window blur carries its look. The card and inner fills are more opaque so lists and
+    // the calendar grid stay readable. Inactive windows flatten to near solid, which
+    // also makes them cheap to composite.
+    static let glassSheen = Color(
+        light: Color.white.opacity(0.26), dark: Color(red: 0.30, green: 0.26, blue: 0.22).opacity(0.22))
     static let glassFill = Color(
-        light: Color.white.opacity(0.24), dark: Color(red: 0.15, green: 0.125, blue: 0.11).opacity(0.30))
+        light: Color.white.opacity(0.08), dark: Color(red: 0.12, green: 0.10, blue: 0.09).opacity(0.14))
     static let cardFill = Color(
-        light: Color.white.opacity(0.46), dark: Color(red: 0x17 / 255, green: 0x14 / 255, blue: 0x12 / 255).opacity(0.44))
+        light: Color.white.opacity(0.50), dark: Color(red: 0x17 / 255, green: 0x14 / 255, blue: 0x12 / 255).opacity(0.48))
     static let innerFill = Color(
-        light: Color.white.opacity(0.55), dark: Color(red: 0x20 / 255, green: 0x1c / 255, blue: 0x19 / 255).opacity(0.58))
+        light: Color.white.opacity(0.58), dark: Color(red: 0x20 / 255, green: 0x1c / 255, blue: 0x19 / 255).opacity(0.62))
+    static let sidebarInactive = Color(
+        light: Color.white.opacity(0.80), dark: Color(red: 0x1b / 255, green: 0x17 / 255, blue: 0x15 / 255).opacity(0.86))
+    static let cardInactive = Color(
+        light: Color.white.opacity(0.94), dark: Color(red: 0x17 / 255, green: 0x14 / 255, blue: 0x12 / 255).opacity(0.94))
+    static let innerInactive = Color(
+        light: Color(red: 0xf6 / 255, green: 0xf4 / 255, blue: 0xf1 / 255).opacity(0.96),
+        dark: Color(red: 0x20 / 255, green: 0x1c / 255, blue: 0x19 / 255).opacity(0.96))
+    // Sidebar text sits straight on the wallpaper, so it uses firmer colors than the defaults.
+    static let sidebarLabel = Color(
+        light: Color(red: 0.09, green: 0.06, blue: 0.03), dark: Color(red: 0.99, green: 0.97, blue: 0.94))
+    static let sidebarSecondary = Color(
+        light: Color(red: 0.09, green: 0.06, blue: 0.03).opacity(0.68),
+        dark: Color(red: 0.99, green: 0.97, blue: 0.94).opacity(0.72))
+    // Edge highlight: crisp on the top and left, fading toward the bottom right.
     static let glassEdge = Color(
-        light: Color.white.opacity(0.7), dark: Color(red: 1, green: 0.94, blue: 0.86).opacity(0.14))
+        light: Color.white.opacity(0.95), dark: Color(red: 1, green: 0.94, blue: 0.86).opacity(0.34))
+    static let glassEdgeFade = Color(
+        light: Color.white.opacity(0.25), dark: Color(red: 1, green: 0.94, blue: 0.86).opacity(0.07))
+    static let panelShadow = Color(
+        light: Color(red: 0.28, green: 0.13, blue: 0).opacity(0.30), dark: Color.black.opacity(0.45))
 
     static let cardRadius: CGFloat = 20
     static let controlRadius: CGFloat = 12
@@ -60,11 +82,14 @@ struct PanelFill<S: Shape>: ViewModifier {
     let level: Level
     let shape: S
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.controlActiveState) private var activeState
 
     func body(content: Content) -> some View {
         content.background {
             if reduceTransparency {
                 shape.fill(level == .card ? Theme.pane : Theme.group)
+            } else if activeState == .inactive {
+                shape.fill(level == .card ? Theme.cardInactive : Theme.innerInactive)
             } else {
                 shape.fill(level == .card ? Theme.cardFill : Theme.innerFill)
             }
@@ -72,7 +97,42 @@ struct PanelFill<S: Shape>: ViewModifier {
     }
 }
 
+/// Highlighted edge and a soft shadow that lifts a panel off the window. The shadow is
+/// cut out under the panel so it does not darken the translucent fill.
+struct PanelChrome<S: InsettableShape>: ViewModifier {
+    let shape: S
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.controlActiveState) private var activeState
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                if reduceTransparency {
+                    shape.strokeBorder(Theme.paneLine, lineWidth: 1)
+                } else {
+                    shape.strokeBorder(
+                        LinearGradient(
+                            colors: [Theme.glassEdge, Theme.glassEdgeFade],
+                            startPoint: .topLeading, endPoint: .bottomTrailing),
+                        lineWidth: 1)
+                }
+            }
+            .background {
+                // No shadow while the window is in the background.
+                if activeState != .inactive {
+                    shape.fill(Theme.panelShadow).shadow(color: Theme.panelShadow, radius: 9, y: 3)
+                        .mask {
+                            Rectangle().padding(-40).overlay { shape.fill(.black).blendMode(.destinationOut) }
+                                .compositingGroup()
+                        }
+                }
+            }
+    }
+}
+
 extension View {
+    func panelChrome<S: InsettableShape>(_ shape: S) -> some View { modifier(PanelChrome(shape: shape)) }
+
     func panelFill<S: Shape>(_ level: PanelFill<S>.Level, in shape: S) -> some View {
         modifier(PanelFill(level: level, shape: shape))
     }
@@ -190,6 +250,10 @@ extension ButtonStyle where Self == AccentButtonStyle {
     static var accentFilled: AccentButtonStyle { AccentButtonStyle() }
 }
 
+extension ButtonStyle where Self == QuietButtonStyle {
+    static var quiet: QuietButtonStyle { QuietButtonStyle() }
+}
+
 extension ButtonStyle where Self == CircleToolbarButtonStyle {
     static var circleToolbar: CircleToolbarButtonStyle { CircleToolbarButtonStyle() }
 }
@@ -209,16 +273,61 @@ struct AccentButtonStyle: ButtonStyle {
     }
 }
 
-struct CircleToolbarButtonStyle: ButtonStyle {
+/// A low-key capsule button. A destructive role turns the text red, whatever the container is.
+struct QuietButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
+    @State private var hovering = false
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .labelStyle(.iconOnly)
-            .frame(width: 32, height: 32)
-            .background(Circle().fill(.quaternary.opacity(configuration.isPressed ? 2 : 1)))
-            .contentShape(Circle())
+        let tint = configuration.role == .destructive ? Theme.bad : Color.primary
+        let fill = configuration.isPressed ? 0.18 : hovering ? 0.12 : 0.07
+        return configuration.label
+            .font(.callout.weight(.medium))
+            .foregroundStyle(configuration.role == .destructive ? Theme.bad : .primary)
+            .padding(.horizontal, 12)
+            .frame(height: 28)
+            .background(Capsule().fill(tint.opacity(fill)))
+            .contentShape(Capsule())
+            .onHover { hovering = $0 }
             .opacity(isEnabled ? 1 : 0.4)
+    }
+}
+
+struct CircleToolbarButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var hovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        let fill = configuration.isPressed ? 0.14 : hovering ? 0.10 : 0.06
+        return configuration.label
+            .labelStyle(.iconOnly)
+            .font(.system(size: 15, weight: .medium))
+            .foregroundStyle(.primary)
+            .frame(width: 30, height: 30)
+            .background(Circle().fill(Color.primary.opacity(fill)))
+            .overlay(Circle().strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5))
+            .contentShape(Circle())
+            .onHover { hovering = $0 }
+            .opacity(isEnabled ? 1 : 0.4)
+    }
+}
+
+/// The toolbar refresh button. Shows a spinner while it works, without looking disabled.
+struct RefreshButton: View {
+    let busy: Bool
+    let help: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                if busy { ProgressView().controlSize(.small) } else { Image(systemName: "arrow.clockwise") }
+            }
+        }
+        .buttonStyle(.circleToolbar)
+        .allowsHitTesting(!busy)
+        .help(help)
+        .accessibilityLabel(busy ? "Refreshing" : "Refresh")
     }
 }
 
