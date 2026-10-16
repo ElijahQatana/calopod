@@ -72,7 +72,8 @@ private struct BehindWindowBlur: NSViewRepresentable {
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
         view.blendingMode = .behindWindow
-        view.material = .underWindowBackground
+        view.material = Theme.windowMaterial
+        view.isEmphasized = false
         view.state = .followsWindowActiveState
         return view
     }
