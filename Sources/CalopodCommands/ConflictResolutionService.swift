@@ -251,7 +251,7 @@ public struct ConflictResolutionService: Sendable {
 
     // MARK: Helpers
 
-    private static func line(
+    static func line(
         for outcome: InboxReviewOutcome?,
         make: (ConflictApplyReport.Status, String) -> ConflictApplyReport.Line
     ) -> ConflictApplyReport.Line {
@@ -264,7 +264,7 @@ public struct ConflictResolutionService: Sendable {
         }
     }
 
-    private static func failureLine(
+    static func failureLine(
         _ error: Error,
         make: (ConflictApplyReport.Status, String) -> ConflictApplyReport.Line
     ) -> ConflictApplyReport.Line {

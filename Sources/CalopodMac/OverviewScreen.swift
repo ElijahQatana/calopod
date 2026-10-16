@@ -5,10 +5,16 @@ struct OverviewScreen: View {
     let model: ServiceModel
     let conflicts: ConflictModel
     let navigation: AppNavigation
+    let setup: SetupModel
+
+    @State private var progress = FirstRunProgress()
+    @State private var showingSetup = false
 
     var body: some View {
         Form {
             if let notice = model.notice { Section { Banner(kind: .error, text: notice) } }
+
+            if progress.canResume && !showingSetup { Section { resumeBanner } }
 
             if let status = model.status, status.installed {
                 Section { hero(status) }
@@ -22,6 +28,16 @@ struct OverviewScreen: View {
             }
         }
         .formStyle(.grouped)
+        .sheet(isPresented: $showingSetup) {
+            FirstRunSheet(progress: progress, setup: setup, service: model, navigation: navigation)
+        }
+        .task {
+            await setup.reload()
+            let fresh = model.status.map { !$0.installed } ?? false
+            if fresh && progress.shouldOpenAutomatically && (setup.snapshot?.connections.isEmpty ?? true) {
+                showingSetup = true
+            }
+        }
     }
 
     // MARK: Hero
@@ -198,32 +214,37 @@ struct OverviewScreen: View {
 
     private var gettingStarted: some View {
         Section {
-            step("Connect your calendars", "Add this Mac's calendars, Google or Microsoft.", "calendar", .calendars)
-            step("Choose where events go", "Pick a Main calendar and any arms.", "arrow.triangle.branch", .arms)
-            step("Turn on background sync", "Keep everything current automatically.", "clock.arrow.2.circlepath", .service)
-            Hint { Text("Three steps and your calendars keep each other up to date.") }
-        } header: {
-            Text("Welcome to Calopod")
+            VStack(spacing: 14) {
+                Image(systemName: "calendar.badge.plus").font(.system(size: 34, weight: .medium)).foregroundStyle(Theme.accent)
+                Text(progress.isFinished ? "Setup is done" : "Welcome to Calopod").font(Theme.title())
+                Text(
+                    progress.isFinished
+                        ? "Turn on background sync when you are ready."
+                        : "Connect your calendars, pick where events go, and review the first sync. It takes a few minutes and nothing is copied until you approve."
+                )
+                .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                if progress.isFinished {
+                    Button("Open background sync") { navigation.selection = .service }.buttonStyle(.accentFilled)
+                } else {
+                    Button(progress.canResume ? "Resume setup" : "Set up Calopod") { showingSetup = true }
+                        .buttonStyle(.accentFilled)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 18)
         }
     }
 
-    private func step(_ title: String, _ detail: String, _ symbol: String, _ screen: Screen) -> some View {
-        Button {
-            navigation.selection = screen
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: symbol)
-                    .foregroundStyle(Theme.accent)
-                    .frame(width: 28)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.headline)
-                    Text(detail).font(.callout).foregroundStyle(.secondary)
-                }
-                Spacer()
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+    private var resumeBanner: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "list.bullet.clipboard").foregroundStyle(Theme.accent)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Setup isn't finished").font(.headline)
+                Text("Step \(progress.step.rawValue + 1) of 3: \(progress.step.title)")
+                    .font(.callout).foregroundStyle(.secondary)
             }
-            .contentShape(Rectangle())
+            Spacer()
+            Button("Resume") { showingSetup = true }.buttonStyle(.accentFilled)
         }
-        .buttonStyle(.plain)
     }
 }
