@@ -738,3 +738,112 @@ func newStateDirectoryAndDatabaseSidecarsAreOwnerOnlyWithAPermissiveUmask() thro
         }
     }
 }
+
+// MARK: - Schedule override from the Mac app
+
+private func overrideFixture() throws -> (directory: URL, state: CalopodStateLocation, environment: CalopodRuntimeEnvironment) {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("calopod-agent-override-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let state = try CalopodStateLocation(
+        environment: ["CALOPOD_STATE_PATH": directory.appendingPathComponent("state.sqlite").path]
+    )
+    try state.prepareDirectory()
+    let environment = try CalopodRuntimeEnvironment(
+        variables: [:],
+        stateLocation: state,
+        executableURL: directory.appendingPathComponent("calopod-agent")
+    )
+    return (directory, state, environment)
+}
+
+@Test
+func scheduleOverrideRoundTripsOwnerOnlyAndRejectsOutOfRangeValues() throws {
+    let fixture = try overrideFixture()
+    defer { try? FileManager.default.removeItem(at: fixture.directory) }
+
+    #expect(AgentScheduleOverride.load(from: fixture.state) == nil)
+    try AgentScheduleOverride(intervalSeconds: 900).save(to: fixture.state)
+    try AgentScheduleOverride(intervalSeconds: 300).save(to: fixture.state)
+
+    #expect(AgentScheduleOverride.load(from: fixture.state)?.intervalSeconds == 300)
+    let mode = try FileManager.default.attributesOfItem(
+        atPath: fixture.state.scheduleOverrideURL.path
+    )[.posixPermissions] as? NSNumber
+    #expect(mode?.intValue == 0o600)
+    #expect(throws: CalopodRuntimeError.self) { try AgentScheduleOverride(intervalSeconds: 59) }
+    #expect(throws: CalopodRuntimeError.self) { try AgentScheduleOverride(intervalSeconds: 86_401) }
+
+    try Data(#"{"intervalSeconds":5}"#.utf8).write(to: fixture.state.scheduleOverrideURL)
+    #expect(AgentScheduleOverride.load(from: fixture.state) == nil)
+    try Data("not json".utf8).write(to: fixture.state.scheduleOverrideURL)
+    #expect(AgentScheduleOverride.load(from: fixture.state) == nil)
+    AgentScheduleOverride.clear(from: fixture.state)
+    #expect(!FileManager.default.fileExists(atPath: fixture.state.scheduleOverrideURL.path))
+}
+
+private func delayAfterBusyRun(
+    _ fixture: (directory: URL, state: CalopodStateLocation, environment: CalopodRuntimeEnvironment)
+) async throws -> [TimeInterval] {
+    let lock = try ProcessLock.acquire(at: fixture.state.lockURL)
+    defer { withExtendedLifetime(lock) {} }
+    let delays = LockedValues<TimeInterval>()
+    let runner = CalopodAgentRunner(
+        environment: fixture.environment,
+        schedule: try AgentSchedule(interval: 600, maximumJitter: 30, lookbackDays: 2, horizonDays: 14),
+        now: { Date(timeIntervalSince1970: 1_788_566_400) },
+        randomUnit: { 0.5 },
+        sleep: { delay in
+            delays.append(delay)
+            throw CancellationError()
+        }
+    )
+    await runner.runUntilCancelled { _ in }
+    return delays.values
+}
+
+@Test
+func agentWaitsForTheOverrideIntervalInsteadOfTheInstalledOne() async throws {
+    let fixture = try overrideFixture()
+    defer { try? FileManager.default.removeItem(at: fixture.directory) }
+    try AgentScheduleOverride(intervalSeconds: 300).save(to: fixture.state)
+
+    #expect(try await delayAfterBusyRun(fixture) == [315])
+}
+
+@Test
+func agentIgnoresAnInvalidOverrideFile() async throws {
+    let fixture = try overrideFixture()
+    defer { try? FileManager.default.removeItem(at: fixture.directory) }
+    try Data("garbage".utf8).write(to: fixture.state.scheduleOverrideURL)
+
+    #expect(try await delayAfterBusyRun(fixture) == [615])
+}
+
+@Test
+func changingTheOverrideEndsTheCurrentWaitEarly() async throws {
+    let fixture = try overrideFixture()
+    defer { try? FileManager.default.removeItem(at: fixture.directory) }
+    let lock = try ProcessLock.acquire(at: fixture.state.lockURL)
+    defer { withExtendedLifetime(lock) {} }
+    let reports = LockedValues<AgentRunReport>()
+    let runner = CalopodAgentRunner(
+        environment: fixture.environment,
+        schedule: try AgentSchedule(interval: 600, maximumJitter: 0, lookbackDays: 2, horizonDays: 14),
+        now: { Date(timeIntervalSince1970: 1_788_566_400) },
+        randomUnit: { 0 },
+        sleep: { _ in try await Task.sleep(for: .seconds(60)) },
+        runSync: { _ in throw CalopodRuntimeError.busy },
+        scheduleCheckSeconds: 0.05
+    )
+
+    let task = Task { await runner.runUntilCancelled { reports.append($0) } }
+    try await Task.sleep(for: .seconds(0.3))
+    #expect(reports.values.count == 1)
+    try AgentScheduleOverride(intervalSeconds: 120).save(to: fixture.state)
+    try await Task.sleep(for: .seconds(0.5))
+    task.cancel()
+    await task.value
+
+    #expect(reports.values.count >= 2)
+}

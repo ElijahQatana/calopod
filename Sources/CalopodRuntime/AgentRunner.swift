@@ -57,6 +57,61 @@ public struct AgentSchedule: Equatable, Sendable {
     }
 }
 
+/// An automatic-sync interval that replaces the installed one. Read by the agent between runs, so
+/// a bundled agent with a fixed plist can still be re-timed. Invalid or missing files are ignored.
+public struct AgentScheduleOverride: Codable, Equatable, Sendable {
+    public static let minimumIntervalSeconds = 60
+    public static let maximumIntervalSeconds = 86_400
+
+    public let intervalSeconds: Int
+
+    public init(intervalSeconds: Int) throws {
+        guard (Self.minimumIntervalSeconds...Self.maximumIntervalSeconds).contains(intervalSeconds) else {
+            throw CalopodRuntimeError.invalidConfiguration("agent-schedule")
+        }
+        self.intervalSeconds = intervalSeconds
+    }
+
+    public static func load(from location: CalopodStateLocation) -> AgentScheduleOverride? {
+        guard let data = try? Data(contentsOf: location.scheduleOverrideURL),
+              let decoded = try? JSONDecoder().decode(AgentScheduleOverride.self, from: data),
+              (minimumIntervalSeconds...maximumIntervalSeconds).contains(decoded.intervalSeconds) else {
+            return nil
+        }
+        return decoded
+    }
+
+    /// Writes the override owner-only, replacing any earlier one.
+    public func save(to location: CalopodStateLocation) throws {
+        try location.prepareDirectory()
+        let data = try JSONEncoder().encode(self)
+        let temporary = location.scheduleOverrideURL.appendingPathExtension("tmp")
+        try? FileManager.default.removeItem(at: temporary)
+        try PrivateFiles.createFile(at: temporary, contents: data)
+        _ = try FileManager.default.replaceItemAt(location.scheduleOverrideURL, withItemAt: temporary)
+    }
+
+    public static func clear(from location: CalopodStateLocation) {
+        try? FileManager.default.removeItem(at: location.scheduleOverrideURL)
+    }
+}
+
+extension AgentSchedule {
+    /// The same schedule with the interval replaced, when an override exists.
+    public func applying(_ override: AgentScheduleOverride?) -> AgentSchedule {
+        guard let override,
+              let replaced = try? AgentSchedule(
+                  interval: Double(override.intervalSeconds),
+                  maximumJitter: maximumJitter,
+                  lookbackDays: lookbackDays,
+                  horizonDays: horizonDays
+              ) else {
+            return self
+        }
+        return replaced
+    }
+}
+
 public struct AgentRunReport: Codable, Equatable, Sendable {
     public let command: String
     public let status: String
@@ -103,6 +158,7 @@ public struct CalopodAgentRunner: Sendable {
     private let randomUnit: @Sendable () -> Double
     private let sleep: @Sendable (TimeInterval) async throws -> Void
     private let runSync: @Sendable (SyncRequest) async throws -> SyncExecutionResult
+    private let scheduleCheckSeconds: Double
 
     public init(
         environment: CalopodRuntimeEnvironment,
@@ -133,8 +189,10 @@ public struct CalopodAgentRunner: Sendable {
         now: @escaping @Sendable () -> Date,
         randomUnit: @escaping @Sendable () -> Double,
         sleep: @escaping @Sendable (TimeInterval) async throws -> Void,
-        runSync: @escaping @Sendable (SyncRequest) async throws -> SyncExecutionResult
+        runSync: @escaping @Sendable (SyncRequest) async throws -> SyncExecutionResult,
+        scheduleCheckSeconds: Double = 15
     ) {
+        self.scheduleCheckSeconds = scheduleCheckSeconds
         self.environment = environment
         self.schedule = schedule
         self.now = now
@@ -172,6 +230,26 @@ public struct CalopodAgentRunner: Sendable {
         }
     }
 
+    /// Waits out the interval, but ends the wait early when the override changes so a new interval
+    /// takes effect within `scheduleCheckSeconds`, not after the old interval.
+    private func sleepUnlessScheduleChanges() async throws {
+        let baseline = AgentScheduleOverride.load(from: environment.stateLocation)
+        let delay = schedule.applying(baseline).delay(randomUnit: randomUnit())
+        let location = environment.stateLocation
+        let checkSeconds = scheduleCheckSeconds
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask { try await sleep(delay) }
+            group.addTask {
+                while true {
+                    try await Task.sleep(for: .seconds(checkSeconds))
+                    if AgentScheduleOverride.load(from: location) != baseline { return }
+                }
+            }
+            _ = try await group.next()
+            group.cancelAll()
+        }
+    }
+
     public func runUntilCancelled(
         report: @escaping @Sendable (AgentRunReport) -> Void
     ) async {
@@ -180,7 +258,7 @@ public struct CalopodAgentRunner: Sendable {
             guard !Task.isCancelled else { return }
             report(result)
             do {
-                try await sleep(schedule.delay(randomUnit: randomUnit()))
+                try await sleepUnlessScheduleChanges()
             } catch is CancellationError {
                 return
             } catch {
