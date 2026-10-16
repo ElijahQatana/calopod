@@ -37,7 +37,7 @@ struct MenuPopover: View {
             Divider()
             row("Open Calopod", "macwindow", .overview)
             row("Calendars", "calendar", .calendars)
-            row("Conflicts", "rectangle.on.rectangle.angled", .conflicts)
+            row("Inbox", "tray", .inbox)
             Divider()
             Button("Quit Calopod") { NSApplication.shared.terminate(nil) }
                 .buttonStyle(.plain)

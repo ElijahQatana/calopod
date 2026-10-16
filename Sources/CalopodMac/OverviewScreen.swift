@@ -3,7 +3,7 @@ import SwiftUI
 
 struct OverviewScreen: View {
     let model: ServiceModel
-    let conflicts: ConflictModel
+    let inbox: InboxModel
     let navigation: AppNavigation
     let setup: SetupModel
 
@@ -191,13 +191,13 @@ struct OverviewScreen: View {
                 .calendars
             )
             glanceRow("Active arms", "\(model.overview?.arms.filter(\.isEnabled).count ?? 0)", .arms)
-            glanceRow("Overlapping events", "\(conflicts.board?.groups.count ?? 0)", .conflicts)
+            glanceRow("Overlapping events", "\(inbox.board?.count(.conflicts) ?? 0)", .inbox, filter: .conflicts)
         }
     }
 
-    private func glanceRow(_ title: String, _ value: String, _ screen: Screen) -> some View {
+    private func glanceRow(_ title: String, _ value: String, _ screen: Screen, filter: InboxFilter? = nil) -> some View {
         Button {
-            navigation.selection = screen
+            if let filter { navigation.openInbox(filter) } else { navigation.selection = screen }
         } label: {
             LabeledContent(title) {
                 HStack(spacing: 6) {

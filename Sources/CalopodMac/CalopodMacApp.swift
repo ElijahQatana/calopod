@@ -5,7 +5,6 @@ import SwiftUI
 struct CalopodMacApp: App {
     @State private var service = ServiceModel()
     @State private var setup = SetupModel()
-    @State private var conflicts = ConflictModel()
     @State private var inbox = InboxModel()
     @State private var navigation = AppNavigation()
     @State private var sidebar = SidebarState()
@@ -19,9 +18,8 @@ struct CalopodMacApp: App {
     var body: some Scene {
         // Opens at launch and on reopen, so launching is visible.
         Window("Calopod", id: "home") {
-            MainWindow(navigation: navigation, sidebar: sidebar, service: service, setup: setup, conflicts: conflicts, inbox: inbox)
+            MainWindow(navigation: navigation, sidebar: sidebar, service: service, setup: setup, inbox: inbox)
                 .task {
-                    await conflicts.reload()
                     await inbox.reload()
                 }
         }

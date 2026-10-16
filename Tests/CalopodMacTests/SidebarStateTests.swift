@@ -13,9 +13,8 @@ final class SidebarStateTests: XCTestCase {
         XCTAssertTrue(SidebarState(defaults: defaults).isCollapsed)
     }
 
-    func testConflictsHighlightsInbox() {
-        XCTAssertEqual(Screen.conflicts.sidebarRow, .inbox)
-        XCTAssertEqual(Screen.arms.sidebarRow, .arms)
-        XCTAssertFalse((Screen.main + Screen.setup).contains(.conflicts))
+    func testConflictsIsNotAScreen() {
+        XCTAssertNil(Screen(rawValue: "conflicts"))
+        XCTAssertEqual(Screen.main + Screen.setup, Screen.allCases)
     }
 }

@@ -5,7 +5,6 @@ struct MainWindow: View {
     let sidebar: SidebarState
     let service: ServiceModel
     let setup: SetupModel
-    let conflicts: ConflictModel
     let inbox: InboxModel
 
     var body: some View {
@@ -45,12 +44,11 @@ struct MainWindow: View {
     @ViewBuilder
     private var screen: some View {
         switch navigation.selection {
-        case .overview: OverviewScreen(model: service, conflicts: conflicts, navigation: navigation, setup: setup)
+        case .overview: OverviewScreen(model: service, inbox: inbox, navigation: navigation, setup: setup)
         case .calendar: CalendarScreen()
         case .inbox: InboxScreen(model: inbox, navigation: navigation, colors: .shared)
         case .calendars: CalendarsScreen(model: setup)
         case .arms: ArmsScreen(model: setup)
-        case .conflicts: ConflictsScreen(model: conflicts)
         case .service: ServiceScreen(model: service)
         }
     }
