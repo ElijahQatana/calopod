@@ -14,6 +14,14 @@ struct CalopodMacApp: App {
     }
 
     var body: some Scene {
+        // A menu bar app shows nothing on launch, which reads as "it didn't open". This window
+        // opens at launch and again when the app is opened a second time.
+        Window("Calopod", id: "home") {
+            StatusView(model: model)
+                .onAppear { NSApplication.shared.activate(ignoringOtherApps: true) }
+        }
+        .windowResizability(.contentSize)
+
         MenuBarExtra {
             StatusView(model: model)
         } label: {
