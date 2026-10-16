@@ -56,7 +56,7 @@ If a reply's outcome is unclear (say the network dropped), Calopod won't send it
 
 At the end you get a summary that separates how many items you reviewed from how many are actually resolved, and which conflicts you created or still have. Only confirmed replies count. Set `NO_COLOR` or pass `--no-decoration` to turn off the flourishes.
 
-In the Mac app, **Review** on the Inbox screen does the same thing in a sheet. Press `Y`, `N`, `M` or `H`, `G` then a number to jump to an overlapping event, and `S` to stop. Every reply gets a confirm step that shows who is told, the answer, the account it goes through and the overlaps that would remain; press Return to send. Closing the sheet keeps your progress, and **Resume** continues it, checking any unclear reply first.
+In the Mac app, **Review** on the Inbox screen does the same thing in a sheet. Only the replies a calendar allows are shown. Press `Y`, `N`, `M` or `H`, `G` then a number to jump to an overlapping event, and `S` to stop. Every reply gets a confirm step that shows who is told, the answer, the account it goes through and the overlaps that would remain; press Return to send. For calendars read through the Mac's Calendar app there is no reply to send, so the sheet offers **Open in Calendar** (`O`), **Done, next** (`D`) once you have answered there, and Hold. Those events count as held, never as answered, and show up again in the next review. Closing the sheet keeps your progress, and **Resume** continues it, checking any unclear reply first.
 
 ## Who can reply
 

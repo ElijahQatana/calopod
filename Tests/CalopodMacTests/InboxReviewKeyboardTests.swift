@@ -6,7 +6,8 @@ final class InboxReviewKeyboardTests: XCTestCase {
     func testKeysInEachMode() {
         let cases: [(ReviewKeyboard.Mode, [String], ReviewKey?)] = [
             (.card, ["y"], .reply(.yes)), (.card, ["N"], .reply(.no)), (.card, ["m"], .reply(.maybe)),
-            (.card, ["h"], .hold), (.card, ["s"], .stop), (.card, ["q"], .stop), (.card, ["b"], .back),
+            (.card, ["h"], .hold), (.card, ["s"], .stop), (.card, ["q"], .stop), (.card, ["b"], .back), (.card, ["o"], .openCalendar), (.card, ["d"], .doneInCalendar),
+            (.confirm, ["o"], nil), (.problem, ["d"], nil),
             (.card, ["g", "2"], .goTo(2)), (.card, ["g", "x"], nil), (.card, ["2"], nil),
             (.card, [ReviewKeyboard.returnKey], nil), (.card, [ReviewKeyboard.escapeKey], nil),
             // Nothing but Return sends, so a stray letter cannot.
@@ -27,5 +28,12 @@ final class InboxReviewKeyboardTests: XCTestCase {
         _ = keyboard.press("g", mode: .card)
         _ = keyboard.press("h", mode: .card)
         XCTAssertNil(keyboard.press("1", mode: .card))
+    }
+
+    func testCalendarLinkPointsAtTheStartOfTheDay() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "UTC"))
+        let noon = Date(timeIntervalSinceReferenceDate: 86_400 * 3 + 43_200)
+        XCTAssertEqual(CalendarOpener.url(for: noon, calendar: calendar)?.absoluteString, "calshow:259200")
     }
 }

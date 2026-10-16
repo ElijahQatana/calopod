@@ -2,22 +2,30 @@ import CalopodCommands
 import SwiftUI
 
 /// Goes through the inbox one event at a time. Everything is keyboard driven.
+/// The header and footer stay in place; only the middle scrolls, and only when it has to.
 struct InboxReviewSheet: View {
     let model: InboxReviewModel
     let colors: CalendarColors
     let close: () -> Void
 
     @FocusState private var focused: Bool
+    @State private var bodyHeight: CGFloat = 0
+
+    private static let width: CGFloat = 640
+    /// Fits a 580 pt window with the header and footer around it.
+    private static let maxBodyHeight: CGFloat = 400
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            header
-            if let notice = model.notice, showsNotice { Banner(kind: .info, text: notice) }
-            content
+        VStack(spacing: 0) {
+            header.padding(.horizontal, 24).padding(.top, 20).padding(.bottom, 14)
+            Divider()
+            scrollingBody
+            if let footer = footerContent {
+                Divider()
+                footer.controlSize(.large).padding(.horizontal, 24).padding(.vertical, 14)
+            }
         }
-        .padding(24)
-        .frame(width: 640)
-        .frame(minHeight: 460)
+        .frame(width: Self.width)
         .focusable()
         .focusEffectDisabled()
         .focused($focused)
@@ -31,6 +39,21 @@ struct InboxReviewSheet: View {
         }
     }
 
+    private var scrollingBody: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                if let notice = model.notice, showsNotice { Banner(kind: .info, text: notice) }
+                content
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(GeometryReader { Color.clear.preference(key: BodyHeightKey.self, value: $0.size.height) })
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .onPreferenceChange(BodyHeightKey.self) { bodyHeight = $0 }
+        .frame(height: min(max(bodyHeight, 260), Self.maxBodyHeight))
+    }
+
     private var showsNotice: Bool {
         switch model.phase {
         case .card, .problem: true
@@ -41,21 +64,13 @@ struct InboxReviewSheet: View {
     // MARK: Header
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Review inbox").font(Theme.title())
-                Spacer()
-                if case .summary = model.phase {
-                    Button("Close", action: close).buttonStyle(.accentFilled).keyboardShortcut(.defaultAction)
-                } else if case .start = model.phase {
-                    Button("Cancel", action: close).keyboardShortcut(.cancelAction)
-                } else {
-                    Button("Stop") { model.stop() }.help("Stop here. Your progress is saved. (S)")
-                }
-            }
+        HStack(spacing: 14) {
+            Text("Review inbox").font(Theme.title())
+            Spacer(minLength: 8)
             if let progress = model.progress, showsProgress {
-                bar(Double(progress.reviewed) / Double(max(progress.total, 1)))
-                Text(progressLine(progress)).font(.caption).foregroundStyle(.secondary)
+                Text(progressLine(progress)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                bar(Double(progress.reviewed) / Double(max(progress.total, 1))).frame(width: 120)
+                if showsStop { Button("Stop") { model.stop() }.help("Stop here. Your progress is saved. (S)") }
             }
         }
     }
@@ -77,10 +92,17 @@ struct InboxReviewSheet: View {
         return true
     }
 
+    private var showsStop: Bool {
+        switch model.phase {
+        case .start, .summary: false
+        default: true
+        }
+    }
+
     private func progressLine(_ progress: InboxReviewProgress) -> String {
-        if case .card(let card) = model.phase { return "Event \(card.position) of \(card.total) · \(progress.reviewed) done" }
-        if case .confirm(let card, _) = model.phase { return "Event \(card.position) of \(card.total) · \(progress.reviewed) done" }
-        return "\(progress.reviewed) of \(progress.total) done"
+        if case .card(let card) = model.phase { return "Event \(card.position) of \(card.total) · \(progress.reviewed) reviewed" }
+        if case .confirm(let card, _) = model.phase { return "Event \(card.position) of \(card.total) · \(progress.reviewed) reviewed" }
+        return "\(progress.reviewed) of \(progress.total) reviewed"
     }
 
     // MARK: Phases
@@ -90,11 +112,11 @@ struct InboxReviewSheet: View {
         switch model.phase {
         case .start: start
         case .working(let text):
-            BusyLine(text: text).frame(maxWidth: .infinity, maxHeight: .infinity)
+            BusyLine(text: text).frame(maxWidth: .infinity, minHeight: 160)
         case .card(let card): cardView(card)
         case .confirm(let card, let reply): confirmView(card, reply)
-        case .problem(let text, _): problem(text)
-        case .summary: summary
+        case .problem(let text, _): Banner(kind: .caution, text: text)
+        case .summary: ReviewSummary(progress: model.progress, paused: model.paused, calendarSkips: model.calendarSkips)
         }
     }
 
@@ -104,24 +126,12 @@ struct InboxReviewSheet: View {
                 Banner(kind: .info, text: saved.hasUnclear
                     ? "A reply from your last review has an unclear outcome. Resume checks what happened first and never sends it again."
                     : "You have a review in progress: \(saved.reviewed) of \(saved.total) done.")
-                HStack {
-                    Button("Resume") { Task { await model.resume() } }
-                        .buttonStyle(.accentFilled).keyboardShortcut(.defaultAction)
-                    if !saved.hasUnclear { Text("or start a new one below").foregroundStyle(.secondary) }
-                }
             }
             if model.saved?.hasUnclear != true {
                 Toggle("Only events that overlap something", isOn: Binding(get: { model.overlapsOnly }, set: { model.overlapsOnly = $0 }))
                 Toggle("Leave out events I answered Maybe", isOn: Binding(get: { model.skipMaybe }, set: { model.skipMaybe = $0 }))
                 Hint { Text("Yes, Maybe and No send your reply to the calendar and may notify the organizer. Hold sends nothing. Keys: Y, N, M, H, G then a number, S to stop.") }
-                if model.saved == nil {
-                    Button("Start review") { Task { await model.begin() } }
-                        .buttonStyle(.accentFilled).keyboardShortcut(.defaultAction)
-                } else {
-                    Button("Start a new review") { Task { await model.begin() } }
-                }
             }
-            Spacer(minLength: 0)
         }
         .controlSize(.large)
     }
@@ -129,48 +139,30 @@ struct InboxReviewSheet: View {
     private func cardView(_ card: InboxReviewCardInfo) -> some View {
         let entry = card.entry
         return VStack(alignment: .leading, spacing: 14) {
-                Text(entry.title).font(Theme.title(.title3))
-                HStack(spacing: 8) {
-                    ForEach(entry.reasons, id: \.self) { StatusPill(text: InboxText.label($0, entry), color: InboxText.tint($0)) }
-                }
-                Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 14, verticalSpacing: 6) {
-                    fact("When", entry.startsAt.formatted(.dateTime.weekday(.abbreviated).month().day()) + ", " + InboxText.time(entry))
-                    if let place = entry.location, !place.isEmpty { fact("Where", place) }
-                    if let organizer = entry.organizer { fact("Organizer", organizer) }
-                    fact("Calendar", card.account)
-                }
-                .font(.callout)
+            Text(entry.title).font(Theme.title(.title3)).fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                ForEach(entry.reasons, id: \.self) { StatusPill(text: InboxText.label($0, entry), color: InboxText.tint($0)) }
+            }
+            Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 14, verticalSpacing: 6) {
+                fact("When", entry.startsAt.formatted(.dateTime.weekday(.abbreviated).month().day()) + ", " + InboxText.time(entry))
+                if let place = entry.location, !place.isEmpty { fact("Where", place) }
+                if let organizer = entry.organizer { fact("Organizer", organizer) }
+                fact("Calendar", card.account)
+            }
+            .font(.callout)
+            VStack(alignment: .leading, spacing: 6) {
                 Text("Around this time").font(.headline)
                 ContextStrip(detail: card.detail, colors: colors)
-                if card.replies.isEmpty {
-                    Text(card.detail.replyNote).font(.callout).foregroundStyle(.secondary)
-                }
-                actions(card)
-                if !card.neighbors.isEmpty { neighbors(card) }
+            }
+            if !card.neighbors.isEmpty { neighbors(card) }
         }
     }
 
     private func fact(_ label: String, _ value: String) -> some View {
         GridRow {
             Text(label).foregroundStyle(.secondary)
-            Text(value).textSelection(.enabled)
+            Text(value).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
         }
-    }
-
-    private func actions(_ card: InboxReviewCardInfo) -> some View {
-        HStack(spacing: 8) {
-            reply("Yes", "Y", .yes, card)
-            reply("Maybe", "M", .maybe, card)
-            reply("No", "N", .no, card)
-            Button("Hold  H") { Task { await model.perform(.hold) } }
-                .help("Skip it for this session. Nothing is sent or marked.")
-        }
-        .controlSize(.large)
-    }
-
-    private func reply(_ title: String, _ key: String, _ choice: ConflictChoice, _ card: InboxReviewCardInfo) -> some View {
-        Button("\(title)  \(key)") { Task { await model.perform(.reply(choice)) } }
-            .disabled(!card.replies.contains(choice))
     }
 
     private func neighbors(_ card: InboxReviewCardInfo) -> some View {
@@ -178,7 +170,7 @@ struct InboxReviewSheet: View {
             Text("Overlaps with").font(.caption).foregroundStyle(.secondary)
             ForEach(Array(card.neighbors.enumerated()), id: \.element.id) { index, other in
                 Button { Task { await model.perform(.goTo(index + 1)) } } label: {
-                    Text("G\(index + 1)  \(other.title)").frame(maxWidth: .infinity, alignment: .leading)
+                    Text("G\(index + 1)  \(other.title)").lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.plain)
             }
@@ -202,35 +194,104 @@ struct InboxReviewSheet: View {
             }
             .font(.callout)
             Banner(kind: .caution, text: (card.notification ?? "The organizer may be notified.") + " This cannot be unsent.")
-            HStack {
-                Button("Send  ⏎") { Task { await model.perform(.send) } }
-                    .buttonStyle(.accentFilled)
-                Button("Back  Esc") { Task { await model.perform(.cancel) } }
-            }
-            .controlSize(.large)
-            Spacer(minLength: 0)
         }
     }
 
-    private func problem(_ text: String) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Banner(kind: .caution, text: text)
-            HStack {
-                Button("Refresh  R") { Task { await model.perform(.refresh) } }
-                Button("Hold  H") { Task { await model.perform(.hold) } }
+    // MARK: Footer
+
+    private var footerContent: AnyView? {
+        switch model.phase {
+        case .start: AnyView(startFooter)
+        case .working: nil
+        case .card(let card): AnyView(cardFooter(card))
+        case .confirm:
+            AnyView(HStack {
+                Button { Task { await model.perform(.cancel) } } label: { keyed("Back", "Esc") }
+                Spacer()
+                Button { Task { await model.perform(.send) } } label: { keyed("Send", "⏎") }.buttonStyle(.accentFilled)
+            })
+        case .problem:
+            AnyView(HStack {
+                Button { Task { await model.perform(.refresh) } } label: { keyed("Refresh", "R") }
+                Spacer()
+                Button { Task { await model.perform(.hold) } } label: { keyed("Hold", "H") }
                     .help("Skip it for this session. Nothing is sent.")
-            }
-            .controlSize(.large)
-            Spacer(minLength: 0)
+            })
+        case .summary:
+            AnyView(HStack {
+                Spacer()
+                Button("Close", action: close).buttonStyle(.accentFilled).keyboardShortcut(.defaultAction)
+            })
         }
     }
 
-    private var summary: some View { ReviewSummary(progress: model.progress, paused: model.paused) }
+    private var startFooter: some View {
+        HStack {
+            Button("Cancel", action: close).keyboardShortcut(.cancelAction)
+            Spacer()
+            if model.saved?.hasUnclear == true {
+                Button("Resume") { Task { await model.resume() } }.buttonStyle(.accentFilled).keyboardShortcut(.defaultAction)
+            } else if model.saved != nil {
+                Button("Start a new review") { Task { await model.begin() } }
+                Button("Resume") { Task { await model.resume() } }.buttonStyle(.accentFilled).keyboardShortcut(.defaultAction)
+            } else {
+                Button("Start review") { Task { await model.begin() } }.buttonStyle(.accentFilled).keyboardShortcut(.defaultAction)
+            }
+        }
+    }
+
+    /// Only choices that can be made are shown. Calendars read through the Mac are answered in Calendar.
+    private func cardFooter(_ card: InboxReviewCardInfo) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if card.replies.isEmpty {
+                Text(card.detail.replyNote).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            cardButtons(card)
+        }
+    }
+
+    private func cardButtons(_ card: InboxReviewCardInfo) -> some View {
+        HStack(spacing: 8) {
+            if card.replies.isEmpty && card.isMacCalendar {
+                let opened = model.openedKey == card.entry.id
+                Button { Task { await model.perform(.openCalendar) } } label: { keyed("Open in Calendar", "O") }
+                    .buttonStyle(.accentFilled)
+                    .opacity(opened ? 0.7 : 1)
+                    .help("Opens the Calendar app at this day. Nothing is sent from Calopod.")
+                Button { Task { await model.perform(.doneInCalendar) } } label: { keyed("Done, next", "D") }
+                    .help("Move on once you have answered in Calendar. It is checked again on the next refresh.")
+            } else {
+                ForEach([ConflictChoice.yes, .maybe, .no], id: \.self) { choice in
+                    if card.replies.contains(choice) {
+                        Button { Task { await model.perform(.reply(choice)) } } label: {
+                            keyed(InboxReviewModel.name(choice), choice == .yes ? "Y" : choice == .no ? "N" : "M")
+                        }
+                    }
+                }
+            }
+            Spacer()
+            Button { Task { await model.perform(.hold) } } label: { keyed("Hold", "H") }
+                .help("Skip it for this session. Nothing is sent or marked.")
+        }
+    }
+
+    private func keyed(_ title: String, _ key: String) -> some View {
+        HStack(spacing: 6) {
+            Text(title)
+            Text(key).font(.caption.monospaced()).opacity(0.55)
+        }
+    }
+}
+
+private struct BodyHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
 
 struct ReviewSummary: View {
     let progress: InboxReviewProgress?
     let paused: Bool
+    var calendarSkips = 0
 
     var body: some View {
         let totals = progress?.totals
@@ -239,7 +300,7 @@ struct ReviewSummary: View {
                 Text(heading(progress, totals)).font(Theme.title(.title3))
                 Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 18, verticalSpacing: 6) {
                     count("Replies recorded", totals.recorded, detail: "Yes \(totals.yes) · Maybe \(totals.maybe) · No \(totals.no)")
-                    count("Held", totals.held)
+                    count("Held", totals.held, detail: calendarSkips > 0 ? "\(min(calendarSkips, totals.held)) left for the Calendar app" : nil)
                     count("Outcome unclear", totals.unclear, tint: totals.unclear > 0 ? Theme.caution : nil)
                     if totals.failed + totals.unavailable + totals.changed > 0 {
                         count("Not sent", totals.failed + totals.unavailable + totals.changed)
@@ -263,7 +324,6 @@ struct ReviewSummary: View {
                         .font(.callout).foregroundStyle(.secondary)
                 }
             }
-            Spacer(minLength: 0)
         }
     }
 

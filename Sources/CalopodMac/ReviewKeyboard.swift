@@ -3,6 +3,8 @@ import CalopodCommands
 enum ReviewKey: Equatable {
     case reply(ConflictChoice)
     case hold, stop, back, refresh
+    /// For events answered in the Calendar app: open it, or move on once answered there.
+    case openCalendar, doneInCalendar
     case goTo(Int)
     case send, cancel
 }
@@ -43,6 +45,8 @@ struct ReviewKeyboard {
             case "n": .reply(.no)
             case "m": .reply(.maybe)
             case "h": .hold
+            case "o": .openCalendar
+            case "d": .doneInCalendar
             case "b": .back
             case "s", "q": .stop
             default: nil
