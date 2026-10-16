@@ -38,6 +38,14 @@ public struct ScheduleCalendar: Identifiable, Equatable, Sendable {
     }
 }
 
+/// Whether Inbox lists this event as changed after the user answered.
+public enum ScheduleChange: Equatable, Sendable {
+    case none
+    case changed
+    /// The edit may have come before the reply, so it is not shown as a proven change.
+    case uncertain
+}
+
 public enum ScheduleResponse: String, Equatable, Sendable {
     case accepted, tentative, declined, needsResponse, organizer, none
 }
@@ -68,7 +76,7 @@ public struct ScheduleEvent: Identifiable, Equatable, Sendable {
     public let isCopy: Bool
     /// Titles of events this one overlaps, for the inspector.
     public let overlaps: [String]
-    public let changedSinceViewed: Bool
+    public let change: ScheduleChange
     public let copiedTo: [ScheduleCopy]
     /// Yes, Maybe, No that the provider allows. Empty when it does not.
     public let replies: [ConflictChoice]
@@ -78,7 +86,7 @@ public struct ScheduleEvent: Identifiable, Equatable, Sendable {
         id: String, calendarID: String, title: String, startsAt: Date, endsAt: Date,
         isAllDay: Bool = false, location: String? = nil, organizer: String? = nil,
         response: ScheduleResponse = .accepted, isCopy: Bool = false, overlaps: [String] = [],
-        changedSinceViewed: Bool = false, copiedTo: [ScheduleCopy] = [],
+        change: ScheduleChange = .none, copiedTo: [ScheduleCopy] = [],
         replies: [ConflictChoice] = [], replyUnavailableReason: String? = nil
     ) {
         self.id = id
@@ -92,7 +100,7 @@ public struct ScheduleEvent: Identifiable, Equatable, Sendable {
         self.response = response
         self.isCopy = isCopy
         self.overlaps = overlaps
-        self.changedSinceViewed = changedSinceViewed
+        self.change = change
         self.copiedTo = copiedTo
         self.replies = replies
         self.replyUnavailableReason = replyUnavailableReason
@@ -143,6 +151,12 @@ public struct CalendarScheduleService: Sendable {
         let analysis = InboxConflictCalculator.analyze(snapshot, window: nil, freshnessCutoff: cutoff)
         let titles = Dictionary(
             snapshot.events.map { ($0.event.sourceKeyHash, Self.title($0.event)) }, uniquingKeysWith: { first, _ in first })
+        // The changed dot is exactly the set Inbox lists as changed, with no rule of its own.
+        var changes: [String: ScheduleChange] = [:]
+        for row in InboxAttentionQuery.evaluate(snapshot, freshnessCutoff: cutoff).rows
+        where row.reasons.contains(.changedAfterResponse) {
+            changes[row.item.event.sourceKeyHash] = row.changeTiming == .uncertain ? .uncertain : .changed
+        }
         var overlapping: [String: [String]] = [:]
         for conflict in analysis.conflicts where conflict.isConfirmed {
             overlapping[conflict.pair.first, default: []].append(titles[conflict.pair.second] ?? "Untitled event")
@@ -183,7 +197,7 @@ public struct CalendarScheduleService: Sendable {
                 organizer: event.organizer.flatMap { $0.name ?? $0.emailAddress },
                 response: Self.response(event.currentUserResponse.state),
                 overlaps: overlapping[event.sourceKeyHash] ?? [],
-                changedSinceViewed: item.observation.map { $0.revision > max($0.acknowledgedRevision ?? 0, 1) } ?? false,
+                change: changes[event.sourceKeyHash] ?? .none,
                 copiedTo: targets.map { ScheduleCopy(calendarName: calendarName($0.binding), fullDetails: $0.fullDetails, calendarID: $0.binding) },
                 replies: replies,
                 replyUnavailableReason: replies.isEmpty ? ConflictResolutionService.reasonText(choices.unavailableReasons) : nil

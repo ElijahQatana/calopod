@@ -9,6 +9,7 @@ struct EventInspector: View {
     let colors: CalendarColors
     private let aliases = CalendarAliases.shared
     let close: () -> Void
+    var openInbox: () -> Void = {}
 
     var body: some View {
         ScrollView {
@@ -22,6 +23,12 @@ struct EventInspector: View {
                 }
                 Text(event.title).font(Theme.title(.title3)).fixedSize(horizontal: false, vertical: true)
                 details
+                if let text = ScheduleLayout.changeText(event) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Banner(kind: .caution, text: "\(text). Review it in Inbox.")
+                        Button("Open Changed in Inbox", action: openInbox).controlSize(.small)
+                    }
+                }
                 if ScheduleLayout.showsOverlap(event) {
                     Banner(kind: .error, text: "Overlaps \(list(event.overlaps)).")
                 } else if !event.isCopy {

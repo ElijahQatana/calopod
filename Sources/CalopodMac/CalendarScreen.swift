@@ -5,7 +5,13 @@ struct CalendarScreen: View {
     @State private var model: CalendarModel
     private let colors = CalendarColors.shared
 
-    init(model: CalendarModel = CalendarModel()) { _model = State(initialValue: model) }
+    /// Opens Inbox on its Changed filter.
+    var openInbox: () -> Void = {}
+
+    init(model: CalendarModel = CalendarModel(), openInbox: @escaping () -> Void = {}) {
+        _model = State(initialValue: model)
+        self.openInbox = openInbox
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -56,7 +62,7 @@ struct CalendarScreen: View {
             if let event = model.selected {
                 EventInspector(
                     event: event, calendar: model.calendars.first { $0.id == event.calendarID },
-                    colors: colors, close: { model.selectedID = nil })
+                    colors: colors, close: { model.selectedID = nil }, openInbox: openInbox)
             }
         }
     }
