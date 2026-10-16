@@ -2,67 +2,59 @@ import SwiftUI
 
 struct MainWindow: View {
     let navigation: AppNavigation
+    let sidebar: SidebarState
     let service: ServiceModel
     let setup: SetupModel
     let conflicts: ConflictModel
 
     var body: some View {
-        @Bindable var navigation = navigation
-        NavigationSplitView {
-            List(Screen.allCases, selection: $navigation.selection) { screen in
-                Label(screen.title, systemImage: screen.symbol)
-                    .badge(badge(for: screen))
-                    .tag(screen)
-            }
-            .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 240)
-            .safeAreaInset(edge: .bottom) { sidebarStatus }
-        } detail: {
-            switch navigation.selection {
-            case .overview: OverviewScreen(model: service, conflicts: conflicts, navigation: navigation)
-            case .calendars: CalendarsScreen(model: setup)
-            case .arms: ArmsScreen(model: setup)
-            case .conflicts: ConflictsScreen(model: conflicts)
-            case .service: ServiceScreen(model: service)
-            }
+        HStack(spacing: 0) {
+            Sidebar(
+                navigation: navigation, state: sidebar, service: service,
+                inboxCount: conflicts.board?.groups.count ?? 0)
+            detail
         }
+        .padding(Sidebar.inset)
+        .ignoresSafeArea(.container, edges: .top)
+        .background(Color(nsColor: .underPageBackgroundColor))
+        .background { WindowChrome(collapsed: sidebar.isCollapsed) }
         .navigationTitle(navigation.selection.title)
         .frame(minWidth: 860, minHeight: 580)
         .tint(Theme.accent)
         .onAppear { NSApplication.shared.activate(ignoringOtherApps: true) }
     }
 
-    private func badge(for screen: Screen) -> Int {
-        screen == .conflicts ? (conflicts.board?.groups.count ?? 0) : 0
+    private var detail: some View {
+        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+        return screen
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if sidebar.isCollapsed {
+                    HStack { SidebarToggle(state: sidebar); Spacer() }
+                        .padding(.horizontal, 14).padding(.top, 12)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .transition(.opacity)
+                }
+            }
+            .background(Color(nsColor: .windowBackgroundColor))
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(.separator))
+            .padding(.leading, Sidebar.inset)
     }
 
-    private var sidebarStatus: some View {
-        HStack(spacing: 8) {
-            Circle().fill(statusColor).frame(width: 8, height: 8)
-            Text(statusText).font(.callout).foregroundStyle(.secondary)
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
-    private var statusColor: Color {
-        switch service.status?.state {
-        case "ok": Theme.good
-        case "paused", "disabled": Theme.caution
-        case "failed", "stopped": Theme.bad
-        default: .secondary
-        }
-    }
-
-    private var statusText: String {
-        switch service.status?.state {
-        case "ok": "Syncing"
-        case "paused": "Paused"
-        case "disabled": "Sync off"
-        case "failed": "Needs attention"
-        case "stopped": "Stopped"
-        case "not-installed": "Not set up"
-        default: "Checking…"
+    @ViewBuilder
+    private var screen: some View {
+        switch navigation.selection {
+        case .overview: OverviewScreen(model: service, conflicts: conflicts, navigation: navigation)
+        case .calendar: PlaceholderScreen(screen: .calendar, detail: "Your week at a glance will appear here.")
+        case .inbox:
+            PlaceholderScreen(
+                screen: .inbox, detail: "Events that need your attention will collect here.",
+                action: ("Review overlapping events", { navigation.selection = .conflicts }))
+        case .calendars: CalendarsScreen(model: setup)
+        case .arms: ArmsScreen(model: setup)
+        case .conflicts: ConflictsScreen(model: conflicts)
+        case .service: ServiceScreen(model: service)
         }
     }
 }
