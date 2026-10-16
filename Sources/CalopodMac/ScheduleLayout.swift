@@ -72,6 +72,12 @@ enum ScheduleLayout {
             .sorted { ($0.startsAt, $0.id) < ($1.startsAt, $1.id) }
     }
 
+    /// How many title lines a block can show. Narrow blocks wrap instead of cutting the title to a few letters.
+    static func titleLines(width: CGFloat, height: CGFloat, allDay: Bool) -> Int {
+        if allDay { return 1 }
+        return max(1, min(Int((height - 6) / 13), width < 72 ? 2 : 6))
+    }
+
     enum Treatment: Equatable {
         /// A Busy copy Calopod made.
         case copy
