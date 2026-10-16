@@ -23,9 +23,15 @@ enum WindowBlurStrategy: String, CaseIterable {
 
     static let key = "CalopodWindowBlur"
 
+    /// The system glass view where it exists, otherwise the wrapper.
+    static var standard: WindowBlurStrategy {
+        if #available(macOS 26, *) { return .glass }
+        return .wrapper
+    }
+
     static func parse(_ raw: String?) -> WindowBlurStrategy {
-        guard let raw else { return .wrapper }
-        return WindowBlurStrategy(rawValue: raw.trimmingCharacters(in: .whitespaces).lowercased()) ?? .wrapper
+        guard let raw else { return standard }
+        return WindowBlurStrategy(rawValue: raw.trimmingCharacters(in: .whitespaces).lowercased()) ?? standard
     }
 
     static var current: WindowBlurStrategy { parse(UserDefaults.standard.string(forKey: key)) }
