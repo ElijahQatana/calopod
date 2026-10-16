@@ -2,6 +2,7 @@ import CalopodCommands
 import CalopodRuntime
 import Foundation
 import Observation
+import ServiceManagement
 
 /// Holds what the window shows and routes every action to `AgentControlService`, the same
 /// controller and runner behind `calopod agent ...`. Blocking launchctl work stays off the main actor.
@@ -13,8 +14,10 @@ final class ServiceModel {
     private(set) var busyAction: String?
     private(set) var notice: String?
     private(set) var lastRunSummary: String?
+    private(set) var registration: ServiceRegistration.State = .unavailable
 
     private let service = AgentControlService()
+    private let registrar = ServiceRegistration()
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
 
     init() {
@@ -47,6 +50,7 @@ final class ServiceModel {
         if busyAction == nil {
             status = result.0
             overview = result.1
+            registration = registrar.state()
         }
     }
 
@@ -82,6 +86,43 @@ final class ServiceModel {
         }
     }
 
+    /// True while the source-installed LaunchAgent is still loaded or enabled.
+    var legacyServiceActive: Bool {
+        guard let status, status.installed else { return false }
+        return status.enabled || status.running
+    }
+
+    /// Moves automatic sync from the source-installed LaunchAgent to the bundled agent. The legacy
+    /// agent is stopped first so two agents never run, and restored if registration fails. Local
+    /// state is never touched.
+    func installBundledService() async {
+        let service = service
+        let registrar = registrar
+        let legacyActive = legacyServiceActive
+        await perform("Installing background service…") {
+            if legacyActive { try service.setEnabled(false) }
+            do {
+                try registrar.register()
+            } catch {
+                if legacyActive { try? service.setEnabled(true) }
+                throw error
+            }
+            return nil
+        }
+    }
+
+    func removeBundledService() async {
+        let registrar = registrar
+        await perform("Removing background service…") {
+            try await registrar.unregister()
+            return nil
+        }
+    }
+
+    func openLoginItemsSettings() {
+        registrar.openLoginItemsSettings()
+    }
+
     private func perform(
         _ label: String,
         _ work: @escaping @Sendable () async throws -> String?
@@ -93,7 +134,10 @@ final class ServiceModel {
             let summary = try await Task.detached { try await work() }.value
             if let summary { lastRunSummary = summary }
         } catch {
-            notice = service.message(for: error)
+            let nsError = error as NSError
+            notice = nsError.domain == "SMAppServiceErrorDomain"
+                ? nsError.localizedDescription
+                : service.message(for: error)
         }
         busyAction = nil
         await refresh()

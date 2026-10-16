@@ -16,11 +16,8 @@ struct StatusView: View {
                 controls(status)
                 Divider()
                 overview
-            } else if model.status != nil {
-                Text("The background service is not installed. Run ./install from the Calopod source folder, then reopen this menu.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
             }
+            backgroundService
             if let notice = model.notice {
                 Text(notice).font(.callout).foregroundStyle(.red)
             }
@@ -72,6 +69,39 @@ struct StatusView: View {
                    !Self.intervals.contains(where: { $0.seconds == current }) {
                     Text("\(current) seconds").tag(current)
                 }
+            }
+            .disabled(model.isBusy)
+        }
+    }
+
+    @ViewBuilder
+    private var backgroundService: some View {
+        switch model.registration {
+        case .unavailable:
+            if model.status?.installed != true {
+                Text("Open the Calopod app (Scripts/build-calopod-mac-app.sh) to install the background service.")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
+        case .notRegistered, .notFound:
+            VStack(alignment: .leading, spacing: 6) {
+                Text(model.legacyServiceActive
+                    ? "Automatic sync currently runs from the source-installed service. Installing the app's service replaces it; your settings and local state are kept."
+                    : "Install the background service so Calopod syncs automatically.")
+                    .font(.callout).foregroundStyle(.secondary)
+                Button(model.legacyServiceActive ? "Move to the app's service" : "Install background service") {
+                    Task { await model.installBundledService() }
+                }
+                .disabled(model.isBusy || model.registration == .notFound)
+            }
+        case .requiresApproval:
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Allow Calopod in System Settings > General > Login Items to start automatic sync.")
+                    .font(.callout).foregroundStyle(.secondary)
+                Button("Open Login Items Settings") { model.openLoginItemsSettings() }
+            }
+        case .enabled:
+            Button("Remove background service") {
+                Task { await model.removeBundledService() }
             }
             .disabled(model.isBusy)
         }
