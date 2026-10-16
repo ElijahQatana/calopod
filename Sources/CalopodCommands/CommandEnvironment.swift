@@ -99,7 +99,7 @@ func failCommand(_ error: Error) throws -> Never {
     throw ExitCode(failure.exitCode.rawValue)
 }
 
-private func commandFailure(_ error: Error) -> (message: String, exitCode: CalopodExitCode) {
+func commandFailure(_ error: Error) -> (message: String, exitCode: CalopodExitCode) {
     if error is CalopodDatabaseError {
         return ("Local state needs an upgrade. Run a writable command after sync finishes, then retry the read.", .localStateFailure)
     }
