@@ -36,7 +36,7 @@ struct MainWindow: View {
                         .transition(.opacity)
                 }
             }
-            .background(Theme.pane)
+            .panelFill(.card, in: shape)
             .clipShape(shape)
             .overlay(shape.strokeBorder(Theme.paneLine))
             .padding(.leading, Sidebar.inset)
@@ -57,8 +57,14 @@ struct MainWindow: View {
 
 /// Blurs the desktop behind the window and warms it, as the mockup does.
 private struct GlassWindowBackground: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     var body: some View {
-        BehindWindowBlur().overlay(Theme.windowTint).ignoresSafeArea()
+        if reduceTransparency {
+            Color(nsColor: .windowBackgroundColor).ignoresSafeArea()
+        } else {
+            BehindWindowBlur().overlay(Theme.windowTint).ignoresSafeArea()
+        }
     }
 }
 

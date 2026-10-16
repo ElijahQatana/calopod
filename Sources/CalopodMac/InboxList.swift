@@ -22,7 +22,7 @@ struct InboxList: View {
             }
             .padding(.vertical, 6)
         }
-        .background(Theme.group, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .panelFill(.inner, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .focusable()
         .focusEffectDisabled()
         .onKeyPress(.upArrow) { move(-1) }
