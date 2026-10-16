@@ -50,7 +50,7 @@ public enum InboxConflictCalculator {
     public static func analyze(
         _ snapshot: InboxContextSnapshot, window: SyncWindow?, freshnessCutoff: Date,
         responseOverride: (key: String, state: EventResponseState)? = nil,
-        responseOverrides: [String: EventResponseState] = [:]
+        responseOverrides: [String: EventResponseState] = [:], coverageWindow: SyncWindow? = nil
     ) -> InboxConflictAnalysis {
         var overrides = responseOverrides
         if let responseOverride { overrides[responseOverride.key] = responseOverride.state }
@@ -79,6 +79,13 @@ public enum InboxConflictCalculator {
                 }
             }
         }
+        // Events kept from before or after the read range cannot be read again, so they
+        // only widen the analysis, not what a calendar must have covered.
+        let required = coverageWindow ?? window.flatMap { window -> SyncWindow? in
+            guard let start = snapshot.sources.compactMap({ $0.coverage?.startsAt }).min(),
+                  let end = snapshot.sources.compactMap({ $0.coverage?.endsAt }).max() else { return window }
+            return try? SyncWindow(start: max(window.start, start), end: min(window.end, end))
+        }
         var warnings: [InboxContextWarning] = []
         if snapshot.sources.isEmpty {
             warnings.append(InboxContextWarning(kind: .noSelectedSources, bindingID: nil, sourceKeyHash: nil))
@@ -92,7 +99,7 @@ public enum InboxConflictCalculator {
                 warnings.append(InboxContextWarning(kind: .staleSource, bindingID: source.bindingID, sourceKeyHash: nil))
             }
             if source.coverage.map({ coverage in
-                window.map { coverage.startsAt > $0.start || coverage.endsAt < $0.end } ?? false
+                required.map { coverage.startsAt > $0.start || coverage.endsAt < $0.end } ?? false
             }) != false {
                 warnings.append(InboxContextWarning(kind: .incompleteCoverage, bindingID: source.bindingID, sourceKeyHash: nil))
             }
