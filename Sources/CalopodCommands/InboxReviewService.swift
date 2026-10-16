@@ -26,6 +26,8 @@ public struct InboxReviewProgress: Equatable, Sendable {
     public let isFinished: Bool
     /// A reply whose outcome is not known yet. Resume checks it before anything else.
     public let hasUnclear: Bool
+    /// The queued event the sheet is on, when it is not finished.
+    public let currentKey: String?
     public let totals: InboxReviewTotals
 }
 
@@ -225,7 +227,8 @@ public struct InboxReviewService: Sendable {
         return InboxReviewProgress(
             sessionID: session.id, total: session.queueCount,
             reviewed: queue.filter { $0.outcome != nil && $0.outcome != .stale }.count,
-            isFinished: session.cursor >= session.queueCount, hasUnclear: session.hasUnresolvedActions, totals: totals)
+            isFinished: session.cursor >= session.queueCount, hasUnclear: session.hasUnresolvedActions,
+            currentKey: session.cursor < session.queueCount ? session.entries[session.cursor].sourceKeyHash : nil, totals: totals)
     }
 
     private func info(_ card: InboxReviewCard, session: InboxReviewSession) throws -> InboxReviewCardInfo {

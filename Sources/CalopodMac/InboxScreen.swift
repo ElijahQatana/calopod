@@ -6,6 +6,7 @@ struct InboxScreen: View {
     let model: InboxModel
     let navigation: AppNavigation
     let colors: CalendarColors
+    @State private var showingReview = false
 
     private var filter: InboxFilter { navigation.inboxFilter }
     private var entries: [InboxEntry] { model.board?.entries(for: filter) ?? [] }
@@ -26,6 +27,9 @@ struct InboxScreen: View {
         .task { await model.reload() }
         .onChange(of: filter) { model.ensureSelection(in: entries) }
         .onChange(of: model.board) { model.ensureSelection(in: entries) }
+        .sheet(isPresented: $showingReview, onDismiss: { Task { await model.reload() } }) {
+            InboxReviewSheet(model: model.review, colors: colors) { showingReview = false }
+        }
     }
 
     // MARK: Header and filters
@@ -35,8 +39,12 @@ struct InboxScreen: View {
             Text("Inbox").font(Theme.title())
             BusyLine(text: model.busy)
             Spacer()
-            Button("Choose replies for overlaps") { navigation.selection = .conflicts }
-                .help("Open the guided list of overlapping events")
+            Button("Review") {
+                model.review.open(filter: filter)
+                showingReview = true
+            }
+            .disabled(model.isBusy)
+            .help("Go through your inbox one event at a time")
             Button("Refresh", systemImage: "arrow.clockwise") { Task { await model.refresh() } }
                 .buttonStyle(.circleToolbar)
                 .disabled(model.isBusy)

@@ -15,6 +15,7 @@ final class InboxModel {
         didSet { if selection != oldValue { result = nil; Task { await loadDetail() } } }
     }
 
+    let review = InboxReviewModel()
     private let service: InboxScreenService
 
     init(service: InboxScreenService = InboxScreenService()) {
