@@ -52,3 +52,24 @@ final class ThemeTests: XCTestCase {
         }
     }
 }
+
+final class WindowBlurTests: XCTestCase {
+    func testStrategyParsing() {
+        XCTAssertEqual(WindowBlurStrategy.parse(nil), .wrapper)
+        XCTAssertEqual(WindowBlurStrategy.parse(""), .wrapper)
+        XCTAssertEqual(WindowBlurStrategy.parse("bogus"), .wrapper)
+        XCTAssertEqual(WindowBlurStrategy.parse(" Background "), .background)
+        XCTAssertEqual(WindowBlurStrategy.parse("container"), .container)
+        XCTAssertEqual(WindowBlurStrategy.parse("OFF"), .off)
+    }
+
+    func testLogLine() {
+        let line = WindowDiagnostics.line(
+            event: "startup", strategy: .background, isOpaque: false, background: "clear",
+            contentView: "NSHostingView", effect: "none", isMain: true, reduceTransparency: false)
+        XCTAssertEqual(
+            line,
+            "startup: strategy=background isOpaque=false backgroundColor=clear contentView=NSHostingView "
+                + "effect=none isMainWindow=true reduceTransparency=false")
+    }
+}

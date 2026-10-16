@@ -17,7 +17,8 @@ struct MainWindow: View {
         }
         .padding(Sidebar.inset)
         .ignoresSafeArea(.container, edges: .top)
-        .background { GlassWindowBackground() }
+        .modifier(WindowBackdrop(strategy: .current))
+        .background { WindowBlurHelper(strategy: .current) }
         .background { WindowChrome(collapsed: sidebar.isCollapsed) }
         .navigationTitle(navigation.selection.title)
         .frame(minWidth: 860, minHeight: 580)
@@ -53,30 +54,4 @@ struct MainWindow: View {
         case .service: ServiceScreen(model: service)
         }
     }
-}
-
-/// Blurs the desktop behind the window and warms it, as the mockup does.
-private struct GlassWindowBackground: View {
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-
-    var body: some View {
-        if reduceTransparency {
-            Color(nsColor: .windowBackgroundColor).ignoresSafeArea()
-        } else {
-            BehindWindowBlur().overlay(Theme.frameTint).ignoresSafeArea()
-        }
-    }
-}
-
-private struct BehindWindowBlur: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.blendingMode = .behindWindow
-        view.material = Theme.windowMaterial
-        view.isEmphasized = false
-        view.state = .followsWindowActiveState
-        return view
-    }
-
-    func updateNSView(_ view: NSVisualEffectView, context: Context) {}
 }
