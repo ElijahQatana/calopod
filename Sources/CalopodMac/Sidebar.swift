@@ -240,7 +240,6 @@ struct WindowChrome: NSViewRepresentable {
     }
 
     func updateNSView(_ view: NSView, context: Context) {
-        context.coordinator.collapsed = collapsed
         DispatchQueue.main.async { context.coordinator.apply() }
     }
 
@@ -255,7 +254,6 @@ struct WindowChrome: NSViewRepresentable {
     @MainActor
     final class Coordinator {
         weak var view: NSView?
-        var collapsed = false
         private var observers: [NSObjectProtocol] = []
 
         func apply() {
@@ -273,21 +271,22 @@ struct WindowChrome: NSViewRepresentable {
                 let container = titlebar.superview
             else { return }
             let height = WindowChrome.barHeight
-            container.frame = NSRect(
+            let barFrame = NSRect(
                 x: 0, y: window.frame.height - height, width: window.frame.width, height: height)
-            titlebar.frame = container.bounds
+            if container.frame != barFrame { container.frame = barFrame }
+            if titlebar.frame != container.bounds { titlebar.frame = container.bounds }
 
-            // Rail: centered in the narrow panel. Expanded: near its left edge.
+            // Same spot in both states: centered in the rail, which also fits the full panel.
             let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton]
                 .compactMap { window.standardWindowButton($0) }
             let step = (buttons.dropFirst().first?.frame.minX ?? 34) - close.frame.minX
             let span = step * 2 + close.frame.width
-            let left = Sidebar.inset + (collapsed ? (Sidebar.railWidth - span) / 2 : 22)
+            let left = Sidebar.inset + (Sidebar.railWidth - span) / 2
             let top = Sidebar.inset + 10 + 16
             for (index, button) in buttons.enumerated() {
                 let origin = NSPoint(
                     x: left + step * CGFloat(index), y: height - top - button.frame.height / 2)
-                button.setFrameOrigin(origin)
+                if button.frame.origin != origin { button.setFrameOrigin(origin) }
             }
         }
 
@@ -295,6 +294,8 @@ struct WindowChrome: NSViewRepresentable {
             let names: [Notification.Name] = [
                 NSWindow.didResizeNotification, NSWindow.didEndLiveResizeNotification,
                 NSWindow.didExitFullScreenNotification, NSWindow.didBecomeKeyNotification,
+                // AppKit lays the title bar out again on its own; put the buttons back.
+                NSWindow.didUpdateNotification,
             ]
             observers = names.map { name in
                 NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) {
