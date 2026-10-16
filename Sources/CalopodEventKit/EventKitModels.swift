@@ -19,6 +19,8 @@ public struct EventKitCalendarSnapshot: Codable, Equatable, Sendable {
     public let sourceTitle: String
     public let sourceType: String
     public let allowsContentModifications: Bool
+    /// The Calendar app color as `#rrggbb`, when the host could read it.
+    public let color: String?
 
     public init(
         id: String,
@@ -26,7 +28,8 @@ public struct EventKitCalendarSnapshot: Codable, Equatable, Sendable {
         sourceID: String,
         sourceTitle: String,
         sourceType: String,
-        allowsContentModifications: Bool
+        allowsContentModifications: Bool,
+        color: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -34,6 +37,7 @@ public struct EventKitCalendarSnapshot: Codable, Equatable, Sendable {
         self.sourceTitle = sourceTitle
         self.sourceType = sourceType
         self.allowsContentModifications = allowsContentModifications
+        self.color = color
     }
 }
 

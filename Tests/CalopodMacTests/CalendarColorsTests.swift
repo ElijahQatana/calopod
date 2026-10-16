@@ -38,17 +38,56 @@ final class CalendarColorsTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
         defer { defaults.removePersistentDomain(forName: name) }
 
+        let ids = ["work@example.com", "home@example.com"].map { CalendarColorSource(id: $0) }
         let first = CalendarColors(defaults: defaults)
-        first.assignMissing(to: ["work@example.com", "home@example.com"])
+        first.assignMissing(to: ids)
         let work = first.color(for: "work@example.com")
         XCTAssertNotEqual(work, first.color(for: "home@example.com"))
 
         let red = try XCTUnwrap(CalendarColor.named("red"))
         first.set(red, for: "home@example.com")
-        first.assignMissing(to: ["work@example.com", "home@example.com"])
+        first.assignMissing(to: ids)
 
         let reopened = CalendarColors(defaults: defaults)
         XCTAssertEqual(reopened.color(for: "work@example.com"), work)
         XCTAssertEqual(reopened.color(for: "home@example.com"), red)
+    }
+
+    func testNearestPaletteColorForProviderHex() {
+        let cases: [(hex: String, id: String?)] = [
+            ("#3a5fcd", "blue"), ("#d9731a", "orange"), ("#ff2d55", "red"), ("#16a765", "green"),
+            ("#808080", "gray"), ("not a color", nil), ("#12", nil),
+        ]
+        for item in cases { XCTAssertEqual(CalendarColor.nearest(toHex: item.hex)?.id, item.id, item.hex) }
+    }
+
+    @MainActor
+    func testProviderColorsStayDefaultsUntilChosen() throws {
+        let name = "calopod.test.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let colors = CalendarColors(defaults: defaults)
+        let sources = [
+            CalendarColorSource(id: "mac", providerColor: "#d9731a", provider: "eventkit"),
+            CalendarColorSource(id: "mac-none", providerColor: nil, provider: "eventkit"),
+            CalendarColorSource(id: "google", providerColor: "#16a765", provider: "google"),
+        ]
+        colors.assignMissing(to: sources)
+
+        // Mac starts from the Calendar app color; Google keeps a suggestion until asked.
+        XCTAssertEqual(colors.color(for: "mac").id, "orange")
+        XCTAssertNotNil(colors.choices["mac-none"])
+        XCTAssertNotEqual(colors.color(for: "google").id, "orange")
+        XCTAssertEqual(colors.providerMatch(for: "google")?.name, "Google")
+
+        colors.matchProvider(for: "google")
+        XCTAssertEqual(colors.color(for: "google").id, "green")
+        XCTAssertNil(colors.providerMatch(for: "mac-none"))
+
+        // A later pass with a different provider color does not undo a choice.
+        let purple = try XCTUnwrap(CalendarColor.named("purple"))
+        colors.set(purple, for: "mac")
+        colors.assignMissing(to: [CalendarColorSource(id: "mac", providerColor: "#c8453b", provider: "eventkit")])
+        XCTAssertEqual(colors.color(for: "mac"), purple)
     }
 }

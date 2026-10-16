@@ -65,7 +65,8 @@ public struct MicrosoftConnectionService: RSVPActionProvider {
                 displayLabel: $0.name,
                 isSelected: false,
                 isReadOnly: !$0.canEdit,
-                responseIdentityScope: $0.isDefault ? .authenticatedUser : .unverified
+                responseIdentityScope: $0.isDefault ? .authenticatedUser : .unverified,
+                providerColor: $0.hexColor
             )
         }
         try state.replaceCalendarBindings(connectionID: connectionID, bindings: bindings, now: now())

@@ -127,12 +127,12 @@ struct MicrosoftGraphClientTests {
             if request.url?.query == "page=2" {
                 return HTTPResponse(
                     statusCode: 200,
-                    body: Data(#"{"value":[{"id":"second","name":"Shared","canEdit":false}]}"#.utf8)
+                    body: Data(#"{"value":[{"id":"second","name":"Shared","canEdit":false,"color":"auto","hexColor":""}]}"#.utf8)
                 )
             }
             return HTTPResponse(
                 statusCode: 200,
-                body: Data(#"{"value":[{"id":"first","name":"Main","isDefaultCalendar":true,"canEdit":true}],"@odata.nextLink":"https://graph.microsoft.com/v1.0/me/calendars?page=2"}"#.utf8)
+                body: Data(##"{"value":[{"id":"first","name":"Main","isDefaultCalendar":true,"canEdit":true,"color":"lightBlue","hexColor":"#1A8CFF"}],"@odata.nextLink":"https://graph.microsoft.com/v1.0/me/calendars?page=2"}"##.utf8)
             )
         }
         let client = MicrosoftGraphClient(transport: transport)
@@ -142,6 +142,7 @@ struct MicrosoftGraphClientTests {
         #expect(calendars.map(\.id) == ["first", "second"])
         #expect(calendars[0].isDefault)
         #expect(!calendars[1].canEdit)
+        #expect(calendars.map(\.hexColor) == ["#1a8cff", nil])
     }
 
     @Test("Calendar delta follows next links and normalizes removals")

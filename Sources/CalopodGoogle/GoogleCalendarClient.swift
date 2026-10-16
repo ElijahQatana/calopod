@@ -12,13 +12,18 @@ public struct GoogleCalendar: Equatable, Sendable {
     public let timeZone: String?
     public let accessRole: String
     public let primary: Bool
+    public let backgroundColor: String?
 
-    public init(id: String, summary: String?, timeZone: String?, accessRole: String, primary: Bool) {
+    public init(
+        id: String, summary: String?, timeZone: String?, accessRole: String, primary: Bool,
+        backgroundColor: String? = nil
+    ) {
         self.id = id
         self.summary = summary
         self.timeZone = timeZone
         self.accessRole = accessRole
         self.primary = primary
+        self.backgroundColor = backgroundColor
     }
 }
 
@@ -57,7 +62,8 @@ public struct GoogleCalendarClient: Sendable {
                     summary: $0.summary,
                     timeZone: $0.timeZone,
                     accessRole: $0.accessRole,
-                    primary: $0.primary ?? false
+                    primary: $0.primary ?? false,
+                    backgroundColor: ProviderColor.hex($0.backgroundColor)
                 )
             })
             pageToken = page.nextPageToken
@@ -484,6 +490,7 @@ private struct CalendarListItem: Decodable {
     let timeZone: String?
     let accessRole: String
     let primary: Bool?
+    let backgroundColor: String?
 }
 
 private struct EventListResponse: Decodable {

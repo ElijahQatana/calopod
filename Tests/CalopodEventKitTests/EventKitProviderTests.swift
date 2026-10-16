@@ -144,7 +144,8 @@ struct EventKitConnectionServiceTests {
                 sourceID: "source-one",
                 sourceTitle: "Synthetic source",
                 sourceType: "caldav",
-                allowsContentModifications: true
+                allowsContentModifications: true,
+                color: "#FF2D55"
             ),
             EventKitCalendarSnapshot(
                 id: "calendar-two",
@@ -162,6 +163,7 @@ struct EventKitConnectionServiceTests {
         #expect(connection.displayLabel == "Calendars on this Mac")
         #expect(first.count == 2)
         #expect(first.allSatisfy { !$0.isSelected })
+        #expect(first.map(\.providerColor).sorted { ($0 ?? "") < ($1 ?? "") } == [nil, "#ff2d55"])
         #expect(first.first { $0.providerCalendarID == "calendar-two" }?.isReadOnly == true)
 
         try database.write { database in

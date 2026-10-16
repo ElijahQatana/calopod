@@ -43,6 +43,8 @@ public struct StoredCalendarBinding: Equatable, Sendable {
     public let providerSourceType: String?
     public let providerSourceLabel: String?
     public let responseIdentityScope: ResponseIdentityScope
+    /// The provider's color for the calendar as `#rrggbb`, when it reports one.
+    public let providerColor: String?
 
     public init(
         id: String,
@@ -54,7 +56,8 @@ public struct StoredCalendarBinding: Equatable, Sendable {
         providerSourceID: String? = nil,
         providerSourceType: String? = nil,
         providerSourceLabel: String? = nil,
-        responseIdentityScope: ResponseIdentityScope = .unverified
+        responseIdentityScope: ResponseIdentityScope = .unverified,
+        providerColor: String? = nil
     ) {
         self.id = id
         self.connectionID = connectionID
@@ -66,6 +69,7 @@ public struct StoredCalendarBinding: Equatable, Sendable {
         self.providerSourceType = providerSourceType
         self.providerSourceLabel = providerSourceLabel
         self.responseIdentityScope = responseIdentityScope
+        self.providerColor = providerColor
     }
 }
 
@@ -297,8 +301,9 @@ public final class LocalStateRepository: @unchecked Sendable {
                         INSERT INTO calendar_bindings
                             (id, connection_id, provider_calendar_id, display_label,
                              is_selected, is_read_only, provider_source_id,
-                             provider_source_type, provider_source_label, response_identity_scope, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             provider_source_type, provider_source_label, response_identity_scope,
+                             provider_color, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(connection_id, provider_calendar_id) DO UPDATE SET
                             display_label = excluded.display_label,
                             is_selected = excluded.is_selected,
@@ -306,7 +311,8 @@ public final class LocalStateRepository: @unchecked Sendable {
                             provider_source_id = excluded.provider_source_id,
                             provider_source_type = excluded.provider_source_type,
                             provider_source_label = excluded.provider_source_label,
-                            response_identity_scope = excluded.response_identity_scope
+                            response_identity_scope = excluded.response_identity_scope,
+                            provider_color = excluded.provider_color
                         """,
                     arguments: [
                         binding.id,
@@ -319,6 +325,7 @@ public final class LocalStateRepository: @unchecked Sendable {
                         binding.providerSourceType,
                         binding.providerSourceLabel,
                         binding.responseIdentityScope.rawValue,
+                        binding.providerColor,
                         now,
                     ]
                 )
@@ -370,7 +377,7 @@ public final class LocalStateRepository: @unchecked Sendable {
                 sql: """
                     SELECT id, connection_id, provider_calendar_id, display_label,
                            is_selected, is_read_only, provider_source_id,
-                           provider_source_type, provider_source_label, response_identity_scope
+                           provider_source_type, provider_source_label, response_identity_scope, provider_color
                     FROM calendar_bindings
                     WHERE connection_id = ?
                     ORDER BY display_label, id
@@ -387,7 +394,8 @@ public final class LocalStateRepository: @unchecked Sendable {
                     providerSourceID: $0["provider_source_id"],
                     providerSourceType: $0["provider_source_type"],
                     providerSourceLabel: $0["provider_source_label"],
-                    responseIdentityScope: ResponseIdentityScope(rawValue: $0["response_identity_scope"]) ?? .unverified
+                    responseIdentityScope: ResponseIdentityScope(rawValue: $0["response_identity_scope"]) ?? .unverified,
+                    providerColor: $0["provider_color"]
                 )
             }
         }
@@ -400,7 +408,7 @@ public final class LocalStateRepository: @unchecked Sendable {
                 sql: """
                     SELECT id, connection_id, provider_calendar_id, display_label,
                            is_selected, is_read_only, provider_source_id,
-                           provider_source_type, provider_source_label, response_identity_scope
+                           provider_source_type, provider_source_label, response_identity_scope, provider_color
                     FROM calendar_bindings
                     WHERE id = ?
                     """,
@@ -418,7 +426,8 @@ public final class LocalStateRepository: @unchecked Sendable {
                 providerSourceID: row["provider_source_id"],
                 providerSourceType: row["provider_source_type"],
                 providerSourceLabel: row["provider_source_label"],
-                responseIdentityScope: ResponseIdentityScope(rawValue: row["response_identity_scope"]) ?? .unverified
+                responseIdentityScope: ResponseIdentityScope(rawValue: row["response_identity_scope"]) ?? .unverified,
+                providerColor: row["provider_color"]
             )
         }
     }

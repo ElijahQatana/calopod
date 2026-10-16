@@ -163,6 +163,13 @@ private actor LiveEventKitGateway: EventKitGateway {
         }
     }
 
+    private static func hex(_ color: CGColor) -> String? {
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let rgb = color.converted(to: space, intent: .defaultIntent, options: nil),
+              let c = rgb.components, c.count >= 3 else { return nil }
+        return ProviderColor.hex(red: Double(c[0]), green: Double(c[1]), blue: Double(c[2]))
+    }
+
     func calendars() -> [EventKitCalendarSnapshot] {
         store.calendars(for: .event).map {
             EventKitCalendarSnapshot(
@@ -171,7 +178,8 @@ private actor LiveEventKitGateway: EventKitGateway {
                 sourceID: $0.source.sourceIdentifier,
                 sourceTitle: $0.source.title,
                 sourceType: sourceType($0.source.sourceType),
-                allowsContentModifications: $0.allowsContentModifications
+                allowsContentModifications: $0.allowsContentModifications,
+                color: $0.cgColor.flatMap(Self.hex)
             )
         }
     }

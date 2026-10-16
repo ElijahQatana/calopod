@@ -17,6 +17,7 @@ extension CalopodDatabase {
         "v13_inbox_review_sessions",
         "v14_all_day_time_zone",
         "v15_refresh_retention_indexes",
+        "v16_calendar_provider_color",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -357,6 +358,12 @@ extension CalopodDatabase {
                                 on: "normalized_instances", columns: ["calendar_binding_id", "starts_at", "ends_at"])
             try database.create(index: "sync_runs_retention", on: "sync_runs", columns: ["status", "finished_at"])
             try database.create(index: "sync_operations_mirror", on: "sync_operations", columns: ["mirror_key"])
+        }
+
+        migrator.registerMigration("v16_calendar_provider_color") { database in
+            try database.alter(table: "calendar_bindings") { table in
+                table.add(column: "provider_color", .text)
+            }
         }
 
         return migrator

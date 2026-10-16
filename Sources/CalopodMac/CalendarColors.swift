@@ -31,6 +31,13 @@ struct CalendarColor: Identifiable, Equatable, Sendable {
 }
 
 extension CalendarColor {
+    /// The palette color closest to a provider's `#rrggbb`, so a match still stays within the twelve.
+    static func nearest(toHex hex: String) -> CalendarColor? {
+        guard hex.count == 7, hex.hasPrefix("#"), let value = UInt32(hex.dropFirst(), radix: 16) else { return nil }
+        let probe = CalendarColor(id: "", name: "", light: value, dark: value)
+        return palette.min { $0.distance(to: probe) < $1.distance(to: probe) }
+    }
+
     static let palette: [CalendarColor] = [
         CalendarColor(id: "blue", name: "Blue", light: 0x3a5fcd, dark: 0x7b9af0),
         CalendarColor(id: "orange", name: "Orange", light: 0xd9731a, dark: 0xf2a04a),
@@ -63,6 +70,32 @@ extension CalendarColor {
     }
 }
 
+/// What the provider says about a calendar's color, as far as it is known.
+struct CalendarColorSource: Equatable, Sendable {
+    let id: String
+    /// `#rrggbb` as the provider or Calendar app reports it.
+    let providerColor: String?
+    /// "google", "microsoft" or "eventkit".
+    let provider: String
+
+    init(id: String, providerColor: String? = nil, provider: String = "") {
+        self.id = id
+        self.providerColor = providerColor
+        self.provider = provider
+    }
+
+    /// The palette color that stands in for the provider's color.
+    var matched: CalendarColor? { providerColor.flatMap(CalendarColor.nearest(toHex:)) }
+
+    var providerName: String {
+        switch provider {
+        case "google": "Google"
+        case "microsoft": "Microsoft"
+        default: "Calendar app"
+        }
+    }
+}
+
 /// Calendar colors chosen on this Mac. They are never written to a calendar at the provider.
 @MainActor
 @Observable
@@ -72,6 +105,7 @@ final class CalendarColors {
     private static let defaultsKey = "calendarColors"
 
     private(set) var choices: [String: String]
+    private(set) var sources: [String: CalendarColorSource] = [:]
     @ObservationIgnored private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -89,11 +123,26 @@ final class CalendarColors {
         save()
     }
 
-    /// Gives every calendar without a color a suggested one, in the order listed.
-    func assignMissing(to calendarIDs: [String]) {
+    /// The color to offer for matching the provider, if it reported one.
+    func providerMatch(for calendarID: String) -> (name: String, color: CalendarColor)? {
+        guard let source = sources[calendarID], let color = source.matched else { return nil }
+        return (source.providerName, color)
+    }
+
+    func matchProvider(for calendarID: String) {
+        if let match = providerMatch(for: calendarID) { set(match.color, for: calendarID) }
+    }
+
+    /// Gives every calendar without a color one, in the order listed. Mac calendars start with their
+    /// Calendar app color; the rest get a suggestion. A color someone chose is never replaced.
+    func assignMissing(to calendars: [CalendarColorSource]) {
         var changed = false
-        for id in calendarIDs where choices[id].flatMap(CalendarColor.named) == nil {
-            choices[id] = CalendarColor.suggestion(avoiding: Array(choices.values)).id
+        for source in calendars {
+            sources[source.id] = source
+            guard choices[source.id].flatMap(CalendarColor.named) == nil else { continue }
+            let isMac = source.provider == "eventkit"
+            choices[source.id] = (isMac ? source.matched : nil)?.id
+                ?? CalendarColor.suggestion(avoiding: Array(choices.values)).id
             changed = true
         }
         if changed { save() }

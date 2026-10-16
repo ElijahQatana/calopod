@@ -102,12 +102,12 @@ struct GoogleCalendarClientTests {
             if request.url?.query?.contains("pageToken=next") == true {
                 return HTTPResponse(
                     statusCode: 200,
-                    body: Data(#"{"items":[{"id":"second","summary":"Shared","accessRole":"reader"}]}"#.utf8)
+                    body: Data(#"{"items":[{"id":"second","summary":"Shared","accessRole":"reader","backgroundColor":"not a color"}]}"#.utf8)
                 )
             }
             return HTTPResponse(
                 statusCode: 200,
-                body: Data(#"{"items":[{"id":"first","summary":"Main","accessRole":"owner","primary":true}],"nextPageToken":"next"}"#.utf8)
+                body: Data(##"{"items":[{"id":"first","summary":"Main","accessRole":"owner","primary":true,"backgroundColor":"#9A9CFF","colorId":"1"}],"nextPageToken":"next"}"##.utf8)
             )
         }
         let client = GoogleCalendarClient(transport: transport)
@@ -117,6 +117,7 @@ struct GoogleCalendarClientTests {
         #expect(calendars.map(\.id) == ["first", "second"])
         #expect(calendars[0].primary)
         #expect(calendars[1].accessRole == "reader")
+        #expect(calendars.map(\.backgroundColor) == ["#9a9cff", nil])
     }
 
     @Test("Event reads are bounded and normalize recurring and cancelled instances")
@@ -292,7 +293,7 @@ struct GoogleConnectionServiceTests {
             if request.url?.path.hasSuffix("calendarList") == true {
                 return HTTPResponse(
                     statusCode: 200,
-                    body: Data(#"{"items":[{"id":"calendar","summary":"Work","accessRole":"owner","primary":true}]}"#.utf8)
+                    body: Data(##"{"items":[{"id":"calendar","summary":"Work","accessRole":"owner","primary":true,"backgroundColor":"#16a765"}]}"##.utf8)
                 )
             }
             return HTTPResponse(
@@ -315,6 +316,7 @@ struct GoogleConnectionServiceTests {
         let connection = try await service.authorize(using: StubBrowserSession { _ in })
         let bindings = try await service.refreshCalendars(connectionID: connection.id)
         #expect(bindings.first?.responseIdentityScope == .authenticatedUser)
+        #expect(bindings.first?.providerColor == "#16a765")
         let page = try await service.events(
             connectionID: connection.id,
             binding: bindings[0],

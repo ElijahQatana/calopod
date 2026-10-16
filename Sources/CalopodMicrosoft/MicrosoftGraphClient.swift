@@ -11,12 +11,14 @@ public struct MicrosoftCalendar: Equatable, Sendable {
     public let name: String?
     public let isDefault: Bool
     public let canEdit: Bool
+    public let hexColor: String?
 
-    public init(id: String, name: String?, isDefault: Bool, canEdit: Bool) {
+    public init(id: String, name: String?, isDefault: Bool, canEdit: Bool, hexColor: String? = nil) {
         self.id = id
         self.name = name
         self.isDefault = isDefault
         self.canEdit = canEdit
+        self.hexColor = hexColor
     }
 }
 
@@ -45,7 +47,8 @@ public struct MicrosoftGraphClient: Sendable {
                     id: $0.id,
                     name: $0.name,
                     isDefault: $0.isDefaultCalendar ?? false,
-                    canEdit: $0.canEdit ?? false
+                    canEdit: $0.canEdit ?? false,
+                    hexColor: ProviderColor.hex($0.hexColor)
                 )
             })
             nextURL = try page.nextLink.map(validatedLink)
@@ -475,6 +478,7 @@ private struct MicrosoftCalendarItem: Decodable {
     let name: String?
     let isDefaultCalendar: Bool?
     let canEdit: Bool?
+    let hexColor: String?
 }
 
 private struct MicrosoftEventList: Decodable {
