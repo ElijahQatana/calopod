@@ -98,6 +98,23 @@ struct InboxReviewServiceTests {
         let plain = try #require(try await readOnly.service.card(sessionID: local.sessionID))
         #expect(plain.replies.isEmpty && plain.notification == nil)
         #expect(plain.detail.replyNote.contains("Calendar app"))
+        #expect(plain.isMacCalendar && !card.isMacCalendar)
+    }
+
+    @Test("A Mac calendar event can only be held, sends nothing and does not count as answered")
+    func macCalendarEventIsSkippedNotResolved() async throws {
+        let f = try ReviewFixture(count: 2, provider: "eventkit")
+        let progress = try f.service.start(overlapsOnly: false, skipMaybe: false)
+        var card = try #require(try await f.service.card(sessionID: progress.sessionID))
+        let (denied, _) = await f.service.reply(.yes, card: card)
+        #expect(denied != .recorded(.yes))
+        _ = await f.service.hold(card: card)
+        card = try #require(try await f.service.card(sessionID: progress.sessionID))
+        let (_, done) = await f.service.hold(card: card)
+        let totals = try #require(done).totals
+        #expect(await f.remote.writes == 0)
+        #expect(totals.held == 2 && totals.recorded == 0 && totals.queueReviewed && !totals.inboxResolved)
+        #expect(totals.remainingInbox == 2)
     }
 
     @Test("The summary counts overlaps resolved separately from replies recorded")

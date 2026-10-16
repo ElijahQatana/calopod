@@ -28,13 +28,20 @@ final class InboxReviewModel {
     var overlapsOnly = false
     var skipMaybe = false
 
+    /// Events moved on from after being left for the Calendar app. Held, never counted as answered.
+    private(set) var calendarSkips = 0
+    /// The event whose Calendar link was just opened, so the sheet can offer Done next.
+    private(set) var openedKey: String?
+
     private let service: InboxReviewService
+    private let calendar: CalendarOpener
     private var keyboard = ReviewKeyboard()
     private var focus: (key: String, origin: String)?
     private var isWorking: Bool { if case .working = phase { true } else { false } }
 
-    init(service: InboxReviewService = InboxReviewService()) {
+    init(service: InboxReviewService = InboxReviewService(), calendar: CalendarOpener = .system) {
         self.service = service
+        self.calendar = calendar
     }
 
     /// True while looking at an overlapping event reached with G.
@@ -53,6 +60,8 @@ final class InboxReviewModel {
         notice = nil
         paused = false
         progress = nil
+        calendarSkips = 0
+        openedKey = nil
         overlapsOnly = filter == .conflicts
         saved = try? service.unfinished()
         phase = .start
@@ -102,6 +111,14 @@ final class InboxReviewModel {
             guard card.neighbors.indices.contains(number - 1) else { return }
             focus = (card.neighbors[number - 1].id, focus?.origin ?? card.entry.id)
             await next()
+        case (.card(let card), .openCalendar) where card.isMacCalendar:
+            // Nothing is sent. The person answers in Calendar and comes back.
+            calendar.open(card.entry.startsAt)
+            openedKey = card.entry.id
+        case (.card(let card), .doneInCalendar) where card.isMacCalendar && card.replies.isEmpty:
+            let result = await service.hold(card: card)
+            if result.0 == .held { calendarSkips += 1 }
+            await finish(result, card: card, held: "Left for the Calendar app. Calopod checks it again next time. Nothing was sent.")
         case (.card, .back):
             guard focus != nil else { return }
             focus = nil
@@ -149,7 +166,10 @@ final class InboxReviewModel {
         }
     }
 
-    private func finish(_ result: (InboxReviewStep, InboxReviewProgress?), card: InboxReviewCardInfo) async {
+    private func finish(
+        _ result: (InboxReviewStep, InboxReviewProgress?), card: InboxReviewCardInfo,
+        held: String = "Held for this session. Nothing was sent."
+    ) async {
         let (step, updated) = result
         if let updated { progress = updated }
         switch step {
@@ -158,7 +178,7 @@ final class InboxReviewModel {
             focus = nil
             await next()
         case .held:
-            notice = "Held for this session. Nothing was sent."
+            notice = held
             focus = nil
             await next()
         case .changed:

@@ -44,6 +44,8 @@ public struct InboxReviewCardInfo: Sendable {
     public let position: Int
     public let total: Int
     public let account: String
+    /// True for calendars read through the Mac's Calendar app, where replies are made in that app.
+    public let isMacCalendar: Bool
     public let organizer: String?
     /// What sending does, as the provider describes it. Nil when no reply is possible.
     public let notification: String?
@@ -275,7 +277,7 @@ public struct InboxReviewService: Sendable {
         return InboxReviewCardInfo(
             detail: detail, position: min(session.cursor + 1, session.queueCount), total: session.queueCount,
             account: [source.connectionLabel ?? source.provider, source.calendarLabel].compactMap { $0 }.joined(separator: " / "),
-            organizer: organizer,
+            isMacCalendar: source.provider == "eventkit", organizer: organizer,
             notification: card.providerSnapshot.map { Self.notification($0.notification, organizer: organizer) },
             previews: previews, neighbors: neighbors, card: card)
     }
