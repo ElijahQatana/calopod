@@ -16,19 +16,32 @@ final class CalendarModel {
     /// Calendars hidden in this view. Not remembered and not shared with other screens.
     private(set) var hidden: Set<String> = []
     var selectedID: String?
+    /// Whether Busy copies Calopod made are drawn. Only this view changes; Inbox and sync do not.
+    var showCopies: Bool {
+        didSet {
+            defaults.set(showCopies, forKey: Self.showCopiesKey)
+            if !showCopies, selected?.isCopy == true { selectedID = nil }
+        }
+    }
+
+    static let showCopiesKey = "calendarShowCopies"
 
     let calendar: Calendar
     @ObservationIgnored private let load: @Sendable () throws -> CalendarSchedule
     @ObservationIgnored private let now: () -> Date
+    @ObservationIgnored private let defaults: UserDefaults
 
     init(
         calendar: Calendar = .current,
         now: @escaping () -> Date = Date.init,
+        defaults: UserDefaults = .standard,
         load: @escaping @Sendable () throws -> CalendarSchedule = { try CalendarScheduleService().schedule() }
     ) {
         self.calendar = calendar
         self.now = now
+        self.defaults = defaults
         self.load = load
+        showCopies = defaults.object(forKey: Self.showCopiesKey) as? Bool ?? true
         anchor = now()
     }
 
@@ -48,7 +61,7 @@ final class CalendarModel {
     var calendars: [ScheduleCalendar] { schedule?.calendars ?? [] }
 
     var events: [ScheduleEvent] {
-        (schedule?.events ?? []).filter { !hidden.contains($0.calendarID) }
+        (schedule?.events ?? []).filter { !hidden.contains($0.calendarID) && (showCopies || !$0.isCopy) }
     }
 
     var selected: ScheduleEvent? {
