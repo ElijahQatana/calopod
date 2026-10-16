@@ -26,4 +26,23 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(try hex(Theme.onAccent, .aqua), "ffffff")
         XCTAssertNotEqual(try hex(Theme.onAccent, .darkAqua), "ffffff")
     }
+
+    private func alpha(_ color: Color, _ name: NSAppearance.Name) throws -> CGFloat {
+        let appearance = try XCTUnwrap(NSAppearance(named: name))
+        var result: CGFloat = 0
+        appearance.performAsCurrentDrawingAppearance {
+            result = NSColor(color).usingColorSpace(.sRGB)!.alphaComponent
+        }
+        return result
+    }
+
+    func testFrameIsMoreSeeThroughThanSidebarThanContent() throws {
+        for name in [NSAppearance.Name.aqua, .darkAqua] {
+            let frame = try alpha(Theme.frameTint, name)
+            let sidebar = [try alpha(Theme.sidebarFill, name), try alpha(Theme.sidebarSheen, name)]
+            let content = try alpha(Theme.contentFill, name)
+            XCTAssertLessThan(frame, sidebar.min()!)
+            XCTAssertLessThan(sidebar.max()!, content)
+        }
+    }
 }

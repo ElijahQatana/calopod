@@ -63,7 +63,7 @@ private struct GlassWindowBackground: View {
         if reduceTransparency {
             Color(nsColor: .windowBackgroundColor).ignoresSafeArea()
         } else {
-            BehindWindowBlur().overlay(Theme.windowTint).ignoresSafeArea()
+            BehindWindowBlur().overlay(Theme.frameTint).ignoresSafeArea()
         }
     }
 }
