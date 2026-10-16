@@ -61,6 +61,24 @@ public struct SyncPreview: Equatable, Sendable {
     public var changeCount: Int { creates + updates + removals + repairs }
 }
 
+/// The `calopod doctor` checks, for the Mac app's Health section.
+public struct HealthReport: Equatable, Sendable {
+    public struct Check: Identifiable, Equatable, Sendable {
+        public var id: String { name }
+        /// `installation`, `service`, `state`, `database`, `schedule`, `connections` and so on.
+        public let name: String
+        /// `ok`, `pending` or `failed`.
+        public let state: String
+        public let reason: String?
+    }
+
+    /// `ok`, `attention` or `failed`.
+    public let status: String
+    public let message: String
+    public let checks: [Check]
+    public let warnings: [String]
+}
+
 /// Stateless entry point the Mac app uses to control the background service. Each call goes
 /// through the same `LaunchAgentController` and runner as the `calopod agent` commands.
 public struct AgentControlService: Sendable {
@@ -115,6 +133,22 @@ public struct AgentControlService: Sendable {
             environment: environment,
             schedule: try AgentSchedule(environment: configuration.environment)
         ).runOnce(ignorePause: true)
+    }
+
+    public func health() throws -> HealthReport {
+        try Self.health(controller: try LaunchAgentController())
+    }
+
+    static func health(controller: LaunchAgentController) throws -> HealthReport {
+        let report = try doctorReport(controller: controller)
+        return HealthReport(
+            status: report.status,
+            message: report.message,
+            checks: report.items.map {
+                HealthReport.Check(name: $0.id, state: $0.kind, reason: $0.reason)
+            },
+            warnings: report.warnings
+        )
     }
 
     /// Plans one bounded sync over the automatic-sync window without writing to any calendar.

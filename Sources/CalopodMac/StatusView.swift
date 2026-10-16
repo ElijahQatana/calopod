@@ -15,6 +15,7 @@ struct StatusView: View {
             header
             if let status = model.status, status.installed {
                 controls(status)
+                healthSection(status)
                 Divider()
                 overview
             }
@@ -80,6 +81,33 @@ struct StatusView: View {
                 }
             }
             .disabled(model.isBusy)
+        }
+    }
+
+    @ViewBuilder
+    private func healthSection(_ status: AgentControlStatus) -> some View {
+        if let health = model.health, health.status != "ok" {
+            DisclosureGroup("Needs attention") {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(health.checks.filter { $0.state != "ok" }) { check in
+                        Text("\(check.name.capitalized): \(check.state)" + (check.reason.map { " (\($0))" } ?? ""))
+                            .font(.caption)
+                    }
+                    ForEach(health.warnings, id: \.self) { warning in
+                        Text(warning).font(.caption).foregroundStyle(.secondary)
+                    }
+                    if status.state == "stopped" || (!status.running && status.enabled) {
+                        Button("Start service") { Task { await model.setEnabled(true) } }
+                            .disabled(model.isBusy)
+                    }
+                    if status.paused {
+                        Button("Resume scheduled syncs") { Task { await model.setPaused(false) } }
+                            .disabled(model.isBusy)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .font(.callout)
         }
     }
 

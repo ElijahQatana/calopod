@@ -86,3 +86,29 @@ struct SetupServiceTests {
     }
 }
 #endif
+
+#if os(macOS)
+@Suite("Mac health report")
+struct HealthReportTests {
+    @Test("a missing service is reported as a failed installation check")
+    func notInstalled() throws {
+        let home = FileManager.default.temporaryDirectory
+            .appendingPathComponent("calopod-health-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: home) }
+        let controller = try LaunchAgentController(
+            homeDirectory: home,
+            userID: 501,
+            launchctl: { _ in LaunchctlResult(exitCode: 1, output: "") }
+        )
+
+        let report = try AgentControlService.health(controller: controller)
+
+        #expect(report.status == "failed")
+        #expect(report.checks.map(\.name) == ["installation"])
+        #expect(report.checks.first?.state == "failed")
+        #expect(report.checks.first?.reason == "not-installed")
+        #expect(report.warnings == ["Install the Calopod user service."])
+    }
+}
+#endif
