@@ -7,6 +7,7 @@ struct MenuPopover: View {
     let inbox: InboxModel
     let schedule: CalendarModel
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -34,7 +35,7 @@ struct MenuPopover: View {
 
             if let status = model.status, status.installed {
                 HStack(spacing: 8) {
-                    Button("Preview sync") { open(.overview); Task { await model.previewSync() } }
+                    Button("Preview sync") { open(.overview, keepMenu: true); Task { await model.previewSync() } }
                         .buttonStyle(.accentFilled)
                         .disabled(model.isBusy)
                     if status.enabled {
@@ -101,14 +102,20 @@ struct MenuPopover: View {
         show()
     }
 
-    private func open(_ screen: Screen) {
+    private func open(_ screen: Screen, keepMenu: Bool = false) {
         navigation.selection = screen
-        show()
+        show(keepMenu: keepMenu)
     }
 
-    private func show() {
+    /// Opens the window, then closes the popover unless it should stay for watching status.
+    private func show(keepMenu: Bool = false) {
+        let popover = NSApp.keyWindow.flatMap { $0.title == "Calopod" ? nil : $0 }
         NSApplication.shared.activate(ignoringOtherApps: true)
         openWindow(id: "home")
+        guard !keepMenu else { return }
+        dismiss()
+        // dismiss() is not honored by every popover, so close its window as well.
+        DispatchQueue.main.async { if popover?.isVisible == true { popover?.close() } }
     }
 
     private var title: String {
