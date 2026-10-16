@@ -91,7 +91,7 @@ struct Sidebar: View {
                     if count > 0 { countBadge(count, selected: selected) }
                 }
             }
-            .font(.callout.weight(selected ? .semibold : .medium))
+            .font(.callout.weight(.semibold))
             .foregroundStyle(selected ? Theme.onAccent : Theme.sidebarLabel)
             .padding(.horizontal, rail ? 0 : 12)
             .frame(width: rail ? 44 : nil, height: rail ? 44 : 34)
