@@ -15,6 +15,7 @@ struct ConflictsScreen: View {
         .toolbar {
             ToolbarItem {
                 Button("Refresh", systemImage: "arrow.clockwise") { Task { await model.refresh() } }
+                    .buttonStyle(.circleToolbar)
                     .disabled(model.isBusy)
                     .help("Re-read your calendars. Nothing is changed.")
             }
@@ -78,10 +79,7 @@ struct ConflictsScreen: View {
                         .font(.callout).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text(event.response.replacingOccurrences(of: "-", with: " "))
-                    .font(.caption.weight(.medium))
-                    .padding(.horizontal, 8).padding(.vertical, 3)
-                    .background(Capsule().fill(.quaternary))
+                Chip(text: event.response.replacingOccurrences(of: "-", with: " "))
             }
             if let reason = event.replyUnavailableReason {
                 Label(reason, systemImage: "info.circle")
@@ -89,17 +87,13 @@ struct ConflictsScreen: View {
             }
             // Nothing to pick when "No change" is the only choice.
             if event.choices.count > 1 {
-                Picker(
-                    "Action",
+                PillPicker(
+                    options: event.choices.map { (Self.label($0), $0) },
                     selection: Binding(
                         get: { model.choice(for: event.id) },
                         set: { model.select($0, for: event.id) }
                     )
-                ) {
-                    ForEach(event.choices, id: \.self) { Text(Self.label($0)).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
+                )
                 .disabled(model.isBusy)
             }
         }

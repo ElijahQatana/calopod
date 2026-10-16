@@ -34,7 +34,7 @@ struct OverviewScreen: View {
                 .frame(width: 76, height: 76)
                 .background(Circle().fill(color(status).opacity(0.14)))
             VStack(spacing: 4) {
-                Text(headline(status)).font(.title2.weight(.semibold))
+                Text(headline(status)).font(Theme.title())
                 Text(detail(status)).font(.callout).foregroundStyle(.secondary)
             }
             if let busy = model.busyAction { BusyLine(text: busy) }

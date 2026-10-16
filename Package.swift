@@ -109,6 +109,10 @@ let package = Package(
             path: "Tests/Support"
         ),
         .testTarget(
+            name: "CalopodMacTests",
+            dependencies: ["CalopodMac"]
+        ),
+        .testTarget(
             name: "CalopodDomainTests",
             dependencies: ["CalopodDomain", "CalopodTestSupport"]
         ),

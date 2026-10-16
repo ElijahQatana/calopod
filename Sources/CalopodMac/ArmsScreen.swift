@@ -52,22 +52,22 @@ struct ArmsScreen: View {
         }
     }
 
+    private static let ruleOptions: [(label: String, value: ArmRuleMode)] = [
+        ("Busy only", .busy), ("Full details", .fullDetails),
+    ]
+
     // MARK: Arms
 
     private func armSection(_ arm: SetupArm) -> some View {
         Section {
             route(arm)
-            Picker(
-                "Shows",
+            PillPicker(
+                options: Self.ruleOptions,
                 selection: Binding(
                     get: { arm.rule },
                     set: { value in Task { await model.setRule(arm.id, value) } }
                 )
-            ) {
-                Text("Busy only").tag(ArmRuleMode.busy)
-                Text("Full details").tag(ArmRuleMode.fullDetails)
-            }
-            .pickerStyle(.segmented)
+            )
             Toggle(
                 "Enabled",
                 isOn: Binding(
@@ -84,11 +84,7 @@ struct ArmsScreen: View {
     private var newArmSection: some View {
         Section {
             picker(sources: $armSources, target: $armTarget)
-            Picker("Shows", selection: $armRule) {
-                Text("Busy only").tag(ArmRuleMode.busy)
-                Text("Full details").tag(ArmRuleMode.fullDetails)
-            }
-            .pickerStyle(.segmented)
+            PillPicker(options: Self.ruleOptions, selection: $armRule)
             TextField("Name (optional)", text: $armName)
             Button("Create arm") {
                 guard let target = armTarget else { return }
