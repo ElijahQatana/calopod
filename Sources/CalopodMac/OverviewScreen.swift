@@ -3,78 +3,68 @@ import SwiftUI
 
 struct OverviewScreen: View {
     let model: ServiceModel
+    let conflicts: ConflictModel
     let navigation: AppNavigation
 
     var body: some View {
-        ScreenScaffold {
-            ScreenHeader(title: "Overview", subtitle: subtitle)
-            BusyLine(text: model.busyAction)
-            if let notice = model.notice { Banner(kind: .error, text: notice) }
+        Form {
+            if let notice = model.notice { Section { Banner(kind: .error, text: notice) } }
 
             if let status = model.status, status.installed {
-                statusCard(status)
-                if let preview = model.pendingPreview { previewCard(preview) }
+                Section { hero(status) }
+                if let preview = model.pendingPreview { previewSection(preview) }
                 attention(status)
-                tiles
+                glance
             } else if model.status != nil {
                 gettingStarted
+            } else {
+                Section { ProgressView().frame(maxWidth: .infinity).padding(40) }
             }
         }
+        .formStyle(.grouped)
     }
 
-    private var subtitle: String {
-        guard let status = model.status else { return "Checking your calendars…" }
-        guard status.installed else { return "Let's get your calendars in sync." }
-        return switch status.state {
-        case "ok": "Everything is running smoothly."
-        case "paused": "Scheduled syncs are paused."
-        case "disabled": "Automatic sync is turned off."
-        case "failed": "The last sync didn't finish."
-        default: "Automatic sync needs a nudge."
-        }
-    }
+    // MARK: Hero
 
-    // MARK: Status
-
-    private func statusCard(_ status: AgentControlStatus) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    StatusPill(text: pillText(status), color: pillColor(status))
-                    Spacer()
-                    if let age = status.lastSuccessAgeSeconds {
-                        Text("Last synced \(Format.ago(age))")
-                            .font(.callout).foregroundStyle(.secondary)
+    private func hero(_ status: AgentControlStatus) -> some View {
+        VStack(spacing: 14) {
+            Image(systemName: symbol(status))
+                .font(.system(size: 34, weight: .medium))
+                .foregroundStyle(color(status))
+                .frame(width: 76, height: 76)
+                .background(Circle().fill(color(status).opacity(0.14)))
+            VStack(spacing: 4) {
+                Text(headline(status)).font(.title2.weight(.semibold))
+                Text(detail(status)).font(.callout).foregroundStyle(.secondary)
+            }
+            if let busy = model.busyAction { BusyLine(text: busy) }
+            HStack(spacing: 10) {
+                Button("Preview sync") { Task { await model.previewSync() } }
+                    .buttonStyle(.accentFilled)
+                    .disabled(model.isBusy || model.pendingPreview != nil)
+                if status.enabled {
+                    Button(status.paused ? "Resume" : "Pause") {
+                        Task { await model.setPaused(!status.paused) }
                     }
-                }
-                Text(model.lastRunSummary ?? status.message)
-                    .font(.title3.weight(.medium))
-                HStack(spacing: 10) {
-                    Button("Preview sync") { Task { await model.previewSync() } }
-                        .buttonStyle(.accentFilled)
-                        .disabled(model.isBusy || model.pendingPreview != nil)
-                    if status.enabled {
-                        Button(status.paused ? "Resume" : "Pause") {
-                            Task { await model.setPaused(!status.paused) }
-                        }
-                        .disabled(model.isBusy)
-                    }
+                    .controlSize(.large)
+                    .disabled(model.isBusy)
                 }
             }
         }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 18)
     }
 
-    private func pillText(_ status: AgentControlStatus) -> String {
+    private func symbol(_ status: AgentControlStatus) -> String {
         switch status.state {
-        case "ok": "Running"
-        case "paused": "Paused"
-        case "disabled": "Off"
-        case "failed": "Needs attention"
-        default: "Stopped"
+        case "ok": "checkmark"
+        case "paused": "pause.fill"
+        case "disabled": "power"
+        default: "exclamationmark"
         }
     }
 
-    private func pillColor(_ status: AgentControlStatus) -> Color {
+    private func color(_ status: AgentControlStatus) -> Color {
         switch status.state {
         case "ok": Theme.good
         case "paused", "disabled": Theme.caution
@@ -82,47 +72,63 @@ struct OverviewScreen: View {
         }
     }
 
+    private func headline(_ status: AgentControlStatus) -> String {
+        if let summary = model.lastRunSummary { return summary }
+        return switch status.state {
+        case "ok": "Everything is in sync"
+        case "paused": "Scheduled syncs are paused"
+        case "disabled": "Automatic sync is off"
+        case "failed": "The last sync didn't finish"
+        default: "Automatic sync is stopped"
+        }
+    }
+
+    private func detail(_ status: AgentControlStatus) -> String {
+        var parts: [String] = []
+        if let age = status.lastSuccessAgeSeconds { parts.append("Last synced \(Format.ago(age))") }
+        if let interval = status.intervalSeconds { parts.append("every \(Format.interval(interval))") }
+        return parts.isEmpty ? status.message : parts.joined(separator: " · ")
+    }
+
     // MARK: Preview
 
-    private func previewCard(_ preview: SyncPreview) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: 12) {
-                SectionLabel("Review before syncing")
-                Text(Self.summaryLine(preview)).font(.title3.weight(.medium))
-                if preview.removals > 0 {
-                    Banner(kind: .caution, text: "Includes removing copies Calopod made earlier.")
+    private func previewSection(_ preview: SyncPreview) -> some View {
+        Section {
+            ForEach(preview.lines.prefix(8)) { line in
+                LabeledContent {
+                    Text(line.reason).foregroundStyle(.secondary)
+                } label: {
+                    Text("\(line.action.capitalized) · \(line.armName)")
                 }
-                ForEach(preview.lines.prefix(6)) { line in
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(line.action.capitalized)
-                            .font(.caption.weight(.semibold))
-                            .padding(.horizontal, 7).padding(.vertical, 2)
-                            .background(Capsule().fill(Theme.accent.opacity(0.14)))
-                        Text("\(line.armName) — \(line.reason)")
-                            .font(.callout).foregroundStyle(.secondary)
-                    }
-                }
-                if preview.lines.count > 6 {
-                    Text("and \(preview.lines.count - 6) more").font(.callout).foregroundStyle(.secondary)
-                }
-                ForEach(preview.warnings, id: \.self) { Banner(kind: .caution, text: $0) }
-                HStack(spacing: 10) {
-                    Button("Apply") { Task { await model.applyPreview() } }
-                        .buttonStyle(.accentFilled)
-                        .keyboardShortcut(.defaultAction)
-                    Button("Cancel") { model.discardPreview() }
-                }
-                .disabled(model.isBusy)
             }
+            if preview.lines.count > 8 {
+                Text("and \(preview.lines.count - 8) more").foregroundStyle(.secondary)
+            }
+            if preview.removals > 0 {
+                Banner(kind: .caution, text: "Includes removing copies Calopod made earlier.")
+            }
+            ForEach(preview.warnings, id: \.self) { Banner(kind: .caution, text: $0) }
+            HStack {
+                Button("Cancel") { model.discardPreview() }
+                Spacer()
+                Button("Apply") { Task { await model.applyPreview() } }
+                    .buttonStyle(.accentFilled)
+                    .keyboardShortcut(.defaultAction)
+            }
+            .disabled(model.isBusy)
+        } header: {
+            Text("Review before syncing: \(Self.summaryLine(preview))")
         }
     }
 
     private static func summaryLine(_ preview: SyncPreview) -> String {
-        [("to create", preview.creates), ("to update", preview.updates),
-         ("to remove", preview.removals), ("to repair", preview.repairs)]
-            .filter { $0.1 > 0 }
-            .map { "\($0.1) \($0.0)" }
-            .joined(separator: " · ")
+        [
+            ("to create", preview.creates), ("to update", preview.updates),
+            ("to remove", preview.removals), ("to repair", preview.repairs),
+        ]
+        .filter { $0.1 > 0 }
+        .map { "\($0.1) \($0.0)" }
+        .joined(separator: ", ")
     }
 
     // MARK: Attention
@@ -130,85 +136,94 @@ struct OverviewScreen: View {
     @ViewBuilder
     private func attention(_ status: AgentControlStatus) -> some View {
         if let health = model.health, health.status != "ok" {
-            Card {
-                VStack(alignment: .leading, spacing: 10) {
-                    SectionLabel("Needs attention")
-                    ForEach(health.checks.filter { $0.state != "ok" }) { check in
-                        HStack {
-                            Circle().fill(check.state == "failed" ? Theme.bad : Theme.caution)
-                                .frame(width: 8, height: 8)
-                            Text(check.name.replacingOccurrences(of: "-", with: " ").capitalized)
-                            if let reason = check.reason {
-                                Text(reason.replacingOccurrences(of: "-", with: " "))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .font(.callout)
+            Section {
+                ForEach(health.checks.filter { $0.state != "ok" }) { check in
+                    LabeledContent {
+                        Text((check.reason ?? check.state).replacingOccurrences(of: "-", with: " "))
+                            .foregroundStyle(.secondary)
+                    } label: {
+                        Label(
+                            check.name.replacingOccurrences(of: "-", with: " ").capitalized,
+                            systemImage: check.state == "failed" ? "xmark.circle.fill" : "clock.fill"
+                        )
+                        .foregroundStyle(check.state == "failed" ? Theme.bad : Theme.caution, .primary)
                     }
-                    ForEach(health.warnings, id: \.self) {
-                        Text($0).font(.callout).foregroundStyle(.secondary)
-                    }
-                    HStack(spacing: 10) {
-                        if !status.running && status.enabled && model.registration != .enabled {
-                            Button("Start service") { Task { await model.setEnabled(true) } }
-                        }
-                        if status.paused {
-                            Button("Resume syncing") { Task { await model.setPaused(false) } }
-                        }
-                    }
-                    .disabled(model.isBusy)
                 }
+                if !status.running && status.enabled && model.registration != .enabled {
+                    Button("Start service") { Task { await model.setEnabled(true) } }
+                        .disabled(model.isBusy)
+                }
+                if status.paused {
+                    Button("Resume syncing") { Task { await model.setPaused(false) } }
+                        .disabled(model.isBusy)
+                }
+                Hint { if !health.warnings.isEmpty { Text(health.warnings.joined(separator: " ")) } }
+            } header: {
+                Text("Needs attention")
             }
         }
     }
 
-    // MARK: Tiles
+    // MARK: At a glance
 
-    private var tiles: some View {
-        HStack(spacing: 14) {
-            StatTile(
-                value: "\(model.overview?.connections.count ?? 0)",
-                caption: "Connected accounts"
+    private var glance: some View {
+        Section("At a glance") {
+            glanceRow("Connected accounts", "\(model.overview?.connections.count ?? 0)", .calendars)
+            glanceRow(
+                "Calendars in use",
+                "\(model.overview?.connections.reduce(0) { $0 + $1.selectedCalendarCount } ?? 0)",
+                .calendars
             )
-            StatTile(
-                value: "\(model.overview?.connections.reduce(0) { $0 + $1.selectedCalendarCount } ?? 0)",
-                caption: "Calendars in use"
-            )
-            StatTile(
-                value: "\(model.overview?.arms.filter(\.isEnabled).count ?? 0)",
-                caption: "Active arms"
-            )
+            glanceRow("Active arms", "\(model.overview?.arms.filter(\.isEnabled).count ?? 0)", .arms)
+            glanceRow("Overlapping events", "\(conflicts.board?.groups.count ?? 0)", .conflicts)
         }
+    }
+
+    private func glanceRow(_ title: String, _ value: String, _ screen: Screen) -> some View {
+        Button {
+            navigation.selection = screen
+        } label: {
+            LabeledContent(title) {
+                HStack(spacing: 6) {
+                    Text(value).monospacedDigit()
+                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: First run
 
     private var gettingStarted: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("Welcome to Calopod").font(.title2.weight(.semibold))
-                Text("Three steps and your calendars keep each other up to date.")
-                    .foregroundStyle(.secondary)
-                step(1, "Connect your calendars", "Add this Mac's calendars, Google or Microsoft.", .calendars)
-                step(2, "Choose where events go", "Pick a Main calendar and any Arms.", .arms)
-                step(3, "Turn on background sync", "Keep everything current automatically.", .service)
-            }
+        Section {
+            step("Connect your calendars", "Add this Mac's calendars, Google or Microsoft.", "calendar", .calendars)
+            step("Choose where events go", "Pick a Main calendar and any arms.", "arrow.triangle.branch", .arms)
+            step("Turn on background sync", "Keep everything current automatically.", "clock.arrow.2.circlepath", .service)
+            Hint { Text("Three steps and your calendars keep each other up to date.") }
+        } header: {
+            Text("Welcome to Calopod")
         }
     }
 
-    private func step(_ number: Int, _ title: String, _ detail: String, _ screen: Screen) -> some View {
-        HStack(spacing: 14) {
-            Text("\(number)")
-                .font(.headline)
-                .frame(width: 30, height: 30)
-                .background(Circle().fill(Theme.accent.opacity(0.14)))
-                .foregroundStyle(Theme.accent)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.headline)
-                Text(detail).font(.callout).foregroundStyle(.secondary)
+    private func step(_ title: String, _ detail: String, _ symbol: String, _ screen: Screen) -> some View {
+        Button {
+            navigation.selection = screen
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: symbol)
+                    .foregroundStyle(Theme.accent)
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.headline)
+                    Text(detail).font(.callout).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
             }
-            Spacer()
-            Button("Open") { navigation.selection = screen }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 }
