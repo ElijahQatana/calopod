@@ -44,7 +44,7 @@ struct MainWindow: View {
     @ViewBuilder
     private var screen: some View {
         switch navigation.selection {
-        case .overview: OverviewScreen(model: service, conflicts: conflicts, navigation: navigation)
+        case .overview: OverviewScreen(model: service, conflicts: conflicts, navigation: navigation, setup: setup)
         case .calendar: PlaceholderScreen(screen: .calendar, detail: "Your week at a glance will appear here.")
         case .inbox:
             PlaceholderScreen(

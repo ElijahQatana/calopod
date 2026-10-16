@@ -22,6 +22,18 @@ final class SetupModel {
         }
     }
 
+    /// Writable calendars that are not sources, which is what calopod-setup offers as targets.
+    var targetCandidates: [(id: String, title: String)] {
+        (snapshot?.connections ?? []).flatMap { connection in
+            connection.calendars.filter { !$0.isSelected && !$0.isReadOnly }.map {
+                (id: $0.id, title: "\(connection.label) · \($0.name)")
+            }
+        }
+    }
+
+    var mainArm: SetupArm? { snapshot?.arms.first(where: \.isMain) }
+    var busyArm: SetupArm? { snapshot?.arms.first { !$0.isMain && $0.rule == .busy && $0.isEnabled } }
+
     func reload() async {
         let service = service
         do {
