@@ -31,14 +31,8 @@ final class ServiceModel {
 
     deinit { refreshTask?.cancel() }
 
-    var menuBarSymbol: String {
-        switch status?.state {
-        case "ok": "calendar.badge.checkmark"
-        case "paused", "disabled": "calendar.badge.minus"
-        case "failed", "stopped": "calendar.badge.exclamationmark"
-        default: "calendar"
-        }
-    }
+    var menuBarAlert: Bool { ["failed", "stopped"].contains(status?.state) }
+    var menuBarDimmed: Bool { ["paused", "disabled"].contains(status?.state) }
 
     var isBusy: Bool { busyAction != nil }
 

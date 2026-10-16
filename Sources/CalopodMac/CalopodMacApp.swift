@@ -25,7 +25,8 @@ struct CalopodMacApp: App {
         MenuBarExtra {
             MenuPopover(model: service, navigation: navigation)
         } label: {
-            Image(systemName: service.menuBarSymbol)
+            Image(nsImage: SquidMark.menuBarImage(alert: service.menuBarAlert))
+                .opacity(service.menuBarDimmed ? 0.5 : 1)
         }
         .menuBarExtraStyle(.window)
     }
