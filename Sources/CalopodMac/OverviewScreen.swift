@@ -6,6 +6,8 @@ struct OverviewScreen: View {
     let conflicts: ConflictModel
     let navigation: AppNavigation
     let setup: SetupModel
+    @Environment(InboxModel.self) private var inbox
+    @Environment(CalendarModel.self) private var schedule
 
     @State private var progress = FirstRunProgress()
     @State private var showingSetup = false
@@ -19,6 +21,8 @@ struct OverviewScreen: View {
             if let status = model.status, status.installed {
                 Section { hero(status) }
                 if let preview = model.pendingPreview { previewSection(preview) }
+                needsYou
+                nextUp
                 attention(status)
                 glance
             } else if model.status != nil {
@@ -147,6 +151,70 @@ struct OverviewScreen: View {
         .joined(separator: ", ")
     }
 
+    // MARK: Needs you and next up
+
+    @ViewBuilder
+    private var needsYou: some View {
+        if let board = inbox.board {
+            Section("Needs you") {
+                if !board.isComplete {
+                    Banner(kind: .caution, text: "Some calendars are out of date, so this may be missing items.")
+                }
+                let rows: [(String, Int, InboxFilter, Bool)] = [
+                    ("Invitations waiting", inbox.waiting, .needsRSVP, true),
+                    ("Overlapping events", inbox.overlaps, .conflicts, false),
+                    ("Changed since you last looked", inbox.changes, .changed, false),
+                ]
+                ForEach(rows.filter { $0.1 > 0 }, id: \.2) { title, count, filter, highlight in
+                    Button { navigation.openInbox(filter) } label: {
+                        LabeledContent {
+                            HStack(spacing: 6) {
+                                Text("\(count)").monospacedDigit().fontWeight(.medium)
+                                    .foregroundStyle(highlight ? Theme.accent : .primary)
+                                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                            }
+                        } label: { Text(title) }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                if rows.allSatisfy({ $0.1 == 0 }) {
+                    Label("Nothing needs an answer", systemImage: "checkmark.circle").foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var nextUp: some View {
+        if schedule.schedule != nil {
+            let events = UpNext.today(in: schedule.schedule, now: Date())
+            let stale = UpNext.staleCalendars(in: schedule.schedule)
+            Section("Next up today") {
+                if !stale.isEmpty {
+                    Banner(kind: .caution, text: "\(stale.joined(separator: ", ")) is out of date, so events may be missing.")
+                }
+                ForEach(events.prefix(4)) { event in
+                    Button { navigation.selection = .calendar } label: {
+                        LabeledContent {
+                            Text(event.startsAt.formatted(date: .omitted, time: .shortened)).foregroundStyle(.secondary)
+                        } label: {
+                            Label {
+                                Text(event.title).lineLimit(1)
+                            } icon: {
+                                Circle().fill(CalendarColors.shared.color(for: event.calendarID).color).frame(width: 10, height: 10)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                if events.count > 4 { Text("and \(events.count - 4) more").foregroundStyle(.secondary) }
+                if events.isEmpty { Text("Nothing else today").foregroundStyle(.secondary) }
+            }
+        }
+    }
+
     // MARK: Attention
 
     @ViewBuilder
@@ -191,7 +259,6 @@ struct OverviewScreen: View {
                 .calendars
             )
             glanceRow("Active arms", "\(model.overview?.arms.filter(\.isEnabled).count ?? 0)", .arms)
-            glanceRow("Overlapping events", "\(conflicts.board?.groups.count ?? 0)", .conflicts)
         }
     }
 
