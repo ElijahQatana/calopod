@@ -209,8 +209,9 @@ struct StatusPill: View {
     var body: some View {
         HStack(spacing: 6) {
             Circle().fill(color).frame(width: 8, height: 8)
-            Text(text).font(Theme.Fonts.bodyMedium)
+            Text(text).font(Theme.Fonts.bodyMedium).lineLimit(1)
         }
+        .fixedSize()
         .padding(.horizontal, 14)
         .frame(minHeight: Theme.Control.chipHeight)
         .background(Capsule().fill(color.opacity(0.14)))

@@ -10,11 +10,11 @@ struct InboxReviewSheet: View {
     private let aliases = CalendarAliases.shared
 
     @FocusState private var focused: Bool
-    @State private var bodyHeight: CGFloat = 0
 
     private static let width: CGFloat = 640
-    /// Fits a 580 pt window with the header and footer around it.
-    private static let maxBodyHeight: CGFloat = 400
+    /// One height for every step, so the sheet does not change size as the review moves along.
+    /// With the header and footer it fits a 580 pt window.
+    private static let bodyHeight: CGFloat = 380
 
     var body: some View {
         VStack(spacing: 0) {
@@ -48,11 +48,9 @@ struct InboxReviewSheet: View {
             }
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(GeometryReader { Color.clear.preference(key: BodyHeightKey.self, value: $0.size.height) })
         }
         .scrollBounceBehavior(.basedOnSize)
-        .onPreferenceChange(BodyHeightKey.self) { bodyHeight = $0 }
-        .frame(height: min(max(bodyHeight, 260), Self.maxBodyHeight))
+        .frame(height: Self.bodyHeight)
     }
 
     private var showsNotice: Bool {
@@ -279,11 +277,6 @@ struct InboxReviewSheet: View {
             Text(key).font(Theme.Fonts.tiny.monospaced()).opacity(0.55)
         }
     }
-}
-
-private struct BodyHeightKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
 
 struct ReviewSummary: View {

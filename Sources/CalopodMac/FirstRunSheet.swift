@@ -39,7 +39,7 @@ struct FirstRunSheet: View {
             Divider()
             footer
         }
-        .frame(width: 600, height: 560)
+        .frame(width: 600, height: 520)
         .background(Theme.pane)
         .task {
             progress.begin()
