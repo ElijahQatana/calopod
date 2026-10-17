@@ -20,25 +20,29 @@ final class AppSettingsTests: XCTestCase {
         return result
     }
 
-    func testDefaultsReproduceTheMergedTokens() throws {
+    func testDefaultsSitAtTheChosenSliderPositions() throws {
         let settings = make()
-        XCTAssertEqual([settings.frameScale, settings.sidebarScale, settings.contentScale], [1, 1, 1])
-        // The shared settings start at the defaults too, so the tokens read them.
-        XCTAssertEqual(try alpha(Theme.frameTint, .aqua), 0.10, accuracy: 0.005)
-        XCTAssertEqual(try alpha(Theme.frameTint, .darkAqua), 0.08, accuracy: 0.005)
-        XCTAssertEqual(try alpha(Theme.sidebarFill, .aqua), 0.52, accuracy: 0.005)
-        XCTAssertEqual(try alpha(Theme.sidebarSheen, .darkAqua), 0.56, accuracy: 0.005)
-        XCTAssertEqual(try alpha(Theme.contentFill, .aqua), 0.93, accuracy: 0.005)
-        XCTAssertEqual(try alpha(Theme.innerFill, .darkAqua), 0.97, accuracy: 0.005)
+        XCTAssertEqual(settings.position(.frame), 0.85, accuracy: 1e-9)
+        XCTAssertEqual(settings.position(.sidebar), 0.15, accuracy: 1e-9)
+        XCTAssertEqual(settings.position(.content), 0.05, accuracy: 1e-9)
+        // The tokens read the shared settings, so bring them to their defaults first.
+        AppSettings.shared.resetTransparency()
+        XCTAssertEqual(try alpha(Theme.frameTint, .aqua), 0.045, accuracy: 0.005)
+        XCTAssertEqual(try alpha(Theme.frameTint, .darkAqua), 0.036, accuracy: 0.005)
+        XCTAssertEqual(try alpha(Theme.sidebarFill, .aqua), 0.73, accuracy: 0.005)
+        XCTAssertEqual(try alpha(Theme.sidebarSheen, .aqua), 0.815, accuracy: 0.005)
+        XCTAssertEqual(try alpha(Theme.sidebarSheen, .darkAqua), 0.787, accuracy: 0.005)
+        XCTAssertEqual(try alpha(Theme.contentFill, .aqua), 0.956, accuracy: 0.005)
+        XCTAssertEqual(try alpha(Theme.contentFill, .darkAqua), 0.935, accuracy: 0.005)
+        XCTAssertEqual(try alpha(Theme.innerFill, .aqua), 0.997, accuracy: 0.005)
     }
 
-    func testSliderPositionsRoundTripAndDefaultsAreInRange() {
+    func testSliderPositionsRoundTrip() {
         let settings = make()
         for layer in [GlassLayer.frame, .sidebar, .content] {
-            let position = settings.position(layer)
-            XCTAssertTrue((0 ... 1).contains(position))
-            settings.setPosition(layer, position)
-            XCTAssertEqual(settings.scale(layer), 1, accuracy: 1e-9)
+            let scale = settings.scale(layer)
+            settings.setPosition(layer, settings.position(layer))
+            XCTAssertEqual(settings.scale(layer), scale, accuracy: 1e-9)
         }
     }
 
@@ -70,7 +74,9 @@ final class AppSettingsTests: XCTestCase {
         settings.setPosition(.sidebar, 0.1)
         settings.setPosition(.content, 1)
         settings.resetTransparency()
-        XCTAssertEqual([settings.frameScale, settings.sidebarScale, settings.contentScale], [1, 1, 1])
+        for layer in [GlassLayer.frame, .sidebar, .content] {
+            XCTAssertEqual(settings.scale(layer), GlassBase.defaultScale(layer), accuracy: 1e-9)
+        }
     }
 
     func testGarbageStoredValuesAreClampedOrIgnored() {
@@ -79,7 +85,7 @@ final class AppSettingsTests: XCTestCase {
             AppSettings.appearanceKey: "purple", AppSettings.windowStyleKey: "nonsense",
         ])
         XCTAssertLessThanOrEqual(settings.frameScale, GlassBase.range(.frame).upperBound)
-        XCTAssertEqual(settings.sidebarScale, 1)
+        XCTAssertEqual(settings.sidebarScale, GlassBase.defaultScale(.sidebar))
         XCTAssertGreaterThanOrEqual(settings.contentScale, GlassBase.range(.content).lowerBound)
         XCTAssertEqual(settings.appearance, .system)
         XCTAssertEqual(settings.windowStyle, WindowStyle.standard)

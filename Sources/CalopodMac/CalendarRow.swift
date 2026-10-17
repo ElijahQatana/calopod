@@ -9,7 +9,9 @@ struct CalendarList: View {
 
     var body: some View {
         let split = Dictionary(grouping: connection.calendars) { model.aliases.isIgnored($0.id) }
-        ForEach(split[false] ?? []) { CalendarRow(calendar: $0, model: model, colors: colors) }
+        ForEach(split[false] ?? []) { calendar in
+            CardRow { CalendarRow(calendar: calendar, model: model, colors: colors) }
+        }
         if let ignored = split[true] { ignoredList(ignored) }
     }
 
@@ -17,7 +19,7 @@ struct CalendarList: View {
     @ViewBuilder
     private func ignoredList(_ calendars: [SetupCalendar]) -> some View {
         let open = model.aliases.isExpanded(connection.id)
-        Button {
+        CardRow { Button {
             model.aliases.setExpanded(!open, for: connection.id)
         } label: {
             HStack(spacing: 6) {
@@ -30,9 +32,11 @@ struct CalendarList: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityValue(open ? "Expanded" : "Collapsed")
+        .accessibilityValue(open ? "Expanded" : "Collapsed") }
         if open {
-            ForEach(calendars) { CalendarRow(calendar: $0, model: model, colors: colors) }
+            ForEach(calendars) { calendar in
+                CardRow { CalendarRow(calendar: calendar, model: model, colors: colors) }
+            }
         }
     }
 }

@@ -109,7 +109,7 @@ struct FirstRunSheet: View {
         VStack(alignment: .leading, spacing: 10, content: content)
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: Theme.controlRadius, style: .continuous).fill(.quaternary.opacity(0.6)))
+            .cardSurface()
     }
 
     // MARK: 1 Connect

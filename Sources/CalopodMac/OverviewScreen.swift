@@ -12,13 +12,13 @@ struct OverviewScreen: View {
     @State private var showingSetup = false
 
     var body: some View {
-        Form {
-            if let notice = model.notice { Section { Banner(kind: .error, text: notice) } }
+        CardPage {
+            if let notice = model.notice { Banner(kind: .error, text: notice) }
 
-            if progress.canResume && !showingSetup { Section { resumeBanner } }
+            if progress.canResume && !showingSetup { CardSection { CardRow { resumeBanner } } }
 
             if let status = model.status, status.installed {
-                Section { hero(status) }
+                CardSection { CardRow { hero(status) } }
                 if let preview = model.pendingPreview { previewSection(preview) }
                 needsYou
                 nextUp
@@ -27,10 +27,9 @@ struct OverviewScreen: View {
             } else if model.status != nil {
                 gettingStarted
             } else {
-                Section { ProgressView().frame(maxWidth: .infinity).padding(40) }
+                CardSection { CardRow { ProgressView().frame(maxWidth: .infinity).padding(40) } }
             }
         }
-        .formStyle(.grouped)
         .sheet(isPresented: $showingSetup) {
             FirstRunSheet(progress: progress, setup: setup, service: model, navigation: navigation)
         }
@@ -112,31 +111,31 @@ struct OverviewScreen: View {
     // MARK: Preview
 
     private func previewSection(_ preview: SyncPreview) -> some View {
-        Section {
+        CardSection("Review before syncing: \(Self.summaryLine(preview))") {
             ForEach(preview.lines.prefix(8)) { line in
-                LabeledContent {
+                CardRow("\(line.action.capitalized) · \(line.armName)") {
                     Text(line.reason).foregroundStyle(.secondary)
-                } label: {
-                    Text("\(line.action.capitalized) · \(line.armName)")
                 }
             }
             if preview.lines.count > 8 {
-                Text("and \(preview.lines.count - 8) more").foregroundStyle(.secondary)
+                CardRow { Text("and \(preview.lines.count - 8) more").foregroundStyle(.secondary) }
             }
             if preview.removals > 0 {
-                Banner(kind: .caution, text: "Includes removing copies Calopod made earlier.")
+                CardRow { Banner(kind: .caution, text: "Includes removing copies Calopod made earlier.") }
             }
-            ForEach(preview.warnings, id: \.self) { Banner(kind: .caution, text: $0) }
-            HStack {
-                Button("Cancel") { model.discardPreview() }
-                Spacer()
-                Button("Apply") { Task { await model.applyPreview() } }
-                    .buttonStyle(.accentFilled)
-                    .keyboardShortcut(.defaultAction)
+            ForEach(preview.warnings, id: \.self) { warning in
+                CardRow { Banner(kind: .caution, text: warning) }
             }
-            .disabled(model.isBusy)
-        } header: {
-            Text("Review before syncing: \(Self.summaryLine(preview))")
+            CardRow {
+                HStack {
+                    Button("Cancel") { model.discardPreview() }
+                    Spacer()
+                    Button("Apply") { Task { await model.applyPreview() } }
+                        .buttonStyle(.accentFilled)
+                        .keyboardShortcut(.defaultAction)
+                }
+                .disabled(model.isBusy)
+            }
         }
     }
 
@@ -155,9 +154,9 @@ struct OverviewScreen: View {
     @ViewBuilder
     private var needsYou: some View {
         if let board = inbox.board {
-            Section("Needs you") {
+            CardSection("Needs you") {
                 if !board.isComplete {
-                    Banner(kind: .caution, text: "Some calendars are out of date, so this may be missing items.")
+                    CardRow { Banner(kind: .caution, text: "Some calendars are out of date, so this may be missing items.") }
                 }
                 let rows: [(String, Int, InboxFilter, Bool)] = [
                     ("Invitations waiting", inbox.waiting, .needsRSVP, true),
@@ -165,20 +164,22 @@ struct OverviewScreen: View {
                     ("Changed since you last looked", inbox.changes, .changed, false),
                 ]
                 ForEach(rows.filter { $0.1 > 0 }, id: \.2) { title, count, filter, highlight in
-                    Button { navigation.openInbox(filter) } label: {
-                        LabeledContent {
-                            HStack(spacing: 6) {
-                                Text("\(count)").monospacedDigit().fontWeight(.medium)
-                                    .foregroundStyle(highlight ? Theme.accent : .primary)
-                                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                    CardRow {
+                        Button { navigation.openInbox(filter) } label: {
+                            CardLabeled(title: title) {
+                                HStack(spacing: 6) {
+                                    Text("\(count)").monospacedDigit().fontWeight(.medium)
+                                        .foregroundStyle(highlight ? Theme.accent : .primary)
+                                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                                }
                             }
-                        } label: { Text(title) }
-                        .contentShape(Rectangle())
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
                 if rows.allSatisfy({ $0.1 == 0 }) {
-                    Label("Nothing needs an answer", systemImage: "checkmark.circle").foregroundStyle(.secondary)
+                    CardRow { Label("Nothing needs an answer", systemImage: "checkmark.circle").foregroundStyle(.secondary) }
                 }
             }
         }
@@ -189,27 +190,29 @@ struct OverviewScreen: View {
         if schedule.schedule != nil {
             let events = UpNext.today(in: schedule.schedule, now: Date())
             let stale = UpNext.staleCalendars(in: schedule.schedule, name: { CalendarAliases.shared.name(for: $0.id, real: $0.name) })
-            Section("Next up today") {
+            CardSection("Next up today") {
                 if !stale.isEmpty {
-                    Banner(kind: .caution, text: "\(stale.joined(separator: ", ")) is out of date, so events may be missing.")
+                    CardRow { Banner(kind: .caution, text: "\(stale.joined(separator: ", ")) is out of date, so events may be missing.") }
                 }
                 ForEach(events.prefix(4)) { event in
-                    Button { navigation.selection = .calendar } label: {
-                        LabeledContent {
-                            Text(event.startsAt.formatted(date: .omitted, time: .shortened)).foregroundStyle(.secondary)
-                        } label: {
-                            Label {
-                                Text(event.title).lineLimit(1)
-                            } icon: {
-                                Circle().fill(CalendarColors.shared.color(for: event.calendarID).color).frame(width: 10, height: 10)
+                    CardRow {
+                        Button { navigation.selection = .calendar } label: {
+                            HStack(spacing: 12) {
+                                Label {
+                                    Text(event.title).lineLimit(1)
+                                } icon: {
+                                    Circle().fill(CalendarColors.shared.color(for: event.calendarID).color).frame(width: 10, height: 10)
+                                }
+                                Spacer(minLength: 12)
+                                Text(event.startsAt.formatted(date: .omitted, time: .shortened)).foregroundStyle(.secondary)
                             }
+                            .contentShape(Rectangle())
                         }
-                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
-                if events.count > 4 { Text("and \(events.count - 4) more").foregroundStyle(.secondary) }
-                if events.isEmpty { Text("Nothing else today").foregroundStyle(.secondary) }
+                if events.count > 4 { CardRow { Text("and \(events.count - 4) more").foregroundStyle(.secondary) } }
+                if events.isEmpty { CardRow { Text("Nothing else today").foregroundStyle(.secondary) } }
             }
         }
     }
@@ -219,30 +222,35 @@ struct OverviewScreen: View {
     @ViewBuilder
     private func attention(_ status: AgentControlStatus) -> some View {
         if let health = model.health, health.status != "ok" {
-            Section {
+            CardSection(
+                "Needs attention", footnote: health.warnings.isEmpty ? nil : health.warnings.joined(separator: " ")
+            ) {
                 ForEach(health.checks.filter { $0.state != "ok" }) { check in
-                    LabeledContent {
-                        Text((check.reason ?? check.state).replacingOccurrences(of: "-", with: " "))
-                            .foregroundStyle(.secondary)
-                    } label: {
-                        Label(
-                            check.name.replacingOccurrences(of: "-", with: " ").capitalized,
-                            systemImage: check.state == "failed" ? "xmark.circle.fill" : "clock.fill"
-                        )
-                        .foregroundStyle(check.state == "failed" ? Theme.bad : Theme.caution, .primary)
+                    CardRow {
+                        HStack(spacing: 12) {
+                            Label(
+                                check.name.replacingOccurrences(of: "-", with: " ").capitalized,
+                                systemImage: check.state == "failed" ? "xmark.circle.fill" : "clock.fill"
+                            )
+                            .foregroundStyle(check.state == "failed" ? Theme.bad : Theme.caution, .primary)
+                            Spacer(minLength: 12)
+                            Text((check.reason ?? check.state).replacingOccurrences(of: "-", with: " "))
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
                 if !status.running && status.enabled && model.registration != .enabled {
-                    Button("Start service") { Task { await model.setEnabled(true) } }
-                        .disabled(model.isBusy)
+                    CardRow {
+                        Button("Start service") { Task { await model.setEnabled(true) } }
+                            .disabled(model.isBusy)
+                    }
                 }
                 if status.paused {
-                    Button("Resume syncing") { Task { await model.setPaused(false) } }
-                        .disabled(model.isBusy)
+                    CardRow {
+                        Button("Resume syncing") { Task { await model.setPaused(false) } }
+                            .disabled(model.isBusy)
+                    }
                 }
-                Hint { if !health.warnings.isEmpty { Text(health.warnings.joined(separator: " ")) } }
-            } header: {
-                Text("Needs attention")
             }
         }
     }
@@ -250,7 +258,7 @@ struct OverviewScreen: View {
     // MARK: At a glance
 
     private var glance: some View {
-        Section("At a glance") {
+        CardSection("At a glance") {
             glanceRow("Connected accounts", "\(model.overview?.connections.count ?? 0)", .calendars)
             glanceRow(
                 "Calendars in use",
@@ -262,25 +270,27 @@ struct OverviewScreen: View {
     }
 
     private func glanceRow(_ title: String, _ value: String, _ screen: Screen, filter: InboxFilter? = nil) -> some View {
-        Button {
-            if let filter { navigation.openInbox(filter) } else { navigation.selection = screen }
-        } label: {
-            LabeledContent(title) {
-                HStack(spacing: 6) {
-                    Text(value).monospacedDigit()
-                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+        CardRow {
+            Button {
+                if let filter { navigation.openInbox(filter) } else { navigation.selection = screen }
+            } label: {
+                CardLabeled(title: title) {
+                    HStack(spacing: 6) {
+                        Text(value).monospacedDigit()
+                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                    }
                 }
+                .contentShape(Rectangle())
             }
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
     }
 
     // MARK: First run
 
     private var gettingStarted: some View {
-        Section {
-            VStack(spacing: 14) {
+        CardSection {
+            CardRow { VStack(spacing: 14) {
                 Image(systemName: "calendar.badge.plus").font(.system(size: 34, weight: .medium)).foregroundStyle(Theme.accent)
                 Text(progress.isFinished ? "Setup is done" : "Welcome to Calopod").font(Theme.title())
                 Text(
@@ -298,6 +308,7 @@ struct OverviewScreen: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 18)
+            }
         }
     }
 

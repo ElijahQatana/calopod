@@ -6,54 +6,33 @@ struct CalendarsScreen: View {
     private let colors = CalendarColors.shared
 
     var body: some View {
-        Form {
-            if let busy = model.busy {
-                Section { BusyLine(text: busy) }
-            }
-            if let notice = model.notice {
-                Section { Banner(kind: .error, text: notice) }
-            }
+        CardPage {
+            if let busy = model.busy { BusyLine(text: busy) }
+            if let notice = model.notice { Banner(kind: .error, text: notice) }
 
-            Section {
-                HStack(spacing: 10) {
-                    addButton("This Mac", "laptopcomputer", .mac)
-                    addButton("Google", "g.circle", .google)
-                    addButton("Microsoft", "m.circle", .microsoft)
-                }
-                Hint {
-                    Text(
-                        "Calopod reads the calendars you choose and never changes them. Choose each calendar once, even if it can be reached two ways."
-                    )
-                }
-            } header: {
-                Text("Add an account")
-            }
-
-            ForEach(model.snapshot?.connections ?? []) { connection in
-                Section {
-                    ForEach(connection.warnings, id: \.self) { Banner(kind: .caution, text: $0) }
-                    CalendarList(connection: connection, model: model, colors: colors)
-                } header: {
-                    HStack {
-                        Label(connection.label, systemImage: Self.symbol(connection.provider))
-                        Spacer()
-                        Menu {
-                            Button("Refresh calendars") { Task { await model.refresh(connection.id) } }
-                            Divider()
-                            Button("Remove account", role: .destructive) {
-                                Task { await model.disconnect(connection.id) }
-                            }
-                        } label: {
-                            Image(systemName: "ellipsis.circle")
-                        }
-                        .menuStyle(.borderlessButton)
-                        .fixedSize()
-                        .disabled(model.isBusy)
+            CardSection(
+                "Add an account",
+                footnote:
+                    "Calopod reads the calendars you choose and never changes them. Choose each calendar once, even if it can be reached two ways."
+            ) {
+                CardRow {
+                    HStack(spacing: 10) {
+                        addButton("This Mac", "laptopcomputer", .mac)
+                        addButton("Google", "g.circle", .google)
+                        addButton("Microsoft", "m.circle", .microsoft)
                     }
                 }
             }
+
+            ForEach(model.snapshot?.connections ?? []) { connection in
+                CardSection(header: accountHeader(connection)) {
+                    ForEach(connection.warnings, id: \.self) { warning in
+                        CardRow { Banner(kind: .caution, text: warning) }
+                    }
+                    CalendarList(connection: connection, model: model, colors: colors)
+                }
+            }
         }
-        .formStyle(.grouped)
         .task { await model.reload() }
         .onChange(of: model.snapshot) { _, snapshot in
             colors.assignMissing(
@@ -63,6 +42,26 @@ struct CalendarsScreen: View {
                     }
                 },
                 ignoring: model.aliases.ignored)
+        }
+    }
+
+    private func accountHeader(_ connection: SetupConnection) -> some View {
+        HStack {
+            Label(connection.label, systemImage: Self.symbol(connection.provider))
+                .font(Theme.title(.headline))
+            Spacer()
+            Menu {
+                Button("Refresh calendars") { Task { await model.refresh(connection.id) } }
+                Divider()
+                Button("Remove account", role: .destructive) {
+                    Task { await model.disconnect(connection.id) }
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .disabled(model.isBusy)
         }
     }
 
