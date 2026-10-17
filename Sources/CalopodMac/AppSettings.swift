@@ -35,7 +35,7 @@ enum WindowStyle: String, CaseIterable {
 
 enum GlassLayer { case frame, sidebar, content }
 
-/// Alphas at the default slider positions, light then dark. A scale of 1 gives these exactly.
+/// Alphas at a scale of 1, light then dark. The defaults sit at the slider positions below.
 enum GlassBase {
     static let frame = (light: 0.10, dark: 0.08)
     static let sidebarFill = (light: 0.52, dark: 0.52)
@@ -47,6 +47,20 @@ enum GlassBase {
     static let contentFloor = 0.55
     /// Smallest step kept between the frame, sidebar and content alphas.
     static let gap = 0.03
+
+    /// Where the sliders start, as the Settings screen shows them.
+    static func defaultPosition(_ layer: GlassLayer) -> Double {
+        switch layer {
+        case .frame: 0.85
+        case .sidebar: 0.15
+        case .content: 0.05
+        }
+    }
+
+    static func defaultScale(_ layer: GlassLayer) -> Double {
+        let range = range(layer)
+        return range.upperBound - defaultPosition(layer) * (range.upperBound - range.lowerBound)
+    }
 
     static func range(_ layer: GlassLayer) -> ClosedRange<Double> {
         switch layer {
@@ -70,9 +84,9 @@ final class AppSettings {
         .frame: "calopod.frameScale", .sidebar: "calopod.sidebarScale", .content: "calopod.contentScale",
     ]
 
-    private(set) var frameScale = 1.0
-    private(set) var sidebarScale = 1.0
-    private(set) var contentScale = 1.0
+    private(set) var frameScale = GlassBase.defaultScale(.frame)
+    private(set) var sidebarScale = GlassBase.defaultScale(.sidebar)
+    private(set) var contentScale = GlassBase.defaultScale(.content)
     private(set) var appearance: AppearanceChoice
     private(set) var windowStyle: WindowStyle
     /// The style the window was set up with. Changing it applies at the next launch.
@@ -95,7 +109,7 @@ final class AppSettings {
     private static func stored(_ defaults: UserDefaults, _ layer: GlassLayer) -> Double {
         guard let key = scaleKeys[layer], let number = defaults.object(forKey: key) as? NSNumber,
             number.doubleValue.isFinite
-        else { return 1 }
+        else { return GlassBase.defaultScale(layer) }
         return number.doubleValue
     }
 
@@ -119,7 +133,7 @@ final class AppSettings {
     /// Sets a layer's scale, kept inside its range and a small gap away from its neighbors.
     func set(_ layer: GlassLayer, _ requested: Double) {
         let gap = GlassBase.gap
-        var value = requested.isFinite ? requested : 1
+        var value = requested.isFinite ? requested : GlassBase.defaultScale(layer)
         var low = GlassBase.range(layer).lowerBound
         var high = GlassBase.range(layer).upperBound
         for dark in [false, true] {
@@ -156,7 +170,10 @@ final class AppSettings {
 
     func resetTransparency() {
         // Back to the defaults, content first so the order check never blocks a step.
-        for layer in [GlassLayer.content, .sidebar, .frame] { set(layer, 1) }
+        // Twice, since a firmer neighbor can hold a layer back on the first pass.
+        for _ in 0 ..< 2 {
+            for layer in [GlassLayer.content, .sidebar, .frame] { set(layer, GlassBase.defaultScale(layer)) }
+        }
     }
 
     func setAppearance(_ choice: AppearanceChoice) {
