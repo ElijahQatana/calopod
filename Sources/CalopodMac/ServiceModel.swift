@@ -157,7 +157,8 @@ final class ServiceModel {
         return status.enabled || status.running
     }
 
-    /// Stops the source-installed agent first so two never run, and restores it if registering fails.
+    /// Stops the source-installed agent first so two never run. It is turned back on if registering
+    /// fails or macOS still needs approval, so syncing never stops without the new service taking over.
     func installBundledService() async {
         let service = service
         let registrar = registrar
@@ -165,13 +166,22 @@ final class ServiceModel {
         await perform("Installing background service…") {
             if legacyActive { try service.setEnabled(false) }
             do {
-                try registrar.register()
+                // Already approved when finishing a move, and registering twice is an error.
+                if registrar.state() != .enabled { try registrar.register() }
             } catch {
                 if legacyActive { try? service.setEnabled(true) }
                 throw error
             }
+            if legacyActive, registrar.state() != .enabled {
+                try? service.setEnabled(true)
+                throw InstallError.needsApproval
+            }
             return nil
         }
+    }
+
+    private enum InstallError: Error {
+        case needsApproval
     }
 
     func removeBundledService() async {
@@ -198,9 +208,13 @@ final class ServiceModel {
             if let summary { lastRunSummary = summary }
         } catch {
             let nsError = error as NSError
-            notice = nsError.domain == "SMAppServiceErrorDomain"
-                ? nsError.localizedDescription
-                : service.message(for: error)
+            if error is InstallError {
+                notice = "Allow Calopod in System Settings, General, Login Items, then choose Move to the app again. Your current service keeps running until then."
+            } else {
+                notice = nsError.domain == "SMAppServiceErrorDomain"
+                    ? nsError.localizedDescription
+                    : service.message(for: error)
+            }
         }
         busyAction = nil
         await refresh()
