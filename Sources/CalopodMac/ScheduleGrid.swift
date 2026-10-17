@@ -9,6 +9,7 @@ struct ScheduleGrid: View {
     private static let hourHeight: CGFloat = 52
     private static let gutter: CGFloat = 48
     private static let firstHour = 7
+    private static let sidewaysSpace = "sideways"
 
     /// Narrower days scroll sideways instead of squeezing event titles.
     private static let minimumDayWidth: CGFloat = 96
@@ -24,6 +25,7 @@ struct ScheduleGrid: View {
                             height: proxy.size.height)
                 }
                 .scrollIndicators(.visible, axes: .horizontal)
+                .coordinateSpace(name: Self.sidewaysSpace)
                 .task(id: days) {
                     // Keep today in view when the days do not all fit.
                     try? await Task.sleep(for: .milliseconds(60))
@@ -127,16 +129,24 @@ struct ScheduleGrid: View {
         }
     }
 
+    /// Stays at the left edge of the visible grid when the days scroll sideways, so the hours are always readable.
     private var hourLabels: some View {
-        ZStack(alignment: .topTrailing) {
-            ForEach(1..<24, id: \.self) { hour in
-                Text(Self.label(hour))
-                    .font(Theme.Fonts.label.monospacedDigit()).foregroundStyle(.secondary)
-                    .offset(y: CGFloat(hour) * Self.hourHeight - 9)
-                    .padding(.trailing, 6)
+        GeometryReader { proxy in
+            let shift = max(0, -proxy.frame(in: .named(Self.sidewaysSpace)).minX)
+            ZStack(alignment: .topTrailing) {
+                ForEach(1..<24, id: \.self) { hour in
+                    Text(Self.label(hour))
+                        .font(Theme.Fonts.label.monospacedDigit()).foregroundStyle(.secondary)
+                        .offset(y: CGFloat(hour) * Self.hourHeight - 9)
+                        .padding(.trailing, 6)
+                }
             }
+            .frame(width: Self.gutter, height: 24 * Self.hourHeight, alignment: .topTrailing)
+            .background { if shift > 0.5 { Theme.contentFill } }
+            .offset(x: shift)
         }
-        .frame(width: Self.gutter, height: 24 * Self.hourHeight, alignment: .topTrailing)
+        .frame(width: Self.gutter, height: 24 * Self.hourHeight)
+        .zIndex(1)
     }
 
     private static func label(_ hour: Int) -> String {
