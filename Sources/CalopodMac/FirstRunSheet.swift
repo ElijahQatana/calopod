@@ -67,8 +67,8 @@ struct FirstRunSheet: View {
                         .frame(height: 4)
                 }
             }
-            Text("Step \(progress.step.rawValue + 1) of 3").font(.caption).foregroundStyle(.secondary)
-            Text(progress.step.title).font(Theme.title(.title))
+            Text("Step \(progress.step.rawValue + 1) of 3").font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+            Text(progress.step.title).font(Theme.Fonts.pageTitle)
         }
         .padding(.horizontal, Theme.pagePadding)
         .padding(.vertical, 18)
@@ -134,7 +134,7 @@ struct FirstRunSheet: View {
             Label("Calopod never edits or deletes events it did not create.", systemImage: "hand.raised")
             Label("Sign-in tokens stay in the Keychain on this Mac.", systemImage: "key")
         }
-        .font(.callout)
+        .font(Theme.Fonts.body)
     }
 
     private func providerButton(_ title: String, _ symbol: String, _ provider: SetupProvider) -> some View {
@@ -154,7 +154,7 @@ struct FirstRunSheet: View {
         Text("Choose the calendars Calopod should read. Each gets a color, which only shows here.")
         ForEach(setup.snapshot?.connections ?? []) { connection in
             card {
-                Label(connection.label, systemImage: "calendar").font(.headline)
+                Label(connection.label, systemImage: "calendar").font(Theme.Fonts.bodySemibold)
                 ForEach(connection.warnings, id: \.self) { Banner(kind: .caution, text: $0) }
                 // Ignored calendars are left out unless they are already chosen, so nothing chosen is hidden.
                 ForEach(connection.calendars.filter { !setup.aliases.isIgnored($0.id) || $0.isSelected }) { calendar in
@@ -168,7 +168,7 @@ struct FirstRunSheet: View {
                             CalendarColorDot(calendarID: calendar.id, colors: colors)
                             Text(setup.aliases.name(for: calendar))
                             if calendar.isReadOnly {
-                                Text("read-only").font(.caption).foregroundStyle(.secondary)
+                                Text("read-only").font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                             }
                         }
                     }
@@ -197,7 +197,7 @@ struct FirstRunSheet: View {
                 existing: setup.busyArm, target: $busyTarget, other: fullTarget)
             if setup.fullDetailsArm == nil || setup.busyArm == nil {
                 Toggle("These targets are fresh and empty, and only Calopod will use them.", isOn: $targetsConfirmed)
-                    .font(.callout)
+                    .font(Theme.Fonts.body)
             }
             if let preview = service.pendingPreview {
                 previewCard(preview)
@@ -213,8 +213,8 @@ struct FirstRunSheet: View {
         _ title: String, _ detail: String, existing: SetupArm?, target: Binding<String?>, other: String?
     ) -> some View {
         card {
-            Text(title).font(.headline)
-            Text(detail).font(.callout).foregroundStyle(.secondary)
+            Text(title).font(Theme.Fonts.bodySemibold)
+            Text(detail).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
             if let existing {
                 LabeledContent("Copies into") { Text(setup.targetName(of: existing)).fontWeight(.medium) }
             } else {
@@ -230,19 +230,19 @@ struct FirstRunSheet: View {
 
     private func previewCard(_ preview: SyncPreview) -> some View {
         card {
-            Text("Review before syncing").font(.headline)
+            Text("Review before syncing").font(Theme.Fonts.bodySemibold)
             Text("\(preview.creates) to create, \(preview.updates) to update, \(preview.removals) to remove, \(preview.repairs) to repair")
-                .font(.callout).foregroundStyle(.secondary)
+                .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
             ForEach(preview.lines.prefix(6)) { line in
                 LabeledContent {
                     Text(line.reason).foregroundStyle(.secondary)
                 } label: {
                     Text("\(line.action.capitalized) · \(line.armName)")
                 }
-                .font(.callout)
+                .font(Theme.Fonts.body)
             }
             if preview.lines.count > 6 {
-                Text("and \(preview.lines.count - 6) more").font(.callout).foregroundStyle(.secondary)
+                Text("and \(preview.lines.count - 6) more").font(Theme.Fonts.secondary).foregroundStyle(.secondary)
             }
             if preview.removals > 0 {
                 Banner(kind: .caution, text: "Includes removing copies Calopod made earlier.")
@@ -253,10 +253,10 @@ struct FirstRunSheet: View {
 
     private var finished: some View {
         card {
-            Label("Setup is done", systemImage: "checkmark.circle.fill").font(.headline)
+            Label("Setup is done", systemImage: "checkmark.circle.fill").font(Theme.Fonts.bodySemibold)
                 .foregroundStyle(Theme.good, .primary)
             Text("Background sync is still off. Turn it on when you are happy with the first sync.")
-                .font(.callout).foregroundStyle(.secondary)
+                .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
             Button("Open background sync") {
                 navigation.selection = .service
                 dismiss()

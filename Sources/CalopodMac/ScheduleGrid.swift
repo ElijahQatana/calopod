@@ -81,11 +81,11 @@ struct ScheduleGrid: View {
                 } label: {
                     VStack(spacing: 2) {
                         Text(day.formatted(.dateTime.weekday(.abbreviated)))
-                            .font(.caption).foregroundStyle(today ? Theme.accent : .secondary)
+                            .font(Theme.Fonts.label).foregroundStyle(today ? Theme.accent : .secondary)
                         Text(day.formatted(.dateTime.day()))
-                            .font(.system(size: 16, weight: today ? .semibold : .regular))
+                            .font(today ? Theme.Fonts.bodySemibold : Theme.Fonts.body)
                             .foregroundStyle(today ? Theme.onAccent : .primary)
-                            .frame(width: 28, height: 28)
+                            .frame(width: 32, height: 32)
                             .background(Circle().fill(today ? Theme.accent : .clear))
                     }
                     .frame(maxWidth: .infinity)
@@ -105,7 +105,7 @@ struct ScheduleGrid: View {
         let perDay = days.map { ScheduleLayout.allDay(model.events, on: $0, calendar: model.calendar) }
         if perDay.contains(where: { !$0.isEmpty }) {
             HStack(alignment: .top, spacing: 0) {
-                Text("all-day").font(.system(size: 10)).foregroundStyle(.secondary)
+                Text("all-day").font(Theme.Fonts.tiny).foregroundStyle(.secondary)
                     .frame(width: Self.gutter, alignment: .trailing).padding(.trailing, 6).padding(.top, 3)
                 ForEach(perDay.indices, id: \.self) { index in
                     VStack(spacing: 2) {
@@ -113,10 +113,10 @@ struct ScheduleGrid: View {
                             Button { model.selectedID = event.id } label: {
                                 ScheduleEventBlock(
                                     event: event, color: colors.color(for: event.calendarID).color,
-                                    isSelected: model.selectedID == event.id, width: 200, height: 20)
+                                    isSelected: model.selectedID == event.id, width: 200, height: 24)
                             }
                             .buttonStyle(.plain)
-                            .frame(height: 20)
+                            .frame(height: 24)
                         }
                     }
                     .padding(.horizontal, 2)
@@ -131,8 +131,8 @@ struct ScheduleGrid: View {
         ZStack(alignment: .topTrailing) {
             ForEach(1..<24, id: \.self) { hour in
                 Text(Self.label(hour))
-                    .font(.system(size: 10)).monospacedDigit().foregroundStyle(.secondary)
-                    .offset(y: CGFloat(hour) * Self.hourHeight - 7)
+                    .font(Theme.Fonts.label.monospacedDigit()).foregroundStyle(.secondary)
+                    .offset(y: CGFloat(hour) * Self.hourHeight - 9)
                     .padding(.trailing, 6)
             }
         }

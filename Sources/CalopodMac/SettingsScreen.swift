@@ -38,7 +38,7 @@ struct SettingsScreen: View {
             CardRow {
                 Button("Reset to defaults") { settings.resetTransparency() }
                     .buttonStyle(.plain)
-                    .font(.callout.weight(.medium))
+                    .font(Theme.Fonts.bodyMedium)
                     .foregroundStyle(Theme.accent)
             }
         }
@@ -67,10 +67,10 @@ struct SettingsScreen: View {
     private func slider(_ title: String, _ layer: GlassLayer) -> some View {
         let position = Binding(get: { settings.position(layer) }, set: { settings.setPosition(layer, $0) })
         return HStack(spacing: 12) {
-            Text(title).font(.callout.weight(.medium)).frame(width: 70, alignment: .leading)
+            Text(title).font(Theme.Fonts.bodyMedium).frame(width: 70, alignment: .leading)
             Slider(value: position, in: 0 ... 1)
             Text("\(Int((position.wrappedValue * 100).rounded()))%")
-                .font(.callout.monospacedDigit()).foregroundStyle(.secondary)
+                .font(Theme.Fonts.body.monospacedDigit()).foregroundStyle(.secondary)
                 .frame(width: 44, alignment: .trailing)
         }
         .accessibilityElement(children: .combine)

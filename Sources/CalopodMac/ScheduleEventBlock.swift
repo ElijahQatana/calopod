@@ -26,11 +26,11 @@ struct ScheduleEventBlock: View {
             background
             VStack(alignment: .leading, spacing: 1) {
                 Text(event.title)
-                    .font(.system(size: narrow ? 10 : 11, weight: .semibold))
+                    .font(narrow ? Theme.Fonts.tinySemibold : Theme.Fonts.eventTitle)
                     .lineLimit(lines)
                 if !event.isAllDay, height >= 44, width >= 72 {
                     Text(event.startsAt.formatted(date: .omitted, time: .shortened))
-                        .font(.system(size: 10))
+                        .font(Theme.Fonts.tiny)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }

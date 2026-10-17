@@ -19,7 +19,7 @@ struct CardPage<Content: View>: View {
 
     var page: some View {
         VStack(alignment: .leading, spacing: 16) {
-            if let title { Text(title).font(Theme.title(.title)) }
+            if let title { Text(title).font(Theme.Fonts.pageTitle) }
             content
         }
         .padding(Theme.pagePadding)
@@ -42,7 +42,7 @@ struct CardSection<Header: View, Content: View>: View {
                 .clipShape(armCardShape)
                 .cardSurface()
             if let footnote {
-                Text(footnote).font(.callout).foregroundStyle(.secondary)
+                Text(footnote).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 4)
             }
@@ -58,7 +58,7 @@ extension CardSection where Header == EmptyView {
 
 extension CardSection where Header == Text {
     init(_ title: String, footnote: String? = nil, @ViewBuilder content: () -> Content) {
-        self.init(header: Text(title).font(Theme.title(.headline)), footnote: footnote, content: content)
+        self.init(header: Text(title).font(Theme.Fonts.sectionTitle), footnote: footnote, content: content)
     }
 }
 

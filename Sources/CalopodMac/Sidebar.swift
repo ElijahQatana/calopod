@@ -47,7 +47,7 @@ struct Sidebar: View {
         HStack(spacing: 9) {
             SquidBadge(size: rail ? 40 : 38)
             if !rail {
-                Text("Calopod").font(.system(size: 21, weight: .semibold, design: .serif))
+                Text("Calopod").font(Theme.Fonts.heading)
                     .foregroundStyle(Theme.sidebarLabel)
             }
         }
@@ -76,7 +76,7 @@ struct Sidebar: View {
                 Divider().frame(width: 28).padding(.vertical, 6)
             } else {
                 Text("Setup")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(Theme.Fonts.tinySemibold)
                     .foregroundStyle(Theme.sidebarSecondary)
                     .padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 4)
             }
@@ -95,7 +95,7 @@ struct Sidebar: View {
         return Button { navigation.selection = screen } label: {
             HStack(spacing: 10) {
                 Image(systemName: screen.symbol)
-                    .font(.system(size: rail ? 22 : 20))
+                    .font(rail ? Theme.Fonts.railIcon : Theme.Fonts.icon)
                     .frame(width: rail ? 28 : 24)
                     .foregroundStyle(selected ? Theme.onAccent : Theme.sidebarSecondary)
                     .overlay(alignment: .topTrailing) {
@@ -107,7 +107,7 @@ struct Sidebar: View {
                     if count > 0 { countBadge(count, selected: selected) }
                 }
             }
-            .font(.system(size: 15, weight: .semibold))
+            .font(Theme.Fonts.bodySemibold)
             .foregroundStyle(selected ? Theme.onAccent : Theme.sidebarLabel)
             .padding(.horizontal, rail ? 0 : 14)
             .frame(width: rail ? 44 : nil, height: 44)
@@ -123,7 +123,7 @@ struct Sidebar: View {
 
     private func countBadge(_ count: Int, selected: Bool) -> some View {
         Text("\(count)")
-            .font(.system(size: 12, weight: .semibold).monospacedDigit())
+            .font(Theme.Fonts.tinySemibold.monospacedDigit())
             .foregroundStyle(selected ? Theme.onAccent : Theme.accent)
             .padding(.horizontal, 9).padding(.vertical, 2)
             .background(Capsule().fill(selected ? Theme.onAccent.opacity(0.2) : Theme.accent.opacity(0.14)))
@@ -137,7 +137,7 @@ struct Sidebar: View {
     private var status: some View {
         HStack(spacing: 8) {
             Circle().fill(statusColor).frame(width: rail ? 10 : 8, height: rail ? 10 : 8)
-            if !rail { Text(statusText).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.sidebarSecondary) }
+            if !rail { Text(statusText).font(Theme.Fonts.bodyMedium).foregroundStyle(Theme.sidebarSecondary) }
             if !rail { Spacer(minLength: 0) }
         }
         .padding(.horizontal, rail ? 0 : 10)

@@ -14,7 +14,7 @@ struct InboxList: View {
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(days.keys.sorted(), id: \.self) { day in
                     Text(day.formatted(.dateTime.weekday(.wide).month().day()))
-                        .font(.caption.weight(.semibold))
+                        .font(Theme.Fonts.secondarySemibold)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 4)
                     ForEach(days[day] ?? []) { entry in selectable(entry) }
@@ -42,6 +42,7 @@ struct InboxList: View {
         return Button { selection = entry.id } label: {
             row(entry)
                 .padding(.horizontal, 12).padding(.vertical, 6)
+                .frame(minHeight: Theme.Control.rowHeight)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background {
                     if selected {
@@ -62,8 +63,8 @@ struct InboxList: View {
             Circle().fill(colors.color(for: entry.calendarID).color).frame(width: 9, height: 9).padding(.top, 5)
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.title).fontWeight(.semibold).lineLimit(1)
-                Text(InboxText.time(entry)).font(.caption).foregroundStyle(.secondary)
-                InboxText.statusLine(entry).font(.caption2.weight(.medium))
+                Text(InboxText.time(entry)).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+                InboxText.statusLine(entry).font(Theme.Fonts.tinyMedium)
             }
         }
         .padding(.vertical, 2)

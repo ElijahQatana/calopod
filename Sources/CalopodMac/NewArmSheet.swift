@@ -35,9 +35,9 @@ struct NewArmSheet: View {
 
     var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("New arm").font(Theme.title(.title2))
+            Text("New arm").font(Theme.Fonts.heading)
             Text("Pick the calendars to copy from, the calendar to copy into, and what the copies show.")
-                .font(.callout).foregroundStyle(.secondary)
+                .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, Theme.pagePadding).padding(.vertical, 18)
@@ -79,7 +79,7 @@ struct NewArmSheet: View {
         let open = draft.targets(in: groups)
         return section("Copy into", note: "One calendar you can write to. It can't also be a source.") {
             if open.isEmpty {
-                Text("No writable calendar is left to choose.").font(.callout).foregroundStyle(.secondary)
+                Text("No writable calendar is left to choose.").font(Theme.Fonts.secondary).foregroundStyle(.secondary)
             } else {
                 chipGroups(open) { calendar in
                     chip(calendar, selected: draft.target == calendar.id) { draft.target = calendar.id }
@@ -100,7 +100,7 @@ struct NewArmSheet: View {
     var footer: some View {
         HStack(spacing: 12) {
             if let reason = draft.problem {
-                Text(reason).font(.callout).foregroundStyle(.secondary)
+                Text(reason).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                     .accessibilityLabel("Cannot create yet. \(reason)")
             }
             Spacer()
@@ -118,8 +118,8 @@ struct NewArmSheet: View {
     private func section<Content: View>(_ title: String, note: String?, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(title).font(.headline)
-                if let note { Text(note).font(.caption).foregroundStyle(.secondary) }
+                Text(title).font(Theme.Fonts.bodySemibold)
+                if let note { Text(note).font(Theme.Fonts.secondary).foregroundStyle(.secondary) }
             }
             content()
         }
@@ -131,7 +131,7 @@ struct NewArmSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             ForEach(groups) { group in
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(group.label).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    Text(group.label).font(Theme.Fonts.secondarySemibold).foregroundStyle(.secondary)
                     FlowLayout(spacing: 6) { ForEach(group.calendars) { chip($0) } }
                 }
             }
@@ -143,10 +143,10 @@ struct NewArmSheet: View {
             CappedWidth(limit: 260) {
                 HStack(spacing: 6) {
                     Circle().fill(colors.color(for: calendar.id).color).frame(width: 9, height: 9)
-                    Text(calendar.name).font(.system(size: 12.5, weight: .medium)).lineLimit(1).truncationMode(.tail)
-                    if selected { Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.accent) }
+                    Text(calendar.name).font(Theme.Fonts.chip).lineLimit(1).truncationMode(.tail)
+                    if selected { Image(systemName: "checkmark").font(Theme.Fonts.tinyBold).foregroundStyle(Theme.accent) }
                 }
-                .padding(.horizontal, 11).frame(height: 28)
+                .padding(.horizontal, 12).frame(height: Theme.Control.chipHeight)
                 .background(Capsule().fill(selected ? Theme.accent.opacity(0.14) : Color.primary.opacity(0.06)))
                 .overlay(Capsule().strokeBorder(selected ? Theme.accent : .clear, lineWidth: 1))
                 .contentShape(Capsule())
@@ -165,9 +165,9 @@ struct NewArmSheet: View {
                 HStack(spacing: 6) {
                     Image(systemName: selected ? "largecircle.fill.circle" : "circle")
                         .foregroundStyle(selected ? Theme.accent : .secondary)
-                    Text(title).font(.callout.weight(.semibold))
+                    Text(title).font(Theme.Fonts.bodySemibold)
                 }
-                Text(detail).font(.caption).foregroundStyle(.secondary)
+                Text(detail).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(12)

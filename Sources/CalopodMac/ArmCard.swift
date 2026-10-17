@@ -48,7 +48,6 @@ struct ArmCard: View {
                 set: { value in Task { await model.setArmEnabled(arm.id, value) } }))
                 .labelsHidden()
                 .toggleStyle(.switch)
-                .controlSize(.small)
                 .accessibilityLabel("Enabled")
                 .accessibilityValue("\(arm.name), \(arm.isEnabled ? "on" : "off")")
         }
@@ -58,10 +57,10 @@ struct ArmCard: View {
     private var ruleBadge: some View {
         let label = HStack(spacing: 4) {
             Text(Self.ruleName(arm.rule))
-            if arm.canChangeRule { Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)) }
+            if arm.canChangeRule { Image(systemName: "chevron.down").font(Theme.Fonts.tinyBold) }
         }
-        .font(.caption.weight(.medium))
-        .padding(.horizontal, 10).padding(.vertical, 4)
+        .font(Theme.Fonts.secondaryMedium)
+        .padding(.horizontal, 12).frame(minHeight: Theme.Control.smallChipHeight)
         .background(Capsule().fill(Color.primary.opacity(0.07)))
         .fixedSize()
         if arm.canChangeRule {
@@ -94,9 +93,9 @@ struct ArmCard: View {
             Button(arm.isMain ? "Remove Main calendar…" : "Remove…", role: .destructive) { confirmingRemoval = true }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 13, weight: .semibold))
+                .font(Theme.Fonts.bodySemibold)
                 .foregroundStyle(.secondary)
-                .frame(width: 26, height: 26)
+                .frame(width: Theme.Control.height, height: Theme.Control.height)
                 .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
@@ -113,9 +112,9 @@ struct ArmCard: View {
                 ForEach(sources, id: \.0) { id, name in CalendarChip(name: name, color: colors.color(for: id).color) }
             }
             Image(systemName: "arrow.right")
-                .font(.system(size: 12, weight: .semibold))
+                .font(Theme.Fonts.smallIcon)
                 .foregroundStyle(.secondary)
-                .frame(height: 26)
+                .frame(height: Theme.Control.chipHeight)
             CalendarChip(name: model.targetName(of: arm), color: colors.color(for: arm.targetID).color, isTarget: true)
         }
         .opacity(arm.isEnabled ? 1 : 0.55)
@@ -125,7 +124,7 @@ struct ArmCard: View {
 
     private var removalConfirm: some View {
         HStack(spacing: 8) {
-            Text("Remove this arm? Events already copied stay put.").font(.callout).foregroundStyle(.secondary)
+            Text("Remove this arm? Events already copied stay put.").font(Theme.Fonts.secondary).foregroundStyle(.secondary)
             Spacer()
             Button("Cancel") { confirmingRemoval = false }.buttonStyle(.quiet)
             Button("Remove", role: .destructive) {
@@ -149,9 +148,9 @@ struct CalendarChip: View {
         CappedWidth(limit: 280) {
             HStack(spacing: 6) {
                 Circle().fill(color).frame(width: 9, height: 9)
-                Text(name).font(.system(size: 12.5, weight: .medium)).lineLimit(1).truncationMode(.tail)
+                Text(name).font(Theme.Fonts.chip).lineLimit(1).truncationMode(.tail)
             }
-            .padding(.horizontal, 11).frame(height: 26)
+            .padding(.horizontal, 12).frame(height: Theme.Control.chipHeight)
             .background(Capsule().fill(Color.primary.opacity(0.06)))
             .overlay { if isTarget { Capsule().strokeBorder(Color.primary.opacity(0.22), lineWidth: 1) } }
         }
@@ -199,10 +198,10 @@ private struct ArmTitle: View {
                     .onChange(of: focused) { _, isFocused in
                         if !isFocused && editing { Task { await commit(keepOpenOnError: false) } }
                     }
-                if let problem { Text(problem).font(.caption).foregroundStyle(Theme.bad) }
+                if let problem { Text(problem).font(Theme.Fonts.secondary).foregroundStyle(Theme.bad) }
             } else {
                 HStack(spacing: 6) {
-                    Text(arm.name).font(.system(size: 15, weight: .semibold)).lineLimit(1).truncationMode(.tail)
+                    Text(arm.name).font(Theme.Fonts.bodySemibold).lineLimit(1).truncationMode(.tail)
                     Button { editing = true } label: { Image(systemName: "pencil") }
                         .buttonStyle(.plain)
                         .foregroundStyle(.secondary)

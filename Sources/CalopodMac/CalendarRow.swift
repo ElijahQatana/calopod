@@ -23,7 +23,7 @@ struct CalendarList: View {
             model.aliases.setExpanded(!open, for: connection.id)
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                Image(systemName: "chevron.right").font(Theme.Fonts.secondarySemibold)
                     .rotationEffect(.degrees(open ? 90 : 0))
                 Text("Ignored (\(calendars.count))")
                 Spacer()
@@ -65,11 +65,11 @@ struct CalendarRow: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(aliases.name(for: calendar)).lineLimit(1)
                     if alias != nil {
-                        Text(calendar.name).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        Text(calendar.name).font(Theme.Fonts.secondary).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
                 if calendar.isReadOnly {
-                    Text("read-only").font(.caption).foregroundStyle(.secondary)
+                    Text("read-only").font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                 }
                 if ignored && model.isInUse(calendar) {
                     Chip(text: "in use")
@@ -93,16 +93,17 @@ struct CalendarRow: View {
     /// Shown on hover so a long list stays calm. The same actions are in the context menu.
     private var actions: some View {
         HStack(spacing: 2) {
-            Button { renaming = true } label: { Image(systemName: "pencil").padding(4).contentShape(Rectangle()) }
+            Button { renaming = true } label: { Image(systemName: "pencil").frame(width: Theme.Control.height, height: Theme.Control.height).contentShape(Rectangle()) }
                 .help("Rename on this Mac")
                 .accessibilityLabel("Rename")
                 .popover(isPresented: $renaming, arrowEdge: .bottom) {
                     RenameCalendar(calendar: calendar, aliases: aliases) { renaming = false }
+                        .appTypography()
                 }
             Button {
                 aliases.setIgnored(!ignored, for: calendar.id)
             } label: {
-                Image(systemName: ignored ? "eye" : "eye.slash").padding(4).contentShape(Rectangle())
+                Image(systemName: ignored ? "eye" : "eye.slash").frame(width: Theme.Control.height, height: Theme.Control.height).contentShape(Rectangle())
             }
             .help(ignored ? "Stop ignoring" : "Ignore")
             .accessibilityLabel(ignored ? "Stop ignoring" : "Ignore")
@@ -128,9 +129,9 @@ private struct RenameCalendar: View {
                 .onSubmit(save)
                 .frame(width: 240)
             Text("Name from the calendar: \(calendar.name)")
-                .font(.caption).foregroundStyle(.secondary)
+                .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
             Text("Shown only in Calopod on this Mac. The calendar itself is not changed.")
-                .font(.caption).foregroundStyle(.secondary)
+                .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                 .frame(width: 240, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
             HStack {

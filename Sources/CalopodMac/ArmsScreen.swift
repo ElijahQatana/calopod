@@ -11,7 +11,7 @@ struct ArmsScreen: View {
     var body: some View {
         ScrollView { page }
                 .task { await model.reload() }
-            .sheet(isPresented: $creating) { NewArmSheet(model: model, colors: colors) }
+            .sheet(isPresented: $creating) { NewArmSheet(model: model, colors: colors).appTypography() }
     }
 
     var page: some View {
@@ -35,9 +35,9 @@ struct ArmsScreen: View {
     private var header: some View {
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Arms").font(Theme.title(.title))
+                Text("Arms").font(Theme.Fonts.pageTitle)
                 Text("An arm copies events from one or more calendars into another, as Busy blocks or with full details.")
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
@@ -52,13 +52,13 @@ struct ArmsScreen: View {
     private var emptyState: some View {
         VStack(spacing: 10) {
             Image(systemName: "arrow.triangle.branch")
-                .font(.system(size: 28, weight: .medium))
+                .font(Theme.Fonts.emptyGlyph)
                 .foregroundStyle(Theme.accent)
                 .frame(width: 64, height: 64)
                 .background(Circle().fill(Theme.accent.opacity(0.12)))
-            Text("No arms yet").font(Theme.title(.title3))
+            Text("No arms yet").font(Theme.Fonts.sectionTitle)
             Text("Choose New arm to send one or more calendars into another. First-run setup, from Overview, builds a Main calendar and Busy blocks for you.")
-                .font(.callout).foregroundStyle(.secondary)
+                .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 420)
         }

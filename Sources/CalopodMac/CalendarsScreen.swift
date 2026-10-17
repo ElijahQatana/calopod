@@ -48,7 +48,7 @@ struct CalendarsScreen: View {
     private func accountHeader(_ connection: SetupConnection) -> some View {
         HStack {
             Label(connection.label, systemImage: Self.symbol(connection.provider))
-                .font(Theme.title(.headline))
+                .font(Theme.Fonts.sectionTitle)
             Spacer()
             Menu {
                 Button("Refresh calendars") { Task { await model.refresh(connection.id) } }

@@ -66,10 +66,10 @@ struct InboxReviewSheet: View {
 
     private var header: some View {
         HStack(spacing: 14) {
-            Text("Review inbox").font(Theme.title())
+            Text("Review inbox").font(Theme.Fonts.heading)
             Spacer(minLength: 8)
             if let progress = model.progress, showsProgress {
-                Text(progressLine(progress)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(progressLine(progress)).font(Theme.Fonts.secondary).foregroundStyle(.secondary).lineLimit(1)
                 bar(Double(progress.reviewed) / Double(max(progress.total, 1))).frame(width: 120)
                 if showsStop { Button("Stop") { model.stop() }.help("Stop here. Your progress is saved. (S)") }
             }
@@ -146,7 +146,7 @@ struct InboxReviewSheet: View {
     private func cardView(_ card: InboxReviewCardInfo) -> some View {
         let entry = card.entry
         return VStack(alignment: .leading, spacing: 14) {
-            Text(entry.title).font(Theme.title(.title3)).fixedSize(horizontal: false, vertical: true)
+            Text(entry.title).font(Theme.Fonts.sectionTitle).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 ForEach(entry.reasons, id: \.self) { StatusPill(text: InboxText.label($0, entry), color: InboxText.tint($0)) }
             }
@@ -156,9 +156,9 @@ struct InboxReviewSheet: View {
                 if let organizer = entry.organizer { fact("Organizer", organizer) }
                 fact("Calendar", account(card))
             }
-            .font(.callout)
+            .font(Theme.Fonts.body)
             VStack(alignment: .leading, spacing: 6) {
-                Text("Around this time").font(.headline)
+                Text("Around this time").font(Theme.Fonts.bodySemibold)
                 ContextStrip(detail: card.detail, colors: colors)
             }
             if !card.neighbors.isEmpty { neighbors(card) }
@@ -174,7 +174,7 @@ struct InboxReviewSheet: View {
 
     private func neighbors(_ card: InboxReviewCardInfo) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Overlaps with").font(.caption).foregroundStyle(.secondary)
+            Text("Overlaps with").font(Theme.Fonts.secondary).foregroundStyle(.secondary)
             ForEach(Array(card.neighbors.enumerated()), id: \.element.id) { index, other in
                 Button { Task { await model.perform(.goTo(index + 1)) } } label: {
                     Text("G\(index + 1)  \(other.title)").lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
@@ -183,14 +183,14 @@ struct InboxReviewSheet: View {
             }
             if model.isJumped {
                 Button("Back to the queue  B") { Task { await model.perform(.back) } }
-                    .buttonStyle(.link).font(.caption)
+                    .buttonStyle(.link).font(Theme.Fonts.secondary)
             }
         }
     }
 
     private func confirmView(_ card: InboxReviewCardInfo, _ reply: ConflictChoice) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Send this reply?").font(Theme.title(.title3))
+            Text("Send this reply?").font(Theme.Fonts.sectionTitle)
             Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 14, verticalSpacing: 8) {
                 fact("Event", card.entry.title)
                 fact("Told", card.organizer ?? "The organizer")
@@ -199,7 +199,7 @@ struct InboxReviewSheet: View {
                 let overlaps = card.preview(for: reply)?.overlaps ?? []
                 fact("Overlaps after", overlaps.isEmpty ? "None" : overlaps.joined(separator: ", "))
             }
-            .font(.callout)
+            .font(Theme.Fonts.body)
             Banner(kind: .caution, text: (card.notification ?? "The organizer may be notified.") + " This cannot be unsent.")
         }
     }
@@ -251,7 +251,7 @@ struct InboxReviewSheet: View {
     private func cardFooter(_ card: InboxReviewCardInfo) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             if card.replies.isEmpty {
-                Text(card.detail.replyNote).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Text(card.detail.replyNote).font(Theme.Fonts.secondary).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             cardButtons(card)
         }
@@ -285,7 +285,7 @@ struct InboxReviewSheet: View {
     private func keyed(_ title: String, _ key: String) -> some View {
         HStack(spacing: 6) {
             Text(title)
-            Text(key).font(.caption.monospaced()).opacity(0.55)
+            Text(key).font(Theme.Fonts.tiny.monospaced()).opacity(0.55)
         }
     }
 }
@@ -304,7 +304,7 @@ struct ReviewSummary: View {
         let totals = progress?.totals
         return VStack(alignment: .leading, spacing: 14) {
             if let totals {
-                Text(heading(progress, totals)).font(Theme.title(.title3))
+                Text(heading(progress, totals)).font(Theme.Fonts.sectionTitle)
                 Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 18, verticalSpacing: 6) {
                     count("Replies recorded", totals.recorded, detail: "Yes \(totals.yes) · Maybe \(totals.maybe) · No \(totals.no)")
                     count("Held", totals.held, detail: calendarSkips > 0 ? "\(min(calendarSkips, totals.held)) left for the Calendar app" : nil)
@@ -317,7 +317,7 @@ struct ReviewSummary: View {
                     count("New overlaps created", totals.overlapsCreated, tint: totals.overlapsCreated > 0 ? Theme.bad : nil)
                     count("Overlaps left", totals.overlapsRemaining)
                 }
-                .font(.callout)
+                .font(Theme.Fonts.body)
                 if !totals.overlapsAreComplete {
                     Hint { Text("Some calendars were out of date or only partly read, so the overlap counts may be low.") }
                 }
@@ -325,10 +325,10 @@ struct ReviewSummary: View {
                     Banner(kind: .caution, text: "A reply has an unclear outcome. It is never sent again. Choose Resume next time to check what happened.")
                 } else if totals.queueReviewed {
                     Text(totals.inboxResolved ? "Your inbox is clear." : "Everything in this queue was looked at, but \(totals.remainingInbox) item\(totals.remainingInbox == 1 ? "" : "s") still need\(totals.remainingInbox == 1 ? "s" : "") attention.")
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                 } else {
                     Text("Your progress is saved. Choose Review, then Resume, to carry on.")
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                 }
             }
         }
@@ -343,7 +343,7 @@ struct ReviewSummary: View {
         GridRow {
             Text(label).foregroundStyle(.secondary).gridColumnAlignment(.leading)
             Text("\(value)").monospacedDigit().fontWeight(.semibold).foregroundStyle(tint ?? .primary)
-            if let detail { Text(detail).font(.caption).foregroundStyle(.secondary) } else { Color.clear.frame(width: 0, height: 0) }
+            if let detail { Text(detail).font(Theme.Fonts.secondary).foregroundStyle(.secondary) } else { Color.clear.frame(width: 0, height: 0) }
         }
     }
 }

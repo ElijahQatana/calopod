@@ -19,18 +19,18 @@ struct CalendarColorDot: View {
         .accessibilityValue(current.name)
         .popover(isPresented: $showing, arrowEdge: .bottom) {
             VStack(alignment: .leading, spacing: 10) {
-                LazyVGrid(columns: Array(repeating: GridItem(.fixed(28), spacing: 8), count: 6), spacing: 8) {
+                LazyVGrid(columns: Array(repeating: GridItem(.fixed(Theme.Control.height), spacing: 6), count: 6), spacing: 8) {
                     ForEach(CalendarColor.palette) { option in
                         Button { colors.set(option, for: calendarID) } label: {
-                            Circle().fill(option.color).frame(width: 24, height: 24)
+                            Circle().fill(option.color).frame(width: 28, height: 28)
                                 .overlay {
                                     if option == current {
                                         Image(systemName: "checkmark")
-                                            .font(.caption.weight(.bold))
+                                            .font(Theme.Fonts.secondarySemibold)
                                             .foregroundStyle(.white)
                                     }
                                 }
-                                .frame(width: 28, height: 28)
+                                .frame(width: Theme.Control.height, height: Theme.Control.height)
                                 .contentShape(Circle())
                         }
                         .buttonStyle(.plain)
@@ -45,11 +45,12 @@ struct CalendarColorDot: View {
                     .help("Use \(match.color.name), the closest to the color \(match.name) uses")
                 }
                 Text("Shown only in Calopod on this Mac. The calendar itself is not changed.")
-                    .font(.caption).foregroundStyle(.secondary)
-                    .frame(width: 6 * 28 + 5 * 8, alignment: .leading)
+                    .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+                    .frame(width: 6 * Theme.Control.height + 5 * 6, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(14)
+            .appTypography()
         }
     }
 }
