@@ -1,5 +1,6 @@
 import CalopodCommands
 import CalopodRuntime
+import AppKit
 import Foundation
 import Observation
 import ServiceManagement
@@ -16,6 +17,7 @@ final class ServiceModel {
     private(set) var health: HealthReport?
     private(set) var registration: ServiceRegistration.State = .unavailable
 
+    private typealias AgentState = (status: AgentControlStatus?, overview: AgentControlOverview?, health: HealthReport?)
     private var service = AgentControlService()
     private let registrar = ServiceRegistration()
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
@@ -24,12 +26,16 @@ final class ServiceModel {
         refreshTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.refresh()
-                try? await Task.sleep(for: .seconds(15))
+                // Slower while Calopod is in the background, such as with only the menu bar item showing.
+                let active = self?.isAppActive ?? false
+                try? await Task.sleep(for: .seconds(active ? 15 : 60))
             }
         }
     }
 
     deinit { refreshTask?.cancel() }
+
+    private var isAppActive: Bool { NSApplication.shared.isActive }
 
     var menuBarAlert: Bool { ["failed", "stopped"].contains(status?.state) }
     var menuBarDimmed: Bool { ["paused", "disabled"].contains(status?.state) }
@@ -40,25 +46,31 @@ final class ServiceModel {
         Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/calopod-agent")
     }
 
-    private func updateService() {
-        let state = registrar.state()
-        registration = state
-        service = AgentControlService(
-            bundledAgentExecutable: state == .enabled ? Self.bundledAgentExecutable : nil
-        )
-    }
-
     func refresh() async {
-        if busyAction == nil { updateService() }
-        let service = service
-        let result = await Task.detached {
-            (try? service.status(), try? service.overview(), try? service.health())
+        let updating = busyAction == nil
+        let registrar = registrar
+        let current = service
+        let bundled = Self.bundledAgentExecutable
+        // Registration status and the service reads can block, so they stay off the main actor.
+        let result = await Task.detached { () -> (ServiceRegistration.State?, AgentControlService, AgentState) in
+            var service = current
+            var state: ServiceRegistration.State?
+            if updating {
+                let found = registrar.state()
+                state = found
+                service = AgentControlService(bundledAgentExecutable: found == .enabled ? bundled : nil)
+            }
+            return (state, service, service.state())
         }.value
-        if busyAction == nil {
-            status = result.0
-            overview = result.1
-            health = result.2
+        guard busyAction == nil else { return }
+        if let state = result.0 {
+            if registration != state { registration = state }
+            service = result.1
         }
+        // Equal values are not assigned, so a quiet poll redraws nothing.
+        if status != result.2.status { status = result.2.status }
+        if overview != result.2.overview { overview = result.2.overview }
+        if health != result.2.health { health = result.2.health }
     }
 
     func previewSync() async {

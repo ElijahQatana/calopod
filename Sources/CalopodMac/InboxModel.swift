@@ -48,7 +48,7 @@ final class InboxModel {
         do {
             let loaded = try await Task.detached { try service.board() }.value
             // Several screens reload at once; an older read must not replace a newer one.
-            if load == loads { board = loaded }
+            if load == loads, board != loaded { board = loaded }
         } catch {
             notice = "The inbox could not be loaded. Try again."
         }
@@ -127,6 +127,6 @@ final class InboxModel {
         guard let id = selection else { detail = nil; return }
         let readDetail = readDetail
         let loaded = try? await Task.detached { try readDetail(id) }.value
-        if selection == id { detail = loaded }
+        if selection == id, detail != loaded { detail = loaded }
     }
 }
