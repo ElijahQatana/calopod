@@ -49,12 +49,12 @@ struct ServiceScreen: View {
                 Button(model.legacyServiceActive ? "Move to the app" : "Install") {
                     Task { await model.installBundledService() }
                 }
-                .disabled(model.isBusy || model.registration == .notFound)
+                .disabled(model.isBusy)
                 if model.registration == .notFound {
                     Banner(
                         kind: .caution,
                         text:
-                            "macOS can't find the background service in this build, so it can't be installed from here yet. Your current service keeps running."
+                            "macOS hasn't registered this copy of the app yet, so it may refuse to install the service. You can still try. If it fails, move Calopod to the Applications folder, open it from there, and try again. Your current service keeps running."
                     )
                 }
                 Hint {
