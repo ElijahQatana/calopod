@@ -285,7 +285,7 @@ struct FirstRunSheet: View {
     }
 
     private func approve() async {
-        if service.pendingPreview != nil { await service.applyPreview() }
-        if service.notice == nil { progress.approvePreview() }
+        // Setup only finishes when the sync really completed.
+        if service.pendingPreview != nil, await service.applyPreview() { progress.approvePreview() }
     }
 }
