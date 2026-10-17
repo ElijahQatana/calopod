@@ -115,7 +115,7 @@ struct ContextStrip: View {
             .font(.caption2).foregroundStyle(.secondary)
         }
         .padding(10)
-        .background(RoundedRectangle(cornerRadius: Theme.controlRadius, style: .continuous).fill(Color.primary.opacity(0.05)))
+        .cardSurface()
     }
 
     private func block(_ item: InboxContextEntry) -> some View {
