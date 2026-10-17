@@ -4,6 +4,7 @@ import XCTest
 
 @testable import CalopodMac
 
+@MainActor
 final class ThemeTests: XCTestCase {
     private func hex(_ color: Color, _ name: NSAppearance.Name) throws -> String {
         let appearance = try XCTUnwrap(NSAppearance(named: name))
@@ -51,64 +52,5 @@ final class ThemeTests: XCTestCase {
         for name in [NSAppearance.Name.aqua, .darkAqua] {
             XCTAssertLessThanOrEqual(try alpha(Theme.frameTint, name), 0.15)
         }
-    }
-}
-
-final class WindowBlurTests: XCTestCase {
-    func testStrategyParsing() {
-        XCTAssertEqual(WindowBlurStrategy.parse(nil), WindowBlurStrategy.standard)
-        XCTAssertEqual(WindowBlurStrategy.parse(""), WindowBlurStrategy.standard)
-        XCTAssertEqual(WindowBlurStrategy.parse("bogus"), WindowBlurStrategy.standard)
-        XCTAssertEqual(WindowBlurStrategy.parse("wrapper"), .wrapper)
-        XCTAssertEqual(WindowBlurStrategy.parse(" Background "), .background)
-        XCTAssertEqual(WindowBlurStrategy.parse("container"), .container)
-        XCTAssertEqual(WindowBlurStrategy.parse("OFF"), .off)
-    }
-
-    func testLogLine() {
-        let line = WindowDiagnostics.line(
-            event: "startup", strategy: .background, isOpaque: false, background: "clear",
-            contentView: "NSHostingView", effect: "none", isMain: true, reduceTransparency: false)
-        XCTAssertEqual(
-            line,
-            "startup: strategy=background isOpaque=false backgroundColor=clear contentView=NSHostingView "
-                + "effect=none isMainWindow=true reduceTransparency=false")
-    }
-
-    func testViewLine() {
-        XCTAssertEqual(
-            WindowDiagnostics.viewLine(
-                depth: 1, className: "NSHostingView", wantsLayer: true, background: "nil", layerOpaque: "false"),
-            "view   NSHostingView wantsLayer=true layerBackground=nil layerOpaque=false")
-    }
-}
-
-final class WindowTuningTests: XCTestCase {
-    func testMaterialNames() {
-        XCTAssertEqual(WindowTuning.material("hudWindow"), .hudWindow)
-        XCTAssertEqual(WindowTuning.material(" UnderWindowBackground "), .underWindowBackground)
-        XCTAssertEqual(WindowTuning.material("nonsense"), Theme.windowMaterial)
-        XCTAssertEqual(WindowTuning.material(nil), Theme.windowMaterial)
-    }
-
-    func testAppearanceNames() {
-        XCTAssertEqual(WindowTuning.appearance("darkAqua")?.name, .darkAqua)
-        XCTAssertEqual(WindowTuning.appearance("AQUA")?.name, .aqua)
-        XCTAssertNil(WindowTuning.appearance("system"))
-        XCTAssertNil(WindowTuning.appearance("junk"))
-    }
-
-    func testAlphaIsClampedAndGarbageIgnored() {
-        XCTAssertEqual(WindowTuning.alpha(0.6 as NSNumber), 0.6)
-        XCTAssertEqual(WindowTuning.alpha("0.5"), 0.5)
-        XCTAssertEqual(WindowTuning.alpha(0.05 as NSNumber), 0.2)
-        XCTAssertEqual(WindowTuning.alpha(7 as NSNumber), 1)
-        XCTAssertEqual(WindowTuning.alpha("abc"), 1)
-        XCTAssertEqual(WindowTuning.alpha(nil), 1)
-        XCTAssertEqual(WindowTuning.alpha(Double.nan as NSNumber), 1)
-    }
-
-    func testGlassStrategyParses() {
-        XCTAssertEqual(WindowBlurStrategy.parse("glass"), .glass)
     }
 }

@@ -4,7 +4,7 @@ import Observation
 import SwiftUI
 
 enum Screen: String, CaseIterable, Identifiable {
-    case overview, calendar, inbox, calendars, arms, service
+    case overview, calendar, inbox, calendars, arms, service, settings
 
     var id: String { rawValue }
 
@@ -16,6 +16,7 @@ enum Screen: String, CaseIterable, Identifiable {
         case .calendars: "Calendars"
         case .arms: "Arms"
         case .service: "Background sync"
+        case .settings: "Settings"
         }
     }
 
@@ -27,6 +28,7 @@ enum Screen: String, CaseIterable, Identifiable {
         case .calendars: "calendar"
         case .arms: "arrow.triangle.branch"
         case .service: "clock.arrow.2.circlepath"
+        case .settings: "gearshape"
         }
     }
 }
@@ -34,7 +36,7 @@ enum Screen: String, CaseIterable, Identifiable {
 extension Screen {
     /// Screens listed in the sidebar.
     static let main: [Screen] = [.overview, .calendar, .inbox]
-    static let setup: [Screen] = [.calendars, .arms, .service]
+    static let setup: [Screen] = [.calendars, .arms, .service, .settings]
 }
 
 /// Whether the sidebar is an icon rail. Remembered across launches.

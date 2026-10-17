@@ -28,9 +28,14 @@ enum Theme {
     /// The behind-window material, the one Zen Browser defaults to. The sidebar and
     /// underWindowBackground materials both washed the desktop out.
     static let windowMaterial: NSVisualEffectView.Material = .hudWindow
-    static let frameTint = Color(
-        light: Color(red: 1, green: 0.56, blue: 0.28).opacity(0.10),
-        dark: Color(red: 0.92, green: 0.43, blue: 0.16).opacity(0.08))
+    // The five see-through fills read their opacity from AppSettings, so the Settings
+    // sliders move them live. GlassBase holds the defaults.
+    @MainActor static var frameTint: Color {
+        let scale = AppSettings.shared.frameScale
+        return Color(
+            light: Color(red: 1, green: 0.56, blue: 0.28).opacity(clamped(GlassBase.frame.light * scale)),
+            dark: Color(red: 0.92, green: 0.43, blue: 0.16).opacity(clamped(GlassBase.frame.dark * scale)))
+    }
     static let pane = Color(light: .white, dark: Color(red: 0x17 / 255, green: 0x14 / 255, blue: 0x12 / 255))
     static let group = Color(
         light: Color(red: 0xf6 / 255, green: 0xf4 / 255, blue: 0xf1 / 255),
@@ -39,14 +44,31 @@ enum Theme {
         light: Color(red: 0.10, green: 0.09, blue: 0.07).opacity(0.06),
         dark: Color(red: 1, green: 0.94, blue: 0.86).opacity(0.06))
     // Inactive windows flatten to near solid, which also makes them cheap to composite.
-    static let sidebarSheen = Color(
-        light: Color.white.opacity(0.58), dark: Color(red: 0.30, green: 0.26, blue: 0.22).opacity(0.56))
-    static let sidebarFill = Color(
-        light: Color.white.opacity(0.52), dark: Color(red: 0.12, green: 0.10, blue: 0.09).opacity(0.52))
-    static let contentFill = Color(
-        light: Color.white.opacity(0.93), dark: Color(red: 0x17 / 255, green: 0x14 / 255, blue: 0x12 / 255).opacity(0.91))
-    static let innerFill = Color(
-        light: Color.white.opacity(0.97), dark: Color(red: 0x20 / 255, green: 0x1c / 255, blue: 0x19 / 255).opacity(0.97))
+    @MainActor static var sidebarSheen: Color {
+        let scale = AppSettings.shared.sidebarScale
+        return Color(
+            light: Color.white.opacity(clamped(GlassBase.sidebarSheen.light * scale)),
+            dark: Color(red: 0.30, green: 0.26, blue: 0.22).opacity(clamped(GlassBase.sidebarSheen.dark * scale)))
+    }
+    @MainActor static var sidebarFill: Color {
+        let scale = AppSettings.shared.sidebarScale
+        return Color(
+            light: Color.white.opacity(clamped(GlassBase.sidebarFill.light * scale)),
+            dark: Color(red: 0.12, green: 0.10, blue: 0.09).opacity(clamped(GlassBase.sidebarFill.dark * scale)))
+    }
+    @MainActor static var contentFill: Color {
+        let scale = AppSettings.shared.contentScale
+        return Color(
+            light: Color.white.opacity(clamped(GlassBase.content.light * scale)),
+            dark: Color(red: 0x17 / 255, green: 0x14 / 255, blue: 0x12 / 255).opacity(clamped(GlassBase.content.dark * scale)))
+    }
+    @MainActor static var innerFill: Color {
+        let scale = AppSettings.shared.contentScale
+        return Color(
+            light: Color.white.opacity(clamped(GlassBase.inner.light * scale)),
+            dark: Color(red: 0x20 / 255, green: 0x1c / 255, blue: 0x19 / 255).opacity(clamped(GlassBase.inner.dark * scale)))
+    }
+    private static func clamped(_ alpha: Double) -> Double { min(1, max(0, alpha)) }
     static let sidebarInactive = Color(
         light: Color.white.opacity(0.80), dark: Color(red: 0x1b / 255, green: 0x17 / 255, blue: 0x15 / 255).opacity(0.86))
     static let cardInactive = Color(
@@ -88,7 +110,7 @@ struct PanelFill<S: Shape>: ViewModifier {
 
     func body(content: Content) -> some View {
         content.background {
-            if reduceTransparency {
+            if AppSettings.shared.isSolid(reduceTransparency: reduceTransparency) {
                 shape.fill(level == .card ? Theme.pane : Theme.group)
             } else if activeState == .inactive {
                 shape.fill(level == .card ? Theme.cardInactive : Theme.innerInactive)
@@ -109,7 +131,7 @@ struct PanelChrome<S: InsettableShape>: ViewModifier {
     func body(content: Content) -> some View {
         content
             .overlay {
-                if reduceTransparency {
+                if AppSettings.shared.isSolid(reduceTransparency: reduceTransparency) {
                     shape.strokeBorder(Theme.paneLine, lineWidth: 1)
                 } else {
                     shape.strokeBorder(
