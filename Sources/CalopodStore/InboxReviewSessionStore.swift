@@ -53,7 +53,7 @@ extension LocalStateRepository {
             } else {
                 row = try Row.fetchOne(db, sql: """
                     SELECT * FROM inbox_review_sessions WHERE completed = 0 OR has_unresolved_actions = 1
-                    ORDER BY updated_at DESC, id DESC LIMIT 1
+                    ORDER BY has_unresolved_actions DESC, updated_at DESC, id DESC LIMIT 1
                     """)
             }
             return row.map { StoredInboxReviewSession(id: $0["id"], generation: $0["generation"], snapshot: $0["snapshot"]) }
@@ -62,6 +62,14 @@ extension LocalStateRepository {
 
     public func saveInboxReviewSession(_ update: InboxReviewSessionUpdate) throws {
         try database.write { try writeInboxReviewSession($0, update: update) }
+    }
+
+    /// Removes a session that has nothing unresolved, such as the one behind a single quick reply.
+    public func discardInboxReviewSession(id: String) throws {
+        try database.write { db in
+            try db.execute(
+                sql: "DELETE FROM inbox_review_sessions WHERE id = ? AND has_unresolved_actions = 0", arguments: [id])
+        }
     }
 
     /// Keep unfinished and uncertain sessions until explicitly resolved.

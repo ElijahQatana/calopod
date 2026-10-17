@@ -193,6 +193,8 @@ public struct InboxScreenService: Sendable {
             .init(eventID: id, title: "", choice: choice, status: $0, message: $1)
         }
         guard choice != .noChange else { return .init(status: .unavailable, message: "Pick Yes, Maybe or No.") }
+        var cleanup: (() -> Void)?
+        defer { cleanup?() }
         do {
             let state = try makeRepository()
             let cutoff = freshnessCutoff
@@ -203,6 +205,9 @@ public struct InboxScreenService: Sendable {
             let session = try controller.start(
                 metricsWindow: queue.analysisWindow ?? SyncWindow(start: now(), end: now().addingTimeInterval(1)),
                 freshnessCutoff: cutoff)
+            // A single reply must not leave a review behind for Resume to pick up. A session with an
+            // unclear outcome is kept.
+            cleanup = { try? state.discardInboxReviewSession(id: session.id) }
             guard let card = try await controller.card(
                 sessionID: session.id, sourceKeyHash: id, freshnessCutoff: cutoff, refresh: refresh, provider: provider
             ) else {
