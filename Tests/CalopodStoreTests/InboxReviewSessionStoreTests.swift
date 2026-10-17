@@ -31,6 +31,17 @@ struct InboxReviewSessionStoreTests {
         #expect(try state.inboxReviewSession() != nil)
     }
 
+    @Test func unclearSessionIsOfferedFirstAndOnlyCleanOnesAreDiscarded() throws {
+        let state = LocalStateRepository(database: try .inMemory())
+        try state.createInboxReviewSession(update("older-unclear", generation: 0, unknown: true), connectionIDs: [])
+        try state.createInboxReviewSession(update("newer", generation: 0), connectionIDs: [])
+        #expect(try state.inboxReviewSession()?.id == "older-unclear")
+        try state.discardInboxReviewSession(id: "older-unclear")
+        #expect(try state.inboxReviewSession(id: "older-unclear") != nil)
+        try state.discardInboxReviewSession(id: "newer")
+        #expect(try state.inboxReviewSession(id: "newer") == nil)
+    }
+
     @Test func connectionRemovalErasesSessionAndActionEvidence() throws {
         let state = LocalStateRepository(database: try .inMemory())
         try state.saveConnection(StoredConnection(id: "connection", configurationID: "config", provider: "google", displayLabel: "Example", isEnabled: true))

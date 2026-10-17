@@ -70,13 +70,27 @@ struct ServiceScreen: View {
                 }
             }
         case .requiresApproval:
-            CardSection("Background service", footnote: "Allow Calopod in System Settings, General, Login Items.") {
+            CardSection(
+                "Background service",
+                footnote: model.legacyServiceActive
+                    ? "Allow Calopod in System Settings, General, Login Items, then choose Move to the app again. Your current service keeps running until then."
+                    : "Allow Calopod in System Settings, General, Login Items."
+            ) {
                 CardRow("Status", value: "Waiting for approval")
                 CardRow { Button("Open Login Items Settings") { model.openLoginItemsSettings() } }
             }
         case .enabled:
             CardSection("Background service", footnote: "Registered with macOS and starts when you sign in.") {
                 CardRow("Status", value: "Installed")
+                if model.legacyServiceActive {
+                    CardRow {
+                        Banner(kind: .info, text: "The source-installed service is still running. Finish moving to stop it so only the app's service syncs.")
+                    }
+                    CardRow {
+                        Button("Finish moving") { Task { await model.installBundledService() } }
+                            .disabled(model.isBusy)
+                    }
+                }
                 CardRow {
                     Button("Remove", role: .destructive) { Task { await model.removeBundledService() } }
                         .buttonStyle(.quiet)

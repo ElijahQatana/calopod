@@ -232,6 +232,7 @@ struct Banner: View {
     enum Kind { case info, caution, error }
     let kind: Kind
     let text: String
+    var lineLimit: Int?
 
     private var color: Color {
         switch kind {
@@ -252,7 +253,7 @@ struct Banner: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: symbol).foregroundStyle(color)
-            Text(text).font(Theme.Fonts.body)
+            Text(text).font(Theme.Fonts.body).lineLimit(lineLimit).help(lineLimit == nil ? "" : text)
             Spacer(minLength: 0)
         }
         .padding(14)

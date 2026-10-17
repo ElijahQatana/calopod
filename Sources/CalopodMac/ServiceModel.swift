@@ -85,15 +85,48 @@ final class ServiceModel {
         pendingPreview = nil
     }
 
-    /// The engine plans again and rechecks ownership when it writes.
-    func applyPreview() async {
+    /// Plans again first. If the changes differ from what was shown, the new list replaces it and
+    /// nothing is written, so only an approved plan is applied. Returns true when the sync completed.
+    @discardableResult
+    func applyPreview() async -> Bool {
+        guard busyAction == nil, let approved = pendingPreview else { return false }
         pendingPreview = nil
         let service = service
-        await perform("Syncing…") {
-            let report = try await service.syncNow()
-            return Self.summary(of: report)
+        busyAction = "Checking the plan…"
+        notice = nil
+        var completed = false
+        do {
+            let fresh = try await Task.detached { try await service.preview() }.value
+            if !Self.samePlan(Self.planKeys(approved), Self.planKeys(fresh)) {
+                if fresh.changeCount == 0 {
+                    lastRunSummary = "Everything is up to date. Nothing to change."
+                } else {
+                    pendingPreview = fresh
+                    notice = "Your calendars changed since this preview, so the list was updated. Review it before applying."
+                }
+            } else {
+                busyAction = "Syncing…"
+                let report = try await Task.detached { try await service.syncNow() }.value
+                let summary = Self.summary(of: report)
+                lastRunSummary = summary
+                completed = report.status == "ok"
+                if !completed { notice = summary }
+            }
+        } catch {
+            notice = service.message(for: error)
         }
+        busyAction = nil
+        await refresh()
+        return completed
     }
+
+    /// One entry per planned change, so two plans can be compared.
+    nonisolated static func planKeys(_ preview: SyncPreview) -> [String] {
+        preview.lines.map { "\($0.id)|\($0.action)" }
+    }
+
+    /// Same planned changes, whatever order they come in.
+    nonisolated static func samePlan(_ a: [String], _ b: [String]) -> Bool { a.sorted() == b.sorted() }
 
     func setEnabled(_ enabled: Bool) async {
         let service = service
@@ -124,7 +157,8 @@ final class ServiceModel {
         return status.enabled || status.running
     }
 
-    /// Stops the source-installed agent first so two never run, and restores it if registering fails.
+    /// Stops the source-installed agent first so two never run. It is turned back on if registering
+    /// fails or macOS still needs approval, so syncing never stops without the new service taking over.
     func installBundledService() async {
         let service = service
         let registrar = registrar
@@ -132,13 +166,22 @@ final class ServiceModel {
         await perform("Installing background service…") {
             if legacyActive { try service.setEnabled(false) }
             do {
-                try registrar.register()
+                // Already approved when finishing a move, and registering twice is an error.
+                if registrar.state() != .enabled { try registrar.register() }
             } catch {
                 if legacyActive { try? service.setEnabled(true) }
                 throw error
             }
+            if legacyActive, registrar.state() != .enabled {
+                try? service.setEnabled(true)
+                throw InstallError.needsApproval
+            }
             return nil
         }
+    }
+
+    private enum InstallError: Error {
+        case needsApproval
     }
 
     func removeBundledService() async {
@@ -165,9 +208,13 @@ final class ServiceModel {
             if let summary { lastRunSummary = summary }
         } catch {
             let nsError = error as NSError
-            notice = nsError.domain == "SMAppServiceErrorDomain"
-                ? nsError.localizedDescription
-                : service.message(for: error)
+            if error is InstallError {
+                notice = "Allow Calopod in System Settings, General, Login Items, then choose Move to the app again. Your current service keeps running until then."
+            } else {
+                notice = nsError.domain == "SMAppServiceErrorDomain"
+                    ? nsError.localizedDescription
+                    : service.message(for: error)
+            }
         }
         busyAction = nil
         await refresh()

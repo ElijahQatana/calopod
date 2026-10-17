@@ -87,9 +87,12 @@ struct CalendarScreen: View {
                 .background(Capsule().fill(.quaternary))
             }
             if !model.chipCalendars.isEmpty {
-                FlowLayout(spacing: 6) {
-                    ForEach(model.chipCalendars) { calendar in chip(calendar) }
-                    copiesChip
+                // One scrolling row, so the chips do not take a second and third line at narrow widths.
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(model.chipCalendars) { calendar in chip(calendar) }
+                        copiesChip
+                    }
                 }
             }
         }
@@ -112,7 +115,7 @@ struct CalendarScreen: View {
         let lines = model.notices
         if !lines.isEmpty || model.loadFailed && model.schedule != nil {
             VStack(spacing: 6) {
-                ForEach(lines, id: \.self) { Banner(kind: .caution, text: $0) }
+                ForEach(lines, id: \.self) { Banner(kind: .caution, text: $0, lineLimit: 2) }
                 if model.loadFailed && model.schedule != nil {
                     Banner(kind: .caution, text: "Calopod could not refresh this view, so it may be out of date.")
                 }
