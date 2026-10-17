@@ -29,6 +29,7 @@ struct InboxScreen: View {
         .onChange(of: model.board) { model.ensureSelection(in: entries) }
         .sheet(isPresented: $showingReview, onDismiss: { Task { await model.reload() } }) {
             InboxReviewSheet(model: model.review, colors: colors) { showingReview = false }
+                .appTypography()
         }
     }
 
@@ -36,7 +37,7 @@ struct InboxScreen: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            Text("Inbox").font(Theme.title())
+            Text("Inbox").font(Theme.Fonts.heading)
             BusyLine(text: model.busy)
             Spacer()
             Button("Review") {
@@ -69,9 +70,9 @@ struct InboxScreen: View {
                             Text("\(board.count(option))").monospacedDigit()
                                 .foregroundStyle(selected ? Theme.onAccent.opacity(0.8) : .secondary)
                         }
-                        .font(.callout.weight(.medium))
+                        .font(Theme.Fonts.chip)
                         .foregroundStyle(selected ? Theme.onAccent : .primary)
-                        .padding(.horizontal, 14).padding(.vertical, 6)
+                        .padding(.horizontal, 14).frame(height: Theme.Control.chipHeight)
                         .background(Capsule().fill(selected ? Theme.accent : Color.primary.opacity(0.07)))
                         .contentShape(Capsule())
                     }

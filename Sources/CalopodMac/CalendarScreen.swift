@@ -70,14 +70,14 @@ struct CalendarScreen: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                Text(title).font(Theme.title(.title2)).lineLimit(1).minimumScaleFactor(0.8)
+                Text(title).font(Theme.Fonts.heading).lineLimit(1).minimumScaleFactor(0.8)
                 Spacer(minLength: 8)
                 PillPicker(options: [("Day", CalendarModel.Mode.day), ("Week", .week)], selection: $model.mode, quiet: true)
                     .fixedSize()
                 Button("Today") { model.goToToday() }
                     .buttonStyle(.plain)
-                    .font(.system(size: 13, weight: .medium))
-                    .padding(.horizontal, 14).frame(height: Self.controlHeight)
+                    .font(Theme.Fonts.bodyMedium)
+                    .padding(.horizontal, 16).frame(height: Self.controlHeight)
                     .background(Capsule().fill(.quaternary))
                     .contentShape(Capsule())
                 HStack(spacing: 0) {
@@ -96,12 +96,12 @@ struct CalendarScreen: View {
         .padding(.horizontal, 18).padding(.top, 14).padding(.bottom, 12)
     }
 
-    private static let controlHeight: CGFloat = 30
+    private static let controlHeight = Theme.Control.height
 
     private func stepButton(_ symbol: String, label: String, by direction: Int) -> some View {
         Button { model.step(direction) } label: {
-            Image(systemName: symbol).font(.system(size: 12, weight: .semibold))
-                .frame(width: 32, height: Self.controlHeight).contentShape(Rectangle())
+            Image(systemName: symbol).font(Theme.Fonts.smallIcon)
+                .frame(width: 40, height: Self.controlHeight).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
@@ -129,9 +129,9 @@ struct CalendarScreen: View {
             HStack(spacing: 6) {
                 Circle().fill(shown ? color : .clear).frame(width: 9, height: 9)
                     .overlay(Circle().strokeBorder(color, lineWidth: 1.5))
-                Text(name).font(.system(size: 12)).lineLimit(1)
+                Text(name).font(Theme.Fonts.chip).lineLimit(1)
             }
-            .padding(.horizontal, 11).padding(.vertical, 4)
+            .padding(.horizontal, 12).frame(minHeight: Theme.Control.chipHeight)
             .background(Capsule().fill(.quaternary))
             .opacity(shown ? 1 : 0.5)
             .contentShape(Capsule())
@@ -146,10 +146,10 @@ struct CalendarScreen: View {
         let shown = model.showCopies
         return Button { model.showCopies.toggle() } label: {
             HStack(spacing: 6) {
-                Image(systemName: shown ? "eye" : "eye.slash").font(.system(size: 11))
-                Text("Calopod copies").font(.system(size: 12)).lineLimit(1)
+                Image(systemName: shown ? "eye" : "eye.slash").font(Theme.Fonts.tiny)
+                Text("Calopod copies").font(Theme.Fonts.chip).lineLimit(1)
             }
-            .padding(.horizontal, 11).padding(.vertical, 4)
+            .padding(.horizontal, 12).frame(minHeight: Theme.Control.chipHeight)
             .background(Capsule().fill(.quaternary))
             .opacity(shown ? 1 : 0.5)
             .contentShape(Capsule())

@@ -12,16 +12,16 @@ struct InboxDetailView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(entry.title).font(Theme.title(.title3))
+            Text(entry.title).font(Theme.Fonts.sectionTitle)
             HStack(spacing: 8) {
                 ForEach(entry.reasons, id: \.self) { StatusPill(text: InboxText.label($0, entry), color: InboxText.tint($0)) }
             }
             facts
             VStack(alignment: .leading, spacing: 6) {
-                Text("Around this time").font(.headline)
+                Text("Around this time").font(Theme.Fonts.bodySemibold)
                 ContextStrip(detail: detail, colors: colors)
             }
-            Text(detail.replyNote).font(.callout).foregroundStyle(.secondary)
+            Text(detail.replyNote).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             actions
             if let result = model.result {
@@ -45,7 +45,7 @@ struct InboxDetailView: View {
                 }
             }
         }
-        .font(.callout)
+        .font(Theme.Fonts.body)
     }
 
     private func fact(_ label: String, _ value: String) -> some View {
@@ -69,7 +69,7 @@ struct InboxDetailView: View {
                     Button("Acknowledge") { Task { await model.acknowledge(entry) } }
                         .disabled(model.isBusy)
                     Text("Marks this edit as seen on this Mac. No reply is sent.")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                 }
             }
         }
@@ -87,7 +87,7 @@ struct ContextStrip: View {
     let detail: InboxDetail
     let colors: CalendarColors
 
-    private let laneHeight: CGFloat = 26
+    private let laneHeight: CGFloat = 32
     /// Short events are drawn at least this share of the strip so a title stays readable.
     private static let minShare = 0.15
 
@@ -112,7 +112,7 @@ struct ContextStrip: View {
                 Spacer()
                 Text(detail.windowEnd.formatted(date: .omitted, time: .shortened))
             }
-            .font(.caption2).foregroundStyle(.secondary)
+            .font(Theme.Fonts.tiny).foregroundStyle(.secondary)
         }
         .padding(10)
         .cardSurface()
@@ -122,8 +122,8 @@ struct ContextStrip: View {
         let color = colors.color(for: item.calendarID).color
         let shape = RoundedRectangle(cornerRadius: 6, style: .continuous)
         return Text(item.title)
-            .font(.caption2.weight(item.isFocused ? .bold : .regular))
-            .lineLimit(1).padding(.horizontal, 5)
+            .font(Theme.Fonts.tiny.weight(item.isFocused ? .bold : .regular))
+            .lineLimit(1).padding(.horizontal, 6)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             .background(shape.fill(color.opacity(item.isFocused ? 0.45 : 0.22)))
             .overlay(shape.strokeBorder(item.overlapsFocused ? Theme.bad : color.opacity(item.isFocused ? 1 : 0.5),

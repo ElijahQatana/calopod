@@ -11,6 +11,45 @@ extension Color {
 }
 
 enum Theme {
+    /// The type scale. Screens use these, never raw sizes.
+    enum Fonts {
+        static let pageTitle = Font.system(size: 30, weight: .semibold, design: .serif)
+        static let heading = Font.system(size: 22, weight: .semibold, design: .serif)
+        static let sectionTitle = Font.system(size: 19, weight: .semibold, design: .serif)
+        static let body = Font.system(size: 15)
+        static let bodyMedium = Font.system(size: 15, weight: .medium)
+        static let bodySemibold = Font.system(size: 15, weight: .semibold)
+        static let secondary = Font.system(size: 13)
+        static let secondaryMedium = Font.system(size: 13, weight: .medium)
+        static let secondarySemibold = Font.system(size: 13, weight: .semibold)
+        static let tiny = Font.system(size: 12)
+        static let tinyMedium = Font.system(size: 12, weight: .medium)
+        static let tinySemibold = Font.system(size: 12, weight: .semibold)
+        static let tinyBold = Font.system(size: 12, weight: .bold)
+        /// Hour labels and day headers in the calendar.
+        static let label = Font.system(size: 14)
+        static let labelMedium = Font.system(size: 14, weight: .medium)
+        static let eventTitle = Font.system(size: 13, weight: .semibold)
+        static let button = Font.system(size: 15, weight: .semibold)
+        static let chip = Font.system(size: 14, weight: .medium)
+        static let icon = Font.system(size: 20)
+        static let railIcon = Font.system(size: 22)
+        static let smallIcon = Font.system(size: 12, weight: .semibold)
+        static let glyph = Font.system(size: 34, weight: .medium)
+        static let emptyGlyph = Font.system(size: 30, weight: .medium)
+    }
+
+    /// Control sizes.
+    enum Control {
+        static let height: CGFloat = 36
+        static let chipHeight: CGFloat = 32
+        static let smallChipHeight: CGFloat = 28
+        static let rowHeight: CGFloat = 44
+        static let popoverRowHeight: CGFloat = 36
+        static let iconBox: CGFloat = 24
+        static let circle: CGFloat = 36
+    }
+
     static let accent = Color(
         light: Color(red: 0xb4 / 255, green: 0x53 / 255, blue: 0x09 / 255),
         dark: Color(red: 0xf5 / 255, green: 0xa6 / 255, blue: 0x23 / 255))
@@ -94,10 +133,6 @@ enum Theme {
     static let controlRadius: CGFloat = 12
     static let pagePadding: CGFloat = 28
 
-    /// New York for screen titles and large moments.
-    static func title(_ style: Font.TextStyle = .title2) -> Font {
-        .system(style, design: .serif, weight: .semibold)
-    }
 }
 
 /// Frosted fill for a panel, or the solid pane when Reduce Transparency is on.
@@ -155,6 +190,11 @@ struct PanelChrome<S: InsettableShape>: ViewModifier {
 }
 
 extension View {
+    /// The app's base text size and plain button look, for a window, sheet or popover root.
+    func appTypography() -> some View {
+        font(Theme.Fonts.body).buttonStyle(.neutral)
+    }
+
     func panelChrome<S: InsettableShape>(_ shape: S) -> some View { modifier(PanelChrome(shape: shape)) }
 
     func panelFill<S: Shape>(_ level: PanelFill<S>.Level, in shape: S) -> some View {
@@ -169,10 +209,10 @@ struct StatusPill: View {
     var body: some View {
         HStack(spacing: 6) {
             Circle().fill(color).frame(width: 8, height: 8)
-            Text(text).font(.callout.weight(.medium))
+            Text(text).font(Theme.Fonts.bodyMedium)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 14)
+        .frame(minHeight: Theme.Control.chipHeight)
         .background(Capsule().fill(color.opacity(0.14)))
     }
 }
@@ -182,8 +222,8 @@ struct Chip: View {
 
     var body: some View {
         Text(text)
-            .font(.caption.weight(.medium))
-            .padding(.horizontal, 10).padding(.vertical, 4)
+            .font(Theme.Fonts.secondaryMedium)
+            .padding(.horizontal, 12).frame(minHeight: Theme.Control.smallChipHeight)
             .background(Capsule().fill(.quaternary))
     }
 }
@@ -212,7 +252,7 @@ struct Banner: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: symbol).foregroundStyle(color)
-            Text(text).font(.callout)
+            Text(text).font(Theme.Fonts.body)
             Spacer(minLength: 0)
         }
         .padding(14)
@@ -234,9 +274,9 @@ struct PillPicker<Value: Hashable>: View {
                 let selected = option.value == selection
                 Button { selection = option.value } label: {
                     Text(option.label)
-                        .font(quiet ? .system(size: 12.5, weight: .medium) : .callout.weight(.medium))
+                        .font(Theme.Fonts.bodyMedium)
                         .foregroundStyle(selected && !quiet ? Theme.onAccent : .primary)
-                        .padding(.horizontal, quiet ? 12 : 14).padding(.vertical, quiet ? 3 : 6)
+                        .padding(.horizontal, quiet ? 14 : 16).frame(height: Theme.Control.height - 6)
                         .frame(maxWidth: .infinity)
                         .background {
                             if selected, quiet {
@@ -264,7 +304,7 @@ struct BusyLine: View {
         if let text {
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
-                Text(text).font(.callout).foregroundStyle(.secondary)
+                Text(text).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
             }
         }
     }
@@ -272,6 +312,30 @@ struct BusyLine: View {
 
 extension ButtonStyle where Self == AccentButtonStyle {
     static var accentFilled: AccentButtonStyle { AccentButtonStyle() }
+}
+
+extension ButtonStyle where Self == SecondaryButtonStyle {
+    static var neutral: SecondaryButtonStyle { SecondaryButtonStyle() }
+}
+
+/// The default look for a plain button: a neutral capsule at the standard control height.
+struct SecondaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var hovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        let tint = configuration.role == .destructive ? Theme.bad : Color.primary
+        let fill = configuration.isPressed ? 0.18 : hovering ? 0.12 : 0.08
+        return configuration.label
+            .font(Theme.Fonts.button)
+            .foregroundStyle(configuration.role == .destructive ? Theme.bad : .primary)
+            .padding(.horizontal, 18)
+            .frame(minHeight: Theme.Control.height)
+            .background(Capsule().fill(tint.opacity(fill)))
+            .contentShape(Capsule())
+            .onHover { hovering = $0 }
+            .opacity(isEnabled ? 1 : 0.4)
+    }
 }
 
 extension ButtonStyle where Self == QuietButtonStyle {
@@ -287,10 +351,10 @@ struct AccentButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.callout.weight(.semibold))
+            .font(Theme.Fonts.button)
             .foregroundStyle(Theme.onAccent)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 20)
+            .frame(minHeight: Theme.Control.height)
             .background(
                 Capsule().fill(Theme.accent.opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.35))
             )
@@ -306,10 +370,10 @@ struct QuietButtonStyle: ButtonStyle {
         let tint = configuration.role == .destructive ? Theme.bad : Color.primary
         let fill = configuration.isPressed ? 0.18 : hovering ? 0.12 : 0.07
         return configuration.label
-            .font(.callout.weight(.medium))
+            .font(Theme.Fonts.bodyMedium)
             .foregroundStyle(configuration.role == .destructive ? Theme.bad : .primary)
-            .padding(.horizontal, 12)
-            .frame(height: 28)
+            .padding(.horizontal, 16)
+            .frame(minHeight: Theme.Control.height)
             .background(Capsule().fill(tint.opacity(fill)))
             .contentShape(Capsule())
             .onHover { hovering = $0 }
@@ -325,9 +389,9 @@ struct CircleToolbarButtonStyle: ButtonStyle {
         let fill = configuration.isPressed ? 0.14 : hovering ? 0.10 : 0.06
         return configuration.label
             .labelStyle(.iconOnly)
-            .font(.system(size: 15, weight: .medium))
+            .font(Theme.Fonts.bodyMedium)
             .foregroundStyle(.primary)
-            .frame(width: 30, height: 30)
+            .frame(width: Theme.Control.circle, height: Theme.Control.circle)
             .background(Circle().fill(Color.primary.opacity(fill)))
             .overlay(Circle().strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5))
             .contentShape(Circle())
@@ -379,7 +443,7 @@ struct Hint<Content: View>: View {
 
     var body: some View {
         content
-            .font(.callout)
+            .font(Theme.Fonts.secondary)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
     }

@@ -21,12 +21,12 @@ struct EventInspector: View {
                         .buttonStyle(.plain).foregroundStyle(.secondary)
                         .accessibilityLabel("Close details")
                 }
-                Text(event.title).font(Theme.title(.title3)).fixedSize(horizontal: false, vertical: true)
+                Text(event.title).font(Theme.Fonts.sectionTitle).fixedSize(horizontal: false, vertical: true)
                 details
                 if let text = ScheduleLayout.changeText(event) {
                     VStack(alignment: .leading, spacing: 6) {
                         Banner(kind: .caution, text: "\(text). Review it in Inbox.")
-                        Button("Open Changed in Inbox", action: openInbox).controlSize(.small)
+                        Button("Open Changed in Inbox", action: openInbox)
                     }
                 }
                 if ScheduleLayout.showsOverlap(event) {
@@ -80,7 +80,7 @@ struct EventInspector: View {
                 }
             }
         }
-        .font(.callout)
+        .font(Theme.Fonts.body)
     }
 
     @ViewBuilder
@@ -99,7 +99,7 @@ struct EventInspector: View {
             }
             .controlSize(.large)
             .disabled(true)
-            Hint { Text("Replies are sent from Inbox.").font(.caption) }
+            Hint { Text("Replies are sent from Inbox.").font(Theme.Fonts.secondary) }
         }
     }
 

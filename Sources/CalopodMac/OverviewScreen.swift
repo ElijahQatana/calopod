@@ -32,6 +32,7 @@ struct OverviewScreen: View {
         }
         .sheet(isPresented: $showingSetup) {
             FirstRunSheet(progress: progress, setup: setup, service: model, navigation: navigation)
+                .appTypography()
         }
         .task {
             await setup.reload()
@@ -47,13 +48,13 @@ struct OverviewScreen: View {
     private func hero(_ status: AgentControlStatus) -> some View {
         VStack(spacing: 14) {
             Image(systemName: symbol(status))
-                .font(.system(size: 34, weight: .medium))
+                .font(Theme.Fonts.glyph)
                 .foregroundStyle(color(status))
                 .frame(width: 76, height: 76)
                 .background(Circle().fill(color(status).opacity(0.14)))
             VStack(spacing: 4) {
-                Text(headline(status)).font(Theme.title())
-                Text(detail(status)).font(.callout).foregroundStyle(.secondary)
+                Text(headline(status)).font(Theme.Fonts.heading)
+                Text(detail(status)).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
             }
             if let busy = model.busyAction { BusyLine(text: busy) }
             HStack(spacing: 10) {
@@ -170,7 +171,7 @@ struct OverviewScreen: View {
                                 HStack(spacing: 6) {
                                     Text("\(count)").monospacedDigit().fontWeight(.medium)
                                         .foregroundStyle(highlight ? Theme.accent : .primary)
-                                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                                    Image(systemName: "chevron.right").font(Theme.Fonts.secondary).foregroundStyle(.tertiary)
                                 }
                             }
                             .contentShape(Rectangle())
@@ -277,7 +278,7 @@ struct OverviewScreen: View {
                 CardLabeled(title: title) {
                     HStack(spacing: 6) {
                         Text(value).monospacedDigit()
-                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                        Image(systemName: "chevron.right").font(Theme.Fonts.secondary).foregroundStyle(.tertiary)
                     }
                 }
                 .contentShape(Rectangle())
@@ -291,14 +292,14 @@ struct OverviewScreen: View {
     private var gettingStarted: some View {
         CardSection {
             CardRow { VStack(spacing: 14) {
-                Image(systemName: "calendar.badge.plus").font(.system(size: 34, weight: .medium)).foregroundStyle(Theme.accent)
-                Text(progress.isFinished ? "Setup is done" : "Welcome to Calopod").font(Theme.title())
+                Image(systemName: "calendar.badge.plus").font(Theme.Fonts.glyph).foregroundStyle(Theme.accent)
+                Text(progress.isFinished ? "Setup is done" : "Welcome to Calopod").font(Theme.Fonts.heading)
                 Text(
                     progress.isFinished
                         ? "Turn on background sync when you are ready."
                         : "Connect your calendars, pick where events go, and review the first sync. It takes a few minutes and nothing is copied until you approve."
                 )
-                .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                .font(Theme.Fonts.secondary).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 if progress.isFinished {
                     Button("Open background sync") { navigation.selection = .service }.buttonStyle(.accentFilled)
                 } else {
@@ -316,9 +317,9 @@ struct OverviewScreen: View {
         HStack(spacing: 12) {
             Image(systemName: "list.bullet.clipboard").foregroundStyle(Theme.accent)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Setup isn't finished").font(.headline)
+                Text("Setup isn't finished").font(Theme.Fonts.bodySemibold)
                 Text("Step \(progress.step.rawValue + 1) of 3: \(progress.step.title)")
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
             }
             Spacer()
             Button("Resume") { showingSetup = true }.buttonStyle(.accentFilled)

@@ -14,9 +14,9 @@ struct MenuPopover: View {
             HStack(spacing: 10) {
                 Circle().fill(color).frame(width: 10, height: 10)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(title).font(.headline)
+                    Text(title).font(Theme.Fonts.bodySemibold)
                     if let age = model.status?.lastSuccessAgeSeconds {
-                        Text("Last synced \(Format.ago(age))").font(.caption).foregroundStyle(.secondary)
+                        Text("Last synced \(Format.ago(age))").font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                     }
                 }
                 Spacer(minLength: 0)
@@ -24,13 +24,13 @@ struct MenuPopover: View {
             .padding(12)
             .background(Self.card)
             if let busy = model.busyAction { BusyLine(text: busy) }
-            if let notice = model.notice { Text(notice).font(.caption).foregroundStyle(Theme.bad) }
+            if let notice = model.notice { Text(notice).font(Theme.Fonts.secondary).foregroundStyle(Theme.bad) }
 
             if let next = nextEvent { nextCard(next) }
             if inbox.waiting > 0 { waitingCard }
             if !stale.isEmpty {
                 Label("\(stale.joined(separator: ", ")) is out of date", systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption).foregroundStyle(Theme.caution, .secondary)
+                    .font(Theme.Fonts.secondary).foregroundStyle(Theme.caution, .secondary)
             }
 
             if let status = model.status, status.installed {
@@ -42,9 +42,7 @@ struct MenuPopover: View {
                         Button(status.paused ? "Resume" : "Pause") {
                             Task { await model.setPaused(!status.paused) }
                         }
-                        .buttonStyle(.bordered)
-                        .buttonBorderShape(.capsule)
-                        .controlSize(.large)
+                        .buttonStyle(.neutral)
                         .disabled(model.isBusy)
                     }
                 }
@@ -59,7 +57,8 @@ struct MenuPopover: View {
             }
         }
         .padding(14)
-        .frame(width: 290)
+        .frame(width: 320)
+        .appTypography()
     }
 
     private static var card: some View {
@@ -77,9 +76,9 @@ struct MenuPopover: View {
         HStack(spacing: 10) {
             Circle().fill(CalendarColors.shared.color(for: event.calendarID).color).frame(width: 10, height: 10)
             VStack(alignment: .leading, spacing: 1) {
-                Text(event.startsAt <= Date() ? "Now" : "Next").font(.caption).foregroundStyle(.secondary)
-                Text(event.title).font(.callout.weight(.medium)).lineLimit(1)
-                Text(event.startsAt.formatted(date: .omitted, time: .shortened)).font(.caption).foregroundStyle(.secondary)
+                Text(event.startsAt <= Date() ? "Now" : "Next").font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+                Text(event.title).font(Theme.Fonts.bodyMedium).lineLimit(1)
+                Text(event.startsAt.formatted(date: .omitted, time: .shortened)).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
         }
@@ -150,7 +149,7 @@ struct WaitingCard: View {
         HStack(spacing: 10) {
             Image(systemName: "envelope.badge").foregroundStyle(Theme.accent)
             Text(count == 1 ? "1 invitation waiting" : "\(count) invitations waiting")
-                .font(.callout.weight(.medium))
+                .font(Theme.Fonts.bodyMedium)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
             Button("Review", action: review).buttonStyle(.accentFilled).fixedSize()
@@ -176,7 +175,7 @@ private struct MenuRow: View {
                 Spacer()
                 if let count, count > 0 { Text("\(count)").monospacedDigit().foregroundStyle(.secondary) }
             }
-            .padding(.horizontal, 12).padding(.vertical, 8)
+            .padding(.horizontal, 12).frame(minHeight: Theme.Control.popoverRowHeight)
             .background(
                 RoundedRectangle(cornerRadius: Theme.controlRadius, style: .continuous)
                     .fill(hovering ? Theme.accent.opacity(0.14) : .clear))

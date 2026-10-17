@@ -23,6 +23,7 @@ struct MainWindow: View {
         .navigationTitle(navigation.selection.title)
         .frame(minWidth: 860, minHeight: 580)
         .tint(Theme.accent)
+        .appTypography()
     }
 
     private var detail: some View {
