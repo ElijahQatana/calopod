@@ -42,6 +42,8 @@ cp "$binary_root/calopod-agent" "$contents_root/MacOS/calopod-agent"
 mkdir -p "$contents_root/MacOS/eventkit-host"
 cp -R "$repository_root/.build/eventkit-host/Calopod EventKit Host.app" \
   "$contents_root/MacOS/eventkit-host/"
-codesign --force --sign - "$bundle_root" >/dev/null 2>&1
+# CALOPOD_SIGN_IDENTITY signs with a developer identity; the default is ad hoc.
+codesign --force --sign "${CALOPOD_SIGN_IDENTITY:--}" "$contents_root/MacOS/calopod-agent" >/dev/null 2>&1
+codesign --force --sign "${CALOPOD_SIGN_IDENTITY:--}" "$bundle_root" >/dev/null 2>&1
 
 echo "Built $bundle_root"

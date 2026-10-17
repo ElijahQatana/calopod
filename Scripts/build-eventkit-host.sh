@@ -27,6 +27,7 @@ mkdir -p "$contents_root/Resources"
 cp "$repository_root/Support/EventKitHost/Info.plist" "$contents_root/Info.plist"
 "$repository_root/Scripts/build-calopod-icon.sh" "$contents_root/Resources"
 cp "$binary_root/calopod-eventkit-host" "$executable_path"
-codesign --force --sign - "$bundle_root" >/dev/null 2>&1
+# CALOPOD_SIGN_IDENTITY signs with a developer identity; the default is ad hoc.
+codesign --force --sign "${CALOPOD_SIGN_IDENTITY:--}" "$bundle_root" >/dev/null 2>&1
 
 echo "Built the EventKit host."

@@ -54,7 +54,7 @@ struct ServiceScreen: View {
                     Banner(
                         kind: .caution,
                         text:
-                            "macOS hasn't registered this copy of the app yet, so it may refuse to install the service. You can still try. If it fails, move Calopod to the Applications folder, open it from there, and try again. Your current service keeps running."
+                            "macOS has no record of this copy of the app. Background services need Calopod installed in the Applications folder and signed with a developer identity, not a debug build run from a build folder. You can still try installing. Your current service keeps running."
                     )
                 }
                 Hint {
