@@ -208,7 +208,7 @@ private struct GlassPanel: ViewModifier {
     func body(content: Content) -> some View {
         content
             .background {
-                if reduceTransparency {
+                if AppSettings.shared.isSolid(reduceTransparency: reduceTransparency) {
                     shape.fill(Theme.pane)
                 } else if activeState == .inactive {
                     shape.fill(Theme.sidebarInactive)

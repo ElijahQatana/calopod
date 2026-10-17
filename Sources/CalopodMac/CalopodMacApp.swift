@@ -13,6 +13,7 @@ struct CalopodMacApp: App {
     init() {
         DockPresence.enter()
         AppConfiguration.apply()
+        AppSettings.shared.applyAppearance()
     }
 
     var body: some Scene {
@@ -27,6 +28,7 @@ struct CalopodMacApp: App {
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1140, height: 700)
         .commands {
+            SettingsCommands(navigation: navigation)
             CommandGroup(replacing: .sidebar) {
                 Button(sidebar.isCollapsed ? "Show Sidebar" : "Hide Sidebar") { sidebar.toggle() }
                     .keyboardShortcut("s", modifiers: [.command, .control])
@@ -53,5 +55,23 @@ struct CalopodMacApp: App {
             }
         }
         .menuBarExtraStyle(.window)
+    }
+}
+
+/// The Settings command, with the usual Command-Comma.
+struct SettingsCommands: Commands {
+    let navigation: AppNavigation
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some Commands {
+        CommandGroup(replacing: .appSettings) {
+            Button("Settings…") {
+                navigation.selection = .settings
+                DockPresence.enter()
+                NSApplication.shared.activate(ignoringOtherApps: true)
+                openWindow(id: "home")
+            }
+            .keyboardShortcut(",", modifiers: .command)
+        }
     }
 }

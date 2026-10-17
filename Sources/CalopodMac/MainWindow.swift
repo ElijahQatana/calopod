@@ -17,8 +17,8 @@ struct MainWindow: View {
         }
         .padding(Sidebar.inset)
         .ignoresSafeArea(.container, edges: .top)
-        .modifier(WindowBackdrop(strategy: .current))
-        .background { WindowBlurHelper(strategy: .current) }
+        .modifier(WindowBackdrop())
+        .background { WindowBlurHelper() }
         .background { WindowChrome(collapsed: sidebar.isCollapsed) }
         .navigationTitle(navigation.selection.title)
         .frame(minWidth: 860, minHeight: 580)
@@ -52,6 +52,7 @@ struct MainWindow: View {
         case .calendars: CalendarsScreen(model: setup)
         case .arms: ArmsScreen(model: setup)
         case .service: ServiceScreen(model: service)
+        case .settings: SettingsScreen()
         }
     }
 }
