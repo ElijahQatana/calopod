@@ -60,6 +60,10 @@ enum Theme {
     static let good = Color(red: 0.20, green: 0.62, blue: 0.40)
     static let caution = Color(red: 0.80, green: 0.66, blue: 0.10)
     static let bad = Color(red: 0.80, green: 0.28, blue: 0.28)
+    // The same hues darkened (or lightened on dark) for text, which needs more contrast than a dot or fill.
+    static let goodText = Color(light: Color(red: 0.10, green: 0.42, blue: 0.24), dark: good)
+    static let cautionText = Color(light: Color(red: 0.52, green: 0.38, blue: 0), dark: caution)
+    static let badText = Color(light: Color(red: 0.74, green: 0.22, blue: 0.22), dark: Color(red: 0.95, green: 0.50, blue: 0.50))
 
     // Window, panels and glass. From most to least see-through: the frame around the
     // panels, then the sidebar, then the content card (and the inner fill on it). Each
@@ -329,7 +333,7 @@ struct SecondaryButtonStyle: ButtonStyle {
         let fill = configuration.isPressed ? 0.18 : hovering ? 0.12 : 0.08
         return configuration.label
             .font(Theme.Fonts.button)
-            .foregroundStyle(configuration.role == .destructive ? Theme.bad : .primary)
+            .foregroundStyle(configuration.role == .destructive ? Theme.badText : .primary)
             .padding(.horizontal, 18)
             .frame(minHeight: Theme.Control.height)
             .background(Capsule().fill(tint.opacity(fill)))
@@ -372,7 +376,7 @@ struct QuietButtonStyle: ButtonStyle {
         let fill = configuration.isPressed ? 0.18 : hovering ? 0.12 : 0.07
         return configuration.label
             .font(Theme.Fonts.bodyMedium)
-            .foregroundStyle(configuration.role == .destructive ? Theme.bad : .primary)
+            .foregroundStyle(configuration.role == .destructive ? Theme.badText : .primary)
             .padding(.horizontal, 16)
             .frame(minHeight: Theme.Control.height)
             .background(Capsule().fill(tint.opacity(fill)))

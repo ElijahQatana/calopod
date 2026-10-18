@@ -299,13 +299,13 @@ struct ReviewSummary: View {
                 Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 18, verticalSpacing: 6) {
                     count("Replies recorded", totals.recorded, detail: "Yes \(totals.yes) · Maybe \(totals.maybe) · No \(totals.no)")
                     count("Held", totals.held, detail: calendarSkips > 0 ? "\(min(calendarSkips, totals.held)) left for the Calendar app" : nil)
-                    count("Outcome unclear", totals.unclear, tint: totals.unclear > 0 ? Theme.caution : nil)
+                    count("Outcome unclear", totals.unclear, tint: totals.unclear > 0 ? Theme.cautionText : nil)
                     if totals.failed + totals.unavailable + totals.changed > 0 {
                         count("Not sent", totals.failed + totals.unavailable + totals.changed)
                     }
                     Divider().gridCellColumns(3).gridCellUnsizedAxes(.horizontal)
                     count("Overlaps resolved", totals.overlapsResolved)
-                    count("New overlaps created", totals.overlapsCreated, tint: totals.overlapsCreated > 0 ? Theme.bad : nil)
+                    count("New overlaps created", totals.overlapsCreated, tint: totals.overlapsCreated > 0 ? Theme.badText : nil)
                     count("Overlaps left", totals.overlapsRemaining)
                 }
                 .font(Theme.Fonts.body)

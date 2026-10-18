@@ -148,8 +148,17 @@ enum InboxText {
     /// The row's second line: each reason in its own color, so only an overlap reads as a warning.
     static func statusLine(_ entry: InboxEntry) -> Text {
         entry.reasons.enumerated().reduce(Text("")) { line, item in
-            let part = Text(label(item.element, entry)).foregroundColor(tint(item.element))
+            let part = Text(label(item.element, entry)).foregroundColor(textTint(item.element))
             return item.offset == 0 ? part : line + Text(" · ").foregroundColor(.secondary) + part
+        }
+    }
+
+    /// Like `tint`, but dark enough to read as text.
+    static func textTint(_ reason: InboxAttentionReason) -> Color {
+        switch reason {
+        case .needsResponse: Theme.accent
+        case .conflict: Theme.badText
+        case .maybe, .changedAfterResponse: Theme.cautionText
         }
     }
 

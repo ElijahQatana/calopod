@@ -24,13 +24,13 @@ struct MenuPopover: View {
             .padding(12)
             .background(Self.card)
             if let busy = model.busyAction { BusyLine(text: busy) }
-            if let notice = model.notice { Text(notice).font(Theme.Fonts.secondary).foregroundStyle(Theme.bad) }
+            if let notice = model.notice { Text(notice).font(Theme.Fonts.secondary).foregroundStyle(Theme.badText) }
 
             if let next = nextEvent { nextCard(next) }
             if inbox.waiting > 0 { waitingCard }
             if !stale.isEmpty {
                 Label("\(stale.joined(separator: ", ")) is out of date", systemImage: "exclamationmark.triangle.fill")
-                    .font(Theme.Fonts.secondary).foregroundStyle(Theme.caution, .secondary)
+                    .font(Theme.Fonts.secondary).foregroundStyle(Theme.cautionText, .secondary)
             }
 
             if let status = model.status, status.installed {
