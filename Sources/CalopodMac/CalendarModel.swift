@@ -9,7 +9,7 @@ import Observation
 final class CalendarModel {
     enum Mode: Hashable { case week, day }
 
-    private(set) var schedule: CalendarSchedule?
+    private(set) var schedule: CalendarSchedule? { didSet { scheduleVersion += 1 } }
     private(set) var loadFailed = false
     var mode: Mode = .week { didSet { selectedID = nil } }
     var anchor: Date { didSet { selectedID = nil } }
@@ -66,10 +66,53 @@ final class CalendarModel {
     /// Calendars offered as chips. Ignored ones are left out and their events are not drawn.
     var chipCalendars: [ScheduleCalendar] { calendars.filter { !aliases.isIgnored($0.id) } }
 
-    var events: [ScheduleEvent] {
-        (schedule?.events ?? []).filter {
-            !hidden.contains($0.calendarID) && !aliases.isIgnored($0.calendarID) && (showCopies || !$0.isCopy)
+    /// What one day column draws. Built once per schedule or filter change, not on every redraw.
+    struct DayEvents: Equatable {
+        let placements: [ScheduleLayout.Placement]
+        let allDay: [ScheduleEvent]
+    }
+
+    private struct Cache {
+        let version: Int
+        let hidden: Set<String>
+        let ignored: Set<String>
+        let showCopies: Bool
+        let events: [ScheduleEvent]
+        var days: [Date: DayEvents] = [:]
+    }
+
+    @ObservationIgnored private var scheduleVersion = 0
+    @ObservationIgnored private var cache: Cache?
+
+    private func current() -> Cache {
+        // Reading the ignore list here keeps views that call this watching it.
+        let ignored = aliases.ignored
+        if let cache, cache.version == scheduleVersion, cache.hidden == hidden,
+            cache.ignored == ignored, cache.showCopies == showCopies
+        {
+            return cache
         }
+        let events = (schedule?.events ?? []).filter {
+            !hidden.contains($0.calendarID) && !ignored.contains($0.calendarID) && (showCopies || !$0.isCopy)
+        }
+        let fresh = Cache(version: scheduleVersion, hidden: hidden, ignored: ignored, showCopies: showCopies, events: events)
+        cache = fresh
+        return fresh
+    }
+
+    var events: [ScheduleEvent] { current().events }
+
+    /// The placed and all-day events for one day, from the cache.
+    func dayEvents(_ day: Date) -> DayEvents {
+        var snapshot = current()
+        let key = calendar.startOfDay(for: day)
+        if let hit = snapshot.days[key] { return hit }
+        let built = DayEvents(
+            placements: ScheduleLayout.placements(snapshot.events, on: key, calendar: calendar),
+            allDay: ScheduleLayout.allDay(snapshot.events, on: key, calendar: calendar))
+        snapshot.days[key] = built
+        cache = snapshot
+        return built
     }
 
     var selected: ScheduleEvent? {
