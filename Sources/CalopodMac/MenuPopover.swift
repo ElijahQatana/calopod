@@ -171,7 +171,7 @@ private struct MenuRow: View {
     var body: some View {
         Button(action: action) {
             HStack {
-                Label(title, systemImage: symbol).foregroundStyle(tint)
+                Label { Text(title) } icon: { Image(systemName: symbol).frame(width: 22) }.foregroundStyle(tint)
                 Spacer()
                 if let count, count > 0 { Text("\(count)").monospacedDigit().foregroundStyle(.secondary) }
             }

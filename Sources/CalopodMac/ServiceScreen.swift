@@ -10,7 +10,7 @@ struct ServiceScreen: View {
     ]
 
     var body: some View {
-        CardPage {
+        CardPage(title: "Background sync") {
             if let busy = model.busyAction { BusyLine(text: busy) }
             if let notice = model.notice { Banner(kind: .error, text: notice) }
             serviceSection
