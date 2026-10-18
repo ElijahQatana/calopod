@@ -12,7 +12,8 @@ final class ServiceModel {
     private(set) var overview: AgentControlOverview?
     private(set) var busyAction: String?
     private(set) var notice: String?
-    private(set) var lastRunSummary: String?
+    private(set) var lastRun: ManualRun?
+    private(set) var statusAt = Date()
     private(set) var pendingPreview: SyncPreview?
     private(set) var health: HealthReport?
     private(set) var registration: ServiceRegistration.State = .unavailable
@@ -37,8 +38,9 @@ final class ServiceModel {
 
     private var isAppActive: Bool { NSApplication.shared.isActive }
 
-    var menuBarAlert: Bool { ["failed", "stopped"].contains(status?.state) }
-    var menuBarDimmed: Bool { ["paused", "disabled"].contains(status?.state) }
+    var syncHealth: SyncHealth { SyncHealth.make(status: status, statusAt: statusAt, run: lastRun) }
+    var menuBarAlert: Bool { syncHealth.tone == .bad }
+    var menuBarDimmed: Bool { syncHealth.tone == .caution }
 
     var isBusy: Bool { busyAction != nil }
 
@@ -69,8 +71,19 @@ final class ServiceModel {
         }
         // Equal values are not assigned, so a quiet poll redraws nothing.
         if status != result.2.status { status = result.2.status }
+        statusAt = Date()
+        settleManualRun()
         if overview != result.2.overview { overview = result.2.overview }
         if health != result.2.health { health = result.2.health }
+    }
+
+    private func settleManualRun() {
+        guard let status else { return }
+        lastRun = SyncHealth.settled(lastRun, status: status, statusAt: statusAt)
+    }
+
+    private func finishRun(_ summary: String, succeeded: Bool) {
+        lastRun = ManualRun(summary: summary, succeeded: succeeded, finishedAt: Date(), settledState: nil)
     }
 
     func previewSync() async {
@@ -82,7 +95,7 @@ final class ServiceModel {
         do {
             let preview = try await Task.detached { try await service.preview() }.value
             if preview.changeCount == 0 {
-                lastRunSummary = "Everything is up to date. Nothing to change."
+                finishRun("Everything is up to date. Nothing to change.", succeeded: true)
             } else {
                 pendingPreview = preview
             }
@@ -111,7 +124,7 @@ final class ServiceModel {
             let fresh = try await Task.detached { try await service.preview() }.value
             if !Self.samePlan(Self.planKeys(approved), Self.planKeys(fresh)) {
                 if fresh.changeCount == 0 {
-                    lastRunSummary = "Everything is up to date. Nothing to change."
+                    finishRun("Everything is up to date. Nothing to change.", succeeded: true)
                 } else {
                     pendingPreview = fresh
                     notice = "Your calendars changed since this preview, so the list was updated. Review it before applying."
@@ -120,8 +133,8 @@ final class ServiceModel {
                 busyAction = "Syncing…"
                 let report = try await Task.detached { try await service.syncNow() }.value
                 let summary = Self.summary(of: report)
-                lastRunSummary = summary
                 completed = report.status == "ok"
+                finishRun(summary, succeeded: completed)
                 if !completed { notice = summary }
             }
         } catch {
@@ -221,9 +234,9 @@ final class ServiceModel {
         guard busyAction == nil else { return }
         busyAction = label
         notice = nil
+        lastRun = nil
         do {
-            let summary = try await Task.detached { try await work() }.value
-            if let summary { lastRunSummary = summary }
+            _ = try await Task.detached { try await work() }.value
         } catch {
             let nsError = error as NSError
             if error is InstallError {

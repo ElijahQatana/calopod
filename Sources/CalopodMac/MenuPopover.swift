@@ -12,10 +12,10 @@ struct MenuPopover: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
-                Circle().fill(color).frame(width: 10, height: 10)
+                Circle().fill(model.syncHealth.color).frame(width: 10, height: 10)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(title).font(Theme.Fonts.bodySemibold)
-                    if let age = model.status?.lastSuccessAgeSeconds {
+                    Text(model.syncHealth.label).font(Theme.Fonts.bodySemibold)
+                    if let age = model.syncHealth.lastSyncedAge {
                         Text("Last synced \(Format.ago(age))").font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                     }
                 }
@@ -107,27 +107,6 @@ struct MenuPopover: View {
         dismiss()
         // dismiss() is not honored by every popover, so close its window as well.
         DispatchQueue.main.async { if popover?.isVisible == true { popover?.close() } }
-    }
-
-    private var title: String {
-        guard let status = model.status else { return "Checking…" }
-        guard status.installed else { return "Not set up yet" }
-        return switch status.state {
-        case "ok": "Syncing"
-        case "paused": "Paused"
-        case "disabled": "Sync is off"
-        case "failed": "Needs attention"
-        default: "Stopped"
-        }
-    }
-
-    private var color: Color {
-        switch model.status?.state {
-        case "ok": Theme.good
-        case "paused", "disabled": Theme.caution
-        case "failed", "stopped": Theme.bad
-        default: .secondary
-        }
     }
 }
 
