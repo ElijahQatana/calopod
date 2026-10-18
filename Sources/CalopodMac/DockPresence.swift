@@ -35,8 +35,13 @@ private struct DockPresenceObserver: NSViewRepresentable {
             DockPresence.enter()
             closing = NotificationCenter.default.addObserver(
                 forName: NSWindow.willCloseNotification, object: window, queue: .main
-            ) { _ in
-                MainActor.assumeIsolated { DockPresence.leave() }
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    DockPresence.leave()
+                    // Done with this window, so the observer is removed instead of left registered.
+                    self?.closing.map(NotificationCenter.default.removeObserver)
+                    self?.closing = nil
+                }
             }
         }
     }
