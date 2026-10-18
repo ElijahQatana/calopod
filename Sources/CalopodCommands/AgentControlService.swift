@@ -15,6 +15,12 @@ public struct AgentControlStatus: Equatable, Sendable {
     public let intervalSeconds: Int?
     public let lastSuccessAgeSeconds: Int?
     public let failureCategory: String?
+    /// How long ago the last automatic run failed, when it did and nothing newer has run.
+    public let failureAgeSeconds: Int?
+    /// True when the numbers above describe the app's own service, not a source install.
+    public let usesBundledService: Bool
+    /// A source-installed agent is loaded in launchd right now, whichever service is reported.
+    public let sourceLoaded: Bool
 }
 
 public struct AgentControlOverview: Equatable, Sendable {
@@ -153,6 +159,9 @@ public struct AgentControlService: Sendable {
         let environment: () throws -> CalopodRuntimeEnvironment
         let schedule: () throws -> AgentSchedule
         let isBundled: Bool
+        /// The source install is loaded in launchd, even when the bundled agent is the one in use.
+        var sourceLoaded: Bool { sourceSnapshot.loaded }
+        let sourceSnapshot: LaunchAgentSnapshot
     }
 
     private func context() throws -> Context {
@@ -165,7 +174,8 @@ public struct AgentControlService: Sendable {
                 snapshot: snapshot,
                 environment: { try installedAgentEnvironment(controller: controller) },
                 schedule: { try AgentSchedule(environment: configuration.environment) },
-                isBundled: false
+                isBundled: false,
+                sourceSnapshot: snapshot
             )
         }
         guard let executable = bundledAgentExecutable else {
@@ -173,7 +183,8 @@ public struct AgentControlService: Sendable {
                 snapshot: snapshot,
                 environment: { throw LaunchAgentControlError.notInstalled },
                 schedule: { throw LaunchAgentControlError.notInstalled },
-                isBundled: false
+                isBundled: false,
+                sourceSnapshot: snapshot
             )
         }
         let defaults = Self.bundledSchedule
@@ -211,7 +222,8 @@ public struct AgentControlService: Sendable {
                 )
             },
             schedule: { try AgentSchedule(environment: variables).applying(override) },
-            isBundled: true
+            isBundled: true,
+            sourceSnapshot: snapshot
         )
     }
 
@@ -233,8 +245,17 @@ public struct AgentControlService: Sendable {
             running: payload.runState == "running",
             intervalSeconds: payload.intervalSeconds,
             lastSuccessAgeSeconds: payload.lastSuccessAgeSeconds,
-            failureCategory: payload.failureCategory
+            failureCategory: payload.failureCategory,
+            failureAgeSeconds: payload.failureCategory == nil ? nil : failureAge(in: context),
+            usesBundledService: context.isBundled,
+            sourceLoaded: context.sourceLoaded
         )
+    }
+
+    private func failureAge(in context: Context) -> Int? {
+        guard let run = try? context.environment().repository().latestSyncRun(trigger: "automatic"),
+              run.status == "failed" || run.status == "interrupted" else { return nil }
+        return max(0, Int(Date().timeIntervalSince(run.finishedAt ?? run.startedAt)))
     }
 
     /// The bundled agent is registered and removed by the app, not here.
