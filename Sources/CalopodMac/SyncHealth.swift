@@ -33,12 +33,18 @@ struct SyncHealth: Equatable {
     }
 
     /// A manual run wins only when it finished after the agent's last result.
-    static func make(status: AgentControlStatus?, statusAt: Date, run: ManualRun?, now: Date = Date()) -> SyncHealth {
+    static func make(status: AgentControlStatus?, statusAt: Date, run: ManualRun?, access: CalendarAccessState = .unchecked, now: Date = Date()) -> SyncHealth {
         guard let status else {
             return SyncHealth(tone: .unknown, symbol: "exclamationmark", label: "Checking…", headline: "Checking sync…", detail: "", lastSyncedAge: nil)
         }
         guard status.installed else {
             return SyncHealth(tone: .unknown, symbol: "exclamationmark", label: "Not set up yet", headline: "Automatic sync is not set up", detail: status.message, lastSyncedAge: nil)
+        }
+        // Without Calendar access nothing can sync, whatever the last run said.
+        if access.isMissing {
+            return SyncHealth(
+                tone: access == .blocked ? .bad : .caution, symbol: "exclamationmark", label: "Needs Calendar access",
+                headline: access.title, detail: "Syncing needs Calendar access.", lastSyncedAge: status.lastSuccessAgeSeconds)
         }
         let interval = status.intervalSeconds.map { "every \(Format.interval($0))" }
         func detail(_ age: Int?) -> String {
