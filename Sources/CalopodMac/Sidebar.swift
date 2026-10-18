@@ -211,7 +211,7 @@ struct WindowChrome: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSView {
         let view = WindowObserver()
-        view.onWindow = { [weak coordinator = context.coordinator] in coordinator?.request() }
+        view.onWindow = { [weak coordinator = context.coordinator] in coordinator?.windowAttached($0) }
         view.onRemoved = { [weak coordinator = context.coordinator] in coordinator?.stopObserving() }
         context.coordinator.view = view
         return view
@@ -225,12 +225,14 @@ struct WindowChrome: NSViewRepresentable {
     }
 
     final class WindowObserver: NSView {
-        var onWindow: (() -> Void)?
+        var onWindow: ((NSWindow) -> Void)?
         var onRemoved: (() -> Void)?
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             if window != nil {
-                DispatchQueue.main.async { [weak self] in self?.onWindow?() }
+                DispatchQueue.main.async { [weak self] in
+                    if let window = self?.window { self?.onWindow?(window) }
+                }
             } else {
                 onRemoved?()
             }
@@ -241,8 +243,9 @@ struct WindowChrome: NSViewRepresentable {
     final class Coordinator {
         weak var view: NSView?
         private var observers: [NSObjectProtocol] = []
-        /// Set when the window closes. A closed window is left alone, and nothing is observed again.
-        private var closed = false
+        /// Watches for the window being shown. Unlike `observers` it survives a close, because the
+        /// same window comes back when it is opened again from the menu bar.
+        private var showObservers: [NSObjectProtocol] = []
         private var clearedFocus = false
         private var metrics: TrafficLightPlacement.Metrics?
         private lazy var pass = ApplyCoalescer { [weak self] in self?.apply() }
@@ -250,8 +253,32 @@ struct WindowChrome: NSViewRepresentable {
         /// Frame changes made by apply() itself land here too, so asking never runs it inline.
         func request() { pass.request() }
 
+        /// Runs a pass now and another once AppKit has laid out whatever the show triggered.
+        private func requestAfterShow() {
+            request()
+            DispatchQueue.main.async { [weak self] in self?.request() }
+        }
+
+        func windowAttached(_ window: NSWindow) {
+            if showObservers.isEmpty {
+                let center = NotificationCenter.default
+                // A window brought back by ordering front can get its title bar laid out after the
+                // first pass, and AppKit puts the buttons back in its own spot when it does.
+                let names: [Notification.Name] = [
+                    NSWindow.didBecomeKeyNotification, NSWindow.didBecomeMainNotification,
+                    NSWindow.didChangeOcclusionStateNotification,
+                ]
+                showObservers = names.map { name in
+                    center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+                        MainActor.assumeIsolated { self?.requestAfterShow() }
+                    }
+                }
+            }
+            requestAfterShow()
+        }
+
         private func apply() {
-            guard !closed, let window = view?.window else { return }
+            guard let window = view?.window else { return }
             // Let the blurred desktop show through the window.
             if window.isOpaque { window.isOpaque = false }
             if window.backgroundColor != .clear { window.backgroundColor = .clear }
@@ -269,15 +296,14 @@ struct WindowChrome: NSViewRepresentable {
                 }
             }
             // Measure the AppKit spacing once. Later passes can see buttons AppKit has just reset,
-            // so reading it again would give a different position at different sizes.
+            // so reading it again would give a different position at different sizes. A window
+            // that is not laid out yet reports zero or odd sizes, so those are not kept.
             let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton]
                 .compactMap { window.standardWindowButton($0) }
             if metrics == nil, buttons.count == 3 {
-                metrics = TrafficLightPlacement.Metrics(
-                    step: buttons[1].frame.minX - close.frame.minX,
-                    size: close.frame.size)
+                metrics = TrafficLightPlacement.Metrics.measure(buttons.map(\.frame))
             }
-            let metrics = metrics ?? .init(step: 34, size: close.frame.size)
+            let metrics = metrics ?? .fallback
 
             // The title bar container lives in the window's frame view. Use that view's own height,
             // not window.frame, which can differ from it while a live resize is in flight.
@@ -319,21 +345,26 @@ struct WindowChrome: NSViewRepresentable {
                 })
             }
             // Without this the observers stay registered after the window is closed, and each reopened
-            // window would add another set.
+            // window would add another set. Showing the window again starts them over.
             tokens.append(center.addObserver(
                 forName: NSWindow.willCloseNotification, object: window, queue: .main
             ) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    self?.closed = true
-                    self?.stopObserving()
-                }
+                MainActor.assumeIsolated { self?.dropFrameObservers() }
             })
             observers = tokens
         }
 
-        /// Drops the window observers. Called when the window closes, when the view leaves its
-        /// window and when the representable is torn down. A new window starts observing again.
+        /// Drops every observer. Called when the view leaves its window and when the representable
+        /// is torn down. A new window starts observing again.
         func stopObserving() {
+            dropFrameObservers()
+            // A window that is going away for good is not shown again, and the view leaving it is
+            // the only sign of that.
+            showObservers.forEach(NotificationCenter.default.removeObserver)
+            showObservers = []
+        }
+
+        private func dropFrameObservers() {
             observers.forEach(NotificationCenter.default.removeObserver)
             observers = []
         }
@@ -348,6 +379,22 @@ enum TrafficLightPlacement {
     struct Metrics: Equatable {
         var step: CGFloat
         var size: CGSize
+
+        static let fallback = Metrics(step: 20, size: CGSize(width: 14, height: 16))
+
+        /// Reads the spacing and size from the close, minimize and zoom frames. Returns nil while
+        /// they look unlaid out (zero sizes, overlapping or unevenly spaced buttons), so the caller
+        /// measures again on a later pass instead of keeping a bad value.
+        static func measure(_ frames: [CGRect]) -> Metrics? {
+            guard frames.count == 3 else { return nil }
+            let size = frames[0].size
+            let step = frames[1].minX - frames[0].minX
+            let next = frames[2].minX - frames[1].minX
+            guard (8...32).contains(size.width), (8...32).contains(size.height),
+                step >= size.width, step <= 40, abs(step - next) <= 1
+            else { return nil }
+            return Metrics(step: step, size: size)
+        }
     }
 
     static func origins(barHeight: CGFloat, metrics: Metrics) -> [NSPoint] {
