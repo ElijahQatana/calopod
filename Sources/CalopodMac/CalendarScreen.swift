@@ -7,8 +7,8 @@ struct CalendarScreen: View {
     private let colors = CalendarColors.shared
     @Environment(\.sidebarCollapsed) private var collapsed
 
-    /// Opens Inbox on its Changed filter.
-    var openInbox: () -> Void = {}
+    /// Opens Inbox with this event selected.
+    var openInbox: (ScheduleEvent) -> Void = { _ in }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -61,7 +61,7 @@ struct CalendarScreen: View {
             if let event = model.selected {
                 EventInspector(
                     event: event, calendar: model.calendars.first { $0.id == event.calendarID },
-                    colors: colors, close: { model.selectedID = nil }, openInbox: openInbox)
+                    colors: colors, close: { model.selectedID = nil }, openInbox: { openInbox(event) })
             }
         }
     }

@@ -32,7 +32,7 @@ struct MainWindow: View {
     private var screen: some View {
         switch navigation.selection {
         case .overview: OverviewScreen(model: service, navigation: navigation, setup: setup)
-        case .calendar: CalendarScreen(openInbox: { navigation.openInbox(.changed) })
+        case .calendar: CalendarScreen(openInbox: { navigation.openInbox(showing: $0) })
         case .inbox: InboxScreen(model: inbox, navigation: navigation, colors: .shared)
         case .calendars: CalendarsScreen(model: setup)
         case .arms: ArmsScreen(model: setup)

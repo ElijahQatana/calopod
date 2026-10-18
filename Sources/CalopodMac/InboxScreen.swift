@@ -24,13 +24,22 @@ struct InboxScreen: View {
             }
         }
         .pageEdges(inlineHeader: true)
-        .task { await model.reload() }
-        .onChange(of: filter) { model.ensureSelection(in: entries) }
-        .onChange(of: model.board) { model.ensureSelection(in: entries) }
+        .task {
+            await model.reload()
+            settleSelection()
+        }
+        .onChange(of: filter) { settleSelection() }
+        .onChange(of: model.board) { settleSelection() }
         .sheet(isPresented: $showingReview, onDismiss: { Task { await model.reload() } }) {
             InboxReviewSheet(model: model.review, colors: colors) { showingReview = false }
                 .appTypography()
         }
+    }
+
+    /// Selects the event another screen asked for, or keeps a valid row selected.
+    private func settleSelection() {
+        if model.board != nil, let id = navigation.takeInboxEvent(in: entries) { model.selection = id }
+        model.ensureSelection(in: entries)
     }
 
     // MARK: Header and filters
