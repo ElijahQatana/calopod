@@ -7,6 +7,8 @@ struct PageHeader<Controls: View>: View {
     let title: String
     var subtitle: String?
     var horizontal: CGFloat = Theme.pagePadding
+    /// Start at the top left of the panel, beside the collapse button, whatever the sidebar is doing.
+    var pinnedLeft = false
     @ViewBuilder var controls: Controls
 
     var body: some View {
@@ -22,13 +24,26 @@ struct PageHeader<Controls: View>: View {
             Spacer(minLength: 8)
             HStack(spacing: 10) { controls }.frame(minHeight: Theme.Control.height)
         }
-        .titleClearOfToggle(horizontal: horizontal)
+        .modifier(HeaderLeading(pinnedLeft: pinnedLeft, horizontal: horizontal))
         .accessibilityElement(children: .contain)
     }
 }
 
+private struct HeaderLeading: ViewModifier {
+    let pinnedLeft: Bool
+    let horizontal: CGFloat
+
+    func body(content: Content) -> some View {
+        if pinnedLeft {
+            content.padding(.leading, Theme.Page.titleLeading)
+        } else {
+            content.titleClearOfToggle(horizontal: horizontal)
+        }
+    }
+}
+
 extension PageHeader where Controls == EmptyView {
-    init(_ title: String, subtitle: String? = nil, horizontal: CGFloat = Theme.pagePadding) {
-        self.init(title: title, subtitle: subtitle, horizontal: horizontal) { EmptyView() }
+    init(_ title: String, subtitle: String? = nil, horizontal: CGFloat = Theme.pagePadding, pinnedLeft: Bool = false) {
+        self.init(title: title, subtitle: subtitle, horizontal: horizontal, pinnedLeft: pinnedLeft) { EmptyView() }
     }
 }
