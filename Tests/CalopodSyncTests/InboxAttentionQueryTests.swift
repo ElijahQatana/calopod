@@ -204,6 +204,23 @@ struct InboxAttentionQueryTests {
         #expect(result.analysis.isComplete)
     }
 
+    @Test("Ended events leave the default queue and its overlaps, but a date range still finds them")
+    func endedEvents() throws {
+        let fixture = try AttentionFixture()
+        try fixture.refresh([
+            fixture.event(key: "past", response: .tentative, start: 10000),
+            fixture.event(key: "running", response: .tentative, start: 10500, end: 12000),
+            fixture.event(key: "ahead", response: .needsResponse, start: 13000),
+        ])
+        let now = date(11_500)
+        #expect(try fixture.query(InboxAttentionFilter(asOf: now)).rows.map(\.item.event.sourceKeyHash) == ["running", "ahead"])
+        let conflicts = try fixture.query(InboxAttentionFilter(conflictsOnly: true, asOf: now)).rows
+        #expect(conflicts.isEmpty)
+        #expect(try fixture.query().rows.count == 3)
+        let range = try window(9000, 11_000)
+        #expect(try fixture.query(InboxAttentionFilter(window: range, asOf: now)).rows.map(\.item.event.sourceKeyHash) == ["past", "running"])
+    }
+
     @Test("Pruned change history still queues unread changes, and reading never acknowledges")
     func pruning() throws {
         let fixture = try AttentionFixture()

@@ -78,7 +78,7 @@ public struct InboxReviewCommand: AsyncParsableCommand {
             } else {
                 session = try controller.start(filter: InboxAttentionFilter(window: range?.window,
                     excludeMaybe: options.excludeMaybe, conflictsOnly: options.conflicts,
-                    bindingIDs: Set(selected.sources.map(\.bindingID))), settings: settings,
+                    bindingIDs: Set(selected.sources.map(\.bindingID)), asOf: Date()), settings: settings,
                     metricsWindow: window, freshnessCutoff: Date().addingTimeInterval(-3600),
                     displayTimeZoneIdentifier: options.range.timezone ?? TimeZone.current.identifier)
             }

@@ -130,11 +130,43 @@ extension LocalStateRepository {
                 // last observation as uncertain context, never a proven pair.
                 events.append(InboxContextEvent(event: event, observation: observation, isPresenceConfirmed: false))
             }
+            events = try droppingUnmarkedCopies(events, db)
             events.sort { ($0.event.startsAt, $0.event.sourceKeyHash) < ($1.event.startsAt, $1.event.sourceKeyHash) }
             return InboxContextSnapshot(
                 sources: sources, events: events,
                 unprovenDuplicateBindingIDs: unprovenDuplicateBindingIDs.intersection(bindingIDs)
             )
         }
+    }
+}
+
+/// The same calendar can be read through a second connection (say the Mac's Calendar app next to
+/// a Google sign-in). There a copy has a new event id and may have lost its marker, so neither
+/// the marker nor the mapping matches. Such an event is still taken for a copy when an arm
+/// copies one of our events to exactly that time with exactly that title, it sits on another
+/// calendar than that event, and it has no guests, so it can't be an invitation.
+private func droppingUnmarkedCopies(_ events: [InboxContextEvent], _ db: Database) throws -> [InboxContextEvent] {
+    let mapped = try Row.fetchAll(db, sql: """
+        SELECT DISTINCT m.source_key_hash, a.rule_mode FROM mirror_mappings m
+        JOIN arms a ON a.id = m.arm_id
+        """)
+    guard !mapped.isEmpty else { return events }
+    let sourceKeys = Set(mapped.map { $0["source_key_hash"] as String })
+    let byKey = Dictionary(events.map { ($0.event.sourceKeyHash, $0.event) }, uniquingKeysWith: { first, _ in first })
+    struct Shape: Hashable { let start: Date, end: Date, isAllDay: Bool, title: String }
+    var shapes: [Shape: Set<String>] = [:]
+    for row in mapped {
+        guard let source = byKey[row["source_key_hash"] as String] else { continue }
+        let title = (row["rule_mode"] as String) == ArmRuleMode.busy.rawValue ? "Busy" : (source.title ?? "")
+        shapes[Shape(start: source.startsAt, end: source.endsAt, isAllDay: source.isAllDay, title: title), default: []]
+            .insert(source.sourceKeyHash)
+    }
+    return events.filter { item in
+        let event = item.event
+        // Something we copy from is an original, whatever it looks like.
+        guard !sourceKeys.contains(event.sourceKeyHash), event.attendees.isEmpty,
+              let owners = shapes[Shape(start: event.startsAt, end: event.endsAt, isAllDay: event.isAllDay,
+                                        title: event.title ?? "")] else { return true }
+        return !owners.contains { byKey[$0]?.calendarBindingID != event.calendarBindingID }
     }
 }

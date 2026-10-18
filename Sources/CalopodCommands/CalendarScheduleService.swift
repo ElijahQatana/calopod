@@ -153,7 +153,7 @@ public struct CalendarScheduleService: Sendable {
             snapshot.events.map { ($0.event.sourceKeyHash, Self.title($0.event)) }, uniquingKeysWith: { first, _ in first })
         // The changed dot is exactly the set Inbox lists as changed, with no rule of its own.
         var changes: [String: ScheduleChange] = [:]
-        for row in InboxAttentionQuery.evaluate(snapshot, freshnessCutoff: cutoff).rows
+        for row in InboxAttentionQuery.evaluate(snapshot, filter: InboxAttentionFilter(asOf: now()), freshnessCutoff: cutoff).rows
         where row.reasons.contains(.changedAfterResponse) {
             changes[row.item.event.sourceKeyHash] = row.changeTiming == .uncertain ? .uncertain : .changed
         }

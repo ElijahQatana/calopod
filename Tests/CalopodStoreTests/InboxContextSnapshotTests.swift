@@ -38,6 +38,32 @@ struct InboxContextSnapshotTests {
         #expect(snapshot.events[0].observation?.acknowledgedRevision == 1)
     }
 
+    @Test("A copy re-read under another id is dropped only when it matches an arm's copy", arguments: [
+        // mode, copy title, guests, binding, kept
+        ("busy", "Busy", false, "two", false),
+        ("busy", "Busy", false, "one", true),
+        ("busy", "Busy", true, "two", true),
+        ("busy", "Example event", false, "two", true),
+        ("full-details", "Example event", false, "two", false),
+        ("full-details", "Busy", false, "two", true),
+    ])
+    func unmarkedCopies(mode: String, title: String, guests: Bool, binding: String, kept: Bool) throws {
+        let fixture = try ContextFixture()
+        try fixture.refresh("one", events: [fixture.event("a", binding: "one")])
+        var stray = fixture.event("stray", binding: binding)
+        stray = StoredNormalizedInstance(sourceKeyHash: "stray", connectionID: "connection", calendarBindingID: binding, providerEventID: "stray",
+            recurrenceID: nil, startsAt: stray.startsAt, endsAt: stray.endsAt, isAllDay: false, availability: "busy", isCancelled: false, isPrivate: false,
+            title: title, contentFingerprint: "synthetic", providerUpdatedAt: nil,
+            attendees: guests ? [EventParticipant(name: "Example guest", emailAddress: "guest@example.com")] : [],
+            currentUserResponse: EventResponse(state: .accepted))
+        try fixture.refresh(binding, events: binding == "one" ? [fixture.event("a", binding: "one"), stray] : [stray])
+        try fixture.repository.saveArm(StoredArm(id: "arm", configurationID: "default", sourceBindingIDs: ["one"], targetBindingID: "two", ruleMode: ArmRuleMode(rawValue: mode)!))
+        try fixture.repository.saveMirrorMapping(StoredMirrorMapping(mirrorKey: "mapping", armID: "arm", sourceKeyHash: "a", providerEventID: "copy", providerVersion: nil, desiredFingerprint: "synthetic", ownershipKeyID: "synthetic", updatedAt: fixture.start))
+        let keys = try fixture.repository.inboxContextSnapshot().events.map(\.event.sourceKeyHash)
+        #expect(keys.contains("stray") == kept)
+        #expect(keys.contains("a"))
+    }
+
     @Test("Tombstones are absent and newer retained moves supersede old cached intervals")
     func movesAndRemoval() throws {
         let fixture = try ContextFixture()

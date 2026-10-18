@@ -13,7 +13,7 @@ struct InboxScreenServiceTests {
     func countsMatchCommand() throws {
         let f = try InboxFixture()
         let board = try f.service.board()
-        let payload = try InboxCLI.list(repository: f.state, options: InboxOptions.parse([]), range: nil, activity: false)
+        let payload = try InboxCLI.list(repository: f.state, options: InboxOptions.parse([]), range: nil, activity: false, now: f.now)
         let reasons = (payload.items ?? []).flatMap { $0.inbox?.reasons ?? [] }
 
         let expected: [(InboxFilter, String?)] = [
@@ -108,7 +108,7 @@ private struct InboxFixture {
     let state = LocalStateRepository(database: try! CalopodDatabase.inMemory())
     let now: Date
 
-    init(provider: String = "google", now: Date = Date()) throws {
+    init(provider: String = "google", now: Date = Date(timeIntervalSince1970: 0)) throws {
         self.now = now
         try state.saveConnection(StoredConnection(id: "c", configurationID: "d", provider: provider, displayLabel: "Example", isEnabled: true))
         try state.replaceCalendarBindings(connectionID: "c", bindings: [

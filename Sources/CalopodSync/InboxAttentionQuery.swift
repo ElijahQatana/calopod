@@ -7,14 +7,21 @@ public struct InboxAttentionFilter: Codable, Equatable, Sendable {
     public let excludeMaybe: Bool
     public let conflictsOnly: Bool
     public let bindingIDs: Set<String>?
+    /// With no window, events that ended by this time are left out: a finished meeting can't
+    /// be answered, and its response is no longer re-read. Not persisted with a review.
+    public var asOf: Date?
 
-    /// A nil window includes all relevant retained occurrences, not just today.
+    private enum CodingKeys: String, CodingKey { case window, excludeMaybe, conflictsOnly, bindingIDs }
+
+    /// A nil window includes all relevant retained occurrences that haven't ended.
     /// CLI date parsing supplies normalized local-day or timestamp boundaries.
-    public init(window: SyncWindow? = nil, excludeMaybe: Bool = false, conflictsOnly: Bool = false, bindingIDs: Set<String>? = nil) {
+    public init(window: SyncWindow? = nil, excludeMaybe: Bool = false, conflictsOnly: Bool = false,
+                bindingIDs: Set<String>? = nil, asOf: Date? = nil) {
         self.window = window
         self.excludeMaybe = excludeMaybe
         self.conflictsOnly = conflictsOnly
         self.bindingIDs = bindingIDs
+        self.asOf = asOf
     }
 }
 
@@ -39,9 +46,16 @@ public struct InboxAttentionResult: Equatable, Sendable {
 /// A pure local query. Listing and filtering neither acknowledge nor write.
 public enum InboxAttentionQuery {
     public static func evaluate(
-        _ snapshot: InboxContextSnapshot, filter: InboxAttentionFilter = InboxAttentionFilter(),
+        _ full: InboxContextSnapshot, filter: InboxAttentionFilter = InboxAttentionFilter(),
         freshnessCutoff: Date
     ) -> InboxAttentionResult {
+        // Ended events neither need an answer nor overlap anything that is still ahead.
+        var snapshot = full
+        if filter.window == nil, let now = filter.asOf {
+            snapshot = InboxContextSnapshot(
+                sources: full.sources, events: full.events.filter { $0.event.endsAt > now },
+                unprovenDuplicateBindingIDs: full.unprovenDuplicateBindingIDs)
+        }
         // Analyze complete current intervals before filtering rows. A moved
         // event matching its old date can still conflict at its new date.
         let starts = snapshot.sources.compactMap { $0.coverage?.startsAt }

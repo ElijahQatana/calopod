@@ -130,7 +130,7 @@ public struct ConflictResolutionService: Sendable {
         let snapshot = try makeRepository().inboxContextSnapshot()
         let result = InboxAttentionQuery.evaluate(
             snapshot,
-            filter: InboxAttentionFilter(conflictsOnly: true, bindingIDs: Set(snapshot.sources.map(\.bindingID))),
+            filter: InboxAttentionFilter(conflictsOnly: true, bindingIDs: Set(snapshot.sources.map(\.bindingID)), asOf: now()),
             freshnessCutoff: freshnessCutoff
         )
         var seen = Set<String>()
@@ -201,7 +201,7 @@ public struct ConflictResolutionService: Sendable {
         let cutoff = freshnessCutoff
         let queue = InboxAttentionQuery.evaluate(
             snapshot,
-            filter: InboxAttentionFilter(conflictsOnly: true, bindingIDs: Set(snapshot.sources.map(\.bindingID))),
+            filter: InboxAttentionFilter(conflictsOnly: true, bindingIDs: Set(snapshot.sources.map(\.bindingID)), asOf: now()),
             freshnessCutoff: cutoff
         )
         // Fails before anything is sent if a choice isn't allowed.
@@ -213,7 +213,7 @@ public struct ConflictResolutionService: Sendable {
         let controller = InboxReviewSessionController(state: state, lockURL: try makeLockURL())
         let refresh = makeRefresh(state)
         var session = try controller.start(
-            filter: InboxAttentionFilter(conflictsOnly: true, bindingIDs: Set(snapshot.sources.map(\.bindingID))),
+            filter: InboxAttentionFilter(conflictsOnly: true, bindingIDs: Set(snapshot.sources.map(\.bindingID)), asOf: now()),
             metricsWindow: queue.analysisWindow ?? SyncWindow(start: now(), end: now().addingTimeInterval(1)),
             freshnessCutoff: cutoff
         )

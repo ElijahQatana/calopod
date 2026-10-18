@@ -38,7 +38,7 @@ func cachedCalendarAndInboxReadsProceedUnderSyncLock() async throws {
     #expect(events.map(\.sourceKeyHash) == ["event"])
     #expect(AvailabilityCalculator.calculate(instances: events, from: fixture.range.window.start,
         through: fixture.range.window.end).busy.count == 1)
-    let inbox = try InboxCLI.list(repository: read.repository, options: InboxOptions.parse([]), range: nil, activity: false)
+    let inbox = try InboxCLI.list(repository: read.repository, options: InboxOptions.parse([]), range: nil, activity: false, now: .distantPast)
     #expect(inbox.items?.map(\.id) == ["event:2"])
     let activity = try InboxCLI.list(repository: read.repository, options: InboxOptions.parse([]), range: nil, activity: true)
     #expect(activity.count == 1)
