@@ -57,6 +57,10 @@ calopod doctor
 
 An app that was rebuilt or signed differently counts as a new app to macOS, so it asks again.
 
+## The Mac app's background service
+
+If Background sync says macOS has no record of the app, the app is running from a build folder or is not signed with a developer identity. Install it in the Applications folder from a signed build. If it says it is waiting for approval, allow Calopod in System Settings, General, Login Items, then choose Move to the app again. A source-installed service keeps running until the app's service is approved.
+
 ## Account problems
 
 If a Google or Microsoft account reports a sign-in or consent problem, reconnect just that account with `calopod connection add google` or `microsoft`.

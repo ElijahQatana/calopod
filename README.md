@@ -50,6 +50,7 @@ swift test --disable-sandbox
 
 - [Install](docs/install.md)
 - [Using Calopod](docs/using-calopod.md)
+- [The Mac app](docs/mac-app.md)
 - [Inbox and invitations](docs/inbox.md)
 - [Automatic sync](docs/automatic-sync.md)
 - [Google and Microsoft accounts](docs/google-and-microsoft.md)
