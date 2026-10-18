@@ -133,15 +133,15 @@ public enum InboxConflictCalculator {
     }
 
     public static func group(containing key: String, conflicts: [InboxConflict]) -> Set<String> {
+        var neighbors: [String: [String]] = [:]
+        for conflict in conflicts {
+            neighbors[conflict.pair.first, default: []].append(conflict.pair.second)
+            neighbors[conflict.pair.second, default: []].append(conflict.pair.first)
+        }
         var keys: Set<String> = [key]
-        var changed = true
-        while changed {
-            let previous = keys
-            for conflict in conflicts where keys.contains(conflict.pair.first) || keys.contains(conflict.pair.second) {
-                keys.insert(conflict.pair.first)
-                keys.insert(conflict.pair.second)
-            }
-            changed = previous != keys
+        var pending = [key]
+        while let next = pending.popLast() {
+            for other in neighbors[next] ?? [] where keys.insert(other).inserted { pending.append(other) }
         }
         return keys
     }
