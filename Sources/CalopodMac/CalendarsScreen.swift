@@ -6,7 +6,7 @@ struct CalendarsScreen: View {
     private let colors = CalendarColors.shared
 
     var body: some View {
-        CardPage {
+        CardPage(title: "Calendars") {
             if let busy = model.busy { BusyLine(text: busy) }
             if let notice = model.notice { Banner(kind: .error, text: notice) }
 
@@ -57,10 +57,16 @@ struct CalendarsScreen: View {
                     Task { await model.disconnect(connection.id) }
                 }
             } label: {
-                Image(systemName: "ellipsis.circle")
+                Image(systemName: "ellipsis")
+                    .font(Theme.Fonts.bodySemibold)
+                    .foregroundStyle(.secondary)
+                    .frame(width: Theme.Control.height, height: Theme.Control.height)
+                    .contentShape(Rectangle())
             }
             .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
             .fixedSize()
+            .accessibilityLabel("More actions for \(connection.label)")
             .disabled(model.isBusy)
         }
     }

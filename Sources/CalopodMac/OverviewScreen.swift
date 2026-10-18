@@ -12,7 +12,7 @@ struct OverviewScreen: View {
     @State private var showingSetup = false
 
     var body: some View {
-        CardPage {
+        CardPage(title: "Overview") {
             if let notice = model.notice { Banner(kind: .error, text: notice) }
 
             if progress.canResume && !showingSetup { CardSection { CardRow { resumeBanner } } }
