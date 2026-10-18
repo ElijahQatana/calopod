@@ -11,6 +11,7 @@ The inbox gathers events that need your attention from the calendars you selecte
 calopod inbox
 calopod inbox --conflicts --exclude-maybe
 calopod inbox --day 2026-11-05 --timezone America/New_York
+calopod inbox --explain
 calopod inbox activity
 calopod inbox refresh --from 2026-11-05 --through 2026-11-12
 ```
@@ -72,3 +73,5 @@ Google asks to notify guests. Microsoft asks for a response to be sent to the or
 Microsoft can't guarantee a reply wasn't overtaken by an edit made a moment earlier. That's a small window, but it exists.
 
 Copies Calopod made are left out of the inbox. That includes a copy that came back without its marker or under a new id: if an arm copies that calendar into this one, and the event has the same time and title (or "Busy"), the same guests as the original or none, and no reply from you on it, it is treated as the copy.
+
+If something that looks like a copy is still listed, `calopod inbox --explain` shows, for each listed item that shares time with an event Calopod copies, which copy checks passed or failed.

@@ -8,6 +8,8 @@ import Testing
 struct InboxCopyConflictTests {
     @Test("A full-details copy with the source's guests is no item and no conflict; other guests keep it", arguments: [
         (["ana", "bo", "cy"], false), (["ana", "bo", "dee"], true), ([], false),
+        // The calendar made the user organizer of the copy and listed the original's organizer too.
+        (["ana", "bo", "cy", "me"], false),
     ])
     func copyWithGuests(copyGuests: [String], shown: Bool) throws {
         let repository = LocalStateRepository(database: try CalopodDatabase.inMemory())
@@ -22,6 +24,7 @@ struct InboxCopyConflictTests {
             StoredNormalizedInstance(sourceKeyHash: key, connectionID: "c", calendarBindingID: binding, providerEventID: key, recurrenceID: nil,
                 startsAt: Date(timeIntervalSince1970: start), endsAt: Date(timeIntervalSince1970: start + 1800), isAllDay: false, availability: "busy",
                 isCancelled: false, isPrivate: false, title: title, contentFingerprint: "x", providerUpdatedAt: nil,
+                organizer: EventParticipant(name: "me", emailAddress: "me@example.com"),
                 attendees: people(guests), currentUserResponse: EventResponse(state: state, evidence: evidence))
         }
         let guests = ["ana", "bo", "cy"]
@@ -33,7 +36,8 @@ struct InboxCopyConflictTests {
         }
         try refresh("a", [event("sync", "a", "Regular Sync", .organizer, .eventKitCurrentUser, start: 10_000, guests: guests)])
         try refresh("b", [
-            event("copy", "b", "Regular Sync", .unknown, .none, start: 10_000, guests: copyGuests),
+            event("copy", "b", "Regular Sync", copyGuests.contains("me") ? .organizer : .unknown,
+                  copyGuests.contains("me") ? .eventKitCurrentUser : .none, start: 10_000, guests: copyGuests),
             event("ops", "b", "Ops Meeting", .accepted, .eventKitCurrentUser, start: 50_000),
             event("mariana", "b", "Sync - Mariana", .accepted, .eventKitCurrentUser, start: 50_000),
         ])
@@ -41,5 +45,6 @@ struct InboxCopyConflictTests {
         let keys = Set(rows.map(\.item.event.sourceKeyHash))
         #expect(keys == (shown ? ["sync", "copy", "ops", "mariana"] : ["ops", "mariana"]))
         #expect(rows.allSatisfy { $0.reasons == [.conflict] })
+        #expect(try repository.inboxCopyDiagnoses()["copy"]?.first?.isCopy == !shown)
     }
 }
