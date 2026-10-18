@@ -19,7 +19,7 @@ struct MainWindow: View {
         .ignoresSafeArea(.container, edges: .top)
         .modifier(WindowBackdrop())
         .background { WindowBlurHelper() }
-        .background { WindowChrome(collapsed: sidebar.isCollapsed) }
+        .background { WindowChrome() }
         .navigationTitle(navigation.selection.title)
         .frame(minWidth: 860, minHeight: 580)
         .tint(Theme.accent)
