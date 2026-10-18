@@ -59,7 +59,8 @@ public struct ManagedEventCreateService: Sendable {
             providerVersion: result.providerVersion,
             desiredFingerprint: desiredFingerprint,
             ownershipKeyID: ownershipKey.id,
-            updatedAt: now
+            updatedAt: now,
+            providerExternalID: result.providerExternalID
         )
         try repository.saveMirrorMapping(mapping)
         return mapping

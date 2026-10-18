@@ -61,10 +61,14 @@ public struct ManagedEventWriteRequest: Codable, Equatable, Sendable {
 public struct ManagedEventWriteResult: Codable, Equatable, Sendable {
     public let providerEventID: String
     public let providerVersion: String?
+    /// The server-assigned id, when the provider has one. Unlike `providerEventID` it survives
+    /// the calendar's own sync.
+    public let providerExternalID: String?
 
-    public init(providerEventID: String, providerVersion: String?) {
+    public init(providerEventID: String, providerVersion: String?, providerExternalID: String? = nil) {
         self.providerEventID = providerEventID
         self.providerVersion = providerVersion
+        self.providerExternalID = providerExternalID
     }
 }
 
@@ -85,6 +89,7 @@ public struct ManagedEventSnapshot: Codable, Equatable, Sendable {
     public let provenance: ManagedEventProvenance?
     public let createdAt: Date?
     public let isProviderPreferredIdentity: Bool
+    public let providerExternalID: String?
 
     public init(
         providerEventID: String,
@@ -93,10 +98,12 @@ public struct ManagedEventSnapshot: Codable, Equatable, Sendable {
         markerStatus: ManagedEventMarkerStatus,
         provenance: ManagedEventProvenance?,
         createdAt: Date? = nil,
-        isProviderPreferredIdentity: Bool = false
+        isProviderPreferredIdentity: Bool = false,
+        providerExternalID: String? = nil
     ) {
         self.providerEventID = providerEventID
         self.providerVersion = providerVersion
+        self.providerExternalID = providerExternalID
         self.payload = payload
         self.markerStatus = markerStatus
         self.provenance = provenance

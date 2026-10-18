@@ -30,6 +30,7 @@ public struct StoredNormalizedInstance: Codable, Equatable, Sendable {
     public let organizer: EventParticipant?
     public let attendees: [EventParticipant]
     public let currentUserResponse: EventResponse
+    public let providerExternalID: String?
 
     public init(
         sourceKeyHash: String,
@@ -53,7 +54,8 @@ public struct StoredNormalizedInstance: Codable, Equatable, Sendable {
         attendees: [EventParticipant] = [],
         currentUserResponse: EventResponse = .unavailable,
         providerSeriesID: String? = nil,
-        timeZoneIdentifier: String? = nil
+        timeZoneIdentifier: String? = nil,
+        providerExternalID: String? = nil
     ) {
         self.sourceKeyHash = sourceKeyHash
         self.connectionID = connectionID
@@ -77,6 +79,7 @@ public struct StoredNormalizedInstance: Codable, Equatable, Sendable {
         self.organizer = organizer
         self.attendees = attendees
         self.currentUserResponse = currentUserResponse
+        self.providerExternalID = providerExternalID
     }
 }
 
@@ -155,8 +158,9 @@ extension LocalStateRepository {
                          provider_event_id, recurrence_id, starts_at, ends_at,
                          is_all_day, availability, is_cancelled, content_fingerprint,
                          seen_generation, title, is_private, provider_updated_at,
-                         location, notes, url, organizer_json, attendees_json, response_json, provider_series_id, time_zone, last_seen_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         location, notes, url, organizer_json, attendees_json, response_json, provider_series_id, time_zone, last_seen_at,
+                         provider_external_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(source_key_hash) DO UPDATE SET
                         connection_id = excluded.connection_id,
                         calendar_binding_id = excluded.calendar_binding_id,
@@ -180,7 +184,8 @@ extension LocalStateRepository {
                         response_json = excluded.response_json,
                         provider_series_id = excluded.provider_series_id,
                         time_zone = excluded.time_zone,
-                        last_seen_at = excluded.last_seen_at
+                        last_seen_at = excluded.last_seen_at,
+                        provider_external_id = excluded.provider_external_id
                     """
             )
             for instance in instances {
@@ -209,6 +214,7 @@ extension LocalStateRepository {
                     instance.providerSeriesID,
                     instance.timeZoneIdentifier,
                     now,
+                    instance.providerExternalID,
                 ])
             }
 
@@ -289,7 +295,8 @@ extension LocalStateRepository {
                            provider_event_id, recurrence_id, starts_at, ends_at,
                            is_all_day, availability, is_cancelled, content_fingerprint,
                            title, is_private, provider_updated_at,
-                           location, notes, url, organizer_json, attendees_json, response_json, provider_series_id, time_zone
+                           location, notes, url, organizer_json, attendees_json, response_json, provider_series_id, time_zone,
+                           provider_external_id
                     FROM normalized_instances
                     WHERE calendar_binding_id IN (\(normalizedEventQuestionMarks(count: calendarBindingIDs.count)))
                       AND ends_at > ?
@@ -375,7 +382,8 @@ func normalizedInstance(_ row: Row) -> StoredNormalizedInstance {
         attendees: decodeEventDetails(row["attendees_json"]) ?? [],
         currentUserResponse: decodeEventDetails(row["response_json"]) ?? .unavailable,
         providerSeriesID: row["provider_series_id"],
-        timeZoneIdentifier: row["time_zone"]
+        timeZoneIdentifier: row["time_zone"],
+        providerExternalID: row["provider_external_id"]
     )
 }
 

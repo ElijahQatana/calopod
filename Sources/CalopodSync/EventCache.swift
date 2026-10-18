@@ -55,7 +55,8 @@ public struct EventCache: Sendable {
             calendar: calendar,
             from: start,
             through: end,
-            excludedEventIDs: try repository.managedTargetEventIDs(calendarBindingID: calendar.id)
+            excludedEventIDs: try repository.managedTargetEventIDs(calendarBindingID: calendar.id),
+            excludedExternalIDs: try repository.managedTargetExternalIDs(calendarBindingID: calendar.id)
         )
         let cursors = page.cursorUpdates.map {
             StoredCursorUpdate(
@@ -115,7 +116,8 @@ public enum EventNormalizer {
         calendar: StoredCalendarBinding,
         from windowStart: Date,
         through windowEnd: Date,
-        excludedEventIDs: Set<String> = []
+        excludedEventIDs: Set<String> = [],
+        excludedExternalIDs: Set<String> = []
     ) -> Result {
         var instances: [StoredNormalizedInstance] = []
         var observations: [StoredNormalizedInstance] = []
@@ -142,7 +144,8 @@ public enum EventNormalizer {
             // Copies never become sources, including mapped copies whose
             // marker was removed. Evict any previous cached source instance
             // on incremental refresh as well as on a full refresh.
-            if event.isManagedMirror || excludedEventIDs.contains(event.eventID) {
+            if event.isManagedMirror || excludedEventIDs.contains(event.eventID)
+                || event.externalID.map(excludedExternalIDs.contains) == true {
                 excluded.append(sourceKeyHash)
                 if event.isManagedMirror {
                     ingestion.excludedMarkedCopyCount += 1
@@ -215,7 +218,8 @@ public enum EventNormalizer {
                 attendees: event.attendees,
                 currentUserResponse: event.currentUserResponse,
                 providerSeriesID: event.seriesID,
-                timeZoneIdentifier: event.isAllDay ? event.timeZoneIdentifier : nil
+                timeZoneIdentifier: event.isAllDay ? event.timeZoneIdentifier : nil,
+                providerExternalID: event.externalID
             )
             observations.append(instance)
             if isInRange { instances.append(instance) }

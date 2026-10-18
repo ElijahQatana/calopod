@@ -26,6 +26,7 @@ public struct TargetEventObservation: Codable, Equatable, Sendable {
     public let ownershipStatus: TargetOwnershipStatus
     public let createdAt: Date?
     public let isProviderPreferredIdentity: Bool
+    public let providerExternalID: String?
 
     public init(
         calendarBindingID: String,
@@ -36,7 +37,8 @@ public struct TargetEventObservation: Codable, Equatable, Sendable {
         ownershipKeyID: String? = nil,
         ownershipStatus: TargetOwnershipStatus,
         createdAt: Date? = nil,
-        isProviderPreferredIdentity: Bool = false
+        isProviderPreferredIdentity: Bool = false,
+        providerExternalID: String? = nil
     ) {
         self.calendarBindingID = calendarBindingID
         self.providerEventID = providerEventID
@@ -47,6 +49,7 @@ public struct TargetEventObservation: Codable, Equatable, Sendable {
         self.ownershipStatus = ownershipStatus
         self.createdAt = createdAt
         self.isProviderPreferredIdentity = isProviderPreferredIdentity
+        self.providerExternalID = providerExternalID
     }
 }
 

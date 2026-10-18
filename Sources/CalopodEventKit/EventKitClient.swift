@@ -232,7 +232,8 @@ private actor LiveEventKitGateway: EventKitGateway {
                     sourceType: sourceType($0.calendar.source.sourceType)
                 ),
                 // Floating all-day dates are returned in the Mac's zone.
-                timeZoneIdentifier: $0.isAllDay ? TimeZone.current.identifier : nil
+                timeZoneIdentifier: $0.isAllDay ? TimeZone.current.identifier : nil,
+                externalID: EventKitExternalID.value(for: $0)
             )
         }
     }
@@ -267,7 +268,8 @@ private actor LiveEventKitGateway: EventKitGateway {
         let providerEventID = event.eventIdentifier ?? event.calendarItemIdentifier
         return ManagedEventWriteResult(
             providerEventID: providerEventID,
-            providerVersion: eventVersion(event)
+            providerVersion: eventVersion(event),
+            providerExternalID: EventKitExternalID.value(for: event)
         )
     }
 
@@ -293,7 +295,8 @@ private actor LiveEventKitGateway: EventKitGateway {
         let savedID = event.eventIdentifier ?? event.calendarItemIdentifier
         return ManagedEventWriteResult(
             providerEventID: savedID,
-            providerVersion: eventVersion(event)
+            providerVersion: eventVersion(event),
+            providerExternalID: EventKitExternalID.value(for: event)
         )
     }
 
@@ -396,7 +399,8 @@ private actor LiveEventKitGateway: EventKitGateway {
             payload: payload,
             markerStatus: decoded.0,
             provenance: decoded.1,
-            createdAt: event.creationDate
+            createdAt: event.creationDate,
+            providerExternalID: EventKitExternalID.value(for: event)
         )
     }
 
@@ -445,6 +449,18 @@ private actor LiveEventKitGateway: EventKitGateway {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter.string(from: date)
+    }
+}
+
+/// `calendarItemExternalIdentifier` is the server's id for the item (the iCalendar UID on CalDAV),
+/// so it stays the same when `eventIdentifier` changes after a sync. EventKit does not promise it
+/// is set right after a save, and a recurring series shares one value across its occurrences, so
+/// an empty or recurring value is not used.
+enum EventKitExternalID {
+    static func value(for event: EKEvent) -> String? {
+        guard !event.hasRecurrenceRules,
+              let value = event.calendarItemExternalIdentifier, !value.isEmpty else { return nil }
+        return value
     }
 }
 
