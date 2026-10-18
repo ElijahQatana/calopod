@@ -11,34 +11,93 @@ struct EventInspector: View {
     var openInbox: () -> Void = {}
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .top) {
-                    status
-                    Spacer()
-                    Button(action: close) { Image(systemName: "xmark") }
-                        .buttonStyle(.plain).foregroundStyle(.secondary)
-                        .accessibilityLabel("Close details")
+        ScrollView { content }
+            .frame(maxHeight: .infinity, alignment: .top)
+            .panelFill(.inner, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    var content: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(alignment: .top) {
+                status
+                Spacer()
+                Button(action: close) { Image(systemName: "xmark") }
+                    .buttonStyle(.plain).foregroundStyle(.secondary)
+                    .accessibilityLabel("Close details")
+            }
+            lead
+            if hasPeopleAndPlace { peopleAndPlace }
+            if !event.copiedTo.isEmpty { copies }
+            notes
+            replies
+        }
+        .padding(18)
+    }
+
+    private var lead: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(event.title).font(Theme.Fonts.sectionTitle).fixedSize(horizontal: false, vertical: true)
+            Text(when).font(Theme.Fonts.body).foregroundStyle(.secondary)
+        }
+    }
+
+    private var hasPeopleAndPlace: Bool { calendar != nil || event.organizer != nil || event.location != nil }
+
+    private var peopleAndPlace: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if let calendar {
+                field("Calendar") {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Circle().fill(colors.color(for: event.calendarID).color).frame(width: 9, height: 9)
+                        Text(aliases.name(for: calendar.id, real: calendar.name))
+                    }
+                    Text(calendar.account).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                 }
-                Text(event.title).font(Theme.Fonts.sectionTitle).fixedSize(horizontal: false, vertical: true)
-                details
-                if let text = ScheduleLayout.changeText(event) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Banner(kind: .caution, text: "\(text). Review it in Inbox.")
-                        Button("Open Changed in Inbox", action: openInbox)
+            }
+            if let organizer = event.organizer { field("Organizer") { Text(organizer) } }
+            if let location = event.location { field("Where") { Text(location) } }
+        }
+    }
+
+    private var copies: some View {
+        field("Copied to") {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(event.copiedTo.indices, id: \.self) { index in
+                    let copy = event.copiedTo[index]
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(aliases.name(for: copy.calendarID, real: copy.calendarName))
+                        Text(copy.fullDetails ? "Full details" : "Busy only")
+                            .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                     }
                 }
-                if ScheduleLayout.showsOverlap(event) {
-                    Banner(kind: .error, text: "Overlaps \(list(event.overlaps)).")
-                } else if !event.isCopy {
-                    Banner(kind: .info, text: "Nothing overlaps this event.")
-                }
-                replies
             }
-            .padding(16)
         }
-        .frame(maxHeight: .infinity, alignment: .top)
-        .panelFill(.inner, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var notes: some View {
+        if let text = ScheduleLayout.changeText(event) {
+            VStack(alignment: .leading, spacing: 8) {
+                Banner(kind: .caution, text: "\(text). Review it in Inbox.")
+                Button("Open Changed in Inbox", action: openInbox)
+            }
+        }
+        if ScheduleLayout.showsOverlap(event) {
+            Banner(kind: .error, text: "Overlaps \(list(event.overlaps)).")
+        } else if !event.isCopy {
+            Banner(kind: .info, text: "Nothing overlaps this event.")
+        }
+    }
+
+    /// A small label with its value underneath, so long values get the full width.
+    private func field<Value: View>(_ title: String, @ViewBuilder _ value: () -> Value) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(Theme.Fonts.secondaryMedium).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) { value() }
+                .font(Theme.Fonts.body)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     @ViewBuilder
@@ -57,31 +116,6 @@ struct EventInspector: View {
         }
     }
 
-    private var details: some View {
-        Grid(alignment: .topLeading, horizontalSpacing: 10, verticalSpacing: 8) {
-            row("When") { Text(when) }
-            row("Calendar") {
-                HStack(spacing: 6) {
-                    Circle().fill(colors.color(for: event.calendarID).color).frame(width: 9, height: 9)
-                    Text([calendar.map { aliases.name(for: $0.id, real: $0.name) }, calendar?.account].compactMap { $0 }.joined(separator: " · "))
-                }
-            }
-            if let organizer = event.organizer { row("Organizer") { Text(organizer) } }
-            if let location = event.location { row("Where") { Text(location) } }
-            if !event.copiedTo.isEmpty {
-                row("Copied to") {
-                    VStack(alignment: .leading, spacing: 2) {
-                        ForEach(event.copiedTo.indices, id: \.self) { index in
-                            let copy = event.copiedTo[index]
-                            Text("\(aliases.name(for: copy.calendarID, real: copy.calendarName)) · \(copy.fullDetails ? "full details" : "busy only")")
-                        }
-                    }
-                }
-            }
-        }
-        .font(Theme.Fonts.body)
-    }
-
     @ViewBuilder
     private var replies: some View {
         if event.isCopy {
@@ -94,13 +128,6 @@ struct EventInspector: View {
         }
     }
 
-    private func row<Value: View>(_ title: String, @ViewBuilder _ value: () -> Value) -> some View {
-        GridRow(alignment: .firstTextBaseline) {
-            Text(title).foregroundStyle(.secondary).gridColumnAlignment(.leading)
-            value().frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
     private var when: String {
         if event.isAllDay {
             return event.startsAt.formatted(.dateTime.weekday(.abbreviated).month().day()) + ", all day"
@@ -108,7 +135,7 @@ struct EventInspector: View {
         let day = event.startsAt.formatted(.dateTime.weekday(.abbreviated).month().day())
         let start = event.startsAt.formatted(date: .omitted, time: .shortened)
         let end = event.endsAt.formatted(date: .omitted, time: .shortened)
-        return "\(day)\n\(start) to \(end)"
+        return "\(day), \(start) to \(end)"
     }
 
     private func list(_ titles: [String]) -> String {
