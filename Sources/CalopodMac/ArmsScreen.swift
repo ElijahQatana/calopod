@@ -67,5 +67,3 @@ struct ArmsScreen: View {
         .background(armCardShape.fill(Theme.paneLine))
     }
 }
-
-let armCardShape = RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)

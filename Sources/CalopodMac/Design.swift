@@ -160,6 +160,9 @@ enum Theme {
     }
 }
 
+/// The shape of a card, shared by the pages and the popover.
+let armCardShape = RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
+
 private struct SidebarCollapsedKey: EnvironmentKey { static let defaultValue = false }
 
 extension EnvironmentValues {
