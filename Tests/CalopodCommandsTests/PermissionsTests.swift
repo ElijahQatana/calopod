@@ -25,6 +25,15 @@ func calendarStatusesGetTheirOwnWords() {
 }
 
 @Test
+func adHocBuildFailureSaysASignedBuildIsNeeded() {
+    let reason = Permissions.hostFailureReason(CommandEnvironmentError.eventKitHostUntrusted)
+    #expect(reason.contains("ad hoc build of Calopod cannot use Calendar"))
+    #expect(reason.contains("install the signed build"))
+    let reading = Permissions.calendar(status: nil, hostFailure: reason)
+    #expect(reading.level == .unknown && reading.detail.contains(reason))
+}
+
+@Test
 func loginItemStatesMatchTheBackgroundSyncScreen() {
     let cases: [(BackgroundServiceState, PermissionReading.Level)] = [
         (.enabled, .allowed), (.requiresApproval, .blocked), (.notRegistered, .notAsked),

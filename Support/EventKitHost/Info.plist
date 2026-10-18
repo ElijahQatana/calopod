@@ -24,9 +24,11 @@
     <string>0.1.1</string>
     <key>CFBundleVersion</key>
     <string>2</string>
-    <key>LSBackgroundOnly</key>
+    <key>LSUIElement</key>
     <true/>
     <key>NSCalendarsFullAccessUsageDescription</key>
-    <string>Calopod reads selected calendars to calculate availability and keep configured calendars in sync.</string>
+    <string>Calopod reads the calendars you choose so it can work out when you are free and keep your calendars in sync.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>Calopod reads the calendars you choose so it can work out when you are free and keep your calendars in sync.</string>
 </dict>
 </plist>

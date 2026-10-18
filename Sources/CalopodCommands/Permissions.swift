@@ -175,8 +175,10 @@ public enum Permissions {
     public static func hostFailureReason(_ error: Error) -> String {
         if let error = error as? CommandEnvironmentError {
             switch error {
-            case .missingEventKitHost, .eventKitHostUntrusted:
-                return "The helper is missing or failed its signature check. Reinstall Calopod from the download. A build signed differently from the installed app is not trusted."
+            case .missingEventKitHost:
+                return "The Calendar helper is missing. Reinstall Calopod from the download."
+            case .eventKitHostUntrusted:
+                return "The Calendar helper failed its signature check. An ad hoc build of Calopod cannot use Calendar, so install the signed build from the download."
             case .eventKitHostTimedOut:
                 return "The helper took too long to answer. Try again."
             default:
