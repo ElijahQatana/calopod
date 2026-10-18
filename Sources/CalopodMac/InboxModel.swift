@@ -20,6 +20,7 @@ final class InboxModel {
     let review = InboxReviewModel()
     private let service: InboxScreenService
     private let send: @Sendable (String, ConflictChoice) async -> InboxReplyResult
+    private let calendar: CalendarOpening
     private let afterSend: (@MainActor () async -> Void)?
     private let readDetail: @Sendable (String) throws -> InboxDetail
     private var loads = 0
@@ -30,8 +31,10 @@ final class InboxModel {
         service: InboxScreenService = InboxScreenService(),
         send: (@Sendable (String, ConflictChoice) async -> InboxReplyResult)? = nil,
         afterSend: (@MainActor () async -> Void)? = nil,
-        readDetail: (@Sendable (String) throws -> InboxDetail)? = nil
+        readDetail: (@Sendable (String) throws -> InboxDetail)? = nil,
+        calendar: CalendarOpening = SystemCalendarOpener()
     ) {
+        self.calendar = calendar
         self.service = service
         self.readDetail = readDetail ?? { try service.detail(for: $0) }
         self.send = send ?? { await service.reply(to: $0, $1) }
@@ -128,6 +131,12 @@ final class InboxModel {
         }
         busy = nil
         await reload()
+    }
+
+    /// Opens the event in the Calendar app. This is not a reply and changes nothing in the inbox.
+    func openInCalendar() {
+        guard let detail, let id = detail.calendarEventID else { return }
+        notice = calendar.open(eventID: id, startsAt: detail.entry.startsAt) == .opened ? nil : CalendarOpenText.notFound
     }
 
     /// Moves on without replying or changing anything.

@@ -140,6 +140,9 @@ struct InboxReviewTerminal {
             InboxCalendarContextBuilder.choices(for: context.focused, snapshot: context.snapshot).unavailableReasons.map(\.rawValue)
         if !limits.isEmpty { emit("Action limits: " + limits.joined(separator: ", ")) }
         if card.providerSnapshot == nil { emit("RSVP unavailable or provider preview failed. Use Hold or the provider app.") }
+        if context.source.provider == "eventkit", card.providerSnapshot == nil {
+            emit("Open in Calendar: answer this invitation in the Calendar app. Calopod reads your answer on the next sync. Hold skips it for now.")
+        }
         if context.source.provider == "microsoft" { emit("Provider revision checks are preflight only; concurrent changes cannot be prevented atomically.") }
     }
 

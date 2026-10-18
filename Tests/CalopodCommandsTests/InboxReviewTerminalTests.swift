@@ -36,9 +36,17 @@ struct InboxReviewTerminalTests {
             #expect(text.contains("No responses sent"))
             if count == 1 {
                 #expect(text.contains("RSVP unavailable"))
+                #expect(text.contains("Open in Calendar"))
                 #expect(!text.contains("[y] Yes"))
             }
         }
+    }
+
+    @Test func openInCalendarHintIsOnlyForTheMacCalendar() async throws {
+        let f = try TranscriptFixture(count: 1)
+        defer { f.remove() }
+        let (_, text) = try await f.run(["h"])
+        #expect(!text.contains("Open in Calendar"))
     }
 
     @Test func cancellationAndResumeDoNotRepeatHoldsOrMaybe() async throws {

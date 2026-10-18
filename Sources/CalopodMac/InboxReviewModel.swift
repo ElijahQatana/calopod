@@ -34,12 +34,12 @@ final class InboxReviewModel {
     private(set) var openedKey: String?
 
     private let service: InboxReviewService
-    private let calendar: CalendarOpener
+    private let calendar: CalendarOpening
     private var keyboard = ReviewKeyboard()
     private var focus: (key: String, origin: String)?
     private var isWorking: Bool { if case .working = phase { true } else { false } }
 
-    init(service: InboxReviewService = InboxReviewService(), calendar: CalendarOpener = .system) {
+    init(service: InboxReviewService = InboxReviewService(), calendar: CalendarOpening = SystemCalendarOpener()) {
         self.service = service
         self.calendar = calendar
     }
@@ -66,6 +66,8 @@ final class InboxReviewModel {
         saved = try? service.unfinished()
         phase = .start
     }
+
+    func dismissNotice() { notice = nil }
 
     // MARK: Starting and resuming
 
@@ -111,10 +113,15 @@ final class InboxReviewModel {
             guard card.neighbors.indices.contains(number - 1) else { return }
             focus = (card.neighbors[number - 1].id, focus?.origin ?? card.entry.id)
             await next()
-        case (.card(let card), .openCalendar) where card.isMacCalendar:
+        case (.card(let card), .openCalendar) where card.detail.canOpenInCalendar:
             // Nothing is sent. The person answers in Calendar and comes back.
-            calendar.open(card.entry.startsAt)
-            openedKey = card.entry.id
+            guard let id = card.detail.calendarEventID else { return }
+            if calendar.open(eventID: id, startsAt: card.entry.startsAt) == .opened {
+                openedKey = card.entry.id
+                notice = nil
+            } else {
+                notice = CalendarOpenText.notFound
+            }
         case (.card(let card), .doneInCalendar) where card.isMacCalendar && card.replies.isEmpty:
             let result = await service.hold(card: card)
             if result.0 == .held { calendarSkips += 1 }

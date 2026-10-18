@@ -34,6 +34,6 @@ final class InboxReviewKeyboardTests: XCTestCase {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "UTC"))
         let noon = Date(timeIntervalSinceReferenceDate: 86_400 * 3 + 43_200)
-        XCTAssertEqual(CalendarOpener.url(for: noon, calendar: calendar)?.absoluteString, "calshow:259200")
+        XCTAssertEqual(SystemCalendarOpener.url(for: noon, calendar: calendar)?.absoluteString, "calshow:259200")
     }
 }

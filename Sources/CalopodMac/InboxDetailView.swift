@@ -89,6 +89,14 @@ struct InboxDetailView: View {
                 Button("Hold") { model.hold(in: entries) }
                     .help("Skip for now. Nothing is sent or marked.")
             }
+            if detail.canOpenInCalendar {
+                HStack(spacing: 8) {
+                    Button("Open in Calendar") { model.openInCalendar() }
+                        .help(CalendarOpenText.help)
+                    Text("Answer it in Calendar. Calopod reads the reply on the next sync.")
+                        .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+                }
+            }
             if entry.canAcknowledge {
                 HStack(spacing: 8) {
                     Button("Acknowledge") { Task { await model.acknowledge(entry) } }
