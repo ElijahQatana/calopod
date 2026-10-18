@@ -103,6 +103,20 @@ final class ScheduleLayoutTests: XCTestCase {
         XCTAssertTrue(some[0].contains("Home"))
     }
 
+    func testNoticesNameTheRealGapAndStayQuietWhenTheReadReachesTheRange() {
+        let range = date(18, 0)..<date(25, 0)
+        func notices(_ coverage: ClosedRange<Date>) -> [String] {
+            ScheduleLayout.notices(
+                calendars: [ScheduleCalendar(id: "a", name: "Work", account: "Example", provider: "google", coverage: coverage)],
+                hidden: [], range: range, now: date(18, 20), timeZone: calendar.timeZone)
+        }
+        XCTAssertEqual(notices(date(11, 0)...date(30, 0)), [])
+        XCTAssertEqual(notices(date(17, 0)...date(23, 0)),
+                       ["Work was read until Oct 23, these dates run later, so events may be missing."])
+        XCTAssertEqual(notices(date(18, 19)...date(30, 0)),
+                       ["Work was read from Oct 18 19:00, these dates start earlier, so events may be missing."])
+    }
+
     func testNarrowBlocksWrapTitlesButStayShort() {
         XCTAssertEqual(ScheduleLayout.titleLines(width: 60, height: 26, allDay: false), 1)
         XCTAssertEqual(ScheduleLayout.titleLines(width: 60, height: 52, allDay: false), 2)

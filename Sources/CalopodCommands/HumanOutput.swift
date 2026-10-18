@@ -96,6 +96,7 @@ enum HumanOutputRenderer {
                     if let coverage = source.inbox {
                         lines.append("  Coverage: \(coverage.startsAt ?? "unknown") to \(coverage.endsAt ?? "unknown")")
                         lines.append("  Freshness: \(coverage.status); observed \(coverage.observedAt ?? "never")")
+                        if let gap = coverage.gap { lines.append("  Gap: \(gap)") }
                     }
                     if localIDs { lines += ["  Source ID: \(clean(source.id))", "  Connection ID: \(clean(source.connectionID))"] }
                 }

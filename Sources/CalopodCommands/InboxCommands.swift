@@ -66,7 +66,7 @@ public struct InboxRefreshCommand: AsyncParsableCommand {
                     lookbackDays: config.lookbackDays, horizonDays: config.horizonDays)
                 var localCalendar = Calendar.current
                 if let zone = range.timezone { localCalendar.timeZone = TimeZone(identifier: zone)! }
-                resolved = ResolvedDateRange(window: try schedule.window(containing: Date(), calendar: localCalendar),
+                resolved = ResolvedDateRange(window: try CalendarReadWindow.covering(try schedule.window(containing: Date(), calendar: localCalendar), calendar: localCalendar),
                     timeZoneIdentifier: localCalendar.timeZone.identifier)
             }
             let refresh = await refreshCalendarSources(sources, from: resolved.window.start, through: resolved.window.end, repository: repository)
@@ -158,6 +158,8 @@ public struct InboxSourceDetail: Codable, Equatable, Sendable {
     let endsAt: String?
     let observedAt: String?
     let status: String
+    /// Set when the read stops short of the requested range, in the same words the Mac app uses.
+    var gap: String? = nil
 }
 
 enum InboxCLI {
@@ -243,17 +245,24 @@ enum InboxCLI {
             let bindings = Set(snapshot.sources.map(\.bindingID))
             items = query.rows.filter { bindings.contains($0.item.event.calendarBindingID) }.map { item($0.item.event, revision: $0.item.observation?.revision ?? 1, row: $0, context: full, details: false) }
         }
-        let sources = snapshot.sources.map { source($0, now: now) }
+        let sources = snapshot.sources.map { source($0, now: now, range: range.map { $0.window.start..<$0.window.end }) }
         let gaps = Set(query.analysis.warnings.map { $0.kind.rawValue }).sorted()
         return CommandPayload(status: gaps.isEmpty ? "ok" : "partial",
             message: "\(items.count) retained items. Coverage is bounded.\(gaps.isEmpty ? "" : " Limits: " + gaps.joined(separator: ", "))",
             count: items.count, range: range.map(RangeOutput.init), sources: sources, items: items)
     }
-    static func source(_ source: InboxContextSource, now: Date) -> CommandSource {
-        CommandSource(id: source.bindingID, connectionID: source.connectionID, provider: source.provider, label: source.calendarLabel,
+    static func source(_ source: InboxContextSource, now: Date, range: Range<Date>? = nil) -> CommandSource {
+        let stale = source.staleSince != nil || source.healthStatus != "healthy"
+            || (source.coverage?.observedAt ?? .distantPast) < now.addingTimeInterval(-3600)
+        var status = source.coverage == nil ? "unknown" : (stale ? "stale" : "fresh")
+        var gap: String?
+        if let coverage = source.coverage, coverage.startsAt <= coverage.endsAt, let range {
+            gap = CoverageGap.describe(read: coverage.startsAt...coverage.endsAt, range: range)
+            if gap != nil && status == "fresh" { status = "partial" }
+        }
+        return CommandSource(id: source.bindingID, connectionID: source.connectionID, provider: source.provider, label: source.calendarLabel,
             inbox: InboxSourceDetail(startsAt: date(source.coverage?.startsAt), endsAt: date(source.coverage?.endsAt),
-                observedAt: date(source.coverage?.observedAt), status: source.coverage == nil ? "unknown" :
-                    (source.staleSince != nil || source.healthStatus != "healthy" || source.coverage!.observedAt < now.addingTimeInterval(-3600) ? "stale" : "fresh")))
+                observedAt: date(source.coverage?.observedAt), status: status, gap: gap))
     }
     static func inspect(_ identifier: String, repository: LocalStateRepository) throws -> CommandPayload {
         let (key, revision) = try parse(identifier)

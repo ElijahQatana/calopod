@@ -57,6 +57,31 @@ public struct AgentSchedule: Equatable, Sendable {
     }
 }
 
+/// What a calendar read has to span so the app can draw this week and the next without a gap:
+/// a week back, two weeks ahead. Every reader that records coverage (the agent, a manual sync,
+/// Refresh calendars, `calopod inbox refresh`) uses it, so they agree about what "read" means.
+public enum CalendarReadWindow {
+    public static let lookbackDays = 7
+    public static let horizonDays = 14
+
+    /// The tracked read window around a date, in whole local days.
+    public static func containing(_ date: Date, calendar: Calendar = .current) throws -> SyncWindow {
+        try covering(nil, around: date, calendar: calendar)
+    }
+
+    /// The tracked window, widened if needed to also include `window`.
+    public static func covering(
+        _ window: SyncWindow?, around date: Date = Date(), calendar: Calendar = .current
+    ) throws -> SyncWindow {
+        let day = calendar.startOfDay(for: date)
+        guard let start = calendar.date(byAdding: .day, value: -lookbackDays, to: day),
+              let end = calendar.date(byAdding: .day, value: horizonDays + 1, to: day) else {
+            throw CalopodRuntimeError.invalidConfiguration("read-window")
+        }
+        return try SyncWindow(start: min(start, window?.start ?? start), end: max(end, window?.end ?? end))
+    }
+}
+
 /// An interval from the Mac app that replaces the installed one. A missing or invalid file is ignored.
 public struct AgentScheduleOverride: Codable, Equatable, Sendable {
     public static let minimumIntervalSeconds = 60
