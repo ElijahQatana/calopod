@@ -8,7 +8,7 @@ struct CalendarsScreen: View {
     var body: some View {
         CardPage(title: "Calendars") {
             if let busy = model.busy { BusyLine(text: busy) }
-            if let notice = model.notice { Banner(kind: .error, text: notice) }
+            if let notice = model.notice { Banner(kind: .error, text: notice, onDismiss: model.dismissNotice) }
 
             CardSection(
                 "Add an account",
@@ -34,6 +34,7 @@ struct CalendarsScreen: View {
             }
         }
         .task { await model.reload() }
+        .onDisappear { model.dismissNotice() }
     }
 
     private func accountHeader(_ connection: SetupConnection) -> some View {

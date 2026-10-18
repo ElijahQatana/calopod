@@ -304,6 +304,8 @@ struct Banner: View {
     let kind: Kind
     let text: String
     var lineLimit: Int?
+    /// Shows a close button when set.
+    var onDismiss: (() -> Void)?
 
     private var color: Color {
         switch kind {
@@ -326,6 +328,14 @@ struct Banner: View {
             Image(systemName: symbol).foregroundStyle(color)
             Text(text).font(Theme.Fonts.body).lineLimit(lineLimit).help(lineLimit == nil ? "" : text)
             Spacer(minLength: 0)
+            if let onDismiss {
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark").font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Dismiss")
+                .help("Dismiss")
+            }
         }
         .padding(14)
         .background(RoundedRectangle(cornerRadius: Theme.controlRadius, style: .continuous).fill(color.opacity(0.10)))

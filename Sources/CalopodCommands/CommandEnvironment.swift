@@ -72,9 +72,9 @@ enum CommandEnvironmentError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .missingGoogleClientID:
-            "Set CALOPOD_GOOGLE_CLIENT_ID to the desktop OAuth client ID, then try again."
+            "Google sign-in has no client ID yet. Add your desktop client ID as CALOPOD_GOOGLE_CLIENT_ID (CalopodGoogleClientID in the app's Info.plist), then try again."
         case .missingMicrosoftClientID:
-            "Set CALOPOD_MICROSOFT_CLIENT_ID to the public client ID, then try again."
+            "Microsoft sign-in has no client ID yet. Add your public client ID as CALOPOD_MICROSOFT_CLIENT_ID (CalopodMicrosoftClientID in the app's Info.plist), then try again."
         case .invalidEventKitHostPath:
             "The EventKit host path must be absolute."
         case .missingEventKitHost:
@@ -178,9 +178,9 @@ func commandFailure(_ error: Error) -> (message: String, exitCode: CalopodExitCo
                 .invalidConfiguration
             )
         case .missingGoogleClientID:
-            return ("Set CALOPOD_GOOGLE_CLIENT_ID to the desktop OAuth client ID, then try again.", .invalidConfiguration)
+            return (CommandEnvironmentError.missingGoogleClientID.description, .invalidConfiguration)
         case .missingMicrosoftClientID:
-            return ("Set CALOPOD_MICROSOFT_CLIENT_ID to the public client ID, then try again.", .invalidConfiguration)
+            return (CommandEnvironmentError.missingMicrosoftClientID.description, .invalidConfiguration)
         case .unsupportedPlatform:
             return ("This operation is not available on the current platform.", .unavailable)
         case .noEnabledArms, .invalidConfiguration:
