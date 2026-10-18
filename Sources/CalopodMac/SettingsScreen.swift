@@ -1,9 +1,12 @@
+import AppKit
+import CalopodCommands
 import SwiftUI
 
 /// Appearance, window style and how see-through the panels are.
 struct SettingsScreen: View {
     private let settings = AppSettings.shared
     @State private var command: CommandLineModel
+    @Environment(PermissionsModel.self) private var permissions
 
     init(command: CommandLineModel = CommandLineModel()) { _command = State(initialValue: command) }
 
@@ -18,6 +21,66 @@ struct SettingsScreen: View {
         transparency
         windowStyle
         commandLine
+        permissionsSection
+    }
+
+    private var permissionsSection: some View {
+        CardSection(
+            "Permissions",
+            footnote: "Opening Settings and coming back to Calopod re-check quietly. Only Check on saved sign-ins can make macOS ask."
+        ) {
+            permissionRow(permissions.calendar) {
+                if permissions.calendar.level == .notAsked {
+                    Button("Allow") { Task { await permissions.access.allow() } }
+                        .disabled(permissions.access.asking)
+                } else {
+                    Button("Open Calendar privacy settings") { permissions.openCalendarPrivacy() }
+                }
+            }
+            permissionRow(permissions.backgroundService) {
+                if permissions.loginItems == .requiresApproval {
+                    Button("Open Login Items settings") { permissions.openLoginItemsSettings() }
+                }
+            }
+            permissionRow(permissions.savedSignIns) {
+                Button(permissions.keychain == .needsPrompt ? "Check again" : "Check") {
+                    Task { await permissions.checkKeychain() }
+                }
+                .disabled(permissions.checkingKeychain)
+            }
+        }
+        .task { await permissions.refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await permissions.refresh() }
+        }
+    }
+
+    private func permissionRow<Action: View>(
+        _ reading: PermissionReading, @ViewBuilder action: () -> Action
+    ) -> some View {
+        CardRow {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 12) {
+                    Text(reading.title).font(Theme.Fonts.bodyMedium)
+                    Spacer(minLength: 12)
+                    Text(reading.state).font(Theme.Fonts.body).foregroundStyle(Self.tint(reading.level))
+                    action()
+                }
+                if reading.level != .allowed {
+                    Text(reading.detail).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private static func tint(_ level: PermissionReading.Level) -> Color {
+        switch level {
+        case .allowed: Theme.goodText
+        case .notAsked: Theme.cautionText
+        case .blocked: Theme.badText
+        case .unknown: Color.secondary
+        }
     }
 
     @ViewBuilder

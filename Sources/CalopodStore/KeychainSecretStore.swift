@@ -5,9 +5,13 @@ import Security
 /// the first unlock since boot, never synced.
 public struct KeychainSecretStore: SecretStore, Sendable {
     private let service: String
+    private let allowsPrompt: Bool
 
-    public init(service: String = "com.calopod.credentials") {
+    /// `allowsPrompt` false makes a read fail instead of letting macOS ask for access, so a check
+    /// the person did not start cannot raise a keychain prompt.
+    public init(service: String = "com.calopod.credentials", allowsPrompt: Bool = true) {
         self.service = service
+        self.allowsPrompt = allowsPrompt
     }
 
     // Keychain has no upsert, so try an update first and add only if the item is missing. This
@@ -40,6 +44,7 @@ public struct KeychainSecretStore: SecretStore, Sendable {
         var query = baseQuery(for: reference)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
+        if !allowsPrompt { query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail }
 
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)

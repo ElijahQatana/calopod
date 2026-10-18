@@ -70,7 +70,7 @@ struct ServiceScreen: View {
                         Banner(
                             kind: .caution,
                             text:
-                                "macOS has no record of this copy of the app. Background services need Calopod installed in the Applications folder and signed with a developer identity, not a debug build run from a build folder. You can still try installing. Your current service keeps running."
+                                Permissions.noRecordOfThisCopy + " You can still try installing. Your current service keeps running."
                         )
                     }
                 }

@@ -1,3 +1,4 @@
+import CalopodCommands
 import ServiceManagement
 
 /// What the service model needs from the registration, so tests can stand in for macOS.
@@ -10,15 +11,9 @@ extension ServiceRegistration: BundledServiceRegistering {}
 
 /// Registers the bundled agent with macOS. Only works from the built Calopod.app.
 struct ServiceRegistration: Sendable {
-    static let plistName = "pro.elijahquintana.calopod.app-agent.plist"
+    static let plistName = BackgroundServiceState.agentPlistName
 
-    enum State: Equatable, Sendable {
-        case unavailable
-        case notRegistered
-        case requiresApproval
-        case enabled
-        case notFound
-    }
+    typealias State = BackgroundServiceState
 
     private var service: SMAppService { .agent(plistName: Self.plistName) }
 
@@ -26,16 +21,7 @@ struct ServiceRegistration: Sendable {
         Bundle.main.bundleURL.pathExtension == "app"
     }
 
-    func state() -> State {
-        guard Self.isRunningFromBundle else { return .unavailable }
-        return switch service.status {
-        case .notRegistered: .notRegistered
-        case .requiresApproval: .requiresApproval
-        case .enabled: .enabled
-        case .notFound: .notFound
-        @unknown default: .notFound
-        }
-    }
+    func state() -> State { .read(plistName: Self.plistName) }
 
     func register() throws {
         try service.register()
