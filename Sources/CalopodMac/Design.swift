@@ -136,6 +136,70 @@ enum Theme {
     static let controlRadius: CGFloat = 12
     static let pagePadding: CGFloat = 28
 
+    /// Page edges inside the detail panel. The top depends on whether the collapse button sits above the page.
+    enum Page {
+        static let top: CGFloat = 16
+        static let bottom: CGFloat = 20
+        /// Below the collapse button row, which already has its own top gap.
+        static let belowToggle: CGFloat = 8
+        static let toggleTop: CGFloat = 12
+        static let toggleLeading: CGFloat = 14
+        static let toggleGap: CGFloat = 10
+
+        /// Top padding for a page. An inline page puts its header on the collapse button's row.
+        static func topPadding(collapsed: Bool, inlineHeader: Bool) -> CGFloat {
+            guard collapsed else { return top }
+            return inlineHeader ? toggleTop : belowToggle
+        }
+
+        /// Extra leading space that keeps an inline header clear of the collapse button.
+        static func titleInset(collapsed: Bool, horizontal: CGFloat) -> CGFloat {
+            guard collapsed else { return 0 }
+            return max(0, toggleLeading + Control.circle + toggleGap - horizontal)
+        }
+    }
+}
+
+private struct SidebarCollapsedKey: EnvironmentKey { static let defaultValue = false }
+
+extension EnvironmentValues {
+    var sidebarCollapsed: Bool {
+        get { self[SidebarCollapsedKey.self] }
+        set { self[SidebarCollapsedKey.self] = newValue }
+    }
+}
+
+private struct PageEdges: ViewModifier {
+    @Environment(\.sidebarCollapsed) private var collapsed
+    let horizontal: CGFloat
+    let inlineHeader: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, horizontal)
+            .padding(.top, Theme.Page.topPadding(collapsed: collapsed, inlineHeader: inlineHeader))
+            .padding(.bottom, Theme.Page.bottom)
+    }
+}
+
+private struct TitleClearOfToggle: ViewModifier {
+    @Environment(\.sidebarCollapsed) private var collapsed
+    let horizontal: CGFloat
+
+    func body(content: Content) -> some View {
+        content.padding(.leading, Theme.Page.titleInset(collapsed: collapsed, horizontal: horizontal))
+    }
+}
+
+extension View {
+    /// The shared page padding. Pass `inlineHeader` when the page's header shares the collapse button's row.
+    func pageEdges(horizontal: CGFloat = Theme.pagePadding, inlineHeader: Bool = false) -> some View {
+        modifier(PageEdges(horizontal: horizontal, inlineHeader: inlineHeader))
+    }
+
+    func titleClearOfToggle(horizontal: CGFloat = Theme.pagePadding) -> some View {
+        modifier(TitleClearOfToggle(horizontal: horizontal))
+    }
 }
 
 /// Frosted fill for a panel, or the solid pane when Reduce Transparency is on.

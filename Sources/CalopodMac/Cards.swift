@@ -22,7 +22,7 @@ struct CardPage<Content: View>: View {
             if let title { Text(title).font(Theme.Fonts.pageTitle) }
             content
         }
-        .padding(Theme.pagePadding)
+        .pageEdges()
         .frame(maxWidth: 760, alignment: .leading)
         .frame(maxWidth: .infinity)
     }

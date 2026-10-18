@@ -30,18 +30,31 @@ struct MainWindow: View {
         let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
         return screen
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .environment(\.sidebarCollapsed, sidebar.isCollapsed)
             .safeAreaInset(edge: .top, spacing: 0) {
-                if sidebar.isCollapsed {
-                    HStack { SidebarToggle(state: sidebar); Spacer() }
-                        .padding(.horizontal, 14).padding(.top, 12)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .transition(.opacity)
+                if sidebar.isCollapsed && !inlineHeader {
+                    toggleRow.transition(.opacity)
+                }
+            }
+            .overlay(alignment: .topLeading) {
+                if sidebar.isCollapsed && inlineHeader {
+                    toggleRow.transition(.opacity)
                 }
             }
             .panelFill(.card, in: shape)
             .clipShape(shape)
             .panelChrome(shape)
             .padding(.leading, Sidebar.inset)
+    }
+
+    /// Calendar and Inbox put their title on the collapse button's row.
+    private var inlineHeader: Bool { navigation.selection == .calendar || navigation.selection == .inbox }
+
+    private var toggleRow: some View {
+        HStack { SidebarToggle(state: sidebar); Spacer() }
+            .padding(.leading, Theme.Page.toggleLeading).padding(.trailing, Theme.Page.toggleLeading)
+            .padding(.top, Theme.Page.toggleTop)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     @ViewBuilder

@@ -23,7 +23,7 @@ struct InboxScreen: View {
                 Spacer()
             }
         }
-        .padding(Theme.pagePadding)
+        .pageEdges(inlineHeader: true)
         .task { await model.reload() }
         .onChange(of: filter) { model.ensureSelection(in: entries) }
         .onChange(of: model.board) { model.ensureSelection(in: entries) }
@@ -51,6 +51,7 @@ struct InboxScreen: View {
                 Task { await model.refresh() }
             }
         }
+        .titleClearOfToggle()
     }
 
     private func staleBanner(_ board: InboxBoard) -> some View {
