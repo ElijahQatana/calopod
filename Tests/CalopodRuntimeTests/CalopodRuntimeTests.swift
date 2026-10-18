@@ -102,6 +102,22 @@ func agentScheduleUsesABoundedWindowAndDeterministicJitter() throws {
     #expect(schedule.delay(randomUnit: 1) == 630)
 }
 
+@Test(arguments: 18...24)
+func trackedReadWindowCoversTheWeekAndTheNextOnAnyDay(day: Int) throws {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "America/New_York")!
+    calendar.firstWeekday = 1
+    let now = calendar.date(from: DateComponents(year: 2026, month: 10, day: day, hour: 19, minute: 30))!
+    let window = try CalendarReadWindow.containing(now, calendar: calendar)
+    let week = try #require(calendar.dateInterval(of: .weekOfYear, for: now))
+    let nextWeek = try #require(calendar.dateInterval(of: .weekOfYear, for: week.end))
+    #expect(window.start <= week.start)
+    #expect(window.end >= nextWeek.end)
+    // A wider plan window is kept, not cut back.
+    let plan = try SyncWindow(start: window.start.addingTimeInterval(-86_400), end: window.end.addingTimeInterval(86_400))
+    #expect(try CalendarReadWindow.covering(plan, around: now, calendar: calendar) == plan)
+}
+
 @Test
 func agentScheduleRequiresExplicitRuntimeValues() throws {
     #expect(throws: CalopodRuntimeError.invalidConfiguration("agent-schedule")) {

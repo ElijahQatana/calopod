@@ -2,6 +2,7 @@
 import ArgumentParser
 import CalopodDomain
 import CalopodProviders
+import CalopodRuntime
 import CalopodStore
 import Foundation
 import Testing
@@ -122,6 +123,37 @@ import Testing
         try f.repository.saveMirrorMapping(StoredMirrorMapping(mirrorKey: "mapping", armID: "arm", sourceKeyHash: "original", providerEventID: "copy", providerVersion: nil, desiredFingerprint: "example", ownershipKeyID: "example", updatedAt: f.start))
         #expect(try f.list(activity: true).count == 0)
         #expect(throws: (any Error).self) { try InboxCLI.inspect("copy:2", repository: f.repository) }
+    }
+
+    @Test func aReadMadeNowCoversTheWeekAndAShortOneNamesItsGap() async throws {
+        let f = try Fixture()
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        let now = utc.date(from: DateComponents(year: 2026, month: 10, day: 18, hour: 19, minute: 30))!
+        let week = utc.date(from: DateComponents(year: 2026, month: 10, day: 18))!..<utc.date(from: DateComponents(year: 2026, month: 10, day: 25))!
+        let sources = try selectedCalendarSources(connectionID: nil, calendarID: nil, repository: f.repository)
+        let read = { (window: SyncWindow) async in
+            _ = await refreshCalendarSources(sources, from: window.start, through: window.end, repository: f.repository, readSource: { _, _, _ in
+                ProviderEventPage(events: [], nextSyncToken: nil, refreshMode: .full)
+            })
+        }
+        func status(at when: Date) throws -> (String, String?) {
+            let source = try #require(try f.repository.inboxContextSnapshot().sources.first)
+            let detail = try #require(InboxCLI.source(source, now: when, range: week).inbox)
+            return (detail.status, detail.gap)
+        }
+
+        await read(try CalendarReadWindow.containing(now, calendar: utc))
+        #expect(try status(at: Date()).0 != "unknown")
+        let covered = try #require(try f.repository.inboxCoverage(connectionID: "connection", calendarBindingID: "calendar"))
+        #expect(covered.startsAt <= week.lowerBound && covered.endsAt >= week.upperBound)
+
+        // The old automatic window (a day back, four ahead) stops on Thursday.
+        await read(try SyncWindow(start: utc.date(from: DateComponents(year: 2026, month: 10, day: 17))!,
+                                  end: utc.date(from: DateComponents(year: 2026, month: 10, day: 23))!))
+        let short = try status(at: Date())
+        #expect(short.0 == "partial")
+        #expect(short.1?.hasPrefix("read until") == true)
     }
 
     @Test func partialRefreshReadsOnly() async throws {

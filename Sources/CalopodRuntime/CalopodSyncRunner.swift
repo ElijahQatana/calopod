@@ -120,12 +120,25 @@ public struct SyncEngine: Sendable {
         let eligibility = try eligibleArms(repository: repository)
         let arms = eligibility.arms
         let sources = try armReadSources(arms: arms, repository: repository)
-        let refresh = await refreshCalendarSources(
+        // Reads span the tracked window, not just the plan window, so the Calendar and Inbox
+        // screens see these calendars as read for the days they show.
+        let readWindow = (try? CalendarReadWindow.covering(window)) ?? window
+        let armRefresh = await refreshCalendarSources(
             sources,
-            from: window.start,
-            through: window.end,
+            from: readWindow.start,
+            through: readWindow.end,
             repository: repository
         )
+        // Calendars no Arm uses are still shown, so they are read too. A failure here is a
+        // warning only; it must not hold back an Arm's writes.
+        let otherSources = (try? otherSelectedSources(excluding: sources, repository: repository)) ?? []
+        let otherRefresh = await refreshCalendarSources(
+            otherSources, from: readWindow.start, through: readWindow.end, repository: repository)
+        var ingestion = armRefresh.ingestion
+        ingestion.add(otherRefresh.ingestion)
+        let refresh = CalendarRefreshSummary(
+            ingestion: ingestion, failedSourceCount: armRefresh.failedSourceCount,
+            warnings: armRefresh.warnings + otherRefresh.warnings)
         guard let sourceProviders = Dictionary(
             uniquelyKeyed: sources.map { ($0.calendar.id, $0.connection.provider) }
         ) else {
@@ -373,6 +386,22 @@ public struct SyncEngine: Sendable {
                 throw CalopodRuntimeError.invalidConfiguration("arm-source")
             }
             sources.append(CalendarReadSource(connection: connection, calendar: calendar))
+        }
+        return sources
+    }
+
+    private func otherSelectedSources(
+        excluding used: [CalendarReadSource],
+        repository: LocalStateRepository
+    ) throws -> [CalendarReadSource] {
+        let usedIDs = Set(used.map(\.calendar.id))
+        var sources: [CalendarReadSource] = []
+        for connection in try repository.connections()
+        where connection.isEnabled && ["eventkit", "google", "microsoft"].contains(connection.provider) {
+            for calendar in try repository.calendarBindings(connectionID: connection.id)
+            where calendar.isSelected && !usedIDs.contains(calendar.id) {
+                sources.append(CalendarReadSource(connection: connection, calendar: calendar))
+            }
         }
         return sources
     }

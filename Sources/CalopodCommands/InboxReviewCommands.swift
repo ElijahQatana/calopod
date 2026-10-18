@@ -136,10 +136,9 @@ func inboxReviewRefresh(state: LocalStateRepository) -> InboxReviewSessionContro
         let current = try state.inboxContextSnapshot()
         if current.sources.contains(where: { ["eventkit", "google", "microsoft"].contains($0.provider) }) {
             let sources = try selectedCalendarSources(connectionID: nil, calendarID: nil, repository: state)
-            for source in sources {
-                guard let coverage = current.sources.first(where: { $0.bindingID == source.calendar.id })?.coverage else { continue }
-                _ = await refreshCalendarSources([source], from: coverage.startsAt, through: coverage.endsAt, repository: state)
-            }
+            // Every selected calendar, including one never read, over the tracked window.
+            let window = try CalendarReadWindow.containing(Date())
+            _ = await refreshCalendarSources(sources, from: window.start, through: window.end, repository: state)
         }
         return try state.inboxContextSnapshot()
     }
