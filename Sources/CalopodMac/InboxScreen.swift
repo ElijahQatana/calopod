@@ -143,8 +143,6 @@ enum InboxText {
         }
     }
 
-    static func reasons(_ entry: InboxEntry) -> [String] { entry.reasons.map { label($0, entry) } }
-
     /// The row's second line: each reason in its own color, so only an overlap reads as a warning.
     static func statusLine(_ entry: InboxEntry) -> Text {
         entry.reasons.enumerated().reduce(Text("")) { line, item in
@@ -168,9 +166,5 @@ enum InboxText {
         case .conflict: Theme.bad
         case .maybe, .changedAfterResponse: Theme.caution
         }
-    }
-
-    static func tint(_ entry: InboxEntry) -> Color {
-        entry.reasons.contains(.conflict) ? Theme.bad : entry.reasons.contains(.needsResponse) ? Theme.accent : Theme.caution
     }
 }

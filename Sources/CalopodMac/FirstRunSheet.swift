@@ -45,15 +45,6 @@ struct FirstRunSheet: View {
             progress.begin()
             await setup.reload()
         }
-        .onChange(of: setup.snapshot) { _, snapshot in
-            colors.assignMissing(
-                to: (snapshot?.connections ?? []).flatMap { connection in
-                    connection.calendars.map {
-                        CalendarColorSource(id: $0.id, providerColor: $0.providerColor, provider: connection.provider)
-                    }
-                },
-                ignoring: setup.aliases.ignored)
-        }
     }
 
     // MARK: Frame

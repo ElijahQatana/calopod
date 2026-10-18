@@ -23,6 +23,7 @@ final class InboxModel {
     private let afterSend: (@MainActor () async -> Void)?
     private let readDetail: @Sendable (String) throws -> InboxDetail
     private var loads = 0
+    private var loadFailed = false
 
     /// `send`, `afterSend` and `readDetail` let tests stand in for the calendar and the local reads.
     init(
@@ -49,11 +50,18 @@ final class InboxModel {
             let loaded = try await Task.detached { try service.board() }.value
             // Several screens reload at once; an older read must not replace a newer one.
             if load == loads, board != loaded { board = loaded }
+            // A load error goes away once a load works; other notices are left alone.
+            if loadFailed { notice = nil; loadFailed = false }
         } catch {
             notice = "The inbox could not be loaded. Try again."
+            loadFailed = true
         }
-        if let selection, board?.entries.contains(where: { $0.id == selection }) != true { self.selection = nil }
-        await loadDetail()
+        if let selection, board?.entries.contains(where: { $0.id == selection }) != true {
+            // Clearing the selection already clears the detail.
+            self.selection = nil
+        } else {
+            await loadDetail()
+        }
     }
 
     /// Keeps a valid event selected within the visible list.

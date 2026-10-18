@@ -20,6 +20,16 @@ final class AppSettingsTests: XCTestCase {
         return result
     }
 
+    func testNothingIsSavedUntilASliderMovesAndResetClearsIt() {
+        let suite = UserDefaults(suiteName: "calopod.tests.\(UUID().uuidString)")!
+        let settings = AppSettings(defaults: suite)
+        for key in AppSettings.scaleKeys.values { XCTAssertNil(suite.object(forKey: key)) }
+        settings.setPosition(.frame, 0.5)
+        XCTAssertNotNil(suite.object(forKey: AppSettings.scaleKeys[.frame]!))
+        settings.resetTransparency()
+        for key in AppSettings.scaleKeys.values { XCTAssertNil(suite.object(forKey: key)) }
+    }
+
     func testDefaultsSitAtTheChosenSliderPositions() throws {
         let settings = make()
         XCTAssertEqual(settings.position(.frame), 0.85, accuracy: 1e-9)

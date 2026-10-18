@@ -101,9 +101,10 @@ final class AppSettings {
         windowStyle = style
         launchWindowStyle = style
         // Later layers are clamped against earlier ones, so a hand-edited value cannot break the order.
-        set(.content, Self.stored(defaults, .content))
-        set(.sidebar, Self.stored(defaults, .sidebar))
-        set(.frame, Self.stored(defaults, .frame))
+        // Nothing is saved here, so an untouched default stays a default and can change later.
+        set(.content, Self.stored(defaults, .content), persist: false)
+        set(.sidebar, Self.stored(defaults, .sidebar), persist: false)
+        set(.frame, Self.stored(defaults, .frame), persist: false)
     }
 
     private static func stored(_ defaults: UserDefaults, _ layer: GlassLayer) -> Double {
@@ -131,7 +132,7 @@ final class AppSettings {
     // MARK: Changing
 
     /// Sets a layer's scale, kept inside its range and a small gap away from its neighbors.
-    func set(_ layer: GlassLayer, _ requested: Double) {
+    func set(_ layer: GlassLayer, _ requested: Double, persist: Bool = true) {
         let gap = GlassBase.gap
         var value = requested.isFinite ? requested : GlassBase.defaultScale(layer)
         var low = GlassBase.range(layer).lowerBound
@@ -153,7 +154,7 @@ final class AppSettings {
         case .sidebar: sidebarScale = value
         case .content: contentScale = value
         }
-        if let key = Self.scaleKeys[layer] { defaults.set(value, forKey: key) }
+        if persist, let key = Self.scaleKeys[layer] { defaults.set(value, forKey: key) }
     }
 
     /// Slider position from 0 (firmest) to 1 (most see-through).
@@ -172,8 +173,10 @@ final class AppSettings {
         // Back to the defaults, content first so the order check never blocks a step.
         // Twice, since a firmer neighbor can hold a layer back on the first pass.
         for _ in 0 ..< 2 {
-            for layer in [GlassLayer.content, .sidebar, .frame] { set(layer, GlassBase.defaultScale(layer)) }
+            for layer in [GlassLayer.content, .sidebar, .frame] { set(layer, GlassBase.defaultScale(layer), persist: false) }
         }
+        // Back to unset, so later changes to the defaults reach this Mac.
+        for key in Self.scaleKeys.values { defaults.removeObject(forKey: key) }
     }
 
     func setAppearance(_ choice: AppearanceChoice) {

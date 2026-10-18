@@ -34,15 +34,6 @@ struct CalendarsScreen: View {
             }
         }
         .task { await model.reload() }
-        .onChange(of: model.snapshot) { _, snapshot in
-            colors.assignMissing(
-                to: (snapshot?.connections ?? []).flatMap { connection in
-                    connection.calendars.map {
-                        CalendarColorSource(id: $0.id, providerColor: $0.providerColor, provider: connection.provider)
-                    }
-                },
-                ignoring: model.aliases.ignored)
-        }
     }
 
     private func accountHeader(_ connection: SetupConnection) -> some View {
