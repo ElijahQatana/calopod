@@ -25,7 +25,7 @@ enum WindowStyle: String, CaseIterable {
         return false
     }
 
-    static var standard: WindowStyle { glassAvailable ? .glass : .frosted }
+    static let standard = WindowStyle.frosted
 
     static func parse(_ raw: String?) -> WindowStyle {
         guard let style = raw.flatMap(Self.init(rawValue:)) else { return standard }
@@ -43,30 +43,21 @@ enum GlassBase {
     static let content = (light: 0.93, dark: 0.91)
     static let inner = (light: 0.97, dark: 0.97)
 
-    /// The content fill never goes below this, so text stays readable.
-    static let contentFloor = 0.55
-    /// Smallest step kept between the frame, sidebar and content alphas.
-    static let gap = 0.03
-
-    /// Where the sliders start, as the Settings screen shows them.
-    static func defaultPosition(_ layer: GlassLayer) -> Double {
-        switch layer {
-        case .frame: 0.85
-        case .sidebar: 0.15
-        case .content: 0.05
-        }
-    }
-
+    /// Where the sliders start. Frame and sidebar sit at 100% and 75%. Content starts at
+    /// the scale the older 65% position gave on its former 0.604 to 1.05 range.
     static func defaultScale(_ layer: GlassLayer) -> Double {
-        let range = range(layer)
-        return range.upperBound - defaultPosition(layer) * (range.upperBound - range.lowerBound)
+        switch layer {
+        case .frame: 0
+        case .sidebar: range(.sidebar).upperBound - 0.75 * (range(.sidebar).upperBound - range(.sidebar).lowerBound)
+        case .content: 1.05 - 0.65 * (1.05 - 0.55 / 0.91)
+        }
     }
 
     static func range(_ layer: GlassLayer) -> ClosedRange<Double> {
         switch layer {
         case .frame: 0 ... 3
         case .sidebar: 0.3 ... 1.6
-        case .content: (contentFloor / content.dark) ... 1.05
+        case .content: 0 ... 1.05
         }
     }
 }
@@ -100,11 +91,8 @@ final class AppSettings {
         let style = WindowStyle.parse(defaults.string(forKey: Self.windowStyleKey))
         windowStyle = style
         launchWindowStyle = style
-        // Later layers are clamped against earlier ones, so a hand-edited value cannot break the order.
         // Nothing is saved here, so an untouched default stays a default and can change later.
-        set(.content, Self.stored(defaults, .content), persist: false)
-        set(.sidebar, Self.stored(defaults, .sidebar), persist: false)
-        set(.frame, Self.stored(defaults, .frame), persist: false)
+        for layer in [GlassLayer.frame, .sidebar, .content] { set(layer, Self.stored(defaults, layer), persist: false) }
     }
 
     private static func stored(_ defaults: UserDefaults, _ layer: GlassLayer) -> Double {
@@ -122,33 +110,12 @@ final class AppSettings {
         }
     }
 
-    // MARK: Alphas
-
-    private func frameAlpha(_ scale: Double, dark: Bool) -> Double { min(1, (dark ? GlassBase.frame.dark : GlassBase.frame.light) * scale) }
-    private func sidebarLow(_ scale: Double, dark: Bool) -> Double { min(1, (dark ? GlassBase.sidebarFill.dark : GlassBase.sidebarFill.light) * scale) }
-    private func sidebarHigh(_ scale: Double, dark: Bool) -> Double { min(1, (dark ? GlassBase.sidebarSheen.dark : GlassBase.sidebarSheen.light) * scale) }
-    private func contentAlpha(_ scale: Double, dark: Bool) -> Double { min(1, (dark ? GlassBase.content.dark : GlassBase.content.light) * scale) }
-
     // MARK: Changing
 
-    /// Sets a layer's scale, kept inside its range and a small gap away from its neighbors.
+    /// Sets a layer's scale, kept inside that layer's own range.
     func set(_ layer: GlassLayer, _ requested: Double, persist: Bool = true) {
-        let gap = GlassBase.gap
-        var value = requested.isFinite ? requested : GlassBase.defaultScale(layer)
-        var low = GlassBase.range(layer).lowerBound
-        var high = GlassBase.range(layer).upperBound
-        for dark in [false, true] {
-            switch layer {
-            case .frame:
-                high = min(high, (sidebarLow(sidebarScale, dark: dark) - gap) / (dark ? GlassBase.frame.dark : GlassBase.frame.light))
-            case .sidebar:
-                high = min(high, (contentAlpha(contentScale, dark: dark) - gap) / (dark ? GlassBase.sidebarSheen.dark : GlassBase.sidebarSheen.light))
-                low = max(low, (frameAlpha(frameScale, dark: dark) + gap) / (dark ? GlassBase.sidebarFill.dark : GlassBase.sidebarFill.light))
-            case .content:
-                low = max(low, (sidebarHigh(sidebarScale, dark: dark) + gap) / (dark ? GlassBase.content.dark : GlassBase.content.light))
-            }
-        }
-        value = min(max(value, low), max(low, high))
+        let range = GlassBase.range(layer)
+        let value = requested.isFinite ? min(max(requested, range.lowerBound), range.upperBound) : GlassBase.defaultScale(layer)
         switch layer {
         case .frame: frameScale = value
         case .sidebar: sidebarScale = value
@@ -170,11 +137,7 @@ final class AppSettings {
     }
 
     func resetTransparency() {
-        // Back to the defaults, content first so the order check never blocks a step.
-        // Twice, since a firmer neighbor can hold a layer back on the first pass.
-        for _ in 0 ..< 2 {
-            for layer in [GlassLayer.content, .sidebar, .frame] { set(layer, GlassBase.defaultScale(layer), persist: false) }
-        }
+        for layer in [GlassLayer.frame, .sidebar, .content] { set(layer, GlassBase.defaultScale(layer), persist: false) }
         // Back to unset, so later changes to the defaults reach this Mac.
         for key in Self.scaleKeys.values { defaults.removeObject(forKey: key) }
     }
