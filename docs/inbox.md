@@ -71,4 +71,4 @@ Google asks to notify guests. Microsoft asks for a response to be sent to the or
 
 Microsoft can't guarantee a reply wasn't overtaken by an edit made a moment earlier. That's a small window, but it exists.
 
-Copies Calopod made are left out of the inbox. That includes a copy read back through a second connection to the same calendar, when it sits at the same time as an event Calopod copies, has the title the copy would have and has no guests.
+Copies Calopod made are left out of the inbox. That includes a copy that came back without its marker or under a new id: if an arm copies that calendar into this one, and the event has the same time and title (or "Busy"), the same guests as the original or none, and no reply from you on it, it is treated as the copy.

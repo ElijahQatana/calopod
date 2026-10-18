@@ -140,33 +140,52 @@ extension LocalStateRepository {
     }
 }
 
-/// The same calendar can be read through a second connection (say the Mac's Calendar app next to
-/// a Google sign-in). There a copy has a new event id and may have lost its marker, so neither
-/// the marker nor the mapping matches. Such an event is still taken for a copy when an arm
-/// copies one of our events to exactly that time with exactly that title, it sits on another
-/// calendar than that event, and it has no guests, so it can't be an invitation.
+/// A copy can come back without its marker or with a new id, so the mapping misses it: the
+/// calendar read through a second connection, or an id that changed after a sync. It is still
+/// taken for a copy of one of our events when an arm routes that event's calendar into the
+/// copy's calendar (or the event has a stored copy), and the copy has the same time, the title
+/// the copy would carry, no guests or the same guests, and no current-user evidence. An
+/// invitation to the user always carries evidence, so a real one is never hidden by this.
 private func droppingUnmarkedCopies(_ events: [InboxContextEvent], _ db: Database) throws -> [InboxContextEvent] {
-    let mapped = try Row.fetchAll(db, sql: """
-        SELECT DISTINCT m.source_key_hash, a.rule_mode FROM mirror_mappings m
-        JOIN arms a ON a.id = m.arm_id
+    let arms = try Row.fetchAll(db, sql: """
+        SELECT a.id, a.target_binding_id, a.rule_mode, s.calendar_binding_id AS source_binding_id
+        FROM arms a JOIN arm_sources s ON s.arm_id = a.id WHERE a.is_enabled = 1
         """)
-    guard !mapped.isEmpty else { return events }
+    let mapped = try Row.fetchAll(db, sql: """
+        SELECT DISTINCT m.source_key_hash, a.rule_mode FROM mirror_mappings m JOIN arms a ON a.id = m.arm_id
+        """)
+    guard !arms.isEmpty || !mapped.isEmpty else { return events }
     let sourceKeys = Set(mapped.map { $0["source_key_hash"] as String })
-    let byKey = Dictionary(events.map { ($0.event.sourceKeyHash, $0.event) }, uniquingKeysWith: { first, _ in first })
-    struct Shape: Hashable { let start: Date, end: Date, isAllDay: Bool, title: String }
-    var shapes: [Shape: Set<String>] = [:]
-    for row in mapped {
-        guard let source = byKey[row["source_key_hash"] as String] else { continue }
-        let title = (row["rule_mode"] as String) == ArmRuleMode.busy.rawValue ? "Busy" : (source.title ?? "")
-        shapes[Shape(start: source.startsAt, end: source.endsAt, isAllDay: source.isAllDay, title: title), default: []]
-            .insert(source.sourceKeyHash)
+    func isBusy(_ mode: String) -> Bool { mode == ArmRuleMode.busy.rawValue }
+    func guests(_ event: StoredNormalizedInstance) -> Set<String> {
+        Set(event.attendees.map { ($0.emailAddress ?? $0.name ?? "").lowercased() })
+    }
+    // Where each original's copy would be, and what it would look like.
+    struct Candidate { let source: StoredNormalizedInstance; let title: String; let target: String? }
+    var candidates: [Candidate] = []
+    for item in events {
+        let source = item.event
+        for row in arms where (row["source_binding_id"] as String) == source.calendarBindingID {
+            candidates.append(Candidate(
+                source: source, title: isBusy(row["rule_mode"] as String) ? "Busy" : (source.title ?? ""),
+                target: row["target_binding_id"] as String))
+        }
+        for row in mapped where (row["source_key_hash"] as String) == source.sourceKeyHash {
+            candidates.append(Candidate(
+                source: source, title: isBusy(row["rule_mode"] as String) ? "Busy" : (source.title ?? ""), target: nil))
+        }
     }
     return events.filter { item in
         let event = item.event
-        // Something we copy from is an original, whatever it looks like.
-        guard !sourceKeys.contains(event.sourceKeyHash), event.attendees.isEmpty,
-              let owners = shapes[Shape(start: event.startsAt, end: event.endsAt, isAllDay: event.isAllDay,
-                                        title: event.title ?? "")] else { return true }
-        return !owners.contains { byKey[$0]?.calendarBindingID != event.calendarBindingID }
+        guard !sourceKeys.contains(event.sourceKeyHash), event.currentUserResponse.evidence == ResponseEvidence.none else { return true }
+        return !candidates.contains { candidate in
+            let source = candidate.source
+            guard source.sourceKeyHash != event.sourceKeyHash, source.calendarBindingID != event.calendarBindingID,
+                  candidate.target.map({ $0 == event.calendarBindingID }) ?? true,
+                  source.startsAt == event.startsAt, source.endsAt == event.endsAt, source.isAllDay == event.isAllDay,
+                  candidate.title == (event.title ?? "") else { return false }
+            let mine = guests(event)
+            return mine.isEmpty || mine == guests(source)
+        }
     }
 }
