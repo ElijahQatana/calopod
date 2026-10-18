@@ -94,8 +94,7 @@ struct SettingsScreen: View {
     private var transparency: some View {
         CardSection(
             "Transparency",
-            footnote: "Right is more see-through. Content stays at least 55% filled so text is readable. "
-                + "Reduce transparency in macOS overrides these."
+            footnote: "Right is more see-through. Reduce transparency in macOS overrides these."
         ) {
             CardRow { slider("Frame", .frame) }
             CardRow { slider("Sidebar", .sidebar) }

@@ -30,21 +30,22 @@ final class AppSettingsTests: XCTestCase {
         for key in AppSettings.scaleKeys.values { XCTAssertNil(suite.object(forKey: key)) }
     }
 
-    func testDefaultsSitAtTheChosenSliderPositions() throws {
+    func testDefaultsSitAtTheChosenLook() throws {
         let settings = make()
-        XCTAssertEqual(settings.position(.frame), 0.85, accuracy: 1e-9)
-        XCTAssertEqual(settings.position(.sidebar), 0.15, accuracy: 1e-9)
-        XCTAssertEqual(settings.position(.content), 0.05, accuracy: 1e-9)
+        XCTAssertEqual(settings.position(.frame), 1, accuracy: 1e-9)
+        XCTAssertEqual(settings.position(.sidebar), 0.75, accuracy: 1e-9)
+        // 65% on the former content range, which is 27.6% of the full one.
+        XCTAssertEqual(settings.contentScale, 0.7604, accuracy: 0.0005)
+        XCTAssertEqual(settings.position(.content), 0.2758, accuracy: 0.0005)
+        XCTAssertEqual(settings.windowStyle, .frosted)
         // The tokens read the shared settings, so bring them to their defaults first.
         AppSettings.shared.resetTransparency()
-        XCTAssertEqual(try alpha(Theme.frameTint, .aqua), 0.045, accuracy: 0.005)
-        XCTAssertEqual(try alpha(Theme.frameTint, .darkAqua), 0.036, accuracy: 0.005)
-        XCTAssertEqual(try alpha(Theme.sidebarFill, .aqua), 0.73, accuracy: 0.005)
-        XCTAssertEqual(try alpha(Theme.sidebarSheen, .aqua), 0.815, accuracy: 0.005)
-        XCTAssertEqual(try alpha(Theme.sidebarSheen, .darkAqua), 0.787, accuracy: 0.005)
-        XCTAssertEqual(try alpha(Theme.contentFill, .aqua), 0.956, accuracy: 0.005)
-        XCTAssertEqual(try alpha(Theme.contentFill, .darkAqua), 0.935, accuracy: 0.005)
-        XCTAssertEqual(try alpha(Theme.innerFill, .aqua), 0.997, accuracy: 0.005)
+        XCTAssertEqual(try alpha(Theme.frameTint, .aqua), 0, accuracy: 0.005)
+        XCTAssertEqual(try alpha(Theme.sidebarFill, .aqua), 0.325, accuracy: 0.005)
+        XCTAssertEqual(try alpha(Theme.sidebarSheen, .darkAqua), 0.35, accuracy: 0.005)
+        XCTAssertEqual(try alpha(Theme.contentFill, .aqua), 0.707, accuracy: 0.005)
+        XCTAssertEqual(try alpha(Theme.contentFill, .darkAqua), 0.692, accuracy: 0.005)
+        XCTAssertEqual(try alpha(Theme.innerFill, .aqua), 0.738, accuracy: 0.005)
     }
 
     func testSliderPositionsRoundTrip() {
@@ -56,26 +57,25 @@ final class AppSettingsTests: XCTestCase {
         }
     }
 
-    func testOrderIsKeptWithAGap() {
+    func testEachSliderSpansItsWholeRangeWhateverTheOthersAre() {
         let settings = make()
-        settings.setPosition(.frame, 0) // firmest frame
-        settings.setPosition(.sidebar, 1) // most see-through sidebar
-        // The frame cannot be firmer than the sidebar is.
-        XCTAssertLessThan(
-            GlassBase.frame.light * settings.frameScale + GlassBase.gap - 1e-9,
-            GlassBase.sidebarFill.light * settings.sidebarScale + 1e-9)
+        for (first, second) in [(0.0, 1.0), (1.0, 0.0)] {
+            settings.setPosition(.frame, first)
+            settings.setPosition(.sidebar, second)
+            settings.setPosition(.content, first)
+            for layer in [GlassLayer.frame, .sidebar, .content] {
+                for position in [0.0, 0.5, 1.0] {
+                    settings.setPosition(layer, position)
+                    XCTAssertEqual(settings.position(layer), position, accuracy: 1e-9)
+                }
+            }
+        }
         settings.setPosition(.content, 1)
-        settings.setPosition(.sidebar, 0) // firmest sidebar
-        XCTAssertLessThanOrEqual(
-            GlassBase.sidebarSheen.dark * settings.sidebarScale + GlassBase.gap,
-            GlassBase.content.dark * settings.contentScale + 1e-9)
-    }
-
-    func testContentFillHasAFloor() {
-        let settings = make()
-        settings.setPosition(.content, 1)
-        XCTAssertGreaterThanOrEqual(GlassBase.content.dark * settings.contentScale, GlassBase.contentFloor - 1e-9)
-        XCTAssertGreaterThanOrEqual(GlassBase.content.light * settings.contentScale, GlassBase.contentFloor)
+        XCTAssertEqual(settings.contentScale, 0)
+        settings.setPosition(.frame, 0)
+        settings.setPosition(.sidebar, 1)
+        XCTAssertEqual(settings.frameScale, 3)
+        XCTAssertEqual(settings.sidebarScale, 0.3, accuracy: 1e-9)
     }
 
     func testResetGoesBackToDefaults() {
@@ -96,7 +96,7 @@ final class AppSettingsTests: XCTestCase {
         ])
         XCTAssertLessThanOrEqual(settings.frameScale, GlassBase.range(.frame).upperBound)
         XCTAssertEqual(settings.sidebarScale, GlassBase.defaultScale(.sidebar))
-        XCTAssertGreaterThanOrEqual(settings.contentScale, GlassBase.range(.content).lowerBound)
+        XCTAssertEqual(settings.contentScale, GlassBase.range(.content).lowerBound)
         XCTAssertEqual(settings.appearance, .system)
         XCTAssertEqual(settings.windowStyle, WindowStyle.standard)
     }
@@ -122,7 +122,8 @@ final class AppSettingsTests: XCTestCase {
     func testWindowStyleFallsBackWhereGlassIsMissing() {
         XCTAssertEqual(WindowStyle.parse("solid"), .solid)
         XCTAssertEqual(WindowStyle.parse("frosted"), .frosted)
-        XCTAssertEqual(WindowStyle.parse(nil), WindowStyle.standard)
+        XCTAssertEqual(WindowStyle.parse(nil), .frosted)
+        XCTAssertEqual(WindowStyle.standard, .frosted)
         if !WindowStyle.glassAvailable { XCTAssertEqual(WindowStyle.parse("glass"), .frosted) }
     }
 }
