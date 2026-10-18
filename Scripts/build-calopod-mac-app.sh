@@ -15,6 +15,7 @@ version=$(tr -d '[:space:]' < "$repository_root/VERSION")
 
 swift build --package-path "$repository_root" --configuration "$configuration" --product calopod-mac
 swift build --package-path "$repository_root" --configuration "$configuration" --product calopod-agent
+swift build --package-path "$repository_root" --configuration "$configuration" --product calopod
 CALOPOD_BUILD_CONFIGURATION="$configuration" "$repository_root/Scripts/build-eventkit-host.sh"
 binary_root=$(swift build \
   --package-path "$repository_root" \
@@ -38,12 +39,14 @@ plutil -lint "$contents_root/Info.plist" "$contents_root/Library/LaunchAgents/$a
 "$repository_root/Scripts/build-calopod-icon.sh" "$contents_root/Resources"
 cp "$binary_root/calopod-mac" "$contents_root/MacOS/CalopodMac"
 cp "$binary_root/calopod-agent" "$contents_root/MacOS/calopod-agent"
-# The agent looks for `eventkit-host` next to its own executable.
+cp "$binary_root/calopod" "$contents_root/MacOS/calopod"
+# The agent and the command look for `eventkit-host` next to its own executable.
 mkdir -p "$contents_root/MacOS/eventkit-host"
 cp -R "$repository_root/.build/eventkit-host/Calopod EventKit Host.app" \
   "$contents_root/MacOS/eventkit-host/"
 # CALOPOD_SIGN_IDENTITY signs with a developer identity; the default is ad hoc.
 codesign --force --sign "${CALOPOD_SIGN_IDENTITY:--}" "$contents_root/MacOS/calopod-agent" >/dev/null 2>&1
+codesign --force --sign "${CALOPOD_SIGN_IDENTITY:--}" "$contents_root/MacOS/calopod" >/dev/null 2>&1
 codesign --force --sign "${CALOPOD_SIGN_IDENTITY:--}" "$bundle_root" >/dev/null 2>&1
 
 echo "Built $bundle_root"
