@@ -8,7 +8,7 @@ extension View {
     }
 }
 
-/// A scrolling page of card sections, with an optional serif title.
+/// A scrolling page of card sections, with an optional page header.
 struct CardPage<Content: View>: View {
     var title: String?
     @ViewBuilder var content: Content
@@ -19,10 +19,10 @@ struct CardPage<Content: View>: View {
 
     var page: some View {
         VStack(alignment: .leading, spacing: 16) {
-            if let title { Text(title).font(Theme.Fonts.pageTitle) }
+            if let title { PageHeader(title) }
             content
         }
-        .pageEdges()
+        .pageEdges(inlineHeader: title != nil)
         .frame(maxWidth: 760, alignment: .leading)
         .frame(maxWidth: .infinity)
     }

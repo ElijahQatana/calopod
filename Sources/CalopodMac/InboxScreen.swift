@@ -36,10 +36,8 @@ struct InboxScreen: View {
     // MARK: Header and filters
 
     private var header: some View {
-        HStack(spacing: 10) {
-            Text("Inbox").font(Theme.Fonts.heading)
+        PageHeader(title: "Inbox") {
             BusyLine(text: model.busy)
-            Spacer()
             Button("Review") {
                 model.review.open(filter: filter)
                 showingReview = true
@@ -51,7 +49,6 @@ struct InboxScreen: View {
                 Task { await model.refresh() }
             }
         }
-        .titleClearOfToggle()
     }
 
     private func staleBanner(_ board: InboxBoard) -> some View {
