@@ -85,11 +85,23 @@ public struct InboxDetail: Equatable, Sendable {
     /// Replies the calendar allows. Empty when only Hold is possible.
     public let replies: [ConflictChoice]
     public let replyNote: String
+    /// Connection and calendar the reply goes through, for the confirm step.
+    public var account = ""
+    public var connection = ""
+    /// What would still overlap after each answer.
+    public var previews: [InboxReviewPreview] = []
+
+    public func preview(for reply: ConflictChoice) -> InboxReviewPreview? { previews.first { $0.reply == reply } }
 }
 
 public struct InboxReplyResult: Equatable, Sendable {
     public let status: ConflictApplyReport.Status
     public let message: String
+
+    public init(status: ConflictApplyReport.Status, message: String) {
+        self.status = status
+        self.message = message
+    }
 }
 
 /// Backs the Mac Inbox screen from the same local copy and rules as `calopod inbox`.
@@ -165,7 +177,9 @@ public struct InboxScreenService: Sendable {
             replies: replies,
             replyNote: replies.isEmpty
                 ? ConflictResolutionService.reasonText(choices.unavailableReasons)
-                : Self.note(organizer: focused.organizer, overlapsAfterYes: remaining)
+                : Self.note(organizer: focused.organizer, overlapsAfterYes: remaining),
+            account: Self.accountLabel(context.source), connection: context.source.connectionLabel ?? context.source.provider,
+            previews: Self.previews(for: replies, in: context, key: id)
         )
     }
 
@@ -259,6 +273,22 @@ public struct InboxScreenService: Sendable {
     private func label(of bindingID: String, in snapshot: InboxContextSnapshot) -> String {
         let source = snapshot.sources.first { $0.bindingID == bindingID }
         return source?.calendarLabel ?? source?.connectionLabel ?? "A calendar"
+    }
+
+    static func accountLabel(_ source: InboxContextSource) -> String {
+        [source.connectionLabel ?? source.provider, source.calendarLabel].compactMap { $0 }.joined(separator: " / ")
+    }
+
+    /// Titles of the events that would still overlap after each answer.
+    static func previews(for replies: [ConflictChoice], in context: InboxCalendarContext, key: String) -> [InboxReviewPreview] {
+        replies.map { reply in
+            let projection = context.projections.first { $0.choice == reply.inbox }
+            let titles = (projection?.conflicts ?? []).map { conflict -> String in
+                let other = conflict.pair.first == key ? conflict.pair.second : conflict.pair.first
+                return context.snapshot.events.first { $0.event.sourceKeyHash == other }?.event.title ?? "Untitled event"
+            }
+            return InboxReviewPreview(reply: reply, overlaps: titles)
+        }
     }
 
     private static func reply(_ choice: InboxConflictChoice) -> ConflictChoice? {

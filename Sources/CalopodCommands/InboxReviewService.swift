@@ -259,17 +259,12 @@ public struct InboxReviewService: Sendable {
         if !replies.isEmpty { note = "" }
         else if choices.choices == [.hold] { note = ConflictResolutionService.reasonText(choices.unavailableReasons) }
         else { note = "Calopod could not check this event with the calendar. Hold it, or reply in the calendar app." }
+        let previews = InboxScreenService.previews(for: replies, in: context, key: key)
+        let account = InboxScreenService.accountLabel(context.source)
         let detail = InboxDetail(
             entry: entry, windowStart: context.visibleWindow.start, windowEnd: context.visibleWindow.end,
-            context: strip, replies: replies, replyNote: note)
-        let previews = replies.map { reply in
-            let projection = context.projections.first { $0.choice == reply.inbox }
-            let titles = (projection?.conflicts ?? []).map { conflict -> String in
-                let other = conflict.pair.first == key ? conflict.pair.second : conflict.pair.first
-                return context.snapshot.events.first { $0.event.sourceKeyHash == other }?.event.title ?? "Untitled event"
-            }
-            return InboxReviewPreview(reply: reply, overlaps: titles)
-        }
+            context: strip, replies: replies, replyNote: note,
+            account: account, connection: context.source.connectionLabel ?? context.source.provider, previews: previews)
         let neighbors = context.conflictGroup.filter { $0.event.sourceKeyHash != key }.map { item in
             strip.first { $0.id == item.event.sourceKeyHash } ?? InboxContextEntry(
                 id: item.event.sourceKeyHash, title: item.event.title ?? "Untitled event", calendarID: item.event.calendarBindingID,
@@ -278,8 +273,7 @@ public struct InboxReviewService: Sendable {
         let source = context.source
         return InboxReviewCardInfo(
             detail: detail, position: min(session.cursor + 1, session.queueCount), total: session.queueCount,
-            account: [source.connectionLabel ?? source.provider, source.calendarLabel].compactMap { $0 }.joined(separator: " / "),
-            connection: source.connectionLabel ?? source.provider,
+            account: account, connection: detail.connection,
             isMacCalendar: source.provider == "eventkit", organizer: organizer,
             notification: card.providerSnapshot.map { Self.notification($0.notification, organizer: organizer) },
             previews: previews, neighbors: neighbors, card: card)
