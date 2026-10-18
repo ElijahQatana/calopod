@@ -45,20 +45,9 @@ extension CalendarColor {
         return palette.min { $0.distance(to: probe) < $1.distance(to: probe) }
     }
 
-    static let palette: [CalendarColor] = [
-        CalendarColor(id: "blue", name: "Blue", light: 0x3a5fcd, dark: 0x7b9af0),
-        CalendarColor(id: "orange", name: "Orange", light: 0xd9731a, dark: 0xf2a04a),
-        CalendarColor(id: "green", name: "Green", light: 0x2f9e5f, dark: 0x5cc88b),
-        CalendarColor(id: "purple", name: "Purple", light: 0x9a4fc0, dark: 0xc58be8),
-        CalendarColor(id: "red", name: "Red", light: 0xc8453b, dark: 0xef7b6f),
-        CalendarColor(id: "teal", name: "Teal", light: 0x12908e, dark: 0x4cc3c0),
-        CalendarColor(id: "pink", name: "Pink", light: 0xcc4a8f, dark: 0xef82bb),
-        CalendarColor(id: "amber", name: "Amber", light: 0xb8860b, dark: 0xe5b83a),
-        CalendarColor(id: "sky", name: "Sky", light: 0x1f8ac4, dark: 0x5db4ec),
-        CalendarColor(id: "lime", name: "Lime", light: 0x6f9a1f, dark: 0xa3c94f),
-        CalendarColor(id: "indigo", name: "Indigo", light: 0x5b4bc4, dark: 0x9a8cf0),
-        CalendarColor(id: "gray", name: "Gray", light: 0x6b7280, dark: 0xa1a8b3),
-    ]
+    static let palette: [CalendarColor] = CalendarPalette.entries.map {
+        CalendarColor(id: $0.id, name: $0.name, light: $0.light, dark: $0.dark)
+    }
 
     static func named(_ id: String) -> CalendarColor? { palette.first { $0.id == id } }
 

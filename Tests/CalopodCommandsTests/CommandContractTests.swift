@@ -301,11 +301,11 @@ func agentOutputContainsOnlyGenericControlAndRunFields() throws {
 
 @Test
 func calendarsAcceptExplicitSelectionActions() throws {
-    let select = try CalendarsCommand.parse([
+    let select = try CalendarsListCommand.parse([
         "--connection", "connection",
         "--select", "calendar",
     ])
-    let deselect = try CalendarsCommand.parse([
+    let deselect = try CalendarsListCommand.parse([
         "--connection", "connection",
         "--deselect", "calendar",
     ])

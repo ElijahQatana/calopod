@@ -34,9 +34,10 @@ extension OutputOptions {
         // Missing cached labels must not turn a successful configuration change into a failure.
         let connections = (try? repository.connections()) ?? []
         let calendars = connections.flatMap { (try? repository.calendarBindings(connectionID: $0.id)) ?? [] }
+        let names = CalendarNames(repository)
         return HumanOutputContext(
             calendarLabels: Dictionary(calendars.compactMap { calendar in
-                calendar.displayLabel.map { (calendar.id, $0) }
+                names.shown(calendar.id, real: calendar.displayLabel).map { (calendar.id, $0) }
             }, uniquingKeysWith: { first, _ in first }),
             connectionLabels: Dictionary(connections.compactMap { connection in
                 connection.displayLabel.map { (connection.id, $0) }
@@ -92,7 +93,7 @@ enum HumanOutputRenderer {
             if !shared, let sources = payload.sources {
                 lines.append("Sources: \(sources.count)")
                 for (index, source) in sources.enumerated() {
-                    lines.append("  \(index + 1). \(label(source.label, fallback: "Unnamed calendar")) (\(clean(source.provider)))")
+                    lines.append("  \(index + 1). \(label(source.alias ?? source.label, fallback: "Unnamed calendar")) (\(clean(source.provider)))\(source.ignored == true ? " (ignored)" : "")")
                     if let coverage = source.inbox {
                         lines.append("  Coverage: \(coverage.startsAt ?? "unknown") to \(coverage.endsAt ?? "unknown")")
                         lines.append("  Freshness: \(coverage.status); observed \(coverage.observedAt ?? "never")")
@@ -128,8 +129,11 @@ enum HumanOutputRenderer {
                             lines.append("  Destination: \(label(context.calendarLabels[target], fallback: "Unknown calendar"))")
                             if localIDs { lines.append("  Destination ID: \(clean(target))") }
                         }
-                    case "calendars":
-                        lines.append("\(index + 1). \(label(item.label, fallback: "Unnamed calendar"))")
+                    case let name where name.hasPrefix("calendars"):
+                        lines.append("\(index + 1). \(label(item.alias ?? item.label, fallback: "Unnamed calendar"))")
+                        if item.alias != nil { lines.append("  Real name: \(label(item.label, fallback: "Unnamed calendar"))") }
+                        if item.ignored == true { lines.append("  Ignored: yes") }
+                        if let color = item.color { lines.append("  Color: \(clean(color))") }
                         if let selected = item.selected { lines.append("  Selected: \(selected ? "yes" : "no")") }
                         if let readOnly = item.readOnly { lines.append("  Access: \(readOnly ? "read only" : "writable")") }
                         if let sourceLabel = item.sourceLabel { lines.append("  Account: \(clean(sourceLabel))") }
@@ -142,7 +146,7 @@ enum HumanOutputRenderer {
                         lines.append("\(index + 1). \(label(item.label, fallback: "Untitled event"))")
                         if let parent = item.parentID {
                             let source = payload.sources?.first { $0.id == parent }
-                            lines.append("  Calendar: \(label(source?.label ?? context.calendarLabels[parent], fallback: "Unknown calendar"))")
+                            lines.append("  Calendar: \(label(source?.alias ?? source?.label ?? context.calendarLabels[parent], fallback: "Unknown calendar"))")
                             if let connectionID = source?.connectionID {
                                 lines.append("  Connection: \(label(context.connectionLabels[connectionID], fallback: "Unnamed Connection"))")
                             }
@@ -181,7 +185,7 @@ enum HumanOutputRenderer {
                         if let url = inbox.url { lines.append("  Link: \(clean(url))") }
                         if let organizer = inbox.organizer { lines.append("  Organizer: \(clean(organizer.name ?? organizer.emailAddress ?? "Unknown"))") }
                         for conflict in inbox.conflicts {
-                            lines.append("  Conflict: \(label(conflict.label, fallback: "Untitled event")) / \(label(conflict.calendarLabel, fallback: "Unknown calendar")): \(clean(conflict.startsAt)) to \(clean(conflict.endsAt))")
+                            lines.append("  Conflict: \(label(conflict.label, fallback: "Untitled event")) / \(label(conflict.calendarAlias ?? conflict.calendarLabel, fallback: "Unknown calendar")): \(clean(conflict.startsAt)) to \(clean(conflict.endsAt))")
                             if localIDs { lines.append("    Event ID: \(clean(conflict.eventID))") }
                         }
                         lines.append("  Limits: \(inbox.limits.map(readable).joined(separator: ", "))")
@@ -255,6 +259,7 @@ enum HumanOutputRenderer {
         if let valid = payload.backupValid { lines.append("Backup valid: \(valid ? "yes" : "no")") }
         if let encrypted = payload.backupEncrypted { lines.append("Backup encrypted: \(encrypted ? "yes" : "no")") }
         if let count = payload.migrationCount { lines.append("Migrations: \(count)") }
+        if command == "calendars", let colors = payload.colors { lines.append("Colors: \(colors.joined(separator: ", "))") }
         lines.append(contentsOf: warnings.map { "Warning: \(clean($0))" })
         return lines.flatMap { wrap($0, width: max(10, width)) }.joined(separator: "\n")
     }

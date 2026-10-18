@@ -13,7 +13,10 @@ struct InboxReviewTerminal {
     var width = 80
     var decoration = true
     var timezone = TimeZone.current
+    var names = CalendarNames()
     var cutoff: Date { Date().addingTimeInterval(-3600) }
+
+    func calendar(_ source: InboxContextSource) -> String { names.shown(source.bindingID, real: source.calendarLabel) ?? "Calendar" }
 
     func emit(_ text: String) { write(Self.safe(text, width: width)) }
 
@@ -25,13 +28,13 @@ struct InboxReviewTerminal {
         }.count
         emit("You have \(session.queueCount) events to handle. \(query.rows.filter { !$0.conflicts.isEmpty }.count) have conflicts.\n\(unavailable) have unavailable RSVP actions. Scope: retained coverage and saved filters.\nRSVP choices send responses and may notify the organizer. Hold sends nothing.")
         for source in session.lastSnapshot.sources {
-            emit("\(source.connectionLabel ?? source.provider) / \(source.calendarLabel ?? "Calendar"): \(source.coverage.map { interval($0.startsAt, $0.endsAt) + "; observed " + date($0.observedAt) } ?? "coverage unknown")\(source.staleSince != nil || source.healthStatus != "healthy" || (source.coverage?.observedAt ?? .distantPast) < cutoff ? "; stale" : "")")
+            emit("\(source.connectionLabel ?? source.provider) / \(calendar(source)): \(source.coverage.map { interval($0.startsAt, $0.endsAt) + "; observed " + date($0.observedAt) } ?? "coverage unknown")\(source.staleSince != nil || source.healthStatus != "healthy" || (source.coverage?.observedAt ?? .distantPast) < cutoff ? "; stale" : "")")
         }
         emit("Queue filters: \(session.filter.excludeMaybe ? "Maybe excluded" : "Maybe included"); \(session.filter.conflictsOnly ? "conflicts only" : "all attention reasons").")
         if let window = session.filter.window { emit("Dates: " + interval(window.start, window.end)) }
         if let ids = session.filter.bindingIDs {
             let labels = session.lastSnapshot.sources.filter { ids.contains($0.bindingID) }
-                .map { ($0.connectionLabel ?? $0.provider) + " / " + ($0.calendarLabel ?? "Calendar") }
+                .map { ($0.connectionLabel ?? $0.provider) + " / " + calendar($0) }
             emit("Queue sources: " + labels.joined(separator: "; "))
         }
         var focusedKey: String?
@@ -111,7 +114,7 @@ struct InboxReviewTerminal {
         let event = context.focused.event
         let reasons = InboxAttentionQuery.evaluate(context.snapshot, freshnessCutoff: cutoff).rows
             .first { $0.item.event.sourceKeyHash == event.sourceKeyHash }
-        emit("Event \(min(session.cursor + 1, session.queueCount)) of \(session.queueCount)\n\(event.title ?? "Untitled")\n\(interval(event.startsAt, event.endsAt)) \(timezone.identifier)\(event.isAllDay ? " (all day)" : "")\nSource: \(context.source.connectionLabel ?? context.source.provider) / \(context.source.calendarLabel ?? "Calendar")\nRSVP: \(event.currentUserResponse.state.rawValue)\nReasons: \(reasons?.reasons.map { $0 == .needsResponse ? "Needs RSVP" : $0.rawValue }.joined(separator: ", ") ?? "none")")
+        emit("Event \(min(session.cursor + 1, session.queueCount)) of \(session.queueCount)\n\(event.title ?? "Untitled")\n\(interval(event.startsAt, event.endsAt)) \(timezone.identifier)\(event.isAllDay ? " (all day)" : "")\nSource: \(context.source.connectionLabel ?? context.source.provider) / \(calendar(context.source))\nRSVP: \(event.currentUserResponse.state.rawValue)\nReasons: \(reasons?.reasons.map { $0 == .needsResponse ? "Needs RSVP" : $0.rawValue }.joined(separator: ", ") ?? "none")")
         if reasons?.changeTiming == .uncertain { emit("Change order uncertain.") }
         if let organizer = event.organizer { emit("Organizer: \(organizer.name ?? "") \(organizer.emailAddress ?? "")") }
         emit("Availability: \(event.availability)\(event.isPrivate ? "; private" : "")")
@@ -126,7 +129,7 @@ struct InboxReviewTerminal {
         for row in context.rows {
             let other = row.event.event
             let conflict = context.focusedConflicts.contains { $0.pair.contains(other.sourceKeyHash) && other.sourceKeyHash != event.sourceKeyHash }
-            emit("\(interval(other.startsAt, other.endsAt)) \(other.title ?? "Untitled") | \(row.source.connectionLabel ?? row.source.provider) / \(row.source.calendarLabel ?? "Calendar")\(row.isFocused ? " <- this event" : conflict ? " CONFLICT" : "")")
+            emit("\(interval(other.startsAt, other.endsAt)) \(other.title ?? "Untitled") | \(row.source.connectionLabel ?? row.source.provider) / \(calendar(row.source))\(row.isFocused ? " <- this event" : conflict ? " CONFLICT" : "")")
         }
         for projection in context.projections where projection.choice == .yes || projection.choice == .maybe {
             for conflict in projection.conflicts {
