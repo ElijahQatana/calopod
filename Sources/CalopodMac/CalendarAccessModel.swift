@@ -47,11 +47,12 @@ enum CalendarAccessState: Equatable {
 @MainActor
 @Observable
 final class CalendarAccessModel {
-    static let privacyPage = URL(
-        string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")!
+    static let privacyPage = URL(string: Permissions.calendarPrivacyURL)!
 
     private(set) var status: EventKitAccessStatus?
     private(set) var asking = false
+    /// Why the helper could not be asked, in plain words. Cleared by the next answer.
+    private(set) var hostFailure: String?
     private var checking = false
 
     @ObservationIgnored private let readStatus: @Sendable () throws -> EventKitAccessStatus
@@ -78,8 +79,12 @@ final class CalendarAccessModel {
         checking = true
         defer { checking = false }
         let read = readStatus
-        if let found = try? await Task.detached(operation: { try read() }).value, found != status {
-            status = found
+        do {
+            let found = try await Task.detached(operation: { try read() }).value
+            if found != status { status = found }
+            hostFailure = nil
+        } catch {
+            hostFailure = Permissions.hostFailureReason(error)
         }
     }
 
@@ -89,8 +94,11 @@ final class CalendarAccessModel {
         asking = true
         defer { asking = false }
         let request = requestAccess
-        if let found = try? await Task.detached(operation: { try request() }).value {
-            status = found
+        do {
+            status = try await Task.detached(operation: { try request() }).value
+            hostFailure = nil
+        } catch {
+            hostFailure = Permissions.hostFailureReason(error)
         }
     }
 

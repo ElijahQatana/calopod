@@ -17,7 +17,7 @@ public struct DoctorCommand: ParsableCommand {
     public func run() throws {
         #if os(macOS)
         do {
-            let report = try doctorReport(controller: LaunchAgentController())
+            let report = try doctorReport(controller: LaunchAgentController(), permissions: livePermissionReadings)
             try OutputRenderer.write(
                 command: "doctor",
                 payload: CommandPayload(
@@ -53,7 +53,14 @@ struct DoctorReport: Equatable {
 }
 
 #if os(macOS)
-func doctorReport(controller: LaunchAgentController) throws -> DoctorReport {
+func doctorReport(
+    controller: LaunchAgentController,
+    permissions: () -> [PermissionReading] = { [] }
+) throws -> DoctorReport {
+    withPermissions(try serviceReport(controller: controller), permissions())
+}
+
+private func serviceReport(controller: LaunchAgentController) throws -> DoctorReport {
     let snapshot: LaunchAgentSnapshot
     do {
         snapshot = try controller.snapshot()
@@ -189,7 +196,43 @@ func doctorReport(
 
     return doctorReport(items: items, warnings: warnings)
 }
+
+/// The three macOS permissions, read the way the app reads them. Nothing here can raise a prompt.
+func livePermissionReadings() -> [PermissionReading] {
+    let calendar: PermissionReading
+    do {
+        calendar = Permissions.calendar(status: try CalendarAccessService().status())
+    } catch {
+        calendar = Permissions.calendar(status: nil, hostFailure: Permissions.hostFailureReason(error))
+    }
+    return [
+        calendar,
+        Permissions.backgroundService(.read()),
+        Permissions.keychain(KeychainAccessCheck.live.run(interactive: false)),
+    ]
+}
 #endif
+
+/// Adds the permission checks to a report. Anything not allowed is flagged for attention, and
+/// the warning carries the same words as the app's Permissions list.
+func withPermissions(_ report: DoctorReport, _ readings: [PermissionReading]) -> DoctorReport {
+    guard !readings.isEmpty else { return report }
+    let ids = [PermissionReading.ID.calendar: "permission-calendar", .loginItems: "permission-login-items", .keychain: "permission-keychain"]
+    var items = report.items
+    var warnings = report.warnings
+    for reading in readings {
+        let kind: String
+        switch reading.level {
+        case .allowed: kind = "ok"
+        case .notAsked, .blocked: kind = "attention"
+        case .unknown: kind = reading.reason == "unreachable" ? "attention" : "skipped"
+        }
+        items.append(doctorItem(ids[reading.id] ?? reading.id.rawValue, kind, reading.reason))
+        if kind == "attention" { warnings.append("\(reading.title): \(reading.detail)") }
+    }
+    let merged = doctorReport(items: items, warnings: warnings)
+    return report.status == "failed" ? DoctorReport(status: report.status, message: report.message, items: items, warnings: merged.warnings) : merged
+}
 
 func providerHealthCheck(
     connections: [StoredConnection],
@@ -331,7 +374,7 @@ private func doctorReport(
     if items.contains(where: { $0.kind == "failed" }) {
         status = "failed"
         message = "Automatic sync needs attention."
-    } else if items.contains(where: { $0.kind == "pending" }) {
+    } else if items.contains(where: { $0.kind == "pending" || $0.kind == "attention" }) {
         status = "attention"
         message = "Automatic sync has checks that are not complete yet."
     } else {

@@ -7,11 +7,15 @@ struct CalopodMacApp: App {
     @State private var setup = SetupModel()
     @State private var inbox = InboxModel()
     @State private var schedule = CalendarModel()
-    @State private var access = CalendarAccessModel()
+    @State private var access: CalendarAccessModel
+    @State private var permissions: PermissionsModel
     @State private var navigation = AppNavigation()
     @State private var sidebar = SidebarState()
 
     init() {
+        let access = CalendarAccessModel()
+        _access = State(initialValue: access)
+        _permissions = State(initialValue: PermissionsModel(access: access))
         DockPresence.enter()
         AppConfiguration.apply()
         AppSettings.shared.applyAppearance()
@@ -30,6 +34,7 @@ struct CalopodMacApp: App {
                 .environment(inbox)
                 .environment(schedule)
                 .environment(access)
+                .environment(permissions)
                 .task { await inbox.reload() }
                 .task { await access.check() }
                 .onChange(of: access.status, initial: true) { refreshAccess() }
