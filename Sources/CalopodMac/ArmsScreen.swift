@@ -11,6 +11,7 @@ struct ArmsScreen: View {
     var body: some View {
         ScrollView { page }
                 .task { await model.reload() }
+            .onDisappear { model.dismissNotice() }
             .sheet(isPresented: $creating) { NewArmSheet(model: model, colors: colors).appTypography() }
     }
 
@@ -18,7 +19,7 @@ struct ArmsScreen: View {
         LazyVStack(alignment: .leading, spacing: 12) {
             header
             if let busy = model.busy { BusyLine(text: busy) }
-            if let notice = model.notice, !creating { Banner(kind: .error, text: notice) }
+            if let notice = model.notice, !creating { Banner(kind: .error, text: notice, onDismiss: model.dismissNotice) }
             if let arms = model.snapshot?.arms {
                 if arms.isEmpty {
                     emptyState

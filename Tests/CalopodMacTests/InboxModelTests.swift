@@ -34,4 +34,17 @@ final class InboxModelTests: XCTestCase {
         XCTAssertNil(inbox.notice)
         XCTAssertEqual(inbox.board?.entries.count, 0)
     }
+
+    func testDismissingTheErrorClearsItAndStartingAnActionReplacesIt() async throws {
+        let inbox = try model(Flag())
+        await inbox.reload()
+        XCTAssertNotNil(inbox.notice)
+        inbox.dismissNotice()
+        XCTAssertNil(inbox.notice)
+
+        await inbox.refresh()
+        XCTAssertNotNil(inbox.notice)
+        inbox.dismissNotice()
+        XCTAssertNil(inbox.notice)
+    }
 }
