@@ -198,7 +198,7 @@ private struct ArmTitle: View {
                     .onChange(of: focused) { _, isFocused in
                         if !isFocused && editing { Task { await commit(keepOpenOnError: false) } }
                     }
-                if let problem { Text(problem).font(Theme.Fonts.secondary).foregroundStyle(Theme.bad) }
+                if let problem { Text(problem).font(Theme.Fonts.secondary).foregroundStyle(Theme.badText) }
             } else {
                 HStack(spacing: 6) {
                     Text(arm.name).font(Theme.Fonts.bodySemibold).lineLimit(1).truncationMode(.tail)

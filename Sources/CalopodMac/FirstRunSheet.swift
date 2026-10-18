@@ -254,7 +254,7 @@ struct FirstRunSheet: View {
     private var finished: some View {
         card {
             Label("Setup is done", systemImage: "checkmark.circle.fill").font(Theme.Fonts.bodySemibold)
-                .foregroundStyle(Theme.good, .primary)
+                .foregroundStyle(Theme.goodText, .primary)
             Text("Background sync is still off. Turn it on when you are happy with the first sync.")
                 .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
             Button("Open background sync") {

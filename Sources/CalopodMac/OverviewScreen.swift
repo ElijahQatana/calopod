@@ -233,7 +233,7 @@ struct OverviewScreen: View {
                                 check.name.replacingOccurrences(of: "-", with: " ").capitalized,
                                 systemImage: check.state == "failed" ? "xmark.circle.fill" : "clock.fill"
                             )
-                            .foregroundStyle(check.state == "failed" ? Theme.bad : Theme.caution, .primary)
+                            .foregroundStyle(check.state == "failed" ? Theme.badText : Theme.cautionText, .primary)
                             Spacer(minLength: 12)
                             Text((check.reason ?? check.state).replacingOccurrences(of: "-", with: " "))
                                 .foregroundStyle(.secondary)
