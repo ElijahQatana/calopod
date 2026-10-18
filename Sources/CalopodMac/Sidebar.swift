@@ -226,8 +226,6 @@ private struct GlassPanel: ViewModifier {
 /// Lets the window draw under its title bar and moves the window controls
 /// into the floating sidebar.
 struct WindowChrome: NSViewRepresentable {
-    let collapsed: Bool
-
     private static let barHeight: CGFloat = 52
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -235,19 +233,28 @@ struct WindowChrome: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = WindowObserver()
         view.onWindow = { [weak coordinator = context.coordinator] in coordinator?.request() }
+        view.onRemoved = { [weak coordinator = context.coordinator] in coordinator?.stopObserving() }
         context.coordinator.view = view
         return view
     }
 
-    func updateNSView(_ view: NSView, context: Context) {
-        context.coordinator.request()
+    // The buttons sit in the same spot in both sidebar states, so there is nothing to redo here.
+    func updateNSView(_ view: NSView, context: Context) {}
+
+    static func dismantleNSView(_ view: NSView, coordinator: Coordinator) {
+        coordinator.stopObserving()
     }
 
     final class WindowObserver: NSView {
         var onWindow: (() -> Void)?
+        var onRemoved: (() -> Void)?
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
-            if window != nil { DispatchQueue.main.async { [weak self] in self?.onWindow?() } }
+            if window != nil {
+                DispatchQueue.main.async { [weak self] in self?.onWindow?() }
+            } else {
+                onRemoved?()
+            }
         }
     }
 
@@ -257,6 +264,7 @@ struct WindowChrome: NSViewRepresentable {
         private var observers: [NSObjectProtocol] = []
         /// Set when the window closes. A closed window is left alone, and nothing is observed again.
         private var closed = false
+        private var clearedFocus = false
         private lazy var pass = ApplyCoalescer { [weak self] in self?.apply() }
 
         /// Frame changes made by apply() itself land here too, so asking never runs it inline.
@@ -275,7 +283,10 @@ struct WindowChrome: NSViewRepresentable {
                 observe(window, watching: [container, titlebar] + [.miniaturizeButton, .zoomButton, .closeButton]
                     .compactMap { window.standardWindowButton($0) })
                 // Keep the search field from grabbing focus at launch.
-                window.makeFirstResponder(nil)
+                if !clearedFocus {
+                    clearedFocus = true
+                    window.makeFirstResponder(nil)
+                }
             }
             let height = WindowChrome.barHeight
             let barFrame = NSRect(
@@ -325,17 +336,20 @@ struct WindowChrome: NSViewRepresentable {
             tokens.append(center.addObserver(
                 forName: NSWindow.willCloseNotification, object: window, queue: .main
             ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.stopObserving() }
+                MainActor.assumeIsolated {
+                    self?.closed = true
+                    self?.stopObserving()
+                }
             })
             observers = tokens
         }
 
-        private func stopObserving() {
-            closed = true
+        /// Drops the window observers. Called when the window closes, when the view leaves its
+        /// window and when the representable is torn down. A new window starts observing again.
+        func stopObserving() {
             observers.forEach(NotificationCenter.default.removeObserver)
             observers = []
         }
-
     }
 }
 
