@@ -152,6 +152,9 @@ enum Theme {
             return inlineHeader ? toggleTop : belowToggle
         }
 
+        /// Where a pinned title starts, just right of the collapse button, in either sidebar mode.
+        static let titleLeading: CGFloat = toggleLeading + Control.circle + toggleGap
+
         /// Extra leading space that keeps an inline header clear of the collapse button.
         static func titleInset(collapsed: Bool, horizontal: CGFloat) -> CGFloat {
             guard collapsed else { return 0 }

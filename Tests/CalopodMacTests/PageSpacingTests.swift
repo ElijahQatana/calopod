@@ -19,4 +19,8 @@ final class PageSpacingTests: XCTestCase {
             XCTAssertEqual(Theme.Page.titleInset(collapsed: true, horizontal: margin) + margin, toggleEnd)
         }
     }
+
+    func testPinnedTitleStartsBesideToggle() {
+        XCTAssertEqual(Theme.Page.titleLeading, Theme.Page.toggleLeading + Theme.Control.circle + Theme.Page.toggleGap)
+    }
 }

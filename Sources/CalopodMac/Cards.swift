@@ -12,19 +12,27 @@ extension View {
 struct CardPage<Content: View>: View {
     var title: String?
     @ViewBuilder var content: Content
+    @Environment(\.sidebarCollapsed) private var collapsed
 
     var body: some View {
         ScrollView { page }
     }
 
     var page: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            if let title { PageHeader(title) }
-            content
+        VStack(alignment: .leading, spacing: 0) {
+            if let title {
+                PageHeader(title, pinnedLeft: true)
+                    .padding(.trailing, Theme.pagePadding)
+                    .padding(.top, Theme.Page.topPadding(collapsed: collapsed, inlineHeader: true))
+                    .padding(.bottom, 16)
+            }
+            VStack(alignment: .leading, spacing: 16) { content }
+                .padding(.horizontal, Theme.pagePadding)
+                .padding(.top, title == nil ? Theme.Page.topPadding(collapsed: collapsed, inlineHeader: false) : 0)
+                .padding(.bottom, Theme.Page.bottom)
+                .frame(maxWidth: 760, alignment: .leading)
+                .frame(maxWidth: .infinity)
         }
-        .pageEdges(inlineHeader: title != nil)
-        .frame(maxWidth: 760, alignment: .leading)
-        .frame(maxWidth: .infinity)
     }
 }
 
