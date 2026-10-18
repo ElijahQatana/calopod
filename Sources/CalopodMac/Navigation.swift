@@ -67,14 +67,28 @@ final class AppNavigation {
     var selection: Screen
     /// The Inbox filter to show. Set it with `openInbox` from other screens.
     var inboxFilter: InboxFilter = .all
+    /// An event to select when Inbox opens. Inbox clears it once it has looked for the event.
+    var inboxEvent: String?
 
     /// `CALOPOD_START_SCREEN=inbox` opens on that screen, for screenshots.
     init(environment: [String: String] = ProcessInfo.processInfo.environment) {
         selection = environment["CALOPOD_START_SCREEN"].flatMap(Screen.init(rawValue:)) ?? .overview
     }
 
-    func openInbox(_ filter: InboxFilter = .all) {
+    func openInbox(_ filter: InboxFilter = .all, event: String? = nil) {
         inboxFilter = filter
+        inboxEvent = event
         selection = .inbox
+    }
+
+    /// Opens Inbox on the first filter that holds the event, or All, with the event selected.
+    func openInbox(showing event: ScheduleEvent) {
+        openInbox(ScheduleLayout.inboxFilter(for: event), event: event.id)
+    }
+
+    /// The requested event if the list holds it. Either way the request is done.
+    func takeInboxEvent(in entries: [InboxEntry]) -> String? {
+        defer { inboxEvent = nil }
+        return entries.contains { $0.id == inboxEvent } ? inboxEvent : nil
     }
 }

@@ -10,6 +10,7 @@ struct InboxList: View {
 
     var body: some View {
         let days = Dictionary(grouping: entries) { Calendar.current.startOfDay(for: $0.startsAt) }
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(days.keys.sorted(), id: \.self) { day in
@@ -17,10 +18,14 @@ struct InboxList: View {
                         .font(Theme.Fonts.secondarySemibold)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 4)
-                    ForEach(days[day] ?? []) { entry in selectable(entry) }
+                    ForEach(days[day] ?? []) { entry in selectable(entry).id(entry.id) }
                 }
             }
             .padding(.vertical, 6)
+        }
+        .onChange(of: selection, initial: true) {
+            if let selection { proxy.scrollTo(selection) }
+        }
         }
         .panelFill(.inner, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .focusable()

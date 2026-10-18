@@ -79,7 +79,7 @@ struct EventInspector: View {
         if let text = ScheduleLayout.changeText(event) {
             VStack(alignment: .leading, spacing: 8) {
                 Banner(kind: .caution, text: "\(text). Review it in Inbox.")
-                Button("Open Changed in Inbox", action: openInbox)
+                Button("Open in Inbox", action: openInbox)
             }
         }
         if ScheduleLayout.showsOverlap(event) {

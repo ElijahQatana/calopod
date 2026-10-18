@@ -100,6 +100,16 @@ enum ScheduleLayout {
     static func showsOverlap(_ event: ScheduleEvent) -> Bool { !event.isCopy && !event.overlaps.isEmpty }
     static func showsChange(_ event: ScheduleEvent) -> Bool { !event.isCopy && event.change != .none }
 
+    /// The Inbox filter that holds this event: its first reason in the filter order, else All.
+    static func inboxFilter(for event: ScheduleEvent) -> InboxFilter {
+        guard !event.isCopy else { return .all }
+        if event.response == .needsResponse { return .needsRSVP }
+        if event.response == .tentative { return .maybe }
+        if event.change != .none { return .changed }
+        if !event.overlaps.isEmpty { return .conflicts }
+        return .all
+    }
+
     /// The words for the dot, shared by the inspector and VoiceOver.
     static func changeText(_ event: ScheduleEvent) -> String? {
         guard showsChange(event) else { return nil }
