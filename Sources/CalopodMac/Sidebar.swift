@@ -255,13 +255,15 @@ struct WindowChrome: NSViewRepresentable {
     final class Coordinator {
         weak var view: NSView?
         private var observers: [NSObjectProtocol] = []
+        /// Set when the window closes. A closed window is left alone, and nothing is observed again.
+        private var closed = false
         private lazy var pass = ApplyCoalescer { [weak self] in self?.apply() }
 
         /// Frame changes made by apply() itself land here too, so asking never runs it inline.
         func request() { pass.request() }
 
         private func apply() {
-            guard let window = view?.window else { return }
+            guard !closed, let window = view?.window else { return }
             // Let the blurred desktop show through the window.
             if window.isOpaque { window.isOpaque = false }
             if window.backgroundColor != .clear { window.backgroundColor = .clear }
@@ -318,7 +320,20 @@ struct WindowChrome: NSViewRepresentable {
                     MainActor.assumeIsolated { self?.request() }
                 })
             }
+            // Without this the observers stay registered after the window is closed, and each reopened
+            // window would add another set.
+            tokens.append(center.addObserver(
+                forName: NSWindow.willCloseNotification, object: window, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.stopObserving() }
+            })
             observers = tokens
+        }
+
+        private func stopObserving() {
+            closed = true
+            observers.forEach(NotificationCenter.default.removeObserver)
+            observers = []
         }
 
     }
