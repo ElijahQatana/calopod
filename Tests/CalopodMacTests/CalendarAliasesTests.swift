@@ -75,7 +75,8 @@ final class CalendarAliasesTests: XCTestCase {
     }
 
     func testOldPreferencesMoveOverOnceAndNeverOverwrite() throws {
-        let (_, defaults, state) = try store()
+        let defaults = UserDefaults(suiteName: "aliases-\(UUID().uuidString)")!
+        let state = LocalStateRepository(database: try .inMemory())
         defaults.set(["a": "Work", "b": "Home"], forKey: "calendarAliases")
         defaults.set(["a"], forKey: "calendarIgnored")
         defaults.set(["a": "red", "b": "teal"], forKey: "calendarColors")
