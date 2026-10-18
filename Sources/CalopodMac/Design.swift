@@ -152,8 +152,12 @@ enum Theme {
             return inlineHeader ? toggleTop : belowToggle
         }
 
-        /// Where a pinned title starts, just right of the collapse button, in either sidebar mode.
-        static let titleLeading: CGFloat = toggleLeading + Control.circle + toggleGap
+        /// Where every page title starts, measured from the panel's left edge. With the sidebar open
+        /// the toggle stays in the sidebar, so the title sits at the page margin. Collapsed, the toggle
+        /// is at the panel's top left and the title follows it.
+        static func titleStart(collapsed: Bool, horizontal: CGFloat) -> CGFloat {
+            horizontal + titleInset(collapsed: collapsed, horizontal: horizontal)
+        }
 
         /// Extra leading space that keeps an inline header clear of the collapse button.
         static func titleInset(collapsed: Bool, horizontal: CGFloat) -> CGFloat {
@@ -188,23 +192,10 @@ private struct PageEdges: ViewModifier {
     }
 }
 
-private struct TitleClearOfToggle: ViewModifier {
-    @Environment(\.sidebarCollapsed) private var collapsed
-    let horizontal: CGFloat
-
-    func body(content: Content) -> some View {
-        content.padding(.leading, Theme.Page.titleInset(collapsed: collapsed, horizontal: horizontal))
-    }
-}
-
 extension View {
     /// The shared page padding. Pass `inlineHeader` when the page's header shares the collapse button's row.
     func pageEdges(horizontal: CGFloat = Theme.pagePadding, inlineHeader: Bool = false) -> some View {
         modifier(PageEdges(horizontal: horizontal, inlineHeader: inlineHeader))
-    }
-
-    func titleClearOfToggle(horizontal: CGFloat = Theme.pagePadding) -> some View {
-        modifier(TitleClearOfToggle(horizontal: horizontal))
     }
 }
 
