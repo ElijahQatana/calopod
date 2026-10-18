@@ -47,15 +47,16 @@ struct OverviewScreen: View {
     // MARK: Hero
 
     private func hero(_ status: AgentControlStatus) -> some View {
-        VStack(spacing: 14) {
-            Image(systemName: symbol(status))
+        let health = model.syncHealth
+        return VStack(spacing: 14) {
+            Image(systemName: health.symbol)
                 .font(Theme.Fonts.glyph)
-                .foregroundStyle(color(status))
+                .foregroundStyle(health.color)
                 .frame(width: 76, height: 76)
-                .background(Circle().fill(color(status).opacity(0.14)))
+                .background(Circle().fill(health.color.opacity(0.14)))
             VStack(spacing: 4) {
-                Text(headline(status)).font(Theme.Fonts.heading)
-                Text(detail(status)).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+                Text(health.headline).font(Theme.Fonts.heading)
+                Text(health.detail).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
             }
             if let busy = model.busyAction { BusyLine(text: busy) }
             HStack(spacing: 10) {
@@ -73,41 +74,6 @@ struct OverviewScreen: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 18)
-    }
-
-    private func symbol(_ status: AgentControlStatus) -> String {
-        switch status.state {
-        case "ok": "checkmark"
-        case "paused": "pause.fill"
-        case "disabled": "power"
-        default: "exclamationmark"
-        }
-    }
-
-    private func color(_ status: AgentControlStatus) -> Color {
-        switch status.state {
-        case "ok": Theme.good
-        case "paused", "disabled": Theme.caution
-        default: Theme.bad
-        }
-    }
-
-    private func headline(_ status: AgentControlStatus) -> String {
-        if let summary = model.lastRunSummary { return summary }
-        return switch status.state {
-        case "ok": "Everything is in sync"
-        case "paused": "Scheduled syncs are paused"
-        case "disabled": "Automatic sync is off"
-        case "failed": "The last sync didn't finish"
-        default: "Automatic sync is stopped"
-        }
-    }
-
-    private func detail(_ status: AgentControlStatus) -> String {
-        var parts: [String] = []
-        if let age = status.lastSuccessAgeSeconds { parts.append("Last synced \(Format.ago(age))") }
-        if let interval = status.intervalSeconds { parts.append("every \(Format.interval(interval))") }
-        return parts.isEmpty ? status.message : parts.joined(separator: " · ")
     }
 
     // MARK: Preview

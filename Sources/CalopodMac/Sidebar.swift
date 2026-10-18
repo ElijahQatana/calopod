@@ -136,36 +136,15 @@ struct Sidebar: View {
 
     private var status: some View {
         HStack(spacing: 8) {
-            Circle().fill(statusColor).frame(width: rail ? 10 : 8, height: rail ? 10 : 8)
-            if !rail { Text(statusText).font(Theme.Fonts.bodyMedium).foregroundStyle(Theme.sidebarSecondary) }
+            Circle().fill(service.syncHealth.color).frame(width: rail ? 10 : 8, height: rail ? 10 : 8)
+            if !rail { Text(service.syncHealth.label).font(Theme.Fonts.bodyMedium).foregroundStyle(Theme.sidebarSecondary) }
             if !rail { Spacer(minLength: 0) }
         }
         .padding(.horizontal, rail ? 0 : 10)
         .padding(.vertical, 6)
-        .help(statusText)
+        .help(service.syncHealth.label)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Sync status: \(statusText)")
-    }
-
-    private var statusColor: Color {
-        switch service.status?.state {
-        case "ok": Theme.good
-        case "paused", "disabled": Theme.caution
-        case "failed", "stopped": Theme.bad
-        default: .secondary
-        }
-    }
-
-    private var statusText: String {
-        switch service.status?.state {
-        case "ok": "Syncing"
-        case "paused": "Paused"
-        case "disabled": "Sync off"
-        case "failed": "Needs attention"
-        case "stopped": "Stopped"
-        case "not-installed": "Not set up"
-        default: "Checking…"
-        }
+        .accessibilityLabel("Sync status: \(service.syncHealth.label)")
     }
 }
 
