@@ -273,6 +273,7 @@ public struct InboxReviewService: Sendable {
         let neighbors = context.conflictGroup.filter { $0.event.sourceKeyHash != key }.map { item in
             strip.first { $0.id == item.event.sourceKeyHash } ?? InboxContextEntry(
                 id: item.event.sourceKeyHash, title: item.event.title ?? "Untitled event", calendarID: item.event.calendarBindingID,
+                calendarName: context.snapshot.sources.first { $0.bindingID == item.event.calendarBindingID }?.calendarLabel ?? "Calendar",
                 startsAt: item.event.startsAt, endsAt: item.event.endsAt, isFocused: false, overlapsFocused: true)
         }
         let source = context.source

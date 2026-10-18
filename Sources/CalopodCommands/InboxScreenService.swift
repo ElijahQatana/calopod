@@ -70,10 +70,23 @@ public struct InboxContextEntry: Identifiable, Equatable, Sendable {
     public let id: String
     public let title: String
     public let calendarID: String
+    public let calendarName: String
     public let startsAt: Date
     public let endsAt: Date
     public let isFocused: Bool
     public let overlapsFocused: Bool
+
+    public init(id: String, title: String, calendarID: String, calendarName: String, startsAt: Date, endsAt: Date,
+                isFocused: Bool, overlapsFocused: Bool) {
+        self.id = id
+        self.title = title
+        self.calendarID = calendarID
+        self.calendarName = calendarName
+        self.startsAt = startsAt
+        self.endsAt = endsAt
+        self.isFocused = isFocused
+        self.overlapsFocused = overlapsFocused
+    }
 }
 
 public struct InboxDetail: Equatable, Sendable {
@@ -267,6 +280,7 @@ public struct InboxScreenService: Sendable {
             InboxContextEntry(
                 id: $0.event.event.sourceKeyHash, title: $0.event.event.title ?? "Untitled event",
                 calendarID: $0.event.event.calendarBindingID,
+                calendarName: $0.source.calendarLabel ?? $0.source.connectionLabel ?? "Calendar",
                 startsAt: $0.visibleInterval.start, endsAt: $0.visibleInterval.end, isFocused: $0.isFocused,
                 overlapsFocused: $0.event.event.sourceKeyHash != focusedKey && overlapping.contains($0.event.event.sourceKeyHash))
         }
