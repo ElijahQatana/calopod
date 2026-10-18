@@ -7,6 +7,7 @@ struct CalopodMacApp: App {
     @State private var setup = SetupModel()
     @State private var inbox = InboxModel()
     @State private var schedule = CalendarModel()
+    @State private var access = CalendarAccessModel()
     @State private var navigation = AppNavigation()
     @State private var sidebar = SidebarState()
 
@@ -16,13 +17,27 @@ struct CalopodMacApp: App {
         AppSettings.shared.applyAppearance()
     }
 
+    /// One answer for Overview, the sidebar dot and the menu bar window.
+    private func refreshAccess() {
+        service.calendarAccess = setup.hasMacConnection
+            ? access.state(lastSyncFailure: service.status?.failureCategory) : .unchecked
+    }
+
     var body: some Scene {
         // Opens at launch and on reopen, so launching is visible.
         Window("Calopod", id: "home") {
             MainWindow(navigation: navigation, sidebar: sidebar, service: service, setup: setup, inbox: inbox)
                 .environment(inbox)
                 .environment(schedule)
+                .environment(access)
                 .task { await inbox.reload() }
+                .task { await access.check() }
+                .onChange(of: access.status, initial: true) { refreshAccess() }
+                .onChange(of: setup.hasMacConnection, initial: true) { refreshAccess() }
+                .onChange(of: service.status?.failureCategory, initial: true) { refreshAccess() }
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                    Task { await access.check() }
+                }
                 .dockPresence()
         }
         .windowStyle(.hiddenTitleBar)

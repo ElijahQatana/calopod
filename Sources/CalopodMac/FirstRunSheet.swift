@@ -10,6 +10,7 @@ struct FirstRunSheet: View {
     let navigation: AppNavigation
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(CalendarAccessModel.self) private var access
     @State private var fullTarget: String?
     @State private var busyTarget: String?
     @State private var targetsConfirmed = false
@@ -113,6 +114,10 @@ struct FirstRunSheet: View {
             providerButton("Google", "g.circle", .google)
             providerButton("Microsoft", "m.circle", .microsoft)
         }
+        if setup.hasMacConnection {
+            let state = service.calendarAccess
+            if state.isMissing { card { CalendarAccessCard(access: access, state: state) } }
+        }
         ForEach(setup.snapshot?.connections ?? []) { connection in
             Label {
                 Text(connection.label)
@@ -130,7 +135,10 @@ struct FirstRunSheet: View {
 
     private func providerButton(_ title: String, _ symbol: String, _ provider: SetupProvider) -> some View {
         Button {
-            Task { await setup.connect(provider) }
+            Task {
+                await setup.connect(provider)
+                if provider == .mac { await access.check() }
+            }
         } label: {
             Label(title, systemImage: symbol).frame(maxWidth: .infinity)
         }

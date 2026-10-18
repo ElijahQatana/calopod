@@ -24,6 +24,11 @@ final class SetupModel {
 
     var isBusy: Bool { busy != nil }
 
+    /// True once Calendars on this Mac has been added, which is when Calendar access matters.
+    var hasMacConnection: Bool {
+        snapshot?.connections.contains { $0.provider == ProviderKind.eventKit.rawValue } ?? false
+    }
+
     /// Every calendar that is a source, ignored or not: they all still sync.
     var selectedCalendars: [(id: String, title: String, isReadOnly: Bool)] {
         (snapshot?.connections ?? []).flatMap { connection in

@@ -93,7 +93,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "CalopodMac",
-            dependencies: ["CalopodCommands", "CalopodRuntime"]
+            dependencies: ["CalopodCommands", "CalopodEventKit", "CalopodRuntime"]
         ),
         .executableTarget(
             name: "CalopodAgent",

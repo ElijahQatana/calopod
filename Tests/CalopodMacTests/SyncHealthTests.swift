@@ -31,6 +31,16 @@ final class SyncHealthTests: XCTestCase {
         XCTAssertEqual(result.label, "Syncing")
     }
 
+    func testMissingCalendarAccessBeatsASuccessfulSync() {
+        for (access, tone) in [(CalendarAccessState.canAsk, SyncHealth.Tone.caution), (.blocked, .bad)] {
+            let result = SyncHealth.make(status: status("ok"), statusAt: now, run: run(), access: access, now: now)
+            XCTAssertEqual(result.tone, tone)
+            XCTAssertEqual(result.label, "Needs Calendar access")
+        }
+        let granted = SyncHealth.make(status: status("ok"), statusAt: now, run: nil, access: .granted, now: now)
+        XCTAssertEqual(granted.tone, .good)
+    }
+
     func testAgentSuccessNewerThanManualRunWins() {
         let result = health(status("ok", age: 5), run(secondsAgo: 300))
         XCTAssertEqual(result.headline, "Everything is in sync")

@@ -38,7 +38,11 @@ final class ServiceModel {
 
     private var isAppActive: Bool { NSApplication.shared.isActive }
 
-    var syncHealth: SyncHealth { SyncHealth.make(status: status, statusAt: statusAt, run: lastRun) }
+    /// Set by the app from the Calendar access check; `.unchecked` until a Mac connection exists.
+    var calendarAccess: CalendarAccessState = .unchecked
+    var syncHealth: SyncHealth {
+        SyncHealth.make(status: status, statusAt: statusAt, run: lastRun, access: calendarAccess)
+    }
     var menuBarAlert: Bool { syncHealth.tone == .bad }
     var menuBarDimmed: Bool { syncHealth.tone == .caution }
 

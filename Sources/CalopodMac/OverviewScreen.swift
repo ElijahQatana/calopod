@@ -7,6 +7,7 @@ struct OverviewScreen: View {
     let setup: SetupModel
     @Environment(InboxModel.self) private var inbox
     @Environment(CalendarModel.self) private var schedule
+    @Environment(CalendarAccessModel.self) private var access
 
     @State private var progress = FirstRunProgress()
     @State private var showingSetup = false
@@ -14,6 +15,10 @@ struct OverviewScreen: View {
     var body: some View {
         CardPage(title: "Overview") {
             if let notice = model.notice { Banner(kind: .error, text: notice, onDismiss: model.dismissNotice) }
+
+            if accessState.isMissing {
+                CardSection { CardRow { CalendarAccessCard(access: access, state: accessState) } }
+            }
 
             if progress.canResume && !showingSetup { CardSection { CardRow { resumeBanner } } }
 
@@ -46,6 +51,8 @@ struct OverviewScreen: View {
 
     // MARK: Hero
 
+    private var accessState: CalendarAccessState { model.calendarAccess }
+
     private func hero(_ status: AgentControlStatus) -> some View {
         let health = model.syncHealth
         return VStack(spacing: 14) {
@@ -62,7 +69,7 @@ struct OverviewScreen: View {
             HStack(spacing: 10) {
                 Button("Preview sync") { Task { await model.previewSync() } }
                     .buttonStyle(.accentFilled)
-                    .disabled(model.isBusy || model.pendingPreview != nil)
+                    .disabled(model.isBusy || model.pendingPreview != nil || accessState.isMissing)
                 if status.enabled {
                     Button(status.paused ? "Resume" : "Pause") {
                         Task { await model.setPaused(!status.paused) }
