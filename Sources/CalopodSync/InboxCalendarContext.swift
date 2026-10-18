@@ -83,7 +83,9 @@ public enum InboxCalendarContextBuilder {
         }
         let window = try SyncWindow(start: min(visible.start, group.map(\.event.startsAt).min() ?? focused.event.startsAt),
                                     end: max(visible.end, group.map(\.event.endsAt).max() ?? focused.event.endsAt))
-        let analysis = InboxConflictCalculator.analyze(snapshot, window: window, freshnessCutoff: freshnessCutoff)
+        // A group that reaches the retained edges makes the two windows equal, so the first pass is the answer.
+        let analysis = window == retainedWindow
+            ? retained : InboxConflictCalculator.analyze(snapshot, window: window, freshnessCutoff: freshnessCutoff)
         let conflicts = analysis.conflicts.filter { $0.pair.contains(focusedKey) }
         let rows = try snapshot.events.compactMap { item -> InboxContextRow? in
             let event = item.event

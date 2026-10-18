@@ -80,12 +80,17 @@ public enum InboxAttentionQuery {
         }
         let analysis = InboxConflictCalculator.analyze(
             snapshot, window: window, freshnessCutoff: freshnessCutoff, coverageWindow: coverageWindow)
-        let confirmed = analysis.conflicts.filter(\.isConfirmed)
+        var conflictsByKey: [String: [InboxConflict]] = [:]
+        for conflict in analysis.conflicts where conflict.isConfirmed {
+            conflictsByKey[conflict.pair.first, default: []].append(conflict)
+            conflictsByKey[conflict.pair.second, default: []].append(conflict)
+        }
+        let sourcesByBinding = Dictionary(snapshot.sources.map { ($0.bindingID, $0) }, uniquingKeysWith: { first, _ in first })
         var rows: [InboxAttentionRow] = []
         for item in snapshot.events {
             let event = item.event
             guard !event.isCancelled, item.observation?.tombstone == nil,
-                  let source = snapshot.sources.first(where: { $0.bindingID == event.calendarBindingID }) else { continue }
+                  let source = sourcesByBinding[event.calendarBindingID] else { continue }
             if let ids = filter.bindingIDs, !ids.contains(event.calendarBindingID) { continue }
             if filter.excludeMaybe && event.currentUserResponse.state == .tentative { continue }
             if let range = filter.window {
@@ -107,7 +112,7 @@ public enum InboxAttentionQuery {
                 reasons.append(.changedAfterResponse)
                 changeTiming = observation.responseTiming
             }
-            let conflicts = confirmed.filter { $0.pair.contains(event.sourceKeyHash) }
+            let conflicts = conflictsByKey[event.sourceKeyHash] ?? []
             if !conflicts.isEmpty { reasons.append(.conflict) }
             guard !reasons.isEmpty, !filter.conflictsOnly || !conflicts.isEmpty else { continue }
             rows.append(InboxAttentionRow(item: item, source: source, reasons: reasons,
