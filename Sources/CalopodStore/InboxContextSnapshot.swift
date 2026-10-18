@@ -161,6 +161,12 @@ public struct InboxCopyDiagnosis: Equatable, Sendable {
 extension LocalStateRepository {
     /// For each event that shares time with an event of another calendar, how the copy checks
     /// came out against that event. Read only; the events are listed before any copy is dropped.
+    /// The events the snapshot leaves out as copies, with the originals they copy.
+    public func inboxDroppedCopies() throws -> [String: Set<String>] {
+        let events = try inboxContextSnapshot(includingCopies: true).events
+        return try database.read { copyOriginals(events, try copyContext($0)) }
+    }
+
     public func inboxCopyDiagnoses() throws -> [String: [InboxCopyDiagnosis]] {
         let events = try inboxContextSnapshot(includingCopies: true).events
         return try database.read { db in
@@ -246,9 +252,19 @@ private func copyDiagnoses(
 private func droppingUnmarkedCopies(_ events: [InboxContextEvent], _ db: Database) throws -> [InboxContextEvent] {
     let context = try copyContext(db)
     guard !context.arms.isEmpty || !context.mapped.isEmpty else { return events }
-    let sourceKeys = Set(context.mapped.map { $0["source_key_hash"] as String })
-    return events.filter { item in
-        guard !sourceKeys.contains(item.event.sourceKeyHash) else { return true }
-        return !copyDiagnoses(of: item.event, among: events, context).contains(where: \.isCopy)
+    let copies = copyOriginals(events, context)
+    return events.filter { copies[$0.event.sourceKeyHash] == nil }
+}
+
+/// For each event taken for a copy, the originals it is a copy of. An event that is itself an
+/// original is no excuse: a leaked copy is read as a source by the arms that read its calendar,
+/// so it has mapped copies of its own. Two events that each look like the other's copy are
+/// both kept.
+private func copyOriginals(_ events: [InboxContextEvent], _ context: CopyContext) -> [String: Set<String>] {
+    var originals: [String: Set<String>] = [:]
+    for item in events {
+        let found = copyDiagnoses(of: item.event, among: events, context).filter(\.isCopy).map(\.sourceKeyHash)
+        if !found.isEmpty { originals[item.event.sourceKeyHash] = Set(found) }
     }
+    return originals.filter { key, sources in !sources.allSatisfy { originals[$0]?.contains(key) == true } }
 }

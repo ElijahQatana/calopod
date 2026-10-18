@@ -165,16 +165,22 @@ enum InboxCLI {
     /// copy checks passed. Local only.
     static func explainCopies(_ payload: CommandPayload, repository: LocalStateRepository) throws -> String {
         let diagnoses = try repository.inboxCopyDiagnoses()
+        let dropped = try repository.inboxDroppedCopies()
         var lines = ["", "Why these items are listed (copy checks against events of other calendars at the same time):"]
         for item in payload.items ?? [] {
             guard let key = try? parse(item.id).0, let found = diagnoses[key] else { continue }
             let own = try repository.inboxObservation(sourceKeyHash: key)?.event
             lines.append("")
-            lines.append("\(item.id): \(own?.title ?? "?") [\(own?.calendarBindingID ?? "?")] response \(own?.currentUserResponse.state.rawValue ?? "?"), evidence \(own?.currentUserResponse.evidence.rawValue ?? "?"), guests \(own?.attendees.count ?? 0)")
+            lines.append("\(item.id): LISTED. \(own?.title ?? "?") [\(own?.calendarBindingID ?? "?")] response \(own?.currentUserResponse.state.rawValue ?? "?"), evidence \(own?.currentUserResponse.evidence.rawValue ?? "?"), guests \(own?.attendees.count ?? 0)")
             for diagnosis in found {
                 lines.append("  against \(diagnosis.sourceTitle ?? "?") [\(diagnosis.sourceCalendar)], arm rule \(diagnosis.armRule ?? "?"): \(diagnosis.isCopy ? "TAKEN FOR A COPY" : "not a copy")")
                 for check in diagnosis.checks { lines.append("    \(check.passed ? "pass" : "FAIL") \(check.name)") }
             }
+        }
+        for (key, sources) in dropped.sorted(by: { $0.key < $1.key }) {
+            let own = try repository.inboxObservation(sourceKeyHash: key)?.event
+            lines.append("")
+            lines.append("\(key.prefix(8)): DROPPED as a copy. \(own?.title ?? "?") [\(own?.calendarBindingID ?? "?")] copies \(sources.count) event(s)")
         }
         if lines.count == 2 { lines.append("No listed item shares time with an event that an arm copies.") }
         return lines.joined(separator: "\n")
