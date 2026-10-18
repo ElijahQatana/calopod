@@ -155,7 +155,8 @@ private struct ReviewFixture {
         let state = state, remote = remote, lock = lock
         return InboxReviewService(
             makeRepository: { state }, makeLockURL: { lock },
-            makeRefresh: { state in { try state.inboxContextSnapshot() } }, provider: { _ in remote })
+            makeRefresh: { state in { try state.inboxContextSnapshot() } }, provider: { _ in remote },
+            now: { Date(timeIntervalSince1970: 5_000) })
     }
 
     func apply(title: String? = nil) throws {

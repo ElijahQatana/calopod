@@ -167,7 +167,8 @@ private struct ConflictFixture {
             makeRepository: { state },
             makeLockURL: { lock },
             makeRefresh: { state in { try state.inboxContextSnapshot() } },
-            provider: { _ in remote }
+            provider: { _ in remote },
+            now: { Date(timeIntervalSince1970: 5_000) }
         )
     }
 

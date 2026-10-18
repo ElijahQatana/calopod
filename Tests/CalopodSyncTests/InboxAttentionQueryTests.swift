@@ -204,6 +204,46 @@ struct InboxAttentionQueryTests {
         #expect(result.analysis.isComplete)
     }
 
+    @Test("Ended events leave the default queue and its overlaps, but a date range still finds them")
+    func endedEvents() throws {
+        let fixture = try AttentionFixture()
+        try fixture.refresh([
+            fixture.event(key: "past", response: .tentative, start: 10000),
+            fixture.event(key: "running", response: .tentative, start: 10500, end: 12000),
+            fixture.event(key: "ahead", response: .needsResponse, start: 13000),
+        ])
+        let now = date(11_500)
+        #expect(try fixture.query(InboxAttentionFilter(asOf: now)).rows.map(\.item.event.sourceKeyHash) == ["running", "ahead"])
+        let conflicts = try fixture.query(InboxAttentionFilter(conflictsOnly: true, asOf: now)).rows
+        #expect(conflicts.isEmpty)
+        #expect(try fixture.query().rows.count == 3)
+        let range = try window(9000, 11_000)
+        #expect(try fixture.query(InboxAttentionFilter(window: range, asOf: now)).rows.map(\.item.event.sourceKeyHash) == ["past", "running"])
+    }
+
+    @Test("An event a fresh read of its range no longer returns stops being actionable, elsewhere it stays uncertain",
+          arguments: [(4000.0, 0.0, false), (4000.0, 5000.0, true), (49500.0, 0.0, true)])
+    func notReturnedByFreshRead(start: Double, readFrom: Double, kept: Bool) throws {
+        let fixture = try AttentionFixture()
+        try fixture.refresh([fixture.event(key: "gone", response: .tentative, start: start)], coverage: window(0, 50000))
+        try fixture.refresh([], coverage: window(readFrom, 49000), now: date(600))
+        #expect(try fixture.query().rows.map(\.item.event.sourceKeyHash) == (kept ? ["gone"] : []))
+        if !kept { #expect(!(try fixture.query().analysis.warnings.contains { $0.kind == .unconfirmedPresence })) }
+    }
+
+    @Test("A cancelled event and a cancelled occurrence leave the queue; the rest of the series stays")
+    func cancelled() throws {
+        let fixture = try AttentionFixture()
+        let single = fixture.event(key: "single", response: .tentative, start: 10000)
+        let first = fixture.event(key: "first", response: .tentative, start: 20000, recurrenceID: "r1")
+        let second = fixture.event(key: "second", response: .tentative, start: 30000, recurrenceID: "r2")
+        try fixture.refresh([single, first, second])
+        #expect(try fixture.query().rows.count == 3)
+        try fixture.refresh([second], cancelled: ["single", "first"])
+        #expect(try fixture.query().rows.map(\.item.event.sourceKeyHash) == ["second"])
+        #expect(try fixture.query(InboxAttentionFilter(conflictsOnly: true)).rows.isEmpty)
+    }
+
     @Test("Pruned change history still queues unread changes, and reading never acknowledges")
     func pruning() throws {
         let fixture = try AttentionFixture()

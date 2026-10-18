@@ -228,7 +228,7 @@ struct InboxReviewTerminalTests {
 
     #if os(macOS)
     @Test(arguments: [false, true]) func terminalEOFAndInterruptSaveProgress(interrupt: Bool) throws {
-        let f = try TranscriptFixture(count: 1, backend: "ics")
+        let f = try TranscriptFixture(count: 1, backend: "ics", base: 4_000_000_000)
         defer { f.remove() }
         var master: Int32 = 0, slave: Int32 = 0
         #expect(openpty(&master, &slave, nil, nil, nil) == 0)
@@ -282,13 +282,15 @@ private struct TranscriptFixture {
     let remote: TranscriptRemote
     let count: Int
     let overlapping: Bool
+    /// Seconds added to every time, for tests that run the real command and so see the real clock.
+    let base: Double
     var cutoff: Date { Date().addingTimeInterval(-3600) }
-    var window: SyncWindow { try! SyncWindow(start: Date(timeIntervalSince1970: 0), end: Date(timeIntervalSince1970: 200_000)) }
+    var window: SyncWindow { try! SyncWindow(start: Date(timeIntervalSince1970: base), end: Date(timeIntervalSince1970: base + 200_000)) }
     var controller: InboxReviewSessionController { InboxReviewSessionController(state: state, lockURL: root.appendingPathComponent("review.lock")) }
     var refresh: InboxReviewSessionController.Refresh { { try state.inboxContextSnapshot() } }
     var provider: InboxReviewSessionController.Provider { { _ in remote } }
-    init(count: Int, overlapping: Bool = false, backend: String = "google") throws {
-        self.count = count; self.overlapping = overlapping
+    init(count: Int, overlapping: Bool = false, backend: String = "google", base: Double = 0) throws {
+        self.count = count; self.overlapping = overlapping; self.base = base
         root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         state = LocalStateRepository(database: try CalopodDatabase(path: root.appendingPathComponent("state.sqlite").path))
@@ -300,8 +302,8 @@ private struct TranscriptFixture {
     func apply(title: String? = nil) throws {
         let events = (0..<count).map { index in
             StoredNormalizedInstance(sourceKeyHash: "key\(index)", connectionID: "connection", calendarBindingID: "calendar", providerEventID: "key\(index)", recurrenceID: nil,
-                startsAt: Date(timeIntervalSince1970: overlapping ? 10_000 : 10_000 + Double(index) * 20_000),
-                endsAt: Date(timeIntervalSince1970: overlapping ? 11_000 : 11_000 + Double(index) * 20_000),
+                startsAt: Date(timeIntervalSince1970: base + (overlapping ? 10_000 : 10_000 + Double(index) * 20_000)),
+                endsAt: Date(timeIntervalSince1970: base + (overlapping ? 11_000 : 11_000 + Double(index) * 20_000)),
                 isAllDay: false, availability: "busy", isCancelled: false, isPrivate: false, title: title ?? "Example \(index)", contentFingerprint: "example", providerUpdatedAt: nil, location: "Example room", notes: "Example notes", url: "https://example.com/meeting", organizer: EventParticipant(name: "Taylor Example", emailAddress: "taylor@example.com"),
                 currentUserResponse: EventResponse(state: .needsResponse, evidence: .googleSelf, actionCapability: RSVPActionCapability(supportedScopes: [.occurrence])))
         }

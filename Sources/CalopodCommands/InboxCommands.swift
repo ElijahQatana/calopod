@@ -183,7 +183,7 @@ enum InboxCLI {
         let snapshot = try snapshot(repository, options: options)
         let full = try repository.inboxContextSnapshot()
         let query = InboxAttentionQuery.evaluate(full, filter: InboxAttentionFilter(window: range?.window,
-            excludeMaybe: options.excludeMaybe, conflictsOnly: options.conflicts), freshnessCutoff: now.addingTimeInterval(-3600))
+            excludeMaybe: options.excludeMaybe, conflictsOnly: options.conflicts, asOf: now), freshnessCutoff: now.addingTimeInterval(-3600))
         var items: [CommandItem]
         if activity {
             let bindings = Set(snapshot.sources.map(\.bindingID))

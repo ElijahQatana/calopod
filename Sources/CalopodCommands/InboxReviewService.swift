@@ -128,7 +128,8 @@ public struct InboxReviewService: Sendable {
         let window = try InboxAttentionQuery.evaluate(snapshot, freshnessCutoff: cutoff).analysisWindow
             ?? SyncWindow(start: now(), end: now().addingTimeInterval(1))
         let filter = InboxAttentionFilter(
-            excludeMaybe: skipMaybe, conflictsOnly: overlapsOnly, bindingIDs: Set(snapshot.sources.map(\.bindingID)))
+            excludeMaybe: skipMaybe, conflictsOnly: overlapsOnly, bindingIDs: Set(snapshot.sources.map(\.bindingID)),
+            asOf: now())
         return progress(try controller.start(
             filter: filter, metricsWindow: window, freshnessCutoff: cutoff,
             displayTimeZoneIdentifier: TimeZone.current.identifier))

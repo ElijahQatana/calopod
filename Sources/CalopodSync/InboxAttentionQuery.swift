@@ -7,14 +7,21 @@ public struct InboxAttentionFilter: Codable, Equatable, Sendable {
     public let excludeMaybe: Bool
     public let conflictsOnly: Bool
     public let bindingIDs: Set<String>?
+    /// With no window, events that ended by this time are left out: a finished meeting can't
+    /// be answered, and its response is no longer re-read. Not persisted with a review.
+    public var asOf: Date?
 
-    /// A nil window includes all relevant retained occurrences, not just today.
+    private enum CodingKeys: String, CodingKey { case window, excludeMaybe, conflictsOnly, bindingIDs }
+
+    /// A nil window includes all relevant retained occurrences that haven't ended.
     /// CLI date parsing supplies normalized local-day or timestamp boundaries.
-    public init(window: SyncWindow? = nil, excludeMaybe: Bool = false, conflictsOnly: Bool = false, bindingIDs: Set<String>? = nil) {
+    public init(window: SyncWindow? = nil, excludeMaybe: Bool = false, conflictsOnly: Bool = false,
+                bindingIDs: Set<String>? = nil, asOf: Date? = nil) {
         self.window = window
         self.excludeMaybe = excludeMaybe
         self.conflictsOnly = conflictsOnly
         self.bindingIDs = bindingIDs
+        self.asOf = asOf
     }
 }
 
@@ -39,9 +46,21 @@ public struct InboxAttentionResult: Equatable, Sendable {
 /// A pure local query. Listing and filtering neither acknowledge nor write.
 public enum InboxAttentionQuery {
     public static func evaluate(
-        _ snapshot: InboxContextSnapshot, filter: InboxAttentionFilter = InboxAttentionFilter(),
+        _ full: InboxContextSnapshot, filter: InboxAttentionFilter = InboxAttentionFilter(),
         freshnessCutoff: Date
     ) -> InboxAttentionResult {
+        var snapshot = full
+        let gone = Set(full.events.filter { Self.isGone($0, in: full, freshnessCutoff: freshnessCutoff) }.map(\.event.sourceKeyHash))
+        let ended = filter.window == nil ? filter.asOf : nil
+        if !gone.isEmpty || ended != nil {
+            // Ended events neither need an answer nor overlap anything that is still ahead.
+            snapshot = InboxContextSnapshot(
+                sources: full.sources,
+                events: full.events.filter { item in
+                    !gone.contains(item.event.sourceKeyHash) && (ended.map { item.event.endsAt > $0 } ?? true)
+                },
+                unprovenDuplicateBindingIDs: full.unprovenDuplicateBindingIDs)
+        }
         // Analyze complete current intervals before filtering rows. A moved
         // event matching its old date can still conflict at its new date.
         let starts = snapshot.sources.compactMap { $0.coverage?.startsAt }
@@ -97,5 +116,17 @@ public enum InboxAttentionQuery {
         rows.sort { ($0.item.event.startsAt, $0.item.event.sourceKeyHash) < ($1.item.event.startsAt, $1.item.event.sourceKeyHash) }
         return InboxAttentionResult(rows: rows, sources: snapshot.sources.sorted { $0.bindingID < $1.bindingID },
                                     analysisWindow: window, analysis: analysis)
+    }
+
+    /// A retained event that a fresh read of its whole time range did not return was cancelled or
+    /// removed. Its last response is history, not something to answer. Outside the range read, or
+    /// with a stale source, absence proves nothing and the event stays as uncertain.
+    static func isGone(_ item: InboxContextEvent, in snapshot: InboxContextSnapshot, freshnessCutoff: Date) -> Bool {
+        guard !item.isPresenceConfirmed,
+              let source = snapshot.sources.first(where: { $0.bindingID == item.event.calendarBindingID }),
+              let coverage = source.coverage, source.staleSince == nil,
+              source.healthStatus == nil || source.healthStatus == "healthy",
+              coverage.observedAt >= freshnessCutoff else { return false }
+        return coverage.startsAt <= item.event.startsAt && item.event.endsAt <= coverage.endsAt
     }
 }

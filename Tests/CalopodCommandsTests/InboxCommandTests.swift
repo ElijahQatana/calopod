@@ -163,6 +163,7 @@ private struct Fixture {
             instances: events, cancelledSourceKeyHashes: [], isFullRefresh: true, cursorUpdates: [], now: Date(), removedSourceKeyHashes: removed)
     }
     func list(_ options: InboxOptions? = nil, range: ResolvedDateRange? = nil, activity: Bool = false, all: Bool = false) throws -> CommandPayload {
-        try InboxCLI.list(repository: repository, options: try options ?? InboxOptions.parse([]), range: range, activity: activity, all: all)
+        try InboxCLI.list(repository: repository, options: try options ?? InboxOptions.parse([]), range: range, activity: activity, all: all,
+            now: Date(timeIntervalSince1970: 0))
     }
 }

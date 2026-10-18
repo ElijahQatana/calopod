@@ -17,7 +17,7 @@ calopod inbox refresh --from 2026-11-05 --through 2026-11-12
 
 `inbox`, `activity` and `inspect` read Calopod's local copy and are instant, even while a sync is running. `refresh` asks your calendars for new information. It doesn't write to any of them. Without dates it uses the window set for automatic sync, so pass `--from` and `--through` if you haven't set that up.
 
-Filters: `--connection`, `--calendar`, `--exclude-maybe` (hides those events entirely) and the usual date options. A date filter matches any event that overlaps the range. A moved event matches its old or new time, and shows once. With no dates you see everything relevant, not only today.
+Filters: `--connection`, `--calendar`, `--exclude-maybe` (hides those events entirely) and the usual date options. A date filter matches any event that overlaps the range. A moved event matches its old or new time, and shows once. With no dates you see everything relevant that hasn't ended yet, not only today. A meeting that is over can't be answered, so it drops out; ask for a date range to look back at it. An event that a fresh read of its time range no longer returns (cancelled or removed) drops out too. If the calendar couldn't be read recently, or the event lies outside what was read, it stays and is marked uncertain.
 
 The first time Calopod sees your calendar it records a starting point, so you won't get a flood of old changes. Invitations you haven't answered still show up. Activity keeps up to 90 days and 1,000 changes per account.
 
@@ -71,4 +71,4 @@ Google asks to notify guests. Microsoft asks for a response to be sent to the or
 
 Microsoft can't guarantee a reply wasn't overtaken by an edit made a moment earlier. That's a small window, but it exists.
 
-Copies Calopod made are left out of the inbox.
+Copies Calopod made are left out of the inbox. That includes a copy read back through a second connection to the same calendar, when it sits at the same time as an event Calopod copies, has the title the copy would have and has no guests.

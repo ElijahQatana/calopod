@@ -141,7 +141,8 @@ public struct InboxScreenService: Sendable {
     /// Everything that needs attention, from the local copy. Never contacts a calendar.
     public func board() throws -> InboxBoard {
         let snapshot = try makeRepository().inboxContextSnapshot()
-        let result = InboxAttentionQuery.evaluate(snapshot, freshnessCutoff: freshnessCutoff)
+        let result = InboxAttentionQuery.evaluate(
+            snapshot, filter: InboxAttentionFilter(asOf: now()), freshnessCutoff: freshnessCutoff)
         let entries = result.rows.map { entry($0, in: snapshot) }
         let incomplete = Set(result.analysis.warnings.compactMap { warning -> String? in
             guard [.staleSource, .incompleteCoverage, .unknownSource].contains(warning.kind),
@@ -158,7 +159,8 @@ public struct InboxScreenService: Sendable {
     public func detail(for id: String, settings: InboxContextSettings? = nil) throws -> InboxDetail {
         let state = try makeRepository()
         let snapshot = try state.inboxContextSnapshot()
-        let result = InboxAttentionQuery.evaluate(snapshot, freshnessCutoff: freshnessCutoff)
+        let result = InboxAttentionQuery.evaluate(
+            snapshot, filter: InboxAttentionFilter(asOf: now()), freshnessCutoff: freshnessCutoff)
         guard let row = result.rows.first(where: { $0.item.event.sourceKeyHash == id }) else {
             throw InboxCalendarContextError.eventUnavailable
         }
