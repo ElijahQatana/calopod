@@ -47,10 +47,23 @@ case "$temporary_root" in
   "$temporary_parent"/calopod-setup.*) ;;
   *) fail "The private setup path is invalid." 74 ;;
 esac
+restore_agent=false
 cleanup() {
+  status=$?
+  trap - EXIT
+  # Put automatic sync back the way it was, even when setup stopped early.
+  if [ "$restore_agent" = "true" ]; then
+    if "$cli" agent enable --format json >/dev/null 2>&1; then
+      echo "Automatic sync is back on." >&2
+    else
+      echo "Could not turn automatic sync back on. Run calopod agent enable." >&2
+    fi
+  fi
   /bin/rm -rf "$temporary_root"
+  exit "$status"
 }
-trap cleanup EXIT HUP INT TERM
+trap cleanup EXIT
+trap 'exit 75' HUP INT TERM
 
 extract() {
   /usr/bin/plutil -extract "$2" raw -o - "$1" 2>/dev/null
@@ -321,6 +334,7 @@ was_enabled=$(extract "$status_file" data.enabled || printf 'false')
 if [ "$was_enabled" = "true" ]; then
   disabled_file="$temporary_root/disabled.json"
   run_json "$disabled_file" agent disable
+  restore_agent=true
   echo "Automatic sync was stopped while setup changes configuration."
 fi
 
@@ -401,6 +415,11 @@ if [ -n "$busy_target" ]; then
     || fail "An existing Busy target is unavailable. Restore it in Calendar or repair the Arm configuration before setup." 78
 fi
 
+if [ "$main_count" -gt 0 ] && [ "$busy_present" = "true" ]; then
+  echo "Setup is already done. Nothing was changed."
+  exit 0
+fi
+
 for source_id in $source_ids; do
   selection_file="$temporary_root/selection.json"
   run_json "$selection_file" calendars --connection eventkit-device --select "$source_id"
@@ -477,7 +496,8 @@ done
 printf 'Dry run: %s create, %s update, %s removal, %s repair, %s no-op, %s warning.\n' \
   "$creates" "$updates" "$removals" "$repairs" "$no_ops" "$warning_count"
 
-echo "Automatic sync remains disabled. Apply and verify a manual sync before enabling it."
+[ "$restore_agent" = "true" ] \
+  || echo "Automatic sync remains disabled. Apply and verify a manual sync before enabling it."
 
 doctor_file="$temporary_root/doctor.json"
 if run_json "$doctor_file" doctor; then

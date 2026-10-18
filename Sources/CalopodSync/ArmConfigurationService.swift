@@ -104,6 +104,21 @@ public struct ArmConfigurationService: Sendable {
         return arm
     }
 
+    /// The Arm that already makes exactly this route, so a repeated setup can leave it alone.
+    public func existingArm(
+        sourceBindingIDs: [String],
+        targetBindingID: String,
+        ruleMode: ArmRuleMode,
+        isMain: Bool? = nil
+    ) throws -> StoredArm? {
+        try repository.arms().first {
+            $0.targetBindingID == targetBindingID
+                && $0.ruleMode == ruleMode
+                && Set($0.sourceBindingIDs) == Set(sourceBindingIDs)
+                && (isMain == nil || $0.isMain == isMain)
+        }
+    }
+
     @discardableResult
     public func configureMainCalendar(
         id: String = UUID().uuidString.lowercased(),

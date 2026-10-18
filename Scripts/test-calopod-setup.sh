@@ -56,14 +56,29 @@ grep -q 'Setup complete.' "$first_output"
 second_input="$fixture_root/second-input"
 second_output="$fixture_root/second-output"
 : > "$fixture_root/enabled"
-printf '\n\n\n\n\n' > "$second_input"
+printf '\n' > "$second_input"
 run_setup "$second_input" "$second_output"
 
+# Setup is already done: nothing is asked or changed, and sync is back on.
 [ "$(grep -c '^main configure ' "$call_log")" -eq 1 ]
 [ "$(grep -c '^arm add ' "$call_log")" -eq 1 ]
-grep -q 'Existing Main configuration found; preserving it.' "$second_output"
-grep -q 'Existing Busy configuration found; preserving it.' "$second_output"
+grep -q 'Setup is already done. Nothing was changed.' "$second_output"
 grep -q 'Automatic sync was stopped while setup changes configuration.' "$second_output"
+[ -f "$fixture_root/enabled" ]
+
+# A run that fails midway puts sync back too.
+: > "$fixture_root/source-unavailable"
+if run_setup /dev/null "$fixture_root/failed-output" --basic; then
+  echo "Setup accepted an unavailable configured source." >&2
+  exit 1
+fi
+[ -f "$fixture_root/enabled" ]
+grep -q 'Automatic sync is back on.' "$fixture_root/failed-output"
+/bin/rm -f "$fixture_root/source-unavailable"
+
+# Sync that was off stays off.
+/bin/rm -f "$fixture_root/enabled"
+run_setup "$second_input" "$second_output"
 [ ! -f "$fixture_root/enabled" ]
 
 /bin/rm -f "$fixture_root/main-configured"

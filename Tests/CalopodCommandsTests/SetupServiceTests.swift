@@ -63,6 +63,26 @@ struct SetupServiceTests {
         #expect(try service.snapshot().arms.count == 2)
     }
 
+    @Test("running quick setup again with the same choices changes nothing")
+    func quickSetupTwice() throws {
+        let (service, repository, root) = try makeService()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try repository.replaceCalendarBindings(connectionID: "mac", bindings: [
+            StoredCalendarBinding(id: "work", connectionID: "mac", providerCalendarID: "w",
+                displayLabel: "Work", isSelected: false, isReadOnly: false),
+            StoredCalendarBinding(id: "main", connectionID: "mac", providerCalendarID: "m",
+                displayLabel: "Main", isSelected: false, isReadOnly: false),
+            StoredCalendarBinding(id: "busy", connectionID: "mac", providerCalendarID: "b",
+                displayLabel: "Busy", isSelected: false, isReadOnly: false),
+        ])
+        try service.setSelected(calendarID: "work", selected: true)
+        try service.setUpTwoArms(sourceIDs: ["work"], fullDetailsTargetID: "main", busyTargetID: "busy")
+        let before = try service.snapshot().arms.map(\.id).sorted()
+
+        try service.setUpTwoArms(sourceIDs: ["work"], fullDetailsTargetID: "main", busyTargetID: "busy")
+        #expect(try service.snapshot().arms.map(\.id).sorted() == before)
+    }
+
     @Test("a second full-details arm is a plain arm and an existing Main stays listed")
     func existingMainStaysAnArm() throws {
         let (service, repository, root) = try makeService()
