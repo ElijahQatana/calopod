@@ -157,13 +157,14 @@ struct FirstRunSheet: View {
                 ForEach(connection.warnings, id: \.self) { Banner(kind: .caution, text: $0) }
                 // Ignored calendars are left out unless they are already chosen, so nothing chosen is hidden.
                 ForEach(connection.calendars.filter { !setup.aliases.isIgnored($0.id) || $0.isSelected }) { calendar in
-                    Toggle(
+                    CheckboxRow(
+                        title: setup.aliases.name(for: calendar),
                         isOn: Binding(
                             get: { calendar.isSelected },
                             set: { value in Task { await setup.setSelected(calendar.id, value) } }
                         )
                     ) {
-                        HStack(spacing: 8) {
+                        HStack(alignment: .center, spacing: 8) {
                             CalendarColorDot(calendarID: calendar.id, colors: colors)
                             Text(setup.aliases.name(for: calendar))
                             if calendar.isReadOnly {

@@ -109,3 +109,21 @@ extension CardRow {
         self.init { CardLabeled(title: title) { Text(value).foregroundStyle(.secondary) } }
     }
 }
+
+/// A checkbox with a label beside it. The box is centered on the whole label, so it stays level
+/// with the middle of a two-line label instead of sitting on its first line.
+struct CheckboxRow<Label: View>: View {
+    let title: String
+    @Binding var isOn: Bool
+    @ViewBuilder var label: Label
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 5) {
+            Toggle(title, isOn: $isOn).labelsHidden()
+            label
+                .contentShape(Rectangle())
+                .onTapGesture { isOn.toggle() }
+                .accessibilityHidden(true)
+        }
+    }
+}

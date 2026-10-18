@@ -56,15 +56,16 @@ struct CalendarRow: View {
     private var alias: String? { aliases.alias(for: calendar.id) }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(alignment: .center, spacing: 8) {
             // Only the on/off switch changes the provider, so only it waits for a sync to finish.
-            Toggle(
+            CheckboxRow(
+                title: aliases.name(for: calendar),
                 isOn: Binding(
                     get: { calendar.isSelected },
                     set: { value in Task { await model.setSelected(calendar.id, value) } }
                 )
             ) {
-                HStack(spacing: 8) {
+                HStack(alignment: .center, spacing: 8) {
                     CalendarColorDot(calendarID: calendar.id, colors: colors)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(aliases.name(for: calendar)).lineLimit(1)
