@@ -37,7 +37,7 @@ public struct AgentControlOverview: Equatable, Sendable {
     public let arms: [ArmLine]
 }
 
-/// Counts and reasons only, no event titles or notes.
+/// What a sync would change. Lines carry the event title and time when this Mac still knows them.
 public struct SyncPreview: Equatable, Sendable {
     public struct Line: Identifiable, Equatable, Sendable {
         public let id: String
@@ -45,6 +45,47 @@ public struct SyncPreview: Equatable, Sendable {
         /// One of `create`, `update`, `remove`, `repair`.
         public let action: String
         public let reason: String
+        /// The source event's title. Nil for a copy whose source is gone.
+        public let title: String?
+        public let startsAt: Date?
+        public let endsAt: Date?
+        public let isAllDay: Bool
+        /// Where the event comes from, when known.
+        public let sourceCalendarID: String?
+        /// The calendar that holds, or will hold, the copy.
+        public let targetCalendarID: String
+
+        public init(
+            id: String, armName: String, action: String, reason: String, title: String? = nil,
+            startsAt: Date? = nil, endsAt: Date? = nil, isAllDay: Bool = false,
+            sourceCalendarID: String? = nil, targetCalendarID: String
+        ) {
+            self.id = id
+            self.armName = armName
+            self.action = action
+            self.reason = reason
+            self.title = title
+            self.startsAt = startsAt
+            self.endsAt = endsAt
+            self.isAllDay = isAllDay
+            self.sourceCalendarID = sourceCalendarID
+            self.targetCalendarID = targetCalendarID
+        }
+
+        static func make(
+            item: SyncPlanItem, arm: StoredArm?, armName: String, source: StoredNormalizedInstance?
+        ) -> Line {
+            Line(
+                id: item.id, armName: armName, action: item.action.rawValue,
+                reason: AgentControlService.reasonText(item.reason),
+                title: source?.title ?? item.payload?.title,
+                startsAt: source?.startsAt ?? item.payload?.startsAt,
+                endsAt: source?.endsAt ?? item.payload?.endsAt,
+                isAllDay: source?.isAllDay ?? item.payload?.isAllDay ?? false,
+                sourceCalendarID: source?.calendarBindingID,
+                targetCalendarID: arm?.targetBindingID ?? ""
+            )
+        }
     }
 
     public let creates: Int
@@ -274,12 +315,19 @@ public struct AgentControlService: Sendable {
         let context = try context()
         let environment = try context.environment()
         let schedule = try context.schedule()
-        let armNames = Dictionary(
-            uniqueKeysWithValues: try environment.repository().arms().map { ($0.id, $0.displayName) }
-        )
+        let repository = try environment.repository()
+        let arms = Dictionary(uniqueKeysWithValues: try repository.arms().map { ($0.id, $0) })
+        let window = try schedule.window(containing: Date())
         let result = try await SyncEngine(environment: environment).run(
-            SyncRequest(mode: .dryRun, window: try schedule.window(containing: Date())),
+            SyncRequest(mode: .dryRun, window: window),
             trigger: .manual
+        )
+        let sources = Dictionary(
+            try repository.normalizedInstances(
+                calendarBindingIDs: Array(Set(arms.values.flatMap(\.sourceBindingIDs))),
+                from: window.start, through: window.end
+            ).map { ($0.sourceKeyHash, $0) },
+            uniquingKeysWith: { first, _ in first }
         )
         func count(_ action: SyncPlanAction) -> Int {
             result.items.filter { $0.action == action }.count
@@ -292,17 +340,15 @@ public struct AgentControlService: Sendable {
             noOps: result.noOpCount + count(.noOp),
             warnings: result.warnings,
             lines: result.items.filter { $0.action != .noOp }.map {
-                SyncPreview.Line(
-                    id: $0.id,
-                    armName: armNames[$0.armID] ?? "Unknown Arm",
-                    action: $0.action.rawValue,
-                    reason: Self.reasonText($0.reason)
+                SyncPreview.Line.make(
+                    item: $0, arm: arms[$0.armID], armName: arms[$0.armID]?.displayName ?? "Unknown Arm",
+                    source: $0.sourceKeyHash.flatMap { sources[$0] }
                 )
             }
         )
     }
 
-    private static func reasonText(_ reason: SyncPlanReason) -> String {
+    static func reasonText(_ reason: SyncPlanReason) -> String {
         switch reason {
         case .targetMissing: "Not on the target calendar yet"
         case .targetDiffers: "Target copy is out of date"
