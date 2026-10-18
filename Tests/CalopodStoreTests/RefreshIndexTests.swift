@@ -32,7 +32,7 @@ func refreshIndexesUpgradeEveryEarlierSchema() throws {
         let upgraded = try CalopodDatabase(path: path)
         try upgraded.migrate()
         try upgraded.read { (db: Database) throws -> Void in
-            #expect(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM grdb_migrations") == 16)
+            #expect(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM grdb_migrations") == 17)
             #expect(try String.fetchOne(db, sql: "SELECT status FROM sync_runs WHERE id = 'recover'") == "running")
             #expect(try Int.fetchOne(db, sql: "SELECT seen_generation FROM normalized_instances WHERE source_key_hash = 'source'") == 7)
             #expect(try Date.fetchOne(db, sql: "SELECT last_seen_at FROM normalized_instances WHERE source_key_hash = 'source'") == nil)

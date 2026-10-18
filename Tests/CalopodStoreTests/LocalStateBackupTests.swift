@@ -16,7 +16,7 @@ func localStateBackupCreatesPrivateVerifiedCopy() throws {
         secrets: fixture.secrets
     )
 
-    #expect(summary.migrationCount == 16)
+    #expect(summary.migrationCount == 17)
     #expect(try LocalStateBackup.verify(at: fixture.backupURL.path, secrets: fixture.secrets) == summary)
     let permissions = try FileManager.default.attributesOfItem(
         atPath: fixture.backupURL.path
@@ -93,7 +93,7 @@ func localStateRestoreReplacesStateAndPreservesBackup() throws {
         secrets: fixture.secrets
     )
 
-    #expect(summary.migrationCount == 16)
+    #expect(summary.migrationCount == 17)
     #expect(try fixture.configurationIDs(at: fixture.stateURL) == ["backed-up"])
     #expect(FileManager.default.fileExists(atPath: fixture.backupURL.path))
 }

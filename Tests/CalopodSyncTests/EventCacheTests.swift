@@ -86,6 +86,19 @@ struct EventCacheTests {
         #expect(result.instances.allSatisfy { $0.sourceKeyHash.count == 64 })
     }
 
+    @Test("A copy whose event id changed is excluded by its server id")
+    func excludedByExternalID() {
+        let start = Date(timeIntervalSince1970: 1_000)
+        let result = EventNormalizer.normalize([
+            event(id: "new-id", start: start, end: start.addingTimeInterval(60), externalID: "uid-1"),
+            event(id: "other", start: start, end: start.addingTimeInterval(60), externalID: "uid-2"),
+        ], connection: testConnection(), calendar: testCalendar(connectionID: "connection"),
+           from: start, through: start.addingTimeInterval(100), excludedExternalIDs: ["uid-1"])
+        #expect(result.instances.map(\.providerEventID) == ["other"])
+        #expect(result.instances[0].providerExternalID == "uid-2")
+        #expect(result.ingestion.excludedMappedCopyCount == 1)
+    }
+
     @Test("Expected exclusions, invalid records, and window boundaries are separate")
     func ingestionCategories() throws {
         let start = Date(timeIntervalSince1970: 1_000)
@@ -552,7 +565,8 @@ struct EventCacheTests {
         responseMetadata: EventResponse? = nil,
         provider: String = "eventkit",
         connectionID: String = "connection",
-        calendarID: String = "provider-calendar"
+        calendarID: String = "provider-calendar",
+        externalID: String? = nil
     ) -> ProviderEvent {
         ProviderEvent(
             provider: provider,
@@ -575,7 +589,8 @@ struct EventCacheTests {
             url: url,
             organizer: organizer,
             attendees: attendees,
-            responseMetadata: responseMetadata
+            responseMetadata: responseMetadata,
+            externalID: externalID
         )
     }
 

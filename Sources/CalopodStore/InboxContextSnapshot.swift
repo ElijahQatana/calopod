@@ -106,7 +106,8 @@ extension LocalStateRepository {
                 WHERE n.is_cancelled = 0 AND NOT EXISTS (
                     SELECT 1 FROM mirror_mappings m JOIN arms a ON a.id = m.arm_id
                     WHERE a.target_binding_id = n.calendar_binding_id
-                    AND m.provider_event_id = n.provider_event_id
+                    AND (m.provider_event_id = n.provider_event_id
+                         OR (n.provider_external_id IS NOT NULL AND m.provider_external_id = n.provider_external_id))
                 ) ORDER BY n.starts_at, n.source_key_hash
                 """).filter { bindingIDs.contains($0["calendar_binding_id"]) }.compactMap { row -> InboxContextEvent? in
                 let event = normalizedInstance(row)
@@ -124,8 +125,10 @@ extension LocalStateRepository {
                 let event = observation.event
                 let mapped = try Bool.fetchOne(db, sql: """
                     SELECT EXISTS (SELECT 1 FROM mirror_mappings m JOIN arms a ON a.id = m.arm_id
-                    WHERE a.target_binding_id = ? AND m.provider_event_id = ?)
-                    """, arguments: [event.calendarBindingID, event.providerEventID]) ?? false
+                    WHERE a.target_binding_id = ?
+                    AND (m.provider_event_id = ? OR (? IS NOT NULL AND m.provider_external_id = ?)))
+                    """, arguments: [event.calendarBindingID, event.providerEventID,
+                                     event.providerExternalID, event.providerExternalID]) ?? false
                 guard !mapped else { continue }
                 // A missing cache row is not deletion evidence. Retain the
                 // last observation as uncertain context, never a proven pair.
@@ -193,7 +196,7 @@ private func copyContext(_ db: Database) throws -> CopyContext {
             FROM arms a JOIN arm_sources s ON s.arm_id = a.id WHERE a.is_enabled = 1
             """),
         mapped: try Row.fetchAll(db, sql: """
-            SELECT m.source_key_hash, m.provider_event_id, a.rule_mode, a.target_binding_id
+            SELECT m.source_key_hash, m.provider_event_id, m.provider_external_id, a.rule_mode, a.target_binding_id
             FROM mirror_mappings m JOIN arms a ON a.id = m.arm_id
             """))
 }
@@ -228,6 +231,11 @@ private func copyDiagnoses(
                 .init(name: "arm routes the source calendar to this calendar", passed: routedHere),
                 .init(name: "mirror record for the source matches this event id",
                       passed: stored.contains { ($0["provider_event_id"] as String) == event.providerEventID }),
+                .init(name: "mirror record for the source matches this event's server id",
+                      passed: event.providerExternalID.map { id in stored.contains {
+                          ($0["provider_external_id"] as String?) == id
+                              && ($0["target_binding_id"] as String) == event.calendarBindingID
+                      } } ?? false),
                 .init(name: "start and end equal", passed: other.startsAt == event.startsAt && other.endsAt == event.endsAt
                         && other.isAllDay == event.isAllDay),
                 .init(name: "title equal to the source's (or Busy)", passed: title == (event.title ?? "")),

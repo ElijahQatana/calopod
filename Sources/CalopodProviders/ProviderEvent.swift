@@ -39,6 +39,8 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
     public let organizer: EventParticipant?
     public let attendees: [EventParticipant]
     public let responseMetadata: EventResponse?
+    /// A server-assigned id that stays the same when `eventID` changes after a sync.
+    public let externalID: String?
     public var currentUserResponse: EventResponse {
         responseMetadata ?? (provider == "ics" ? .readOnlyFeed : .unavailable)
     }
@@ -66,7 +68,8 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
         attendees: [EventParticipant] = [],
         responseMetadata: EventResponse? = nil,
         tombstoneEvidence: ProviderTombstoneEvidence? = nil,
-        timeZoneIdentifier: String? = nil
+        timeZoneIdentifier: String? = nil,
+        externalID: String? = nil
     ) {
         self.provider = provider
         self.connectionID = connectionID
@@ -91,6 +94,7 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
         self.organizer = organizer
         self.attendees = attendees
         self.responseMetadata = responseMetadata
+        self.externalID = externalID
     }
 
     /// Marks this event as one of Calopod's mirrors so `EventNormalizer` leaves it out; otherwise a
@@ -119,7 +123,8 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
             attendees: attendees,
             responseMetadata: responseMetadata,
             tombstoneEvidence: tombstoneEvidence,
-            timeZoneIdentifier: timeZoneIdentifier
+            timeZoneIdentifier: timeZoneIdentifier,
+            externalID: externalID
         )
     }
 }

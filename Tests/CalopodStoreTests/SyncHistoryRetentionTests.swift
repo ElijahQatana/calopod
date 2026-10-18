@@ -45,7 +45,7 @@ func historyRetentionKeepsRecoveryAndDeletionProof() throws {
             try db.execute(sql: "INSERT INTO tombstones VALUES (?, ?, 'proof', ?)", arguments: [source, mirror, date])
         }
         try db.execute(sql: "INSERT INTO arms (id, configuration_id, target_binding_id, rule_mode, created_at, updated_at) VALUES ('arm', 'default', 'calendar', 'busy', ?, ?)", arguments: [old, old])
-        try db.execute(sql: "INSERT INTO mirror_mappings VALUES ('mapped', 'arm', 'returned', 'target', NULL, 'synthetic', 'ownership', ?)", arguments: [old])
+        try db.execute(sql: "INSERT INTO mirror_mappings VALUES ('mapped', 'arm', 'returned', 'target', NULL, 'synthetic', 'ownership', ?, NULL)", arguments: [old])
     }
     try database.read { (db: Database) throws -> Void in
         let runs = try Row.fetchAll(db, sql: "EXPLAIN QUERY PLAN DELETE FROM sync_runs WHERE status IN ('succeeded', 'failed') AND finished_at < ? AND NOT EXISTS (SELECT 1 FROM sync_operations WHERE run_id = sync_runs.id AND status <> 'succeeded')", arguments: [cutoff]).map { $0["detail"] as String }.joined()

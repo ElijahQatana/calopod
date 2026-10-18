@@ -64,6 +64,30 @@ struct InboxContextSnapshotTests {
         #expect(keys.contains("a"))
     }
 
+    @Test("A copy edited beyond its shape is found by the server id when the event id changed", arguments: [
+        // stored server id, read-back server id, kept
+        ("uid-1", "uid-1", false),
+        ("uid-1", "uid-2", true),
+        ("uid-1", nil, true),
+        (nil, "uid-1", true),
+    ] as [(String?, String?, Bool)])
+    func copyByServerID(stored: String?, readBack: String?, kept: Bool) throws {
+        let fixture = try ContextFixture()
+        try fixture.refresh("one", events: [fixture.event("a", binding: "one")])
+        let edited = StoredNormalizedInstance(sourceKeyHash: "edited", connectionID: "connection", calendarBindingID: "two", providerEventID: "new-id",
+            recurrenceID: nil, startsAt: Date(timeIntervalSince1970: 2000), endsAt: Date(timeIntervalSince1970: 3000), isAllDay: false, availability: "busy",
+            isCancelled: false, isPrivate: false, title: "Renamed by someone", contentFingerprint: "synthetic", providerUpdatedAt: nil,
+            attendees: [EventParticipant(name: "Other guest", emailAddress: "other@example.com")],
+            currentUserResponse: EventResponse(state: .unknown), providerExternalID: readBack)
+        try fixture.refresh("two", events: [edited])
+        try fixture.repository.saveArm(StoredArm(id: "arm", configurationID: "default", sourceBindingIDs: ["one"], targetBindingID: "two", ruleMode: .busy))
+        try fixture.repository.saveMirrorMapping(StoredMirrorMapping(mirrorKey: "mapping", armID: "arm", sourceKeyHash: "a", providerEventID: "old-id", providerVersion: nil,
+            desiredFingerprint: "synthetic", ownershipKeyID: "synthetic", updatedAt: fixture.start, providerExternalID: stored))
+        let keys = try fixture.repository.inboxContextSnapshot().events.map(\.event.sourceKeyHash)
+        #expect(keys.contains("edited") == kept)
+        #expect(keys.contains("a"))
+    }
+
     @Test("Tombstones are absent and newer retained moves supersede old cached intervals")
     func movesAndRemoval() throws {
         let fixture = try ContextFixture()

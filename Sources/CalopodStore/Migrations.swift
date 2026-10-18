@@ -18,6 +18,7 @@ extension CalopodDatabase {
         "v14_all_day_time_zone",
         "v15_refresh_retention_indexes",
         "v16_calendar_provider_color",
+        "v17_copy_external_id",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -363,6 +364,17 @@ extension CalopodDatabase {
         migrator.registerMigration("v16_calendar_provider_color") { database in
             try database.alter(table: "calendar_bindings") { table in
                 table.add(column: "provider_color", .text)
+            }
+        }
+
+        // The event id of an EventKit copy can change when its calendar syncs, so the copy's
+        // server-assigned id is kept as well.
+        migrator.registerMigration("v17_copy_external_id") { database in
+            try database.alter(table: "mirror_mappings") { table in
+                table.add(column: "provider_external_id", .text)
+            }
+            try database.alter(table: "normalized_instances") { table in
+                table.add(column: "provider_external_id", .text)
             }
         }
 

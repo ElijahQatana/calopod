@@ -160,11 +160,13 @@ public struct ManagedEventLifecycleService: Sendable {
                 }
                 let sourceKeyHash = item.sourceKeyHash ?? mapping.sourceKeyHash
                 let ownershipKeyID = target.ownershipKeyID ?? mapping.ownershipKeyID
+                let externalID = target.providerExternalID ?? mapping.providerExternalID
                 guard mapping.sourceKeyHash != sourceKeyHash
                         || mapping.providerEventID != target.providerEventID
                         || mapping.providerVersion != target.providerVersion
                         || mapping.desiredFingerprint != fingerprint
-                        || mapping.ownershipKeyID != ownershipKeyID else {
+                        || mapping.ownershipKeyID != ownershipKeyID
+                        || mapping.providerExternalID != externalID else {
                     continue
                 }
                 let refreshed = StoredMirrorMapping(
@@ -175,7 +177,8 @@ public struct ManagedEventLifecycleService: Sendable {
                     providerVersion: target.providerVersion,
                     desiredFingerprint: fingerprint,
                     ownershipKeyID: ownershipKeyID,
-                    updatedAt: now()
+                    updatedAt: now(),
+                    providerExternalID: externalID
                 )
                 try repository.saveMirrorMapping(refreshed)
                 mappings[item.mirrorKey] = refreshed
@@ -200,7 +203,8 @@ public struct ManagedEventLifecycleService: Sendable {
                         providerVersion: target.providerVersion,
                         desiredFingerprint: fingerprint,
                         ownershipKeyID: ownershipKeyID,
-                        updatedAt: now()
+                        updatedAt: now(),
+                        providerExternalID: target.providerExternalID
                     )
                     try repository.saveMirrorMapping(adopted)
                     mappings[item.mirrorKey] = adopted
@@ -493,7 +497,8 @@ public struct ManagedEventLifecycleService: Sendable {
             providerVersion: result.providerVersion,
             desiredFingerprint: fingerprint,
             ownershipKeyID: key.id,
-            updatedAt: now
+            updatedAt: now,
+            providerExternalID: result.providerExternalID
         )
     }
 }
