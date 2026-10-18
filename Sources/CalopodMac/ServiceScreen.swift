@@ -26,7 +26,7 @@ struct ServiceScreen: View {
         case .unavailable:
             CardSection(
                 "Background service",
-                footnote: "Open the Calopod app (Scripts/build-calopod-mac-app.sh) to move syncing into the app."
+                footnote: "Syncing moves into the app once Calopod runs as an installed app, not from a build folder."
             ) {
                 if model.status?.installed == true {
                     CardRow("Installed from", value: "Source install")

@@ -70,4 +70,4 @@ Migrations run in order, in transactions, and a failed one leaves the old schema
 
 ## Not done yet
 
-ICS feeds, a Mac app, an iPhone app, a conflict-resolution screen, and automatic declines.
+ICS feeds, an iPhone app, a month view and creating events in the Mac app, and automatic declines.
