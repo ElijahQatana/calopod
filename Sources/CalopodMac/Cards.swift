@@ -21,8 +21,8 @@ struct CardPage<Content: View>: View {
     var page: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let title {
-                PageHeader(title, pinnedLeft: true)
-                    .padding(.trailing, Theme.pagePadding)
+                PageHeader(title)
+                    .padding(.horizontal, Theme.pagePadding)
                     .padding(.top, Theme.Page.topPadding(collapsed: collapsed, inlineHeader: true))
                     .padding(.bottom, 16)
             }
