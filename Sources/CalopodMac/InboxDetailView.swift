@@ -10,26 +10,51 @@ struct InboxDetailView: View {
 
     private var entry: InboxEntry { detail.entry }
 
+    /// Below this pane width the two cards stack, details first.
+    private static let twoColumnWidth: CGFloat = 700
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(entry.title).font(Theme.Fonts.sectionTitle)
-            FlowLayout(spacing: 8) {
-                ForEach(entry.reasons, id: \.self) { StatusPill(text: InboxText.label($0, entry), color: InboxText.tint($0)) }
+            DetailColumns(threshold: Self.twoColumnWidth, spacing: 16) {
+                detailsCard
+                actionsCard
             }
-            facts
             VStack(alignment: .leading, spacing: 6) {
-                Text("Around this time").font(Theme.Fonts.bodySemibold)
+                Text("Around this time").font(Theme.Fonts.sectionTitle)
                 ContextStrip(detail: detail, colors: colors)
-            }
-            Text(detail.replyNote).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            if let reply = model.pendingReply { confirm(reply) } else { actions }
-            if let result = model.result {
-                Banner(kind: result.status == .confirmed ? .info : .caution, text: result.message)
             }
         }
         .padding(.leading, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var detailsCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Event details").font(Theme.Fonts.sectionTitle).padding(.horizontal, 4)
+            VStack(alignment: .leading, spacing: 12) {
+                FlowLayout(spacing: 8) {
+                    ForEach(entry.reasons, id: \.self) { StatusPill(text: InboxText.label($0, entry), color: InboxText.tint($0)) }
+                }
+                facts
+            }
+            .padding(14).frame(maxWidth: .infinity, alignment: .leading).cardSurface()
+        }
+    }
+
+    private var actionsCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Event actions").font(Theme.Fonts.sectionTitle).padding(.horizontal, 4)
+            VStack(alignment: .leading, spacing: 12) {
+                Text(detail.replyNote).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let reply = model.pendingReply { confirm(reply) } else { actions }
+                if let result = model.result {
+                    Banner(kind: result.status == .confirmed ? .info : .caution, text: result.message)
+                }
+            }
+            .padding(14).frame(maxWidth: .infinity, alignment: .leading).cardSurface()
+        }
     }
 
     private var facts: some View {
@@ -87,12 +112,46 @@ struct InboxDetailView: View {
             }
         }
         .controlSize(.large)
-        .padding(14)
-        .cardSurface()
     }
 
     private func reply(_ title: String, _ choice: ConflictChoice) -> some View {
         Button(title) { model.askToReply(choice) }
             .disabled(model.isBusy || !detail.replies.contains(choice))
+    }
+}
+
+/// Two cards side by side when the pane is at least `threshold` wide, otherwise stacked.
+private struct DetailColumns: Layout {
+    let threshold: CGFloat
+    let spacing: CGFloat
+
+    private func columns(_ width: CGFloat) -> Bool { width >= threshold }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? threshold
+        if columns(width) {
+            let each = (width - spacing) / 2
+            let height = subviews.map { $0.sizeThatFits(ProposedViewSize(width: each, height: nil)).height }.max() ?? 0
+            return CGSize(width: width, height: height)
+        }
+        let heights = subviews.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height }
+        return CGSize(width: width, height: heights.reduce(0, +) + spacing * CGFloat(max(heights.count - 1, 0)))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        if columns(bounds.width) {
+            let each = (bounds.width - spacing) / 2
+            for (index, view) in subviews.enumerated() {
+                view.place(at: CGPoint(x: bounds.minX + CGFloat(index) * (each + spacing), y: bounds.minY), anchor: .topLeading,
+                           proposal: ProposedViewSize(width: each, height: nil))
+            }
+        } else {
+            var y = bounds.minY
+            for view in subviews {
+                let height = view.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil)).height
+                view.place(at: CGPoint(x: bounds.minX, y: y), anchor: .topLeading, proposal: ProposedViewSize(width: bounds.width, height: nil))
+                y += height + spacing
+            }
+        }
     }
 }

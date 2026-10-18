@@ -34,6 +34,14 @@ final class DayStripLayoutTests: XCTestCase {
         XCTAssertEqual(DayStripLayout.blocks([item], windowStart: late).first?.top, 60)
     }
 
+    func testAxisStartsOnAnHourAndEveryHourGetsAMark() {
+        let axis = DayStripLayout.axis(start: top.addingTimeInterval(-90 * 60), end: top.addingTimeInterval(90 * 60))
+        XCTAssertEqual(axis.start, top.addingTimeInterval(-120 * 60))
+        XCTAssertEqual(axis.end, top.addingTimeInterval(120 * 60))
+        XCTAssertEqual(DayStripLayout.hourMarks(from: axis.start, to: axis.end).count, 4)
+        XCTAssertEqual(DayStripLayout.axis(start: top, end: top.addingTimeInterval(3 * 3600)).end, top.addingTimeInterval(3 * 3600))
+    }
+
     func testHourMarksAndHeight() {
         let marks = DayStripLayout.hourMarks(from: top.addingTimeInterval(30 * 60), to: top.addingTimeInterval(210 * 60))
         XCTAssertEqual(marks.map(\.minutes), [30, 90, 150])

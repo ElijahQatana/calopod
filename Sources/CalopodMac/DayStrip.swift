@@ -49,8 +49,18 @@ enum DayStripLayout {
         return marks
     }
 
-    static func height(forMinutes minutes: Double) -> CGFloat {
-        min(max(CGFloat(minutes) * pointsPerMinute, minimumHeight), maximumHeight)
+    /// Room above the first hour and below the last, so no label is cut off.
+    static let inset: CGFloat = 10
+
+    static func height(forMinutes minutes: Double, inset: CGFloat = 0) -> CGFloat {
+        min(max(CGFloat(minutes) * pointsPerMinute + 2 * inset, minimumHeight), maximumHeight)
+    }
+
+    /// The window moved out to whole hours, so every hour line inside it has a label.
+    static func axis(start: Date, end: Date, calendar: Calendar = .current) -> (start: Date, end: Date) {
+        let from = calendar.dateInterval(of: .hour, for: start)?.start ?? start
+        let to = calendar.dateInterval(of: .hour, for: end.addingTimeInterval(-1))?.end ?? end
+        return (from, max(to, from.addingTimeInterval(3600)))
     }
 }
 
@@ -63,10 +73,12 @@ struct ContextStrip: View {
     private static let axisWidth: CGFloat = 52
 
     var body: some View {
-        let minutes = max(detail.windowEnd.timeIntervalSince(detail.windowStart) / 60, 60)
-        let blocks = DayStripLayout.blocks(detail.context, windowStart: detail.windowStart)
-        let marks = DayStripLayout.hourMarks(from: detail.windowStart, to: detail.windowEnd)
+        let axis = DayStripLayout.axis(start: detail.windowStart, end: detail.windowEnd)
+        let minutes = max(axis.end.timeIntervalSince(axis.start) / 60, 60)
+        let blocks = DayStripLayout.blocks(detail.context, windowStart: axis.start)
+        let marks = DayStripLayout.hourMarks(from: axis.start, to: axis.end)
         let total = CGFloat(minutes) * DayStripLayout.pointsPerMinute
+        let inset = DayStripLayout.inset
         GeometryReader { proxy in
             ScrollViewReader { scroller in
                 ScrollView {
@@ -78,7 +90,7 @@ struct ContextStrip: View {
                                     .frame(width: Self.axisWidth - 6, alignment: .trailing)
                                 Rectangle().fill(.quaternary).frame(height: 0.5)
                             }
-                            .offset(y: CGFloat(mark.minutes) * DayStripLayout.pointsPerMinute - 8)
+                            .offset(y: inset + CGFloat(mark.minutes) * DayStripLayout.pointsPerMinute - 8)
                             .accessibilityHidden(true)
                         }
                         ForEach(blocks) { placed in
@@ -87,11 +99,11 @@ struct ContextStrip: View {
                             block(placed.entry)
                                 .frame(width: max(width - 3, 24), height: max(CGFloat(placed.height) * DayStripLayout.pointsPerMinute - 2, 18))
                                 .padding(.leading, Self.axisWidth + CGFloat(placed.column) * width)
-                                .padding(.top, CGFloat(placed.top) * DayStripLayout.pointsPerMinute)
+                                .padding(.top, inset + CGFloat(placed.top) * DayStripLayout.pointsPerMinute)
                                 .id(placed.id)
                         }
                     }
-                    .frame(width: proxy.size.width, height: total + 8, alignment: .topLeading)
+                    .frame(width: proxy.size.width, height: total + 2 * inset, alignment: .topLeading)
                 }
                 .scrollBounceBehavior(.basedOnSize)
                 .onAppear {
@@ -99,7 +111,7 @@ struct ContextStrip: View {
                 }
             }
         }
-        .frame(height: DayStripLayout.height(forMinutes: minutes))
+        .frame(height: DayStripLayout.height(forMinutes: minutes, inset: inset))
         .padding(.vertical, 6).padding(.horizontal, 8)
         .cardSurface()
     }
