@@ -150,6 +150,7 @@ public struct InboxConflictDetail: Codable, Equatable, Sendable {
     let eventID: String
     let label: String?
     let calendarLabel: String?
+    var calendarAlias: String? = nil
     let startsAt: String
     let endsAt: String
 }
@@ -209,6 +210,7 @@ enum InboxCLI {
     static func list(repository: LocalStateRepository, options: InboxOptions, range: ResolvedDateRange?,
                      activity: Bool, all: Bool = false, now: Date = Date()) throws -> CommandPayload {
         let snapshot = try snapshot(repository, options: options)
+        let names = CalendarNames(repository)
         let full = try repository.inboxContextSnapshot()
         let query = InboxAttentionQuery.evaluate(full, filter: InboxAttentionFilter(window: range?.window,
             excludeMaybe: options.excludeMaybe, conflictsOnly: options.conflicts, asOf: now), freshnessCutoff: now.addingTimeInterval(-3600))
@@ -240,12 +242,12 @@ enum InboxCLI {
                 (a.observedAt, a.sourceKeyHash, a.revision) > (b.observedAt, b.sourceKeyHash, b.revision)
             }
             items = try rows.map { entry in item(entry.event, revision: entry.revision, activity: entry,
-                row: query.rows.first { $0.item.event.sourceKeyHash == entry.sourceKeyHash }, observation: try repository.inboxObservation(sourceKeyHash: entry.sourceKeyHash), context: full, details: false) }
+                row: query.rows.first { $0.item.event.sourceKeyHash == entry.sourceKeyHash }, observation: try repository.inboxObservation(sourceKeyHash: entry.sourceKeyHash), context: full, details: false, names: names) }
         } else {
             let bindings = Set(snapshot.sources.map(\.bindingID))
-            items = query.rows.filter { bindings.contains($0.item.event.calendarBindingID) }.map { item($0.item.event, revision: $0.item.observation?.revision ?? 1, row: $0, context: full, details: false) }
+            items = query.rows.filter { bindings.contains($0.item.event.calendarBindingID) }.map { item($0.item.event, revision: $0.item.observation?.revision ?? 1, row: $0, context: full, details: false, names: names) }
         }
-        let sources = snapshot.sources.map { source($0, now: now, range: range.map { $0.window.start..<$0.window.end }) }
+        let sources = snapshot.sources.map { names.source(source($0, now: now, range: range.map { $0.window.start..<$0.window.end })) }
         let gaps = Set(query.analysis.warnings.map { $0.kind.rawValue }).sorted()
         return CommandPayload(status: gaps.isEmpty ? "ok" : "partial",
             message: "\(items.count) retained items. Coverage is bounded.\(gaps.isEmpty ? "" : " Limits: " + gaps.joined(separator: ", "))",
@@ -277,8 +279,9 @@ enum InboxCLI {
         guard revision == observation.revision || activity != nil else { throw ValidationError("Revision is no longer retained.") }
         let query = InboxAttentionQuery.evaluate(snapshot, freshnessCutoff: Date().addingTimeInterval(-3600))
         let row = query.rows.first { $0.item.event.sourceKeyHash == key }
+        let names = CalendarNames(repository)
         return CommandPayload(status: "ok", message: "Local revision detail. Inspect does not acknowledge or send RSVP.", count: 1,
-            sources: snapshot.sources.filter { $0.bindingID == observation.event.calendarBindingID }.map { source($0, now: Date()) }, items: [item(activity?.event ?? observation.event, revision: revision, activity: activity, row: row, observation: observation, context: snapshot, details: true)])
+            sources: snapshot.sources.filter { $0.bindingID == observation.event.calendarBindingID }.map { names.source(source($0, now: Date())) }, items: [item(activity?.event ?? observation.event, revision: revision, activity: activity, row: row, observation: observation, context: snapshot, details: true, names: names)])
     }
     static func acknowledge(_ identifier: String, repository: LocalStateRepository) throws -> CommandPayload {
         _ = try inspect(identifier, repository: repository)
@@ -287,12 +290,14 @@ enum InboxCLI {
         return CommandPayload(status: "ok", message: "Reviewed one revision locally. RSVP and conflicts are unchanged.", count: 1)
     }
     static func item(_ event: StoredNormalizedInstance, revision: Int64, activity: InboxActivity? = nil,
-                     row: InboxAttentionRow? = nil, observation: InboxObservation? = nil, context: InboxContextSnapshot? = nil, details: Bool) -> CommandItem {
+                     row: InboxAttentionRow? = nil, observation: InboxObservation? = nil, context: InboxContextSnapshot? = nil, details: Bool,
+                     names: CalendarNames? = nil) -> CommandItem {
         let conflicts = (row?.conflicts ?? []).map { conflict in
             let key = conflict.pair.first == event.sourceKeyHash ? conflict.pair.second : conflict.pair.first
             let other = context?.events.first { $0.event.sourceKeyHash == key }?.event
+            let label = context?.sources.first { $0.bindingID == other?.calendarBindingID }?.calendarLabel
             return InboxConflictDetail(eventID: key, label: other?.title,
-                calendarLabel: context?.sources.first { $0.bindingID == other?.calendarBindingID }?.calendarLabel,
+                calendarLabel: label, calendarAlias: other.flatMap { names?.alias($0.calendarBindingID, real: label) },
                 startsAt: date(conflict.overlap.start)!, endsAt: date(conflict.overlap.end)!)
         }
         let observed = observation ?? row?.item.observation

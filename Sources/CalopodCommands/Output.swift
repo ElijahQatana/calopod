@@ -83,6 +83,8 @@ public struct CommandPayload: Codable, Equatable, Sendable {
     public let migrationCount: Int?
     public let ingestion: EventIngestionSummary?
     public let review: SyncReviewSummary?
+    /// Palette color ids a calendar can be given.
+    public let colors: [String]?
 
     public init(
         status: String,
@@ -122,7 +124,8 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         backupEncrypted: Bool? = nil,
         migrationCount: Int? = nil,
         ingestion: EventIngestionSummary? = nil,
-        review: SyncReviewSummary? = nil
+        review: SyncReviewSummary? = nil,
+        colors: [String]? = nil
     ) {
         self.status = status
         self.message = message
@@ -162,6 +165,7 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         self.migrationCount = migrationCount
         self.ingestion = ingestion
         self.review = review
+        self.colors = colors
     }
 }
 
@@ -170,13 +174,22 @@ public struct CommandSource: Codable, Equatable, Sendable {
     public let connectionID: String
     public let provider: String
     public let label: String?
+    /// The name chosen on this Mac, when there is one. `label` stays the provider's name.
+    public let alias: String?
+    /// Set only for ignored calendars.
+    public let ignored: Bool?
     let inbox: InboxSourceDetail?
 
-    public init(id: String, connectionID: String, provider: String, label: String?, inbox: InboxSourceDetail? = nil) {
+    public init(
+        id: String, connectionID: String, provider: String, label: String?,
+        alias: String? = nil, ignored: Bool? = nil, inbox: InboxSourceDetail? = nil
+    ) {
         self.id = id
         self.connectionID = connectionID
         self.provider = provider
         self.label = label
+        self.alias = alias
+        self.ignored = ignored
         self.inbox = inbox
     }
 }
@@ -203,6 +216,10 @@ public struct CommandItem: Codable, Equatable, Sendable {
     public let armID: String?
     public let mirrorKey: String?
     public let desiredFingerprint: String?
+    /// For calendars: the name chosen on this Mac, whether it is ignored, and its palette color.
+    public let alias: String?
+    public let ignored: Bool?
+    public let color: String?
     let inbox: InboxItemDetail?
 
     public init(
@@ -227,6 +244,9 @@ public struct CommandItem: Codable, Equatable, Sendable {
         armID: String? = nil,
         mirrorKey: String? = nil,
         desiredFingerprint: String? = nil,
+        alias: String? = nil,
+        ignored: Bool? = nil,
+        color: String? = nil,
         inbox: InboxItemDetail? = nil
     ) {
         self.id = id
@@ -250,6 +270,9 @@ public struct CommandItem: Codable, Equatable, Sendable {
         self.armID = armID
         self.mirrorKey = mirrorKey
         self.desiredFingerprint = desiredFingerprint
+        self.alias = alias
+        self.ignored = ignored
+        self.color = color
         self.inbox = inbox
     }
 }

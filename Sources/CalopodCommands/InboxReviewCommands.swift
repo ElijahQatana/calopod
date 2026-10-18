@@ -86,7 +86,8 @@ public struct InboxReviewCommand: AsyncParsableCommand {
             let terminal = InboxReviewTerminal(controller: controller, refresh: refresh, provider: provider,
                 read: { input.line() }, write: { print($0) }, width: input.width,
                 decoration: !noDecoration && environment["NO_COLOR"] == nil && environment["TERM"] != "dumb",
-                timezone: TimeZone(identifier: options.range.timezone ?? session.displayTimeZoneIdentifier ?? "") ?? .current)
+                timezone: TimeZone(identifier: options.range.timezone ?? session.displayTimeZoneIdentifier ?? "") ?? .current,
+                names: CalendarNames(state))
             _ = try await terminal.run(session)
         } catch InboxReviewSessionError.noSession { try failCommand(ValidationError("No unfinished review session. Start with calopod inbox review.")) }
         catch { try failCommand(error) }
