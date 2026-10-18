@@ -12,8 +12,13 @@ final class InboxReviewModelTests: XCTestCase {
         func add() { lock.withLock { days += 1 } }
     }
 
+    private struct StubOpener: CalendarOpening {
+        let opened: Opened
+        func open(eventID: String, startsAt: Date) -> CalendarOpenResult { opened.add(); return .opened }
+    }
+
     private func started(_ f: MacFixture, filter: InboxFilter = .all, opened: Opened = Opened()) async -> InboxReviewModel {
-        let model = InboxReviewModel(service: f.review, calendar: CalendarOpener { _ in opened.add() })
+        let model = InboxReviewModel(service: f.review, calendar: StubOpener(opened: opened))
         model.open(filter: filter)
         await model.begin()
         return model

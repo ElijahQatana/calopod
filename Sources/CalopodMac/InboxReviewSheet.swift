@@ -43,7 +43,7 @@ struct InboxReviewSheet: View {
     private var scrollingBody: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                if let notice = model.notice, showsNotice { Banner(kind: .info, text: notice) }
+                if let notice = model.notice, showsNotice { Banner(kind: .info, text: notice, onDismiss: model.dismissNotice) }
                 content
             }
             .padding(24)
@@ -248,12 +248,12 @@ struct InboxReviewSheet: View {
 
     private func cardButtons(_ card: InboxReviewCardInfo) -> some View {
         HStack(spacing: 8) {
-            if card.replies.isEmpty && card.isMacCalendar {
+            if card.detail.canOpenInCalendar {
                 let opened = model.openedKey == card.entry.id
                 Button { Task { await model.perform(.openCalendar) } } label: { keyed("Open in Calendar", "O") }
                     .buttonStyle(.accentFilled)
                     .opacity(opened ? 0.7 : 1)
-                    .help("Opens the Calendar app at this day. Nothing is sent from Calopod.")
+                    .help(CalendarOpenText.help)
                 Button { Task { await model.perform(.doneInCalendar) } } label: { keyed("Done, next", "D") }
                     .help("Move on once you have answered in Calendar. It is checked again on the next refresh.")
             } else {

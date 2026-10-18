@@ -269,7 +269,8 @@ public struct InboxReviewService: Sendable {
         let detail = InboxDetail(
             entry: entry, windowStart: context.visibleWindow.start, windowEnd: context.visibleWindow.end,
             context: strip, replies: replies, replyNote: note,
-            account: account, connection: context.source.connectionLabel ?? context.source.provider, previews: previews)
+            account: account, connection: context.source.connectionLabel ?? context.source.provider, previews: previews,
+            calendarEventID: context.source.provider == "eventkit" ? event.providerEventID : nil)
         let neighbors = context.conflictGroup.filter { $0.event.sourceKeyHash != key }.map { item in
             strip.first { $0.id == item.event.sourceKeyHash } ?? InboxContextEntry(
                 id: item.event.sourceKeyHash, title: item.event.title ?? "Untitled event", calendarID: item.event.calendarBindingID,

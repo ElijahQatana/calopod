@@ -111,6 +111,11 @@ public struct InboxDetail: Equatable, Sendable {
     public var connection = ""
     /// What would still overlap after each answer.
     public var previews: [InboxReviewPreview] = []
+    /// The Calendar app's id for the event, set for calendars read through the Mac and answered there.
+    public var calendarEventID: String?
+
+    /// True when replies are made in the Calendar app, so Inbox offers to open the event there.
+    public var canOpenInCalendar: Bool { calendarEventID != nil && replies.isEmpty }
 
     public func preview(for reply: ConflictChoice) -> InboxReviewPreview? { previews.first { $0.reply == reply } }
 }
@@ -202,7 +207,8 @@ public struct InboxScreenService: Sendable {
                 ? ConflictResolutionService.reasonText(choices.unavailableReasons)
                 : Self.note(organizer: focused.organizer, overlapsAfterYes: remaining),
             account: Self.accountLabel(context.source), connection: context.source.connectionLabel ?? context.source.provider,
-            previews: Self.previews(for: replies, in: context, key: id)
+            previews: Self.previews(for: replies, in: context, key: id),
+            calendarEventID: context.source.provider == "eventkit" ? focused.providerEventID : nil
         )
     }
 
