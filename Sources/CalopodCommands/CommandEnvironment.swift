@@ -99,6 +99,30 @@ func failCommand(_ error: Error) throws -> Never {
     throw ExitCode(failure.exitCode.rawValue)
 }
 
+private enum PlainWording {
+    static let helperMissing = "Calopod's calendar helper is missing or not trusted. Reinstall Calopod from the download."
+    static let helperAnswer = "Calendar did not answer correctly. Check that Calopod is signed and allowed in Calendar privacy settings."
+    static let helperSlow = "Calendar took too long to answer. Try again."
+    static let google = "Google sign-in has no client ID yet. This build of Calopod was not given one, so it cannot sign in to Google."
+    static let microsoft = "Microsoft sign-in has no client ID yet. This build of Calopod was not given one, so it cannot sign in to Microsoft."
+}
+
+/// The reason a sync run failed, from the failure category the agent saved, in the app's plain words.
+public func syncFailureReason(category: String?) -> String {
+    switch category {
+    case "eventkit-host", "eventkit-host-version": PlainWording.helperMissing
+    case "eventkit-host-response": PlainWording.helperAnswer
+    case "eventkit-host-timeout": PlainWording.helperSlow
+    case "client-id": "This build of Calopod has no sign-in client ID, so it cannot reach Google or Microsoft."
+    case "authorization", "consent", "credential-access":
+        "A calendar account needs to be reconnected. Open Calendars and sign in again."
+    case "busy": "Another sync was running at the same time. The next run will try again."
+    case "interrupted": "The sync was interrupted before it finished."
+    case "source-refresh", "target-refresh": "Calopod could not read one of your calendars. Try again in a moment."
+    default: "The sync failed. Try again in a moment. If it keeps failing, reconnect your calendar accounts."
+    }
+}
+
 /// What the Mac app shows for an error. The terminal keeps `commandFailure`, which points at commands.
 func appFailureMessage(_ error: Error) -> String {
     if error is CalopodDatabaseError {
@@ -115,18 +139,18 @@ func appFailureMessage(_ error: Error) -> String {
     let runtime = (error as? CalopodRuntimeError)
     let environment = (error as? CommandEnvironmentError)
     if runtime == .missingGoogleClientID || environment == .missingGoogleClientID {
-        return "Google sign-in has no client ID yet. This build of Calopod was not given one, so it cannot sign in to Google."
+        return PlainWording.google
     }
     if runtime == .missingMicrosoftClientID || environment == .missingMicrosoftClientID {
-        return "Microsoft sign-in has no client ID yet. This build of Calopod was not given one, so it cannot sign in to Microsoft."
+        return PlainWording.microsoft
     }
     switch runtime {
     case .missingEventKitHost?, .eventKitHostUntrusted?:
-        return "Calopod's calendar helper is missing or not trusted. Reinstall Calopod from the download."
+        return PlainWording.helperMissing
     case .eventKitHostFailed?:
-        return "Calendar did not answer correctly. Check that Calopod is signed and allowed in Calendar privacy settings."
+        return PlainWording.helperAnswer
     case .eventKitHostTimedOut?:
-        return "Calendar took too long to answer. Try again."
+        return PlainWording.helperSlow
     default:
         return commandFailure(error).message
     }

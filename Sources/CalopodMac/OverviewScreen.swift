@@ -8,12 +8,15 @@ struct OverviewScreen: View {
     @Environment(InboxModel.self) private var inbox
     @Environment(CalendarModel.self) private var schedule
     @Environment(CalendarAccessModel.self) private var access
+    @Environment(\.sidebarCollapsed) private var collapsed
 
     @State private var progress = FirstRunProgress()
     @State private var showingSetup = false
 
+    @State private var openReasons: Set<String> = []
+
     var body: some View {
-        CardPage(title: "Overview") {
+        CardPage(title: "Overview", trailing: Date().formatted(.dateTime.weekday(.wide).day().month(.wide)), maxWidth: 1180) {
             if let notice = model.notice { Banner(kind: .error, text: notice, onDismiss: model.dismissNotice) }
 
             if accessState.isMissing {
@@ -23,12 +26,19 @@ struct OverviewScreen: View {
             if progress.canResume && !showingSetup { CardSection { CardRow { resumeBanner } } }
 
             if let status = model.status, status.installed {
-                CardSection { CardRow { hero(status) } }
+                statusCard(status)
                 if let preview = model.pendingPreview { previewSection(preview) }
-                needsYou
-                nextUp
-                attention(status)
-                glance
+                OverviewColumns(sidebarCollapsed: collapsed) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        needsYou
+                        nextUp
+                    }
+                    VStack(alignment: .leading, spacing: 16) {
+                        attention(status)
+                        calendarsCard
+                        glance
+                    }
+                }
             } else if model.status != nil {
                 gettingStarted
             } else {
@@ -49,38 +59,18 @@ struct OverviewScreen: View {
         }
     }
 
-    // MARK: Hero
+    // MARK: Status
 
     private var accessState: CalendarAccessState { model.calendarAccess }
 
-    private func hero(_ status: AgentControlStatus) -> some View {
-        let health = model.syncHealth
-        return VStack(spacing: 14) {
-            Image(systemName: health.symbol)
-                .font(Theme.Fonts.glyph)
-                .foregroundStyle(health.color)
-                .frame(width: 76, height: 76)
-                .background(Circle().fill(health.color.opacity(0.14)))
-            VStack(spacing: 4) {
-                Text(health.headline).font(Theme.Fonts.heading)
-                Text(health.detail).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
-            }
-            if let busy = model.busyAction { BusyLine(text: busy) }
-            HStack(spacing: 10) {
-                Button("Preview sync") { Task { await model.previewSync() } }
-                    .buttonStyle(.accentFilled)
-                    .disabled(model.isBusy || model.pendingPreview != nil || accessState.isMissing)
-                if status.enabled {
-                    Button(status.paused ? "Resume" : "Pause") {
-                        Task { await model.setPaused(!status.paused) }
-                    }
-                    .controlSize(.large)
-                    .disabled(model.isBusy)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 18)
+    private func statusCard(_ status: AgentControlStatus) -> some View {
+        SyncStatusCard(
+            health: model.syncHealth, marks: model.recentRuns, busy: model.busyAction,
+            paused: status.enabled ? status.paused : nil,
+            previewDisabled: model.isBusy || model.pendingPreview != nil || accessState.isMissing,
+            pauseDisabled: model.isBusy,
+            preview: { Task { await model.previewSync() } },
+            togglePause: { Task { await model.setPaused(!status.paused) } })
     }
 
     // MARK: Preview
@@ -94,72 +84,86 @@ struct OverviewScreen: View {
     @ViewBuilder
     private var needsYou: some View {
         if let board = inbox.board {
-            CardSection("Needs you") {
-                if !board.isComplete {
-                    CardRow {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Banner(kind: .caution, text: board.staleText(suffix: "so this may be missing items."))
-                            Button("Refresh calendars") { Task { await inbox.refresh() } }
-                                .disabled(inbox.isBusy)
+            CardSection(
+                header: OverviewSectionHeader(title: "Needs you", link: "Open Inbox") { navigation.openInbox(.all) },
+                content: {
+                    if !board.isComplete {
+                        CardRow {
+                            ViewThatFits(in: .horizontal) {
+                                HStack(alignment: .center, spacing: 12) { staleBanner(board); refreshButton }
+                                VStack(alignment: .leading, spacing: 10) { staleBanner(board); refreshButton }
+                            }
                         }
                     }
-                }
-                let rows: [(String, Int, InboxFilter, Bool)] = [
-                    ("Invitations waiting", inbox.waiting, .needsRSVP, true),
-                    ("Overlapping events", inbox.overlaps, .conflicts, false),
-                    ("Changed since you last looked", inbox.changes, .changed, false),
-                ]
-                ForEach(rows.filter { $0.1 > 0 }, id: \.2) { title, count, filter, highlight in
+                    let tiles: [(String, Int, InboxFilter, Bool)] = [
+                        ("Invitations waiting", inbox.waiting, .needsRSVP, true),
+                        ("Overlapping events", inbox.overlaps, .conflicts, false),
+                        ("Changed since you last looked", inbox.changes, .changed, false),
+                    ]
                     CardRow {
-                        Button { navigation.openInbox(filter) } label: {
-                            CardLabeled(title: title) {
-                                HStack(spacing: 6) {
-                                    Text("\(count)").monospacedDigit().fontWeight(.medium)
-                                        .foregroundStyle(highlight ? Theme.accent : .primary)
-                                    Image(systemName: "chevron.right").font(Theme.Fonts.secondary).foregroundStyle(.tertiary)
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack(alignment: .top, spacing: 12) {
+                                ForEach(tiles, id: \.2) { title, count, filter, highlight in
+                                    NeedsYouTile(title: title, count: count, highlight: highlight) {
+                                        navigation.openInbox(filter)
+                                    }
                                 }
                             }
-                            .contentShape(Rectangle())
+                            .fixedSize(horizontal: false, vertical: true)
+                            if tiles.allSatisfy({ $0.1 == 0 }) {
+                                Label("Nothing needs an answer", systemImage: "checkmark.circle").foregroundStyle(.secondary)
+                            }
                         }
-                        .buttonStyle(.plain)
                     }
-                }
-                if rows.allSatisfy({ $0.1 == 0 }) {
-                    CardRow { Label("Nothing needs an answer", systemImage: "checkmark.circle").foregroundStyle(.secondary) }
-                }
-            }
+                })
         }
+    }
+
+    private func staleBanner(_ board: InboxBoard) -> some View {
+        Banner(kind: .caution, text: board.staleText(suffix: "so this may be missing items."))
+    }
+
+    private var refreshButton: some View {
+        Button("Refresh calendars") { Task { await inbox.refresh() } }
+            .buttonStyle(.neutral)
+            .fixedSize()
+            .disabled(inbox.isBusy)
+    }
+
+    private var today: Range<Date> {
+        let calendar = Calendar.current, start = calendar.startOfDay(for: Date())
+        return start..<(calendar.date(byAdding: .day, value: 1, to: start) ?? start)
     }
 
     @ViewBuilder
     private var nextUp: some View {
-        if schedule.schedule != nil {
-            let events = UpNext.today(in: schedule.schedule, now: Date())
-            let stale = UpNext.staleCalendars(in: schedule.schedule, name: { CalendarAliases.shared.name(for: $0.id, real: $0.name) })
-            CardSection("Next up today") {
-                if !stale.isEmpty {
-                    CardRow { Banner(kind: .caution, text: "\(stale.joined(separator: ", ")) is out of date, so events may be missing.") }
-                }
-                ForEach(events.prefix(4)) { event in
-                    CardRow {
-                        Button { navigation.selection = .calendar } label: {
-                            HStack(spacing: 12) {
-                                Label {
-                                    Text(event.title).lineLimit(1)
-                                } icon: {
-                                    Circle().fill(CalendarColors.shared.color(for: event.calendarID).color).frame(width: 10, height: 10)
-                                }
-                                Spacer(minLength: 12)
-                                Text(event.startsAt.formatted(date: .omitted, time: .shortened)).foregroundStyle(.secondary)
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
+        if let current = schedule.schedule {
+            let now = Date()
+            let events = UpNext.today(in: current, now: now)
+            let stale = UpNext.staleCalendars(
+                in: current, range: today, now: now,
+                name: { CalendarAliases.shared.name(for: $0.id, real: $0.name) })
+            let names = Dictionary(
+                current.calendars.map { ($0.id, CalendarAliases.shared.name(for: $0.id, real: $0.name)) },
+                uniquingKeysWith: { first, _ in first })
+            CardSection(
+                header: OverviewSectionHeader(title: "Next up today", link: "Open Calendar") { navigation.selection = .calendar },
+                content: {
+                    if !stale.isEmpty {
+                        CardRow { Banner(kind: .caution, text: "\(stale.joined(separator: ", ")) \(stale.count == 1 ? "is" : "are") out of date, so events may be missing.") }
                     }
-                }
-                if events.count > 4 { CardRow { Text("and \(events.count - 4) more").foregroundStyle(.secondary) } }
-                if events.isEmpty { CardRow { Text("Nothing else today").foregroundStyle(.secondary) } }
-            }
+                    ForEach(Array(events.prefix(4).enumerated()), id: \.element.id) { index, event in
+                        CardRow {
+                            NextUpRow(
+                                event: event, calendarName: names[event.calendarID] ?? "Calendar",
+                                color: CalendarColors.shared.color(for: event.calendarID).color,
+                                tags: UpNextTag.tags(for: event, isNext: index == 0, now: now)
+                            ) { navigation.selection = .calendar }
+                        }
+                    }
+                    if events.count > 4 { CardRow { Text("and \(events.count - 4) more").foregroundStyle(.secondary) } }
+                    if events.isEmpty { CardRow { Text("Nothing else today").foregroundStyle(.secondary) } }
+                })
         }
     }
 
@@ -170,20 +174,20 @@ struct OverviewScreen: View {
         let checks = model.attentionChecks
         if let health = model.health, health.status != "ok", !checks.isEmpty {
             CardSection(
-                "Needs attention", footnote: health.warnings.isEmpty ? nil : health.warnings.joined(separator: " ")
+                header: Text("Needs attention").font(Theme.Fonts.sectionTitle),
+                footnote: health.warnings.isEmpty ? nil : health.warnings.joined(separator: " ")
             ) {
                 ForEach(checks) { check in
+                    let failedRun = check.name == "automatic-run" && check.state == "failed"
                     CardRow {
-                        HStack(spacing: 12) {
-                            Label(
-                                check.name.replacingOccurrences(of: "-", with: " ").capitalized,
-                                systemImage: check.state == "failed" ? "xmark.circle.fill" : "clock.fill"
-                            )
-                            .foregroundStyle(check.state == "failed" ? Theme.badText : Theme.cautionText, .primary)
-                            Spacer(minLength: 12)
-                            Text(attentionDetail(check, status))
-                                .foregroundStyle(.secondary)
-                        }
+                        AttentionRow(
+                            title: check.name.replacingOccurrences(of: "-", with: " ").capitalized,
+                            detail: attentionDetail(check, status),
+                            failed: check.state == "failed",
+                            reason: failedRun ? syncFailureReason(category: check.reason) : nil,
+                            showingReason: Binding(
+                                get: { openReasons.contains(check.name) },
+                                set: { if $0 { openReasons.insert(check.name) } else { openReasons.remove(check.name) } }))
                     }
                 }
                 if !status.running && status.enabled && model.registration != .enabled {
@@ -205,7 +209,33 @@ struct OverviewScreen: View {
     private func attentionDetail(_ check: HealthReport.Check, _ status: AgentControlStatus) -> String {
         let reason = (check.reason ?? check.state).replacingOccurrences(of: "-", with: " ")
         guard check.name == "automatic-run", let age = status.failureAgeSeconds else { return reason }
-        return "\(reason), \(Format.ago(age))"
+        return "Failed, \(Format.ago(age))"
+    }
+
+    // MARK: Calendars
+
+    @ViewBuilder
+    private var calendarsCard: some View {
+        let calendars = (schedule.schedule?.calendars ?? []).filter { !CalendarAliases.shared.isIgnored($0.id) }
+        if !calendars.isEmpty {
+            let now = Date()
+            CardSection(
+                header: OverviewSectionHeader(title: "Calendars", link: "Manage") { navigation.selection = .calendars },
+                content: {
+                    ForEach(calendars) { calendar in
+                        let label = CalendarFreshnessLabel.make(calendar, range: today, now: now)
+                        CardRow {
+                            HStack(spacing: 10) {
+                                Circle().fill(CalendarColors.shared.color(for: calendar.id).color).frame(width: 10, height: 10)
+                                Text(CalendarAliases.shared.name(for: calendar.id, real: calendar.name)).lineLimit(1)
+                                Spacer(minLength: 8)
+                                Text(label.text).font(Theme.Fonts.secondary)
+                                    .foregroundStyle(label.isBehind ? Theme.cautionText : Color.secondary)
+                            }
+                        }
+                    }
+                })
+        }
     }
 
     // MARK: At a glance

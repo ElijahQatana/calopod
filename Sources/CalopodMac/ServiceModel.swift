@@ -16,6 +16,8 @@ final class ServiceModel {
     private(set) var statusAt = Date()
     private(set) var pendingPreview: SyncPreview?
     private(set) var health: HealthReport?
+    /// How the last sync runs ended, oldest first.
+    private(set) var recentRuns: [RunMark] = []
     private(set) var registration: ServiceRegistration.State = .unavailable
 
     private typealias AgentState = (status: AgentControlStatus?, overview: AgentControlOverview?, health: HealthReport?)
@@ -62,7 +64,7 @@ final class ServiceModel {
         let current = service
         let bundled = Self.bundledAgentExecutable
         // Registration status and the service reads can block, so they stay off the main actor.
-        let result = await Task.detached { () -> (ServiceRegistration.State?, AgentControlService, AgentState) in
+        let result = await Task.detached { () -> (ServiceRegistration.State?, AgentControlService, AgentState, [RunMark]) in
             var service = current
             var state: ServiceRegistration.State?
             if updating {
@@ -70,7 +72,7 @@ final class ServiceModel {
                 state = found
                 service = AgentControlService(bundledAgentExecutable: found == .enabled ? bundled : nil)
             }
-            return (state, service, service.state())
+            return (state, service, service.state(), service.recentRuns())
         }.value
         guard busyAction == nil else { return }
         if let state = result.0 {
@@ -83,6 +85,7 @@ final class ServiceModel {
         settleManualRun()
         if overview != result.2.overview { overview = result.2.overview }
         if health != result.2.health { health = result.2.health }
+        if recentRuns != result.3 { recentRuns = result.3 }
     }
 
     private func settleManualRun() {

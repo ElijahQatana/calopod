@@ -11,6 +11,9 @@ extension View {
 /// A scrolling page of card sections, with an optional page header.
 struct CardPage<Content: View>: View {
     var title: String?
+    /// Text at the right of the title row, such as a date.
+    var trailing: String?
+    var maxWidth: CGFloat = 760
     @ViewBuilder var content: Content
     @Environment(\.sidebarCollapsed) private var collapsed
 
@@ -21,16 +24,18 @@ struct CardPage<Content: View>: View {
     var page: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let title {
-                PageHeader(title)
-                    .padding(.horizontal, Theme.pagePadding)
-                    .padding(.top, Theme.Page.topPadding(collapsed: collapsed, inlineHeader: true))
-                    .padding(.bottom, 16)
+                PageHeader(title: title) {
+                    if let trailing { Text(trailing).font(Theme.Fonts.body).foregroundStyle(.secondary) }
+                }
+                .padding(.horizontal, Theme.pagePadding)
+                .padding(.top, Theme.Page.topPadding(collapsed: collapsed, inlineHeader: true))
+                .padding(.bottom, 16)
             }
             VStack(alignment: .leading, spacing: 16) { content }
                 .padding(.horizontal, Theme.pagePadding)
                 .padding(.top, title == nil ? Theme.Page.topPadding(collapsed: collapsed, inlineHeader: false) : 0)
                 .padding(.bottom, Theme.Page.bottom)
-                .frame(maxWidth: 760, alignment: .leading)
+                .frame(maxWidth: maxWidth, alignment: .leading)
                 .frame(maxWidth: .infinity)
         }
     }

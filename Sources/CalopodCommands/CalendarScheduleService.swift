@@ -21,12 +21,14 @@ public struct ScheduleCalendar: Identifiable, Equatable, Sendable {
     public let freshness: ScheduleFreshness
     /// The range last read completely, when known.
     public let coverage: ClosedRange<Date>?
+    /// When the local copy was last read, when known.
+    public let readAt: Date?
     public let providerColor: String?
 
     public init(
         id: String, name: String, account: String, provider: String,
         freshness: ScheduleFreshness = .current, coverage: ClosedRange<Date>? = nil,
-        providerColor: String? = nil
+        readAt: Date? = nil, providerColor: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -34,6 +36,7 @@ public struct ScheduleCalendar: Identifiable, Equatable, Sendable {
         self.provider = provider
         self.freshness = freshness
         self.coverage = coverage
+        self.readAt = readAt
         self.providerColor = providerColor
     }
 }
@@ -157,7 +160,7 @@ public struct CalendarScheduleService: Sendable {
                 account: source.connectionLabel ?? source.provider, provider: source.provider,
                 freshness: Self.freshness(of: source, cutoff: cutoff),
                 coverage: source.coverage.flatMap { $0.startsAt <= $0.endsAt ? $0.startsAt...$0.endsAt : nil },
-                providerColor: source.providerColor)
+                readAt: source.coverage?.observedAt, providerColor: source.providerColor)
         }
 
         // Overlaps and changes use the same rules as Inbox.
