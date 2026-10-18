@@ -6,26 +6,29 @@ import XCTest
 
 @MainActor
 final class ThemeTests: XCTestCase {
-    private func hex(_ color: Color, _ name: NSAppearance.Name) throws -> String {
+    private func rgb(_ color: Color, _ name: NSAppearance.Name) throws -> [CGFloat] {
         let appearance = try XCTUnwrap(NSAppearance(named: name))
-        var result = ""
+        var result: [CGFloat] = []
         appearance.performAsCurrentDrawingAppearance {
-            let rgb = NSColor(color).usingColorSpace(.sRGB)!
-            result = String(
-                format: "%02x%02x%02x", Int((rgb.redComponent * 255).rounded()),
-                Int((rgb.greenComponent * 255).rounded()), Int((rgb.blueComponent * 255).rounded()))
+            let c = NSColor(color).usingColorSpace(.sRGB)!
+            result = [c.redComponent, c.greenComponent, c.blueComponent]
         }
         return result
     }
 
-    func testAccentResolvesPerAppearance() throws {
-        XCTAssertEqual(try hex(Theme.accent, .aqua), "b45309")
-        XCTAssertEqual(try hex(Theme.accent, .darkAqua), "f5a623")
+    func testTokensThatFlipPickADifferentColorInDarkMode() throws {
+        let tokens: [(String, Color)] = [
+            ("accent", Theme.accent), ("onAccent", Theme.onAccent), ("pane", Theme.pane), ("group", Theme.group),
+            ("goodText", Theme.goodText), ("cautionText", Theme.cautionText), ("badText", Theme.badText),
+        ]
+        for (name, color) in tokens {
+            XCTAssertNotEqual(try rgb(color, .aqua), try rgb(color, .darkAqua), name)
+        }
     }
 
-    func testOnAccentDiffersPerAppearance() throws {
-        XCTAssertEqual(try hex(Theme.onAccent, .aqua), "ffffff")
-        XCTAssertNotEqual(try hex(Theme.onAccent, .darkAqua), "ffffff")
+    func testPaneIsLightInLightModeAndDarkInDarkMode() throws {
+        XCTAssertGreaterThan(try rgb(Theme.pane, .aqua).reduce(0, +), 2.5)
+        XCTAssertLessThan(try rgb(Theme.pane, .darkAqua).reduce(0, +), 0.5)
     }
 
     private func alpha(_ color: Color, _ name: NSAppearance.Name) throws -> CGFloat {

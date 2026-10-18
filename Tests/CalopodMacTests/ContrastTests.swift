@@ -34,4 +34,10 @@ final class ContrastTests: XCTestCase {
             }
         }
     }
+
+    func testTextOnAFilledAccentReads() {
+        for name in [NSAppearance.Name.aqua, .darkAqua] {
+            XCTAssertGreaterThanOrEqual(ratio(Theme.onAccent, Theme.accent, name), 4.5, name.rawValue)
+        }
+    }
 }
