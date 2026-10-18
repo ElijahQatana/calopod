@@ -11,16 +11,30 @@ final class InboxModel {
     private(set) var busy: String?
     private(set) var notice: String?
     private(set) var result: InboxReplyResult?
+    /// A reply waiting for the person to confirm it. Nothing is sent until then.
+    private(set) var pendingReply: ConflictChoice?
     var selection: String? {
-        didSet { if selection != oldValue { result = nil; Task { await loadDetail() } } }
+        didSet { if selection != oldValue { result = nil; pendingReply = nil; Task { await loadDetail() } } }
     }
 
     let review = InboxReviewModel()
     private let service: InboxScreenService
+    private let send: @Sendable (String, ConflictChoice) async -> InboxReplyResult
+    private let afterSend: (@MainActor () async -> Void)?
+    private let readDetail: @Sendable (String) throws -> InboxDetail
     private var loads = 0
 
-    init(service: InboxScreenService = InboxScreenService()) {
+    /// `send`, `afterSend` and `readDetail` let tests stand in for the calendar and the local reads.
+    init(
+        service: InboxScreenService = InboxScreenService(),
+        send: (@Sendable (String, ConflictChoice) async -> InboxReplyResult)? = nil,
+        afterSend: (@MainActor () async -> Void)? = nil,
+        readDetail: (@Sendable (String) throws -> InboxDetail)? = nil
+    ) {
         self.service = service
+        self.readDetail = readDetail ?? { try service.detail(for: $0) }
+        self.send = send ?? { await service.reply(to: $0, $1) }
+        self.afterSend = afterSend
     }
 
     var isBusy: Bool { busy != nil }
@@ -63,14 +77,28 @@ final class InboxModel {
         await reload()
     }
 
-    func reply(_ choice: ConflictChoice) async {
+    /// Clicking Yes, Maybe or No only asks. The reply goes out from `confirmReply`.
+    func askToReply(_ choice: ConflictChoice) {
+        guard busy == nil, selection != nil, choice != .noChange else { return }
+        pendingReply = choice
+    }
+
+    func cancelReply() { pendingReply = nil }
+
+    func confirmReply() async {
+        guard let choice = pendingReply else { return }
+        pendingReply = nil
+        await reply(choice)
+    }
+
+    private func reply(_ choice: ConflictChoice) async {
         guard busy == nil, let id = selection else { return }
-        let service = service
+        let send = send
         busy = "Sending your reply…"
         notice = nil
-        let outcome = await Task.detached { await service.reply(to: id, choice) }.value
+        let outcome = await Task.detached { await send(id, choice) }.value
         busy = nil
-        await reload()
+        if let afterSend { await afterSend() } else { await reload() }
         result = outcome
     }
 
@@ -97,8 +125,8 @@ final class InboxModel {
 
     private func loadDetail() async {
         guard let id = selection else { detail = nil; return }
-        let service = service
-        let loaded = try? await Task.detached { try service.detail(for: id) }.value
+        let readDetail = readDetail
+        let loaded = try? await Task.detached { try readDetail(id) }.value
         if selection == id { detail = loaded }
     }
 }

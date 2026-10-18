@@ -189,19 +189,10 @@ struct InboxReviewSheet: View {
     }
 
     private func confirmView(_ card: InboxReviewCardInfo, _ reply: ConflictChoice) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Send this reply?").font(Theme.Fonts.sectionTitle)
-            Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 14, verticalSpacing: 8) {
-                fact("Event", card.entry.title)
-                fact("Told", card.organizer ?? "The organizer")
-                fact("Answer", InboxReviewModel.name(reply))
-                fact("Sent through", account(card))
-                let overlaps = card.preview(for: reply)?.overlaps ?? []
-                fact("Overlaps after", overlaps.isEmpty ? "None" : overlaps.joined(separator: ", "))
-            }
-            .font(Theme.Fonts.body)
-            Banner(kind: .caution, text: (card.notification ?? "The organizer may be notified.") + " This cannot be unsent.")
-        }
+        ReplyConfirmView(confirmation: ReplyConfirmation(
+            event: card.entry.title, told: card.organizer ?? "The organizer", answer: InboxReviewModel.name(reply),
+            sentThrough: account(card), overlaps: card.preview(for: reply)?.overlaps ?? [],
+            warning: (card.notification ?? "The organizer may be notified.") + " This cannot be unsent."))
     }
 
     // MARK: Footer

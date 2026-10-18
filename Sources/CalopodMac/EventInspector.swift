@@ -1,8 +1,7 @@
 import CalopodCommands
 import SwiftUI
 
-/// Details for the selected event. The reply buttons only show what the provider allows;
-/// sending is done from Inbox.
+/// Details for the selected event. Replies are made from Inbox, so this only points there.
 struct EventInspector: View {
     let event: ScheduleEvent
     let calendar: ScheduleCalendar?
@@ -90,25 +89,8 @@ struct EventInspector: View {
         } else if event.replies.isEmpty {
             if let reason = event.replyUnavailableReason { Hint { Text(reason) } }
         } else {
-            HStack(spacing: 6) {
-                ForEach([ConflictChoice.yes, .maybe, .no], id: \.self) { choice in
-                    if event.replies.contains(choice) {
-                        Button(label(choice)) {}.frame(maxWidth: .infinity)
-                    }
-                }
-            }
-            .controlSize(.large)
-            .disabled(true)
             Hint { Text("Replies are sent from Inbox.").font(Theme.Fonts.secondary) }
-        }
-    }
-
-    private func label(_ choice: ConflictChoice) -> String {
-        switch choice {
-        case .yes: "Yes"
-        case .maybe: "Maybe"
-        case .no: "No"
-        case .noChange: "Hold"
+            Button("Open in Inbox", action: openInbox)
         }
     }
 

@@ -23,7 +23,7 @@ struct InboxDetailView: View {
             }
             Text(detail.replyNote).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            actions
+            if let reply = model.pendingReply { confirm(reply) } else { actions }
             if let result = model.result {
                 Banner(kind: result.status == .confirmed ? .info : .caution, text: result.message)
             }
@@ -76,8 +76,23 @@ struct InboxDetailView: View {
         .controlSize(.large)
     }
 
+    private func confirm(_ reply: ConflictChoice) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            ReplyConfirmView(confirmation: ReplyConfirmation(detail: detail, reply: reply))
+            HStack {
+                Button("Cancel") { model.cancelReply() }.keyboardShortcut(.cancelAction)
+                Spacer()
+                Button("Send \(InboxReviewModel.name(reply))") { Task { await model.confirmReply() } }
+                    .buttonStyle(.accentFilled).keyboardShortcut(.defaultAction)
+            }
+        }
+        .controlSize(.large)
+        .padding(14)
+        .cardSurface()
+    }
+
     private func reply(_ title: String, _ choice: ConflictChoice) -> some View {
-        Button(title) { Task { await model.reply(choice) } }
+        Button(title) { model.askToReply(choice) }
             .disabled(model.isBusy || !detail.replies.contains(choice))
     }
 }

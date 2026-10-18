@@ -48,37 +48,44 @@ struct CalendarRow: View {
     let colors: CalendarColors
     @State private var hovering = false
     @State private var renaming = false
+    private enum Focus { case toggle, rename, ignore }
+    @FocusState private var focus: Focus?
 
     private var aliases: CalendarAliases { model.aliases }
     private var ignored: Bool { aliases.isIgnored(calendar.id) }
     private var alias: String? { aliases.alias(for: calendar.id) }
 
     var body: some View {
-        Toggle(
-            isOn: Binding(
-                get: { calendar.isSelected },
-                set: { value in Task { await model.setSelected(calendar.id, value) } }
-            )
-        ) {
-            HStack(spacing: 8) {
-                CalendarColorDot(calendarID: calendar.id, colors: colors)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(aliases.name(for: calendar)).lineLimit(1)
-                    if alias != nil {
-                        Text(calendar.name).font(Theme.Fonts.secondary).foregroundStyle(.secondary).lineLimit(1)
+        HStack(spacing: 8) {
+            // Only the on/off switch changes the provider, so only it waits for a sync to finish.
+            Toggle(
+                isOn: Binding(
+                    get: { calendar.isSelected },
+                    set: { value in Task { await model.setSelected(calendar.id, value) } }
+                )
+            ) {
+                HStack(spacing: 8) {
+                    CalendarColorDot(calendarID: calendar.id, colors: colors)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(aliases.name(for: calendar)).lineLimit(1)
+                        if alias != nil {
+                            Text(calendar.name).font(Theme.Fonts.secondary).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                    }
+                    if calendar.isReadOnly {
+                        Text("read-only").font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+                    }
+                    if ignored && model.isInUse(calendar) {
+                        Chip(text: "in use")
+                            .help("Still syncing. Ignoring only hides it here and in the pickers.")
                     }
                 }
-                if calendar.isReadOnly {
-                    Text("read-only").font(Theme.Fonts.secondary).foregroundStyle(.secondary)
-                }
-                if ignored && model.isInUse(calendar) {
-                    Chip(text: "in use")
-                        .help("Still syncing. Ignoring only hides it here and in the pickers.")
-                }
-                actions
             }
+            .disabled(model.isBusy)
+            .focused($focus, equals: .toggle)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            actions
         }
-        .disabled(model.isBusy)
         .onHover { hovering = $0 }
         .contextMenu {
             Button("Rename…") { renaming = true }
@@ -90,12 +97,16 @@ struct CalendarRow: View {
         }
     }
 
-    /// Shown on hover so a long list stays calm. The same actions are in the context menu.
+    private var emphasized: Bool { hovering || renaming || focus != nil }
+
+    /// Always on screen so nothing invisible can take focus; stronger on hover or focus.
+    /// The same actions are in the context menu. They only change names on this Mac.
     private var actions: some View {
         HStack(spacing: 2) {
             Button { renaming = true } label: { Image(systemName: "pencil").frame(width: Theme.Control.height, height: Theme.Control.height).contentShape(Rectangle()) }
                 .help("Rename on this Mac")
-                .accessibilityLabel("Rename")
+                .accessibilityLabel(Self.renameLabel(aliases.name(for: calendar)))
+                .focused($focus, equals: .rename)
                 .popover(isPresented: $renaming, arrowEdge: .bottom) {
                     RenameCalendar(calendar: calendar, aliases: aliases) { renaming = false }
                         .appTypography()
@@ -106,12 +117,15 @@ struct CalendarRow: View {
                 Image(systemName: ignored ? "eye" : "eye.slash").frame(width: Theme.Control.height, height: Theme.Control.height).contentShape(Rectangle())
             }
             .help(ignored ? "Stop ignoring" : "Ignore")
-            .accessibilityLabel(ignored ? "Stop ignoring" : "Ignore")
+            .accessibilityLabel(Self.ignoreLabel(aliases.name(for: calendar), ignored: ignored))
+            .focused($focus, equals: .ignore)
         }
         .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
-        .opacity(hovering || renaming ? 1 : 0)
+        .foregroundStyle(emphasized ? .secondary : .tertiary)
     }
+
+    static func renameLabel(_ name: String) -> String { "Rename \(name)" }
+    static func ignoreLabel(_ name: String, ignored: Bool) -> String { (ignored ? "Stop ignoring " : "Ignore ") + name }
 }
 
 /// Edits the name Calopod shows for a calendar. The calendar itself is never renamed.
