@@ -32,6 +32,7 @@ struct NewArmSheet: View {
         .frame(width: 600, height: 520)
         .background(Theme.pane)
         .disabled(model.isBusy)
+        .onDisappear { model.dismissNotice() }
     }
 
     var header: some View {
@@ -47,7 +48,7 @@ struct NewArmSheet: View {
     var fields: some View {
         VStack(alignment: .leading, spacing: 22) {
             if let busy = model.busy { BusyLine(text: busy) }
-            if let notice = model.notice { Banner(kind: .error, text: notice) }
+            if let notice = model.notice { Banner(kind: .error, text: notice, onDismiss: model.dismissNotice) }
             if NewArmDraft.sources(in: groups).isEmpty {
                 Banner(kind: .info, text: "Choose at least one calendar on the Calendars screen first.")
             }

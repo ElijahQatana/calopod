@@ -42,6 +42,12 @@ final class InboxModel {
     /// What the sidebar badge shows: everything that needs attention.
     var count: Int { board?.entries.count ?? 0 }
 
+    /// Clears the error banner. Also used when the screen is left.
+    func dismissNotice() {
+        notice = nil
+        loadFailed = false
+    }
+
     func reload() async {
         let service = service
         loads += 1

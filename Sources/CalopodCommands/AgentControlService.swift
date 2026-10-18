@@ -393,7 +393,7 @@ public struct AgentControlService: Sendable {
     }
 
     public func message(for error: Error) -> String {
-        commandFailure(error).message
+        appFailureMessage(error)
     }
 }
 #endif

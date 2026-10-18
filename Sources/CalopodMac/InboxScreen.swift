@@ -14,7 +14,7 @@ struct InboxScreen: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             header
-            if let notice = model.notice { Banner(kind: .error, text: notice) }
+            if let notice = model.notice { Banner(kind: .error, text: notice, onDismiss: model.dismissNotice) }
             if let board = model.board, !board.isComplete { staleBanner(board) }
             if let board = model.board {
                 filters(board)
@@ -28,6 +28,7 @@ struct InboxScreen: View {
             await model.reload()
             settleSelection()
         }
+        .onDisappear { model.dismissNotice() }
         .onChange(of: filter) { settleSelection() }
         .onChange(of: model.board) { settleSelection() }
         .sheet(isPresented: $showingReview, onDismiss: { Task { await model.reload() } }) {

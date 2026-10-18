@@ -26,7 +26,7 @@ struct FirstRunSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     if let busy = setup.busy ?? service.busyAction { BusyLine(text: busy) }
-                    if let notice = setup.notice ?? service.notice { Banner(kind: .error, text: notice) }
+                    if let notice = setup.notice ?? service.notice { Banner(kind: .error, text: notice, onDismiss: { setup.dismissNotice(); service.dismissNotice() }) }
                     switch progress.step {
                     case .connect: connect
                     case .calendars: calendars

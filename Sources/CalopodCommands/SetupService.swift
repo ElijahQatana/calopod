@@ -252,7 +252,7 @@ public struct SetupService: Sendable {
         case let arm as ArmConfigurationError:
             return arm.description
         default:
-            return commandFailure(error).message
+            return appFailureMessage(error)
         }
     }
 }

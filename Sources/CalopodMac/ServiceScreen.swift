@@ -12,10 +12,11 @@ struct ServiceScreen: View {
     var body: some View {
         CardPage(title: "Background sync") {
             if let busy = model.busyAction { BusyLine(text: busy) }
-            if let notice = model.notice { Banner(kind: .error, text: notice) }
+            if let notice = model.notice { Banner(kind: .error, text: notice, onDismiss: model.dismissNotice) }
             serviceSection
             if let status = model.status, status.installed { scheduleSection(status) }
         }
+        .onDisappear { model.dismissNotice() }
     }
 
     // MARK: Service

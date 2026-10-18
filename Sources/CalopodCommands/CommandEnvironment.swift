@@ -59,7 +59,7 @@ enum CommandEnvironment {
     }
 }
 
-enum CommandEnvironmentError: Error, CustomStringConvertible {
+enum CommandEnvironmentError: Error, Equatable, CustomStringConvertible {
     case missingGoogleClientID
     case missingMicrosoftClientID
     case invalidEventKitHostPath
@@ -97,6 +97,39 @@ func failCommand(_ error: Error) throws -> Never {
         try? FileHandle.standardError.write(contentsOf: data)
     }
     throw ExitCode(failure.exitCode.rawValue)
+}
+
+/// What the Mac app shows for an error. The terminal keeps `commandFailure`, which points at commands.
+func appFailureMessage(_ error: Error) -> String {
+    if error is CalopodDatabaseError {
+        return "Calopod's saved data needs an upgrade. Wait for the sync to finish, then try again."
+    }
+    if let control = error as? LaunchAgentControlError {
+        switch control {
+        case .notInstalled: return "Background sync is not installed yet."
+        case .rootUnsupported: return "Background sync can only be changed by the signed-in user."
+        case .unavailable, .operationFailed:
+            return "Background sync could not be changed. Calopod needs to be installed in Applications and signed to run in the background."
+        }
+    }
+    let runtime = (error as? CalopodRuntimeError)
+    let environment = (error as? CommandEnvironmentError)
+    if runtime == .missingGoogleClientID || environment == .missingGoogleClientID {
+        return "Google sign-in has no client ID yet. This build of Calopod was not given one, so it cannot sign in to Google."
+    }
+    if runtime == .missingMicrosoftClientID || environment == .missingMicrosoftClientID {
+        return "Microsoft sign-in has no client ID yet. This build of Calopod was not given one, so it cannot sign in to Microsoft."
+    }
+    switch runtime {
+    case .missingEventKitHost?, .eventKitHostUntrusted?:
+        return "Calopod's calendar helper is missing or not trusted. Reinstall Calopod from the download."
+    case .eventKitHostFailed?:
+        return "Calendar did not answer correctly. Check that Calopod is signed and allowed in Calendar privacy settings."
+    case .eventKitHostTimedOut?:
+        return "Calendar took too long to answer. Try again."
+    default:
+        return commandFailure(error).message
+    }
 }
 
 func commandFailure(_ error: Error) -> (message: String, exitCode: CalopodExitCode) {

@@ -13,7 +13,7 @@ struct OverviewScreen: View {
 
     var body: some View {
         CardPage(title: "Overview") {
-            if let notice = model.notice { Banner(kind: .error, text: notice) }
+            if let notice = model.notice { Banner(kind: .error, text: notice, onDismiss: model.dismissNotice) }
 
             if progress.canResume && !showingSetup { CardSection { CardRow { resumeBanner } } }
 
@@ -30,6 +30,7 @@ struct OverviewScreen: View {
                 CardSection { CardRow { ProgressView().frame(maxWidth: .infinity).padding(40) } }
             }
         }
+        .onDisappear { model.dismissNotice() }
         .sheet(isPresented: $showingSetup) {
             FirstRunSheet(progress: progress, setup: setup, service: model, navigation: navigation)
                 .appTypography()

@@ -93,6 +93,9 @@ final class ServiceModel {
         await refresh()
     }
 
+    /// Clears the error banner. Also used when the screen is left.
+    func dismissNotice() { notice = nil }
+
     func discardPreview() {
         pendingPreview = nil
     }
@@ -247,7 +250,7 @@ final class ServiceModel {
         case "interrupted":
             "The sync was interrupted."
         default:
-            "The sync failed. Run calopod doctor for details."
+            "The sync failed. Try again in a moment. If it keeps failing, reconnect your calendar accounts."
         }
     }
 }
