@@ -55,7 +55,7 @@ struct InboxContextSnapshotTests {
             recurrenceID: nil, startsAt: stray.startsAt, endsAt: stray.endsAt, isAllDay: false, availability: "busy", isCancelled: false, isPrivate: false,
             title: title, contentFingerprint: "synthetic", providerUpdatedAt: nil,
             attendees: guests ? [EventParticipant(name: "Example guest", emailAddress: "guest@example.com")] : [],
-            currentUserResponse: EventResponse(state: .accepted))
+            currentUserResponse: EventResponse(state: .unknown))
         try fixture.refresh(binding, events: binding == "one" ? [fixture.event("a", binding: "one"), stray] : [stray])
         try fixture.repository.saveArm(StoredArm(id: "arm", configurationID: "default", sourceBindingIDs: ["one"], targetBindingID: "two", ruleMode: ArmRuleMode(rawValue: mode)!))
         try fixture.repository.saveMirrorMapping(StoredMirrorMapping(mirrorKey: "mapping", armID: "arm", sourceKeyHash: "a", providerEventID: "copy", providerVersion: nil, desiredFingerprint: "synthetic", ownershipKeyID: "synthetic", updatedAt: fixture.start))

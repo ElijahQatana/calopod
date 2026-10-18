@@ -70,7 +70,8 @@ extension LocalStateRepository {
     /// Known duplicate bindings can be excluded by a caller with proven identity.
     public func inboxContextSnapshot(
         knownDuplicateBindingIDs: Set<String> = [],
-        unprovenDuplicateBindingIDs: Set<String> = []
+        unprovenDuplicateBindingIDs: Set<String> = [],
+        includingCopies: Bool = false
     ) throws -> InboxContextSnapshot {
         try database.read { db in
             let rows = try Row.fetchAll(db, sql: """
@@ -130,7 +131,7 @@ extension LocalStateRepository {
                 // last observation as uncertain context, never a proven pair.
                 events.append(InboxContextEvent(event: event, observation: observation, isPresenceConfirmed: false))
             }
-            events = try droppingUnmarkedCopies(events, db)
+            if !includingCopies { events = try droppingUnmarkedCopies(events, db) }
             events.sort { ($0.event.startsAt, $0.event.sourceKeyHash) < ($1.event.startsAt, $1.event.sourceKeyHash) }
             return InboxContextSnapshot(
                 sources: sources, events: events,
@@ -140,52 +141,114 @@ extension LocalStateRepository {
     }
 }
 
+/// One original that an event might be the copy of, and which checks it passed.
+public struct InboxCopyDiagnosis: Equatable, Sendable {
+    public struct Check: Equatable, Sendable {
+        public let name: String
+        public let passed: Bool
+    }
+    public let sourceKeyHash: String
+    public let sourceTitle: String?
+    public let sourceCalendar: String
+    public let armRule: String?
+    public let checks: [Check]
+    /// A stored copy record for this very event settles it; otherwise every other check must pass.
+    public var isCopy: Bool {
+        checks.contains { $0.name.hasPrefix("mirror record") && $0.passed } || checks.filter { !$0.name.hasPrefix("mirror record") }.allSatisfy(\.passed)
+    }
+}
+
+extension LocalStateRepository {
+    /// For each event that shares time with an event of another calendar, how the copy checks
+    /// came out against that event. Read only; the events are listed before any copy is dropped.
+    public func inboxCopyDiagnoses() throws -> [String: [InboxCopyDiagnosis]] {
+        let events = try inboxContextSnapshot(includingCopies: true).events
+        return try database.read { db in
+            let rows = try copyContext(db)
+            var result: [String: [InboxCopyDiagnosis]] = [:]
+            for item in events {
+                let found = copyDiagnoses(of: item.event, among: events, rows, overlappingOnly: true)
+                if !found.isEmpty { result[item.event.sourceKeyHash] = found }
+            }
+            return result
+        }
+    }
+}
+
+private struct CopyContext {
+    let arms: [Row]
+    let mapped: [Row]
+}
+
+private func copyContext(_ db: Database) throws -> CopyContext {
+    CopyContext(
+        arms: try Row.fetchAll(db, sql: """
+            SELECT a.id, a.target_binding_id, a.rule_mode, s.calendar_binding_id AS source_binding_id
+            FROM arms a JOIN arm_sources s ON s.arm_id = a.id WHERE a.is_enabled = 1
+            """),
+        mapped: try Row.fetchAll(db, sql: """
+            SELECT m.source_key_hash, m.provider_event_id, a.rule_mode, a.target_binding_id
+            FROM mirror_mappings m JOIN arms a ON a.id = m.arm_id
+            """))
+}
+
+private func guestSet(_ event: StoredNormalizedInstance) -> Set<String> {
+    Set(event.attendees.map { ($0.emailAddress ?? $0.name ?? "").lowercased() })
+}
+
+/// Everyone the original names: its guests and its organizer.
+private func participants(_ event: StoredNormalizedInstance) -> Set<String> {
+    guestSet(event).union(event.organizer.map { [($0.emailAddress ?? $0.name ?? "").lowercased()] } ?? [])
+}
+
+private func copyDiagnoses(
+    of event: StoredNormalizedInstance, among events: [InboxContextEvent], _ context: CopyContext,
+    overlappingOnly: Bool = false
+) -> [InboxCopyDiagnosis] {
+    var found: [InboxCopyDiagnosis] = []
+    for other in events.map(\.event) where other.sourceKeyHash != event.sourceKeyHash
+        && other.calendarBindingID != event.calendarBindingID {
+        if overlappingOnly ? !(other.startsAt < event.endsAt && event.startsAt < other.endsAt)
+            : (other.startsAt != event.startsAt || other.endsAt != event.endsAt) { continue }
+        let routes = context.arms.filter { ($0["source_binding_id"] as String) == other.calendarBindingID }
+        let stored = context.mapped.filter { ($0["source_key_hash"] as String) == other.sourceKeyHash }
+        let modes = routes.map { ($0["rule_mode"] as String, ($0["target_binding_id"] as String) == event.calendarBindingID) }
+            + stored.map { ($0["rule_mode"] as String, true) }
+        guard !modes.isEmpty else { continue }
+        for (mode, routedHere) in modes {
+            let title = mode == ArmRuleMode.busy.rawValue ? "Busy" : (other.title ?? "")
+            let mine = guestSet(event)
+            let checks: [InboxCopyDiagnosis.Check] = [
+                .init(name: "arm routes the source calendar to this calendar", passed: routedHere),
+                .init(name: "mirror record for the source matches this event id",
+                      passed: stored.contains { ($0["provider_event_id"] as String) == event.providerEventID }),
+                .init(name: "start and end equal", passed: other.startsAt == event.startsAt && other.endsAt == event.endsAt
+                        && other.isAllDay == event.isAllDay),
+                .init(name: "title equal to the source's (or Busy)", passed: title == (event.title ?? "")),
+                .init(name: "guests empty or within the source's people", passed: mine.isEmpty || mine.isSubset(of: participants(other))),
+                .init(name: "no invitation reply from the user on it (organizer of the copy is allowed)",
+                      passed: ![EventResponseState.needsResponse, .accepted, .tentative, .declined].contains(event.currentUserResponse.state)),
+            ]
+            found.append(InboxCopyDiagnosis(
+                sourceKeyHash: other.sourceKeyHash, sourceTitle: other.title, sourceCalendar: other.calendarBindingID,
+                armRule: mode, checks: checks))
+        }
+    }
+    return found
+}
+
 /// A copy can come back without its marker or with a new id, so the mapping misses it: the
 /// calendar read through a second connection, or an id that changed after a sync. It is still
 /// taken for a copy of one of our events when an arm routes that event's calendar into the
 /// copy's calendar (or the event has a stored copy), and the copy has the same time, the title
-/// the copy would carry, no guests or the same guests, and no current-user evidence. An
-/// invitation to the user always carries evidence, so a real one is never hidden by this.
+/// the copy would carry, no guests or only the original's people, and no invitation
+/// reply from the user. A real invitation always carries a reply, so it is never hidden.
 private func droppingUnmarkedCopies(_ events: [InboxContextEvent], _ db: Database) throws -> [InboxContextEvent] {
-    let arms = try Row.fetchAll(db, sql: """
-        SELECT a.id, a.target_binding_id, a.rule_mode, s.calendar_binding_id AS source_binding_id
-        FROM arms a JOIN arm_sources s ON s.arm_id = a.id WHERE a.is_enabled = 1
-        """)
-    let mapped = try Row.fetchAll(db, sql: """
-        SELECT DISTINCT m.source_key_hash, a.rule_mode FROM mirror_mappings m JOIN arms a ON a.id = m.arm_id
-        """)
-    guard !arms.isEmpty || !mapped.isEmpty else { return events }
-    let sourceKeys = Set(mapped.map { $0["source_key_hash"] as String })
-    func isBusy(_ mode: String) -> Bool { mode == ArmRuleMode.busy.rawValue }
-    func guests(_ event: StoredNormalizedInstance) -> Set<String> {
-        Set(event.attendees.map { ($0.emailAddress ?? $0.name ?? "").lowercased() })
-    }
-    // Where each original's copy would be, and what it would look like.
-    struct Candidate { let source: StoredNormalizedInstance; let title: String; let target: String? }
-    var candidates: [Candidate] = []
-    for item in events {
-        let source = item.event
-        for row in arms where (row["source_binding_id"] as String) == source.calendarBindingID {
-            candidates.append(Candidate(
-                source: source, title: isBusy(row["rule_mode"] as String) ? "Busy" : (source.title ?? ""),
-                target: row["target_binding_id"] as String))
-        }
-        for row in mapped where (row["source_key_hash"] as String) == source.sourceKeyHash {
-            candidates.append(Candidate(
-                source: source, title: isBusy(row["rule_mode"] as String) ? "Busy" : (source.title ?? ""), target: nil))
-        }
-    }
+    let context = try copyContext(db)
+    guard !context.arms.isEmpty || !context.mapped.isEmpty else { return events }
+    let sourceKeys = Set(context.mapped.map { $0["source_key_hash"] as String })
     return events.filter { item in
-        let event = item.event
-        guard !sourceKeys.contains(event.sourceKeyHash), event.currentUserResponse.evidence == ResponseEvidence.none else { return true }
-        return !candidates.contains { candidate in
-            let source = candidate.source
-            guard source.sourceKeyHash != event.sourceKeyHash, source.calendarBindingID != event.calendarBindingID,
-                  candidate.target.map({ $0 == event.calendarBindingID }) ?? true,
-                  source.startsAt == event.startsAt, source.endsAt == event.endsAt, source.isAllDay == event.isAllDay,
-                  candidate.title == (event.title ?? "") else { return false }
-            let mine = guests(event)
-            return mine.isEmpty || mine == guests(source)
-        }
+        guard !sourceKeys.contains(item.event.sourceKeyHash) else { return true }
+        return !copyDiagnoses(of: item.event, among: events, context).contains(where: \.isCopy)
     }
 }

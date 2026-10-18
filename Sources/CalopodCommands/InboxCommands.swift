@@ -12,6 +12,7 @@ public struct InboxOptions: ParsableArguments {
     @Option(name: .long) public var calendar: String?
     @Flag(name: .long) public var excludeMaybe = false
     @Flag(name: .long, help: "Only events with known conflicts.") public var conflicts = false
+    @Flag(name: .long, help: "After the list, show for each item that shares time with another item why it is or isn't taken for a Calopod copy.") public var explain = false
     public init() {}
 }
 
@@ -115,6 +116,7 @@ private func writeInbox(options: InboxOptions, activity: Bool, all: Bool = false
     let payload = try InboxCLI.list(repository: repository, options: options, range: resolved, activity: activity, all: all)
     try OutputRenderer.write(command: activity ? "inbox.activity" : "inbox", payload: payload,
         format: options.output.format, showIDs: options.output.ids, human: options.output.localContext(repository: repository))
+    if options.explain, !activity { print(try InboxCLI.explainCopies(payload, repository: repository)) }
 }
 
 func inboxRefreshPayload(_ refresh: CalendarRefreshSummary, range: ResolvedDateRange) -> CommandPayload {
@@ -159,6 +161,24 @@ public struct InboxSourceDetail: Codable, Equatable, Sendable {
 }
 
 enum InboxCLI {
+    /// Plain text: for each listed item that shares time with an event of another calendar, which
+    /// copy checks passed. Local only.
+    static func explainCopies(_ payload: CommandPayload, repository: LocalStateRepository) throws -> String {
+        let diagnoses = try repository.inboxCopyDiagnoses()
+        var lines = ["", "Why these items are listed (copy checks against events of other calendars at the same time):"]
+        for item in payload.items ?? [] {
+            guard let key = try? parse(item.id).0, let found = diagnoses[key] else { continue }
+            let own = try repository.inboxObservation(sourceKeyHash: key)?.event
+            lines.append("")
+            lines.append("\(item.id): \(own?.title ?? "?") [\(own?.calendarBindingID ?? "?")] response \(own?.currentUserResponse.state.rawValue ?? "?"), evidence \(own?.currentUserResponse.evidence.rawValue ?? "?"), guests \(own?.attendees.count ?? 0)")
+            for diagnosis in found {
+                lines.append("  against \(diagnosis.sourceTitle ?? "?") [\(diagnosis.sourceCalendar)], arm rule \(diagnosis.armRule ?? "?"): \(diagnosis.isCopy ? "TAKEN FOR A COPY" : "not a copy")")
+                for check in diagnosis.checks { lines.append("    \(check.passed ? "pass" : "FAIL") \(check.name)") }
+            }
+        }
+        if lines.count == 2 { lines.append("No listed item shares time with an event that an arm copies.") }
+        return lines.joined(separator: "\n")
+    }
     static func date(_ value: Date?) -> String? { value.map { ISO8601DateFormatter().string(from: $0) } }
     static func id(_ key: String, _ revision: Int64) -> String { "\(key):\(revision)" }
     static func parse(_ id: String) throws -> (String, Int64) {
