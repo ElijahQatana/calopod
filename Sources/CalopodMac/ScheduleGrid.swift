@@ -51,7 +51,15 @@ struct ScheduleGrid: View {
                     HStack(alignment: .top, spacing: 0) {
                         hourLabels
                         ForEach(days, id: \.self) { day in
-                            DayColumn(model: model, colors: colors, day: day, hourHeight: Self.hourHeight)
+                            let layout = model.dayEvents(day)
+                            // Only the column that holds the old or new selection gets a different value.
+                            let selectedID = model.selectedID.flatMap { id in
+                                layout.placements.contains { $0.event.id == id } ? id : nil
+                            }
+                            DayColumn(
+                                model: model, colors: colors, day: day, layout: layout, selectedID: selectedID,
+                                isToday: model.isToday(day), hourHeight: Self.hourHeight
+                            ).equatable()
                         }
                     }
                     .frame(height: 24 * Self.hourHeight)
@@ -104,7 +112,7 @@ struct ScheduleGrid: View {
 
     @ViewBuilder
     private func allDayStrip(_ days: [Date]) -> some View {
-        let perDay = days.map { ScheduleLayout.allDay(model.events, on: $0, calendar: model.calendar) }
+        let perDay = days.map { model.dayEvents($0).allDay }
         if perDay.contains(where: { !$0.isEmpty }) {
             HStack(alignment: .top, spacing: 0) {
                 Text("all-day").font(Theme.Fonts.tiny).foregroundStyle(.secondary)
@@ -155,43 +163,72 @@ struct ScheduleGrid: View {
     }
 }
 
-private struct DayColumn: View {
+private struct DayColumn: View, Equatable {
     let model: CalendarModel
     let colors: CalendarColors
     let day: Date
+    let layout: CalendarModel.DayEvents
+    let selectedID: String?
+    let isToday: Bool
     let hourHeight: CGFloat
 
     private static let crowdedBlockWidth: CGFloat = 64
 
+    /// The model and colors are shared objects that tell their views when they change.
+    nonisolated static func == (a: Self, b: Self) -> Bool {
+        a.day == b.day && a.layout == b.layout && a.selectedID == b.selectedID
+            && a.isToday == b.isToday && a.hourHeight == b.hourHeight
+    }
+
     var body: some View {
-        let placements = ScheduleLayout.placements(model.events, on: day, calendar: model.calendar)
         GeometryReader { proxy in
             ZStack(alignment: .topLeading) {
                 ForEach(1..<24, id: \.self) { hour in
                     Rectangle().fill(.quaternary.opacity(0.7)).frame(height: 1)
                         .offset(y: CGFloat(hour) * hourHeight)
                 }
-                ForEach(placements) { placement in
+                ForEach(layout.placements) { placement in
                     let slot = (proxy.size.width - 4) / CGFloat(placement.columns)
                     let height = max(CGFloat(placement.height) / 60 * hourHeight - 2, 14)
                     let left = 2 + slot * CGFloat(placement.column)
                     // Crowded columns overlap a little, later ones on top, so each title keeps some room.
                     let width = min(max(slot - 2, Self.crowdedBlockWidth), max(proxy.size.width - left - 2, 8))
-                    Button { model.selectedID = placement.event.id } label: {
-                        ScheduleEventBlock(
-                            event: placement.event, color: colors.color(for: placement.event.calendarID).color,
-                            isSelected: model.selectedID == placement.event.id, width: width, height: height)
-                    }
-                    .buttonStyle(.plain)
+                    let isSelected = selectedID == placement.event.id
+                    EventButton(
+                        model: model, event: placement.event, color: colors.color(for: placement.event.calendarID).color,
+                        isSelected: isSelected, width: width, height: height
+                    )
+                    .equatable()
                     .frame(width: width, height: height)
                     .offset(x: left, y: CGFloat(placement.top) / 60 * hourHeight + 1)
-                        .zIndex(model.selectedID == placement.event.id ? 100 : Double(placement.column))
+                    .zIndex(isSelected ? 100 : Double(placement.column))
                 }
-                if model.isToday(day) { NowLine(hourHeight: hourHeight, calendar: model.calendar) }
+                if isToday { NowLine(hourHeight: hourHeight, calendar: model.calendar) }
             }
         }
         .frame(maxWidth: .infinity)
         .overlay(alignment: .leading) { Rectangle().fill(.quaternary).frame(width: 1) }
+    }
+}
+
+/// One event block. It only redraws when its own look or selection changes.
+private struct EventButton: View, Equatable {
+    let model: CalendarModel
+    let event: ScheduleEvent
+    let color: Color
+    let isSelected: Bool
+    let width: CGFloat
+    let height: CGFloat
+
+    nonisolated static func == (a: Self, b: Self) -> Bool {
+        a.event == b.event && a.color == b.color && a.isSelected == b.isSelected && a.width == b.width && a.height == b.height
+    }
+
+    var body: some View {
+        Button { model.selectedID = event.id } label: {
+            ScheduleEventBlock(event: event, color: color, isSelected: isSelected, width: width, height: height)
+        }
+        .buttonStyle(.plain)
     }
 }
 
