@@ -13,7 +13,7 @@ struct InboxDetailView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(entry.title).font(Theme.Fonts.sectionTitle)
-            HStack(spacing: 8) {
+            FlowLayout(spacing: 8) {
                 ForEach(entry.reasons, id: \.self) { StatusPill(text: InboxText.label($0, entry), color: InboxText.tint($0)) }
             }
             facts
@@ -104,7 +104,7 @@ struct ContextStrip: View {
 
     private let laneHeight: CGFloat = 32
     /// Short events are drawn at least this share of the strip so a title stays readable.
-    private static let minShare = 0.15
+    private static let minShare = 0.3
 
     var body: some View {
         let span = max(detail.windowEnd.timeIntervalSince(detail.windowStart), 1)

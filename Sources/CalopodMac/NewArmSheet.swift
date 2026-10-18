@@ -28,7 +28,8 @@ struct NewArmSheet: View {
             Divider()
             footer
         }
-        .frame(width: 600, height: 640)
+        // Short enough for the smallest window (580 pt); the middle scrolls.
+        .frame(width: 600, height: 520)
         .background(Theme.pane)
         .disabled(model.isBusy)
     }
