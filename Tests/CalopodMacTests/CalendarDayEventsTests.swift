@@ -24,7 +24,7 @@ final class CalendarDayEventsTests: XCTestCase {
         suite.removePersistentDomain(forName: "CalendarDayEventsTests")
         let schedule = CalendarSchedule(calendars: [], events: events)
         let model = CalendarModel(
-            calendar: calendar, now: { self.start }, defaults: suite, aliases: CalendarAliases(defaults: suite), load: { schedule })
+            calendar: calendar, now: { self.start }, defaults: suite, aliases: CalendarAliases(defaults: suite, state: nil), load: { schedule })
         await model.reload()
         return model
     }

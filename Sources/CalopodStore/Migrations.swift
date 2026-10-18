@@ -19,6 +19,7 @@ extension CalopodDatabase {
         "v15_refresh_retention_indexes",
         "v16_calendar_provider_color",
         "v17_copy_external_id",
+        "v18_calendar_preferences",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -376,6 +377,22 @@ extension CalopodDatabase {
             try database.alter(table: "normalized_instances") { table in
                 table.add(column: "provider_external_id", .text)
             }
+        }
+
+        // Names, ignores and colors chosen on this Mac. Keyed by calendar id with no foreign key, so a
+        // choice is kept when a calendar drops out of a refresh and comes back. A null column means
+        // never chosen.
+        migrator.registerMigration("v18_calendar_preferences") { database in
+            try database.execute(sql: """
+                CREATE TABLE calendar_preferences (
+                    calendar_id TEXT PRIMARY KEY,
+                    connection_id TEXT,
+                    alias TEXT,
+                    is_ignored INTEGER,
+                    color TEXT
+                );
+                CREATE TABLE calendar_preferences_import (id INTEGER PRIMARY KEY CHECK (id = 1));
+                """)
         }
 
         return migrator

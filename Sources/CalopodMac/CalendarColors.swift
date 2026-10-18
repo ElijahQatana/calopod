@@ -1,3 +1,5 @@
+import CalopodCommands
+import CalopodStore
 import Foundation
 import Observation
 import SwiftUI
@@ -105,17 +107,18 @@ struct CalendarColorSource: Equatable, Sendable {
 @MainActor
 @Observable
 final class CalendarColors {
-    static let shared = CalendarColors()
-
-    private static let defaultsKey = "calendarColors"
+    static let shared = CalendarColors(defaults: .standard, state: try? LocalState.repository())
 
     private(set) var choices: [String: String]
     private(set) var sources: [String: CalendarColorSource] = [:]
-    @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private let state: LocalStateRepository?
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
-        choices = defaults.dictionary(forKey: Self.defaultsKey) as? [String: String] ?? [:]
+    /// Colors live in the local state database. Without one they last until the app quits. The
+    /// defaults are only read once, to move colors an earlier version kept there.
+    init(defaults: UserDefaults, state: LocalStateRepository?) {
+        self.state = state
+        if let state { CalendarPreferenceMigration.run(defaults: defaults, state: state) }
+        choices = ((try? state?.calendarPreferences()) ?? [:]).compactMapValues(\.color)
     }
 
     /// The chosen color for a calendar, or a neutral one until it has been given a color.
@@ -125,7 +128,7 @@ final class CalendarColors {
 
     func set(_ color: CalendarColor, for calendarID: String) {
         choices[calendarID] = color.id
-        save()
+        save([calendarID])
     }
 
     /// The color to offer for matching the provider, if it reported one.
@@ -142,17 +145,19 @@ final class CalendarColors {
     /// Calendar app color; the rest get a suggestion. A color someone chose is never replaced.
     /// Ignored calendars do not count when picking a suggestion, so they do not use up a color.
     func assignMissing(to calendars: [CalendarColorSource], ignoring ignored: Set<String> = []) {
-        var changed = false
+        var changed: [String] = []
         for source in calendars {
             sources[source.id] = source
             guard choices[source.id].flatMap(CalendarColor.named) == nil else { continue }
             let isMac = source.provider == "eventkit"
             choices[source.id] = (isMac ? source.matched : nil)?.id
                 ?? CalendarColor.suggestion(avoiding: choices.filter { !ignored.contains($0.key) }.map(\.value)).id
-            changed = true
+            changed.append(source.id)
         }
-        if changed { save() }
+        save(changed)
     }
 
-    private func save() { defaults.set(choices, forKey: Self.defaultsKey) }
+    private func save(_ ids: [String]) {
+        for id in ids { try? state?.setCalendarColor(choices[id], calendarID: id) }
+    }
 }

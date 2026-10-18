@@ -10,7 +10,7 @@ final class NewArmDraftTests: XCTestCase {
     }
 
     private func groups(ignoring ignored: [String] = []) -> [ArmCalendarGroup] {
-        let aliases = CalendarAliases(defaults: UserDefaults(suiteName: "arm-draft-\(UUID().uuidString)")!)
+        let aliases = CalendarAliases(defaults: UserDefaults(suiteName: "arm-draft-\(UUID().uuidString)")!, state: nil)
         ignored.forEach { aliases.setIgnored(true, for: $0) }
         let connection = SetupConnection(
             id: "c1", provider: "google", label: "me@example.com", isEnabled: true,

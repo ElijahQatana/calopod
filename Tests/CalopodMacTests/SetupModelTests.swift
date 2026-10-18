@@ -17,9 +17,9 @@ final class SetupModelTests: XCTestCase {
         let suite = "SetupModelTests-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         addTeardownBlock { defaults.removePersistentDomain(forName: suite) }
-        let colors = CalendarColors(defaults: defaults)
+        let colors = CalendarColors(defaults: defaults, state: state)
         let model = SetupModel(
-            service: SetupService(makeRepository: { state }), aliases: CalendarAliases(defaults: defaults), colors: colors)
+            service: SetupService(makeRepository: { state }), aliases: CalendarAliases(defaults: defaults, state: state), colors: colors)
         return (model, state, colors)
     }
 
@@ -73,7 +73,7 @@ final class SetupModelTests: XCTestCase {
         defaults.removePersistentDomain(forName: "SetupModelTests-load")
         let model = SetupModel(
             service: SetupService(makeRepository: { if flag.failing { throw Down() } else { return state } }),
-            aliases: CalendarAliases(defaults: defaults), colors: CalendarColors(defaults: defaults))
+            aliases: CalendarAliases(defaults: defaults, state: state), colors: CalendarColors(defaults: defaults, state: nil))
         await model.reload()
         XCTAssertNotNil(model.notice)
         flag.failing = false

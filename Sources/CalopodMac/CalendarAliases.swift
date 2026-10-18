@@ -1,4 +1,5 @@
 import CalopodCommands
+import CalopodStore
 import Foundation
 import Observation
 
@@ -7,10 +8,8 @@ import Observation
 @MainActor
 @Observable
 final class CalendarAliases {
-    static let shared = CalendarAliases()
+    static let shared = CalendarAliases(defaults: .standard, state: try? LocalState.repository())
 
-    private static let aliasKey = "calendarAliases"
-    private static let ignoredKey = "calendarIgnored"
     private static let expandedKey = "calendarIgnoredExpanded"
 
     private(set) var aliases: [String: String]
@@ -18,11 +17,16 @@ final class CalendarAliases {
     /// Connections whose Ignored section is open. Closed unless opened.
     private(set) var expanded: Set<String>
     @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private let state: LocalStateRepository?
 
-    init(defaults: UserDefaults = .standard) {
+    /// Names and ignores live in the local state database. Without one they last until the app quits.
+    init(defaults: UserDefaults, state: LocalStateRepository?) {
         self.defaults = defaults
-        aliases = defaults.dictionary(forKey: Self.aliasKey) as? [String: String] ?? [:]
-        ignored = Set(defaults.stringArray(forKey: Self.ignoredKey) ?? [])
+        self.state = state
+        if let state { CalendarPreferenceMigration.run(defaults: defaults, state: state) }
+        let saved = (try? state?.calendarPreferences()) ?? [:]
+        aliases = saved.compactMapValues(\.alias)
+        ignored = Set(saved.filter(\.value.isIgnored).keys)
         expanded = Set(defaults.stringArray(forKey: Self.expandedKey) ?? [])
     }
 
@@ -35,14 +39,14 @@ final class CalendarAliases {
     func setAlias(_ text: String, for calendarID: String, real: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty || trimmed == real { aliases[calendarID] = nil } else { aliases[calendarID] = trimmed }
-        defaults.set(aliases, forKey: Self.aliasKey)
+        try? state?.setCalendarAlias(aliases[calendarID], calendarID: calendarID)
     }
 
     func isIgnored(_ calendarID: String) -> Bool { ignored.contains(calendarID) }
 
     func setIgnored(_ value: Bool, for calendarID: String) {
         if value { ignored.insert(calendarID) } else { ignored.remove(calendarID) }
-        defaults.set(ignored.sorted(), forKey: Self.ignoredKey)
+        try? state?.setCalendarIgnored(value, calendarID: calendarID)
     }
 
     func isExpanded(_ connectionID: String) -> Bool { expanded.contains(connectionID) }
