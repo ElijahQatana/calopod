@@ -176,23 +176,29 @@ final class ServiceModel {
         let registrar = registrar
         let legacyActive = legacyServiceActive
         await perform("Installing background service…") {
-            if legacyActive { try service.setEnabled(false) }
-            do {
-                // Already approved when finishing a move, and registering twice is an error.
-                if registrar.state() != .enabled { try registrar.register() }
-            } catch {
-                if legacyActive { try? service.setEnabled(true) }
-                throw error
-            }
-            if legacyActive, registrar.state() != .enabled {
-                try? service.setEnabled(true)
-                throw InstallError.needsApproval
-            }
+            try Self.install(legacyActive: legacyActive, registrar: registrar, setLegacyEnabled: { try service.setEnabled($0) })
             return nil
         }
     }
 
-    private enum InstallError: Error {
+    nonisolated static func install(
+        legacyActive: Bool, registrar: some BundledServiceRegistering, setLegacyEnabled: (Bool) throws -> Void
+    ) throws {
+        if legacyActive { try setLegacyEnabled(false) }
+        do {
+            // Already approved when finishing a move, and registering twice is an error.
+            if registrar.state() != .enabled { try registrar.register() }
+        } catch {
+            if legacyActive { try? setLegacyEnabled(true) }
+            throw error
+        }
+        if legacyActive, registrar.state() != .enabled {
+            try? setLegacyEnabled(true)
+            throw InstallError.needsApproval
+        }
+    }
+
+    enum InstallError: Error {
         case needsApproval
     }
 
