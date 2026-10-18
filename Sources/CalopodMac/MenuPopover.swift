@@ -61,7 +61,7 @@ struct MenuPopover: View {
         .appTypography()
     }
 
-    private static var card: some View {
+    fileprivate static var card: some View {
         RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous).fill(Theme.innerFill)
             .overlay(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous).strokeBorder(Theme.paneLine, lineWidth: 1))
     }
@@ -73,20 +73,10 @@ struct MenuPopover: View {
     private var stale: [String] { UpNext.staleCalendars(in: schedule.schedule, name: { CalendarAliases.shared.name(for: $0.id, real: $0.name) }) }
 
     private func nextCard(_ event: ScheduleEvent) -> some View {
-        HStack(spacing: 10) {
-            Circle().fill(CalendarColors.shared.color(for: event.calendarID).color).frame(width: 10, height: 10)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(event.startsAt <= Date() ? "Now" : "Next").font(Theme.Fonts.secondary).foregroundStyle(.secondary)
-                Text(event.title).font(Theme.Fonts.bodyMedium).lineLimit(1)
-                Text(event.startsAt.formatted(date: .omitted, time: .shortened)).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 0)
+        NextCard(event: event) {
+            schedule.show(event)
+            open(.calendar)
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Self.card)
-        .contentShape(Rectangle())
-        .onTapGesture { open(.calendar) }
     }
 
     private var waitingCard: some View { WaitingCard(count: inbox.waiting) { openInbox(.needsRSVP) } }
@@ -138,6 +128,42 @@ struct MenuPopover: View {
         case "failed", "stopped": Theme.bad
         default: .secondary
         }
+    }
+}
+
+/// The next event as a button, with the same hover highlight as the rows below it.
+private struct NextCard: View {
+    let event: ScheduleEvent
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Circle().fill(CalendarColors.shared.color(for: event.calendarID).color).frame(width: 10, height: 10)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(event.startsAt <= Date() ? "Now" : "Next").font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+                    Text(event.title).font(Theme.Fonts.bodyMedium).lineLimit(1)
+                    Text(event.startsAt.formatted(date: .omitted, time: .shortened)).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(MenuPopover.card)
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
+                    .fill(Theme.accent.opacity(hovering ? 0.14 : 0)))
+            .contentShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
+        }
+        .buttonStyle(PressedFade())
+        .onHover { hovering = $0 }
+    }
+}
+
+private struct PressedFade: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.opacity(configuration.isPressed ? 0.7 : 1)
     }
 }
 

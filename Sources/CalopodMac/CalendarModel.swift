@@ -107,5 +107,12 @@ final class CalendarModel {
 
     func goToToday() { anchor = now() }
 
+    /// Shows the event's day and opens it in the inspector. The anchor is set first because moving it clears the selection.
+    func show(_ event: ScheduleEvent) {
+        anchor = event.startsAt
+        if hidden.contains(event.calendarID) { toggle(event.calendarID) }
+        selectedID = event.id
+    }
+
     func isToday(_ day: Date) -> Bool { calendar.isDate(day, inSameDayAs: now()) }
 }
