@@ -76,6 +76,8 @@ public struct ScheduleEvent: Identifiable, Equatable, Sendable {
     public let isCopy: Bool
     /// Titles of events this one overlaps, for the inspector.
     public let overlaps: [String]
+    /// Titles of Calopod copies drawn over this event that are not already in `overlaps`.
+    public let copyOverlaps: [String]
     public let change: ScheduleChange
     public let copiedTo: [ScheduleCopy]
     /// Yes, Maybe, No that the provider allows. Empty when it does not.
@@ -85,7 +87,7 @@ public struct ScheduleEvent: Identifiable, Equatable, Sendable {
     public init(
         id: String, calendarID: String, title: String, startsAt: Date, endsAt: Date,
         isAllDay: Bool = false, location: String? = nil, organizer: String? = nil,
-        response: ScheduleResponse = .accepted, isCopy: Bool = false, overlaps: [String] = [],
+        response: ScheduleResponse = .accepted, isCopy: Bool = false, overlaps: [String] = [], copyOverlaps: [String] = [],
         change: ScheduleChange = .none, copiedTo: [ScheduleCopy] = [],
         replies: [ConflictChoice] = [], replyUnavailableReason: String? = nil
     ) {
@@ -100,10 +102,21 @@ public struct ScheduleEvent: Identifiable, Equatable, Sendable {
         self.response = response
         self.isCopy = isCopy
         self.overlaps = overlaps
+        self.copyOverlaps = copyOverlaps
         self.change = change
         self.copiedTo = copiedTo
         self.replies = replies
         self.replyUnavailableReason = replyUnavailableReason
+    }
+}
+
+extension ScheduleEvent {
+    fileprivate func withCopyOverlaps(_ titles: [String]) -> ScheduleEvent {
+        ScheduleEvent(
+            id: id, calendarID: calendarID, title: title, startsAt: startsAt, endsAt: endsAt,
+            isAllDay: isAllDay, location: location, organizer: organizer, response: response,
+            isCopy: isCopy, overlaps: overlaps, copyOverlaps: titles, change: change,
+            copiedTo: copiedTo, replies: replies, replyUnavailableReason: replyUnavailableReason)
     }
 }
 
@@ -158,7 +171,10 @@ public struct CalendarScheduleService: Sendable {
             changes[row.item.event.sourceKeyHash] = row.changeTiming == .uncertain ? .uncertain : .changed
         }
         var overlapping: [String: [String]] = [:]
+        var overlapIDs: [String: Set<String>] = [:]
         for conflict in analysis.conflicts where conflict.isConfirmed {
+            overlapIDs[conflict.pair.first, default: []].insert(conflict.pair.second)
+            overlapIDs[conflict.pair.second, default: []].insert(conflict.pair.first)
             overlapping[conflict.pair.first, default: []].append(titles[conflict.pair.second] ?? "Untitled event")
             overlapping[conflict.pair.second, default: []].append(titles[conflict.pair.first] ?? "Untitled event")
         }
@@ -178,6 +194,7 @@ public struct CalendarScheduleService: Sendable {
         }
 
         var events: [ScheduleEvent] = []
+        var copySources: [String: String] = [:]
         for item in snapshot.events where item.isPresenceConfirmed {
             let event = item.event
             let choices = InboxCalendarContextBuilder.choices(for: item, snapshot: snapshot)
@@ -204,6 +221,7 @@ public struct CalendarScheduleService: Sendable {
             ))
             // The copy is drawn at the source's time on the calendar that holds it.
             for target in targets where names[target.binding] != nil && target.binding != event.calendarBindingID {
+                copySources["copy:\(target.binding):\(event.sourceKeyHash)"] = event.sourceKeyHash
                 events.append(ScheduleEvent(
                     id: "copy:\(target.binding):\(event.sourceKeyHash)", calendarID: target.binding,
                     title: target.fullDetails ? Self.title(event) : "Busy",
@@ -211,6 +229,18 @@ public struct CalendarScheduleService: Sendable {
                     response: .none, isCopy: true,
                     replyUnavailableReason: ConflictResolutionService.reasonText([.managedMirror])))
             }
+        }
+        // Copies are drawn on the grid but are not events in the overlap check. Name the ones
+        // that sit over an event so the inspector does not claim nothing overlaps.
+        let drawnCopies = events.filter(\.isCopy)
+        events = events.map { event in
+            guard !event.isCopy, event.overlaps.isEmpty, !event.isAllDay else { return event }
+            let hits = drawnCopies.filter { copy in
+                !copy.isAllDay && copy.startsAt < event.endsAt && event.startsAt < copy.endsAt
+                    && copySources[copy.id] != event.id
+                    && !(overlapIDs[event.id]?.contains(copySources[copy.id] ?? "") ?? false)
+            }
+            return hits.isEmpty ? event : event.withCopyOverlaps(hits.map(\.title))
         }
         return CalendarSchedule(calendars: calendars, events: events)
     }

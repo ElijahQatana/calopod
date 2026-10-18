@@ -21,7 +21,7 @@ struct CalendarScheduleServiceTests {
                 id: $0, connectionID: "connection", providerCalendarID: $0, displayLabel: $0.capitalized,
                 isSelected: true, isReadOnly: false, responseIdentityScope: .authenticatedUser)
         })
-        func event(_ key: String, hour: Int) -> StoredNormalizedInstance {
+        func event(_ key: String, hour: Int, response: EventResponseState = .needsResponse) -> StoredNormalizedInstance {
             StoredNormalizedInstance(
                 sourceKeyHash: key, connectionID: "connection", calendarBindingID: "work",
                 providerEventID: key, recurrenceID: nil,
@@ -30,13 +30,13 @@ struct CalendarScheduleServiceTests {
                 isAllDay: false, availability: "busy", isCancelled: false, isPrivate: false,
                 title: "Event \(key)", contentFingerprint: key, providerUpdatedAt: nil,
                 currentUserResponse: EventResponse(
-                    state: .needsResponse, evidence: .googleSelf,
+                    state: response, evidence: .googleSelf,
                     actionCapability: RSVPActionCapability(supportedScopes: [.occurrence])))
         }
         try state.applyEventRefresh(
             connectionID: "connection", calendarBindingID: "work",
             windowStart: Date(timeIntervalSince1970: 0), windowEnd: Date(timeIntervalSince1970: 200_000),
-            instances: [event("a", hour: 10), event("b", hour: 11), event("c", hour: 20)],
+            instances: [event("a", hour: 10), event("b", hour: 11), event("c", hour: 20), event("d", hour: 21, response: .declined)],
             cancelledSourceKeyHashes: [], isFullRefresh: true, cursorUpdates: [])
         try state.saveArm(StoredArm(
             id: "arm", configurationID: "config", sourceBindingIDs: ["work"], targetBindingID: "main",
@@ -55,7 +55,9 @@ struct CalendarScheduleServiceTests {
         let copy = try #require(byID["copy:main:c"])
         #expect(copy.isCopy && copy.title == "Busy" && copy.calendarID == "main")
         #expect(copy.replies.isEmpty && copy.replyUnavailableReason != nil)
-        #expect(schedule.events.count == 4)
+        #expect(byID["d"]?.copyOverlaps == ["Busy"])
+        #expect(byID["c"]?.copyOverlaps == [] && byID["a"]?.copyOverlaps == [])
+        #expect(schedule.events.count == 5)
     }
 }
 #endif
