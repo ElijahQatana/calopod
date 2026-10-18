@@ -92,6 +92,16 @@ struct ArmConfigurationServiceTests {
         #expect(main.ruleMode == .fullDetails)
         #expect(main.sourceBindingIDs == ["source-one", "source-two"])
         #expect(try setup.repository.arm(id: main.id) == main)
+        let again = try setup.service.existingArm(
+            sourceBindingIDs: ["source-one", "source-two"],
+            targetBindingID: "target",
+            ruleMode: .fullDetails,
+            isMain: true
+        )
+        #expect(again == main)
+        #expect(try setup.service.existingArm(
+            sourceBindingIDs: ["source-one"], targetBindingID: "target", ruleMode: .fullDetails
+        ) == nil)
         #expect(throws: ArmConfigurationError.mainCalendarAlreadyConfigured) {
             try setup.service.configureMainCalendar(
                 id: "another-main",

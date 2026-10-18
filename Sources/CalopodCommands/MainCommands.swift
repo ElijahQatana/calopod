@@ -37,9 +37,14 @@ public struct MainConfigureCommand: ParsableCommand {
     public func run() throws {
         do {
             let repository = try CommandEnvironment.repository()
-            let arm = try ArmConfigurationService(
-                repository: repository
-            ).configureMainCalendar(
+            let service = ArmConfigurationService(repository: repository)
+            // Running it again with the same choices is fine and changes nothing.
+            let arm = try service.existingArm(
+                sourceBindingIDs: source,
+                targetBindingID: target,
+                ruleMode: .fullDetails,
+                isMain: true
+            ) ?? service.configureMainCalendar(
                 sourceBindingIDs: source,
                 targetBindingID: target
             )

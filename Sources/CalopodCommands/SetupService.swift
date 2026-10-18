@@ -180,14 +180,16 @@ public struct SetupService: Sendable {
     public func setUpTwoArms(sourceIDs: [String], fullDetailsTargetID: String?, busyTargetID: String?) throws {
         let repository = try makeRepository()
         let arms = ArmConfigurationService(repository: repository)
-        if let target = fullDetailsTargetID {
+        if let target = fullDetailsTargetID,
+           try arms.existingArm(sourceBindingIDs: sourceIDs, targetBindingID: target, ruleMode: .fullDetails) == nil {
             if try repository.arms().contains(where: \.isMain) {
                 _ = try arms.createArm(sourceBindingIDs: sourceIDs, targetBindingID: target, ruleMode: .fullDetails)
             } else {
                 _ = try arms.configureMainCalendar(sourceBindingIDs: sourceIDs, targetBindingID: target)
             }
         }
-        if let target = busyTargetID {
+        if let target = busyTargetID,
+           try arms.existingArm(sourceBindingIDs: sourceIDs, targetBindingID: target, ruleMode: .busy) == nil {
             _ = try arms.createArm(sourceBindingIDs: sourceIDs, targetBindingID: target, ruleMode: .busy)
         }
     }
