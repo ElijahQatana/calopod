@@ -258,6 +258,12 @@ public struct AgentControlService: Sendable {
         return max(0, Int(Date().timeIntervalSince(run.finishedAt ?? run.startedAt)))
     }
 
+    /// How the last sync runs ended, oldest first. Empty when the history cannot be read.
+    public func recentRuns(limit: Int = RunMark.barCount) -> [RunMark] {
+        guard let context = try? context(), let repository = try? context.environment().repository() else { return [] }
+        return (try? repository.recentRunMarks(limit: limit)) ?? []
+    }
+
     /// The bundled agent is registered and removed by the app, not here.
     public func setEnabled(_ enabled: Bool) throws {
         guard !(try context().isBundled) else { throw LaunchAgentControlError.unavailable }

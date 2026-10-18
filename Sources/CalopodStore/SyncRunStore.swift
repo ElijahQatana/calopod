@@ -138,6 +138,22 @@ extension LocalStateRepository {
         }
     }
 
+    /// The latest finished runs of one mode, newest first.
+    public func recentSyncRuns(mode: String = "apply", limit: Int) throws -> [StoredSyncRun] {
+        try database.read { database in
+            try Row.fetchAll(
+                database,
+                sql: """
+                    SELECT * FROM sync_runs
+                    WHERE mode = ? AND status != 'running'
+                    ORDER BY started_at DESC, id DESC
+                    LIMIT ?
+                    """,
+                arguments: [mode, limit]
+            ).map(Self.storedSyncRun)
+        }
+    }
+
     private static func storedSyncRun(_ row: Row) -> StoredSyncRun {
         StoredSyncRun(
             id: row["id"],

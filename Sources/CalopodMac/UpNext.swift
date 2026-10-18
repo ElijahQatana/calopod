@@ -16,11 +16,16 @@ enum UpNext {
         return events(in: schedule, from: now, before: end)
     }
 
-    /// Calendars whose copy is old or missing, so the list above may be incomplete.
+    /// Calendars whose copy is old or missing, so the list above may be incomplete. With a range,
+    /// a calendar read only part of the way across it counts too.
     static func staleCalendars(
-        in schedule: CalendarSchedule?, name: (ScheduleCalendar) -> String = { $0.name }
+        in schedule: CalendarSchedule?, range: Range<Date>? = nil, now: Date = Date(),
+        name: (ScheduleCalendar) -> String = { $0.name }
     ) -> [String] {
-        (schedule?.calendars ?? []).filter { $0.freshness != .current }.map(name)
+        (schedule?.calendars ?? []).filter { calendar in
+            guard let range else { return calendar.freshness != .current }
+            return CalendarFreshnessLabel.make(calendar, range: range, now: now).isBehind
+        }.map(name)
     }
 
     /// Text beside the menu bar icon. Nothing when no invitation is waiting.
