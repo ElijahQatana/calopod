@@ -61,6 +61,12 @@ final class SetupModel {
     var fullDetailsArm: SetupArm? { snapshot?.arms.first { $0.rule == .fullDetails } }
     var busyArm: SetupArm? { snapshot?.arms.first { $0.rule == .busy && $0.isEnabled } }
 
+    /// Clears the error banner. Also used when the screen is left.
+    func dismissNotice() {
+        notice = nil
+        loadFailed = false
+    }
+
     func reload() async {
         let service = service
         do {
