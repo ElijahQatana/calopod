@@ -84,6 +84,8 @@ struct EventInspector: View {
         }
         if ScheduleLayout.showsOverlap(event) {
             Banner(kind: .error, text: "Overlaps \(list(event.overlaps)).")
+        } else if !event.isCopy && !event.copyOverlaps.isEmpty {
+            Banner(kind: .info, text: "Overlaps only a Calopod copy: \(list(event.copyOverlaps)).")
         } else if !event.isCopy {
             Banner(kind: .info, text: "Nothing overlaps this event.")
         }
