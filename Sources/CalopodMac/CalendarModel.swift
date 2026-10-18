@@ -85,8 +85,10 @@ final class CalendarModel {
     func reload() async {
         let load = load
         do {
-            schedule = try await Task.detached { try load() }.value
-            loadFailed = false
+            let loaded = try await Task.detached { try load() }.value
+            // An unchanged read is not assigned, so views do not redraw for nothing.
+            if schedule != loaded { schedule = loaded }
+            if loadFailed { loadFailed = false }
             if selectedID != nil, selected == nil { selectedID = nil }
         } catch {
             loadFailed = true

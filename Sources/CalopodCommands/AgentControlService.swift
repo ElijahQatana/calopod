@@ -175,7 +175,10 @@ public struct AgentControlService: Sendable {
     }
 
     public func status() throws -> AgentControlStatus {
-        let context = try context()
+        try status(in: try context())
+    }
+
+    private func status(in context: Context) throws -> AgentControlStatus {
         let payload = try agentStatusPayload(
             snapshot: context.snapshot,
             environment: context.environment
@@ -234,9 +237,19 @@ public struct AgentControlService: Sendable {
         ).runOnce(ignorePause: true)
     }
 
+    /// Status, overview and health from one reading of the service, so a poll launches launchctl once
+    /// instead of three times. Each part is nil when it could not be read.
+    public func state() -> (status: AgentControlStatus?, overview: AgentControlOverview?, health: HealthReport?) {
+        guard let context = try? context() else { return (nil, nil, nil) }
+        return (try? status(in: context), try? overview(in: context), try? health(in: context))
+    }
+
     public func health() throws -> HealthReport {
-        let context = try context()
-        return Self.healthReport(
+        try health(in: try context())
+    }
+
+    private func health(in context: Context) throws -> HealthReport {
+        Self.healthReport(
             try doctorReport(snapshot: context.snapshot, environment: context.environment)
         )
     }
@@ -305,7 +318,11 @@ public struct AgentControlService: Sendable {
     }
 
     public func overview() throws -> AgentControlOverview {
-        let repository = try context().environment().repository()
+        try overview(in: try context())
+    }
+
+    private func overview(in context: Context) throws -> AgentControlOverview {
+        let repository = try context.environment().repository()
         let connections = try repository.connections().map { connection in
             AgentControlOverview.ConnectionLine(
                 id: connection.id,

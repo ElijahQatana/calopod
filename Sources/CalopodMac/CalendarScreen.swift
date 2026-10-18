@@ -2,16 +2,12 @@ import CalopodCommands
 import SwiftUI
 
 struct CalendarScreen: View {
-    @State private var model: CalendarModel
+    /// The same model the menu bar keeps current, so the schedule is read once for both.
+    @Environment(CalendarModel.self) private var model
     private let colors = CalendarColors.shared
 
     /// Opens Inbox on its Changed filter.
     var openInbox: () -> Void = {}
-
-    init(model: CalendarModel = CalendarModel(), openInbox: @escaping () -> Void = {}) {
-        _model = State(initialValue: model)
-        self.openInbox = openInbox
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,16 +22,18 @@ struct CalendarScreen: View {
         }
         .task {
             // Reads the local copy only, so it shows at once even while a sync is running.
-            while !Task.isCancelled {
-                await model.reload()
-                colors.assignMissing(
-                    to: model.calendars.map {
-                        CalendarColorSource(id: $0.id, providerColor: $0.providerColor, provider: $0.provider)
-                    },
-                    ignoring: model.aliases.ignored)
-                try? await Task.sleep(for: .seconds(30))
-            }
+            await model.reload()
+            assignColors()
         }
+        .onChange(of: model.calendars) { assignColors() }
+    }
+
+    private func assignColors() {
+        colors.assignMissing(
+            to: model.calendars.map {
+                CalendarColorSource(id: $0.id, providerColor: $0.providerColor, provider: $0.provider)
+            },
+            ignoring: model.aliases.ignored)
     }
 
     @ViewBuilder
@@ -72,7 +70,7 @@ struct CalendarScreen: View {
             HStack(spacing: 10) {
                 Text(title).font(Theme.Fonts.heading).lineLimit(1).minimumScaleFactor(0.8)
                 Spacer(minLength: 8)
-                PillPicker(options: [("Day", CalendarModel.Mode.day), ("Week", .week)], selection: $model.mode, quiet: true)
+                PillPicker(options: [("Day", CalendarModel.Mode.day), ("Week", .week)], selection: Bindable(model).mode, quiet: true)
                     .fixedSize()
                 Button("Today") { model.goToToday() }
                     .buttonStyle(.plain)
