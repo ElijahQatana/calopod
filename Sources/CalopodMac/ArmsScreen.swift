@@ -7,6 +7,7 @@ struct ArmsScreen: View {
     private let colors = CalendarColors.shared
 
     @State private var creating = false
+    @Environment(\.sidebarCollapsed) private var collapsed
 
     var body: some View {
         ScrollView { page }
@@ -16,21 +17,27 @@ struct ArmsScreen: View {
     }
 
     var page: some View {
-        LazyVStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 0) {
             header
-            if let busy = model.busy { BusyLine(text: busy) }
-            if let notice = model.notice, !creating { Banner(kind: .error, text: notice, onDismiss: model.dismissNotice) }
-            if let arms = model.snapshot?.arms {
-                if arms.isEmpty {
-                    emptyState
-                } else {
-                    ForEach(arms) { ArmCard(model: model, arm: $0, colors: colors) }
+                .padding(.horizontal, Theme.pagePadding)
+                .padding(.top, Theme.Page.topPadding(collapsed: collapsed, inlineHeader: true))
+                .padding(.bottom, 16)
+            LazyVStack(alignment: .leading, spacing: 12) {
+                if let busy = model.busy { BusyLine(text: busy) }
+                if let notice = model.notice, !creating { Banner(kind: .error, text: notice, onDismiss: model.dismissNotice) }
+                if let arms = model.snapshot?.arms {
+                    if arms.isEmpty {
+                        emptyState
+                    } else {
+                        ForEach(arms) { ArmCard(model: model, arm: $0, colors: colors) }
+                    }
                 }
             }
+            .padding(.horizontal, Theme.pagePadding)
+            .padding(.bottom, Theme.Page.bottom)
+            .frame(maxWidth: 760, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
-        .pageEdges(inlineHeader: true)
-        .frame(maxWidth: 760)
-        .frame(maxWidth: .infinity)
     }
 
     private var header: some View {

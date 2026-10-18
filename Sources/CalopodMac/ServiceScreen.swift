@@ -31,7 +31,7 @@ struct ServiceScreen: View {
         switch model.registration {
         case .unavailable:
             CardSection(
-                "Background service",
+                "Service",
                 footnote: "Syncing moves into the app once Calopod runs as an installed app, not from a build folder."
             ) {
                 if model.status?.installed == true {
@@ -53,7 +53,7 @@ struct ServiceScreen: View {
             }
         case .notRegistered, .notFound:
             CardSection(
-                "Background service",
+                "Service",
                 footnote: model.legacyServiceActive
                     ? "The app's own service replaces the source-installed one. Your settings and local data are kept."
                     : "Syncing runs quietly in the background and starts when you sign in."
@@ -77,7 +77,7 @@ struct ServiceScreen: View {
             }
         case .requiresApproval:
             CardSection(
-                "Background service",
+                "Service",
                 footnote: model.legacyServiceActive
                     ? "Allow Calopod in System Settings, General, Login Items, then choose Move to the app again. Your current service keeps running until then."
                     : "Allow Calopod in System Settings, General, Login Items."
@@ -86,7 +86,7 @@ struct ServiceScreen: View {
                 CardRow { Button("Open Login Items Settings") { model.openLoginItemsSettings() } }
             }
         case .enabled:
-            CardSection("Background service", footnote: "Registered with macOS and starts when you sign in.") {
+            CardSection("Service", footnote: "Registered with macOS and starts when you sign in.") {
                 CardRow("Status", value: "Installed")
                 if model.legacyServiceActive {
                     CardRow {
