@@ -49,11 +49,16 @@ public enum InboxAttentionQuery {
         _ full: InboxContextSnapshot, filter: InboxAttentionFilter = InboxAttentionFilter(),
         freshnessCutoff: Date
     ) -> InboxAttentionResult {
-        // Ended events neither need an answer nor overlap anything that is still ahead.
         var snapshot = full
-        if filter.window == nil, let now = filter.asOf {
+        let gone = Set(full.events.filter { Self.isGone($0, in: full, freshnessCutoff: freshnessCutoff) }.map(\.event.sourceKeyHash))
+        let ended = filter.window == nil ? filter.asOf : nil
+        if !gone.isEmpty || ended != nil {
+            // Ended events neither need an answer nor overlap anything that is still ahead.
             snapshot = InboxContextSnapshot(
-                sources: full.sources, events: full.events.filter { $0.event.endsAt > now },
+                sources: full.sources,
+                events: full.events.filter { item in
+                    !gone.contains(item.event.sourceKeyHash) && (ended.map { item.event.endsAt > $0 } ?? true)
+                },
                 unprovenDuplicateBindingIDs: full.unprovenDuplicateBindingIDs)
         }
         // Analyze complete current intervals before filtering rows. A moved
@@ -111,5 +116,17 @@ public enum InboxAttentionQuery {
         rows.sort { ($0.item.event.startsAt, $0.item.event.sourceKeyHash) < ($1.item.event.startsAt, $1.item.event.sourceKeyHash) }
         return InboxAttentionResult(rows: rows, sources: snapshot.sources.sorted { $0.bindingID < $1.bindingID },
                                     analysisWindow: window, analysis: analysis)
+    }
+
+    /// A retained event that a fresh read of its whole time range did not return was cancelled or
+    /// removed. Its last response is history, not something to answer. Outside the range read, or
+    /// with a stale source, absence proves nothing and the event stays as uncertain.
+    static func isGone(_ item: InboxContextEvent, in snapshot: InboxContextSnapshot, freshnessCutoff: Date) -> Bool {
+        guard !item.isPresenceConfirmed,
+              let source = snapshot.sources.first(where: { $0.bindingID == item.event.calendarBindingID }),
+              let coverage = source.coverage, source.staleSince == nil,
+              source.healthStatus == nil || source.healthStatus == "healthy",
+              coverage.observedAt >= freshnessCutoff else { return false }
+        return coverage.startsAt <= item.event.startsAt && item.event.endsAt <= coverage.endsAt
     }
 }
