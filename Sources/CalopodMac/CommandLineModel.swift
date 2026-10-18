@@ -40,7 +40,8 @@ final class CommandLineModel {
             confirmingReplace = true
             return
         }
-        run { try link.install(replacingOther: self.confirmingReplace) }
+        let replacing = confirmingReplace
+        run { try link.install(replacingOther: replacing) }
     }
 
     func cancelReplace() { confirmingReplace = false }
@@ -59,9 +60,13 @@ final class CommandLineModel {
 
     private static func message(_ error: Error) -> String {
         switch error as? CommandLink.Failure {
-        case .occupied: "Something that is not a link is already at ~/.local/bin/calopod, so it was left alone."
-        case .notInThisApp: "That link does not point into this app, so it was left alone."
-        default: "Could not change ~/.local/bin/calopod: \(error.localizedDescription)"
+        case .occupied: return "Something that is not a link is already at ~/.local/bin/calopod, so it was left alone."
+        case .notInThisApp: return "That link does not point into this app, so it was left alone."
+        case .needsReplaceConfirmation: return "The command points somewhere else. Confirm to replace it."
+        case nil:
+            // Only file system errors have wording worth showing; other errors would expose type names.
+            let reason = (error as NSError).domain == NSCocoaErrorDomain ? " \(error.localizedDescription)" : ""
+            return "Could not change ~/.local/bin/calopod.\(reason)"
         }
     }
 }
