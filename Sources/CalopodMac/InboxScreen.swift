@@ -62,9 +62,7 @@ struct InboxScreen: View {
     }
 
     private func staleBanner(_ board: InboxBoard) -> some View {
-        let names = board.incompleteCalendars
-        let which = names.isEmpty ? "Some calendars are" : names.joined(separator: ", ") + (names.count == 1 ? " is" : " are")
-        return Banner(kind: .caution, text: "\(which) out of date or only partly read, so overlaps may be missing.")
+        Banner(kind: .caution, text: board.staleText(suffix: "so overlaps may be missing."))
     }
 
     private func filters(_ board: InboxBoard) -> some View {

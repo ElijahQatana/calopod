@@ -1,4 +1,5 @@
 import CalopodCommands
+import AppKit
 import SwiftUI
 
 struct ServiceScreen: View {
@@ -15,6 +16,10 @@ struct ServiceScreen: View {
             if let notice = model.notice { Banner(kind: .error, text: notice, onDismiss: model.dismissNotice) }
             serviceSection
             if let status = model.status, status.installed { scheduleSection(status) }
+        }
+        .task { await model.refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await model.refresh() }
         }
         .onDisappear { model.dismissNotice() }
     }

@@ -96,7 +96,13 @@ struct OverviewScreen: View {
         if let board = inbox.board {
             CardSection("Needs you") {
                 if !board.isComplete {
-                    CardRow { Banner(kind: .caution, text: "Some calendars are out of date, so this may be missing items.") }
+                    CardRow {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Banner(kind: .caution, text: board.staleText(suffix: "so this may be missing items."))
+                            Button("Refresh calendars") { Task { await inbox.refresh() } }
+                                .disabled(inbox.isBusy)
+                        }
+                    }
                 }
                 let rows: [(String, Int, InboxFilter, Bool)] = [
                     ("Invitations waiting", inbox.waiting, .needsRSVP, true),
@@ -161,11 +167,12 @@ struct OverviewScreen: View {
 
     @ViewBuilder
     private func attention(_ status: AgentControlStatus) -> some View {
-        if let health = model.health, health.status != "ok" {
+        let checks = model.attentionChecks
+        if let health = model.health, health.status != "ok", !checks.isEmpty {
             CardSection(
                 "Needs attention", footnote: health.warnings.isEmpty ? nil : health.warnings.joined(separator: " ")
             ) {
-                ForEach(health.checks.filter { $0.state != "ok" }) { check in
+                ForEach(checks) { check in
                     CardRow {
                         HStack(spacing: 12) {
                             Label(
@@ -174,7 +181,7 @@ struct OverviewScreen: View {
                             )
                             .foregroundStyle(check.state == "failed" ? Theme.badText : Theme.cautionText, .primary)
                             Spacer(minLength: 12)
-                            Text((check.reason ?? check.state).replacingOccurrences(of: "-", with: " "))
+                            Text(attentionDetail(check, status))
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -193,6 +200,12 @@ struct OverviewScreen: View {
                 }
             }
         }
+    }
+
+    private func attentionDetail(_ check: HealthReport.Check, _ status: AgentControlStatus) -> String {
+        let reason = (check.reason ?? check.state).replacingOccurrences(of: "-", with: " ")
+        guard check.name == "automatic-run", let age = status.failureAgeSeconds else { return reason }
+        return "\(reason), \(Format.ago(age))"
     }
 
     // MARK: At a glance

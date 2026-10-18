@@ -369,7 +369,8 @@ private func controlService(
     legacyDisabled: Bool,
     bundledLoaded: Bool,
     bundled: Bool,
-    verbs: Box<[String]>
+    verbs: Box<[String]>,
+    legacyLoaded: Bool = false
 ) -> AgentControlService {
     let home = fixture.homeDirectory
     let state = fixture.stateURL
@@ -384,7 +385,7 @@ private func controlService(
                 case "print":
                     let target = arguments.dropFirst().first ?? ""
                     return LaunchctlResult(
-                        exitCode: target.hasSuffix(bundledLabel) ? (bundledLoaded ? 0 : 1) : 1,
+                        exitCode: target.hasSuffix(bundledLabel) ? (bundledLoaded ? 0 : 1) : (legacyLoaded ? 0 : 1),
                         output: ""
                     )
                 case "print-disabled":
@@ -401,6 +402,22 @@ private func controlService(
         },
         baseEnvironment: { ["CALOPOD_STATE_PATH": state.path] }
     )
+}
+
+@Test("The source install counts only while launchd has it loaded", arguments: [
+    (true, false, false, true), (false, true, true, false), (false, false, false, false),
+])
+func sourceInstallIsReportedOnlyWhileLoaded(
+    legacyDisabled: Bool, legacyLoaded: Bool, sourceLoaded: Bool, usesBundled: Bool
+) throws {
+    let fixture = try LaunchAgentFixture()
+    defer { fixture.remove() }
+    let service = controlService(
+        fixture: fixture, legacyDisabled: legacyDisabled, bundledLoaded: true, bundled: true,
+        verbs: Box([]), legacyLoaded: legacyLoaded)
+    let status = try service.status()
+    #expect(status.sourceLoaded == sourceLoaded)
+    #expect(status.usesBundledService == usesBundled)
 }
 
 @Test

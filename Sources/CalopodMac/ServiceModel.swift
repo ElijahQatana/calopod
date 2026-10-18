@@ -43,6 +43,10 @@ final class ServiceModel {
     var syncHealth: SyncHealth {
         SyncHealth.make(status: status, statusAt: statusAt, run: lastRun, access: calendarAccess)
     }
+    /// Failed checks to show on Overview, without a failed run that a later sync has made out of date.
+    var attentionChecks: [HealthReport.Check] {
+        SyncHealth.attentionChecks(health, status: status, statusAt: statusAt, run: lastRun)
+    }
     var menuBarAlert: Bool { syncHealth.tone == .bad }
     var menuBarDimmed: Bool { syncHealth.tone == .caution }
 
@@ -184,8 +188,14 @@ final class ServiceModel {
         }
     }
 
-    var legacyServiceActive: Bool {
-        guard let status, status.installed else { return false }
+    /// A source-installed agent is loaded in launchd. A leftover plist, or the app's own service
+    /// reporting as installed, does not count.
+    var legacyServiceActive: Bool { status?.sourceLoaded ?? false }
+
+    /// The source install is what the numbers describe and it is switched on, loaded or not.
+    /// It has to be switched off before the app's service can take over.
+    private var legacyServiceEnabled: Bool {
+        guard let status, !status.usesBundledService, status.installed else { return false }
         return status.enabled || status.running
     }
 
@@ -194,7 +204,7 @@ final class ServiceModel {
     func installBundledService() async {
         let service = service
         let registrar = registrar
-        let legacyActive = legacyServiceActive
+        let legacyActive = legacyServiceActive || legacyServiceEnabled
         await perform("Installing background service…") {
             try Self.install(legacyActive: legacyActive, registrar: registrar, setLegacyEnabled: { try service.setEnabled($0) })
             return nil

@@ -10,7 +10,8 @@ final class SyncHealthTests: XCTestCase {
         AgentControlStatus(
             state: state, message: message, installed: true, enabled: state != "disabled",
             paused: state == "paused", running: false, intervalSeconds: 600,
-            lastSuccessAgeSeconds: age, failureCategory: nil)
+            lastSuccessAgeSeconds: age, failureCategory: nil, failureAgeSeconds: nil,
+            usesBundledService: false, sourceLoaded: false)
     }
 
     private func run(_ ok: Bool = true, secondsAgo: Int = 30) -> ManualRun {
@@ -82,5 +83,39 @@ final class SyncHealthTests: XCTestCase {
         var kept = SyncHealth.settled(run(secondsAgo: 300), status: status("failed", age: 960), statusAt: now)
         kept = SyncHealth.settled(kept, status: status("failed", age: 10), statusAt: now)
         XCTAssertNil(kept)
+    }
+}
+
+final class AttentionChecksTests: XCTestCase {
+    private let now = Date(timeIntervalSince1970: 1_000_000)
+    private let health = HealthReport(
+        status: "attention", message: "", checks: [
+            .init(name: "automatic-run", state: "failed", reason: "source-refresh"),
+            .init(name: "schedule", state: "pending", reason: "paused"),
+        ], warnings: [])
+
+    private func status(failedSecondsAgo: Int?) -> AgentControlStatus {
+        AgentControlStatus(
+            state: "failed", message: "", installed: true, enabled: true, paused: false, running: false,
+            intervalSeconds: 600, lastSuccessAgeSeconds: nil, failureCategory: "source-refresh",
+            failureAgeSeconds: failedSecondsAgo, usesBundledService: true, sourceLoaded: false)
+    }
+
+    private func run(_ ok: Bool, secondsAgo: Int) -> ManualRun {
+        ManualRun(summary: "", succeeded: ok, finishedAt: now.addingTimeInterval(-Double(secondsAgo)), settledState: nil)
+    }
+
+    private func names(_ run: ManualRun?, failedSecondsAgo: Int = 3600) -> [String] {
+        SyncHealth.attentionChecks(health, status: status(failedSecondsAgo: failedSecondsAgo), statusAt: now, run: run).map(\.name)
+    }
+
+    func testALaterSuccessfulRunClearsTheFailedRunRow() {
+        XCTAssertEqual(names(run(true, secondsAgo: 30)), ["schedule"])
+    }
+
+    func testAnEarlierOrFailedRunKeepsIt() {
+        XCTAssertEqual(names(run(true, secondsAgo: 7200)), ["automatic-run", "schedule"])
+        XCTAssertEqual(names(run(false, secondsAgo: 30)), ["automatic-run", "schedule"])
+        XCTAssertEqual(names(nil), ["automatic-run", "schedule"])
     }
 }

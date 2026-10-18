@@ -94,6 +94,17 @@ struct InboxScreenServiceTests {
         #expect(board.incompleteCalendars == (stale ? ["Calendar"] : []))
     }
 
+    @Test("The warning names the calendar that is behind and clears after a fresh read")
+    func staleTextNamesTheCalendar() throws {
+        let f = try InboxFixture(now: Date().addingTimeInterval(4 * 3600))
+        let stale = try f.service.board()
+        #expect(stale.staleText(suffix: "so this may be missing items.")
+            == "Calendar is out of date or only partly read, so this may be missing items.")
+        try f.refresh([], full: false, at: f.now.addingTimeInterval(-60))
+        let fresh = try f.service.board()
+        #expect(fresh.isComplete && fresh.incompleteCalendars.isEmpty)
+    }
+
     @Test("The context strip rings overlaps and uses 90 minutes either side")
     func contextStrip() throws {
         let f = try InboxFixture()

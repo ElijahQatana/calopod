@@ -93,3 +93,16 @@ struct SyncHealth: Equatable {
         return seen == status.state && newer(run, than: status, statusAt: statusAt) ? run : nil
     }
 }
+
+extension SyncHealth {
+    /// The failed checks worth showing. A last automatic run that failed is dropped once a sync done
+    /// from the app finished after it.
+    static func attentionChecks(
+        _ health: HealthReport?, status: AgentControlStatus?, statusAt: Date, run: ManualRun?
+    ) -> [HealthReport.Check] {
+        guard let health else { return [] }
+        let failedAt = status?.failureAgeSeconds.map { statusAt.addingTimeInterval(-Double($0)) }
+        let recovered = run.map { run in run.succeeded && (failedAt.map { run.finishedAt > $0 } ?? false) } ?? false
+        return health.checks.filter { $0.state != "ok" && !($0.name == "automatic-run" && recovered) }
+    }
+}

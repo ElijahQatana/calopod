@@ -62,6 +62,14 @@ public struct InboxBoard: Equatable, Sendable {
     /// When the calendars were last read.
     public let lastChecked: Date?
 
+    /// Names the calendars that are behind, or says some are when none can be named.
+    public func staleText(suffix: String) -> String {
+        let which = incompleteCalendars.isEmpty
+            ? "Some calendars are"
+            : incompleteCalendars.joined(separator: ", ") + (incompleteCalendars.count == 1 ? " is" : " are")
+        return "\(which) out of date or only partly read, \(suffix)"
+    }
+
     public func entries(for filter: InboxFilter) -> [InboxEntry] { entries.filter { filter.matches($0.reasons) } }
     public func count(_ filter: InboxFilter) -> Int { entries(for: filter).count }
 }
