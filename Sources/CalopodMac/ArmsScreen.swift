@@ -27,7 +27,7 @@ struct ArmsScreen: View {
                 }
             }
         }
-        .padding(Theme.pagePadding)
+        .pageEdges()
         .frame(maxWidth: 760)
         .frame(maxWidth: .infinity)
     }

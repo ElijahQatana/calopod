@@ -5,6 +5,7 @@ struct CalendarScreen: View {
     /// The same model the menu bar keeps current, so the schedule is read once for both.
     @Environment(CalendarModel.self) private var model
     private let colors = CalendarColors.shared
+    @Environment(\.sidebarCollapsed) private var collapsed
 
     /// Opens Inbox on its Changed filter.
     var openInbox: () -> Void = {}
@@ -84,6 +85,7 @@ struct CalendarScreen: View {
                 }
                 .background(Capsule().fill(.quaternary))
             }
+            .titleClearOfToggle(horizontal: Self.headerInset)
             if !model.chipCalendars.isEmpty {
                 // One scrolling row, so the chips do not take a second and third line at narrow widths.
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -94,8 +96,12 @@ struct CalendarScreen: View {
                 }
             }
         }
-        .padding(.horizontal, 18).padding(.top, 14).padding(.bottom, 12)
+        .padding(.horizontal, Self.headerInset)
+        .padding(.top, Theme.Page.topPadding(collapsed: collapsed, inlineHeader: true))
+        .padding(.bottom, 12)
     }
+
+    private static let headerInset: CGFloat = 18
 
     private static let controlHeight = Theme.Control.height
 
