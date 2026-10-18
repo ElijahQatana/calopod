@@ -1,3 +1,4 @@
+import CalopodStore
 import XCTest
 
 @testable import CalopodMac
@@ -39,7 +40,8 @@ final class CalendarColorsTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: name) }
 
         let ids = ["work@example.com", "home@example.com"].map { CalendarColorSource(id: $0) }
-        let first = CalendarColors(defaults: defaults)
+        let state = LocalStateRepository(database: try .inMemory())
+        let first = CalendarColors(defaults: defaults, state: state)
         first.assignMissing(to: ids)
         let work = first.color(for: "work@example.com")
         XCTAssertNotEqual(work, first.color(for: "home@example.com"))
@@ -48,7 +50,7 @@ final class CalendarColorsTests: XCTestCase {
         first.set(red, for: "home@example.com")
         first.assignMissing(to: ids)
 
-        let reopened = CalendarColors(defaults: defaults)
+        let reopened = CalendarColors(defaults: defaults, state: state)
         XCTAssertEqual(reopened.color(for: "work@example.com"), work)
         XCTAssertEqual(reopened.color(for: "home@example.com"), red)
     }
@@ -66,7 +68,7 @@ final class CalendarColorsTests: XCTestCase {
         let name = "calopod.test.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
         defer { defaults.removePersistentDomain(forName: name) }
-        let colors = CalendarColors(defaults: defaults)
+        let colors = CalendarColors(defaults: defaults, state: nil)
         let sources = [
             CalendarColorSource(id: "mac", providerColor: "#d9731a", provider: "eventkit"),
             CalendarColorSource(id: "mac-none", providerColor: nil, provider: "eventkit"),
