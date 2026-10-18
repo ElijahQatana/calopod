@@ -265,6 +265,7 @@ struct WindowChrome: NSViewRepresentable {
         /// Set when the window closes. A closed window is left alone, and nothing is observed again.
         private var closed = false
         private var clearedFocus = false
+        private var metrics: TrafficLightPlacement.Metrics?
         private lazy var pass = ApplyCoalescer { [weak self] in self?.apply() }
 
         /// Frame changes made by apply() itself land here too, so asking never runs it inline.
@@ -288,22 +289,28 @@ struct WindowChrome: NSViewRepresentable {
                     window.makeFirstResponder(nil)
                 }
             }
+            // Measure the AppKit spacing once. Later passes can see buttons AppKit has just reset,
+            // so reading it again would give a different position at different sizes.
+            let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton]
+                .compactMap { window.standardWindowButton($0) }
+            if metrics == nil, buttons.count == 3 {
+                metrics = TrafficLightPlacement.Metrics(
+                    step: buttons[1].frame.minX - close.frame.minX,
+                    size: close.frame.size)
+            }
+            let metrics = metrics ?? .init(step: 34, size: close.frame.size)
+
+            // The title bar container lives in the window's frame view. Use that view's own height,
+            // not window.frame, which can differ from it while a live resize is in flight.
+            let parentHeight = container.superview?.bounds.height ?? window.frame.height
+            let parentWidth = container.superview?.bounds.width ?? window.frame.width
             let height = WindowChrome.barHeight
-            let barFrame = NSRect(
-                x: 0, y: window.frame.height - height, width: window.frame.width, height: height)
+            let barFrame = NSRect(x: 0, y: parentHeight - height, width: parentWidth, height: height)
             if !container.frame.isClose(to: barFrame) { container.frame = barFrame }
             if !titlebar.frame.isClose(to: container.bounds) { titlebar.frame = container.bounds }
 
-            // Same spot in both states: centered in the rail, which also fits the full panel.
-            let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton]
-                .compactMap { window.standardWindowButton($0) }
-            let step = (buttons.dropFirst().first?.frame.minX ?? 34) - close.frame.minX
-            let span = step * 2 + close.frame.width
-            let left = Sidebar.inset + (Sidebar.railWidth - span) / 2
-            let top = Sidebar.inset + 10 + 16
-            for (index, button) in buttons.enumerated() {
-                let origin = NSPoint(
-                    x: left + step * CGFloat(index), y: height - top - button.frame.height / 2)
+            let origins = TrafficLightPlacement.origins(barHeight: height, metrics: metrics)
+            for (button, origin) in zip(buttons, origins) {
                 if !NSRect(origin: button.frame.origin, size: .zero).isClose(to: NSRect(origin: origin, size: .zero)) {
                     button.setFrameOrigin(origin)
                 }
@@ -314,7 +321,8 @@ struct WindowChrome: NSViewRepresentable {
             let center = NotificationCenter.default
             let names: [Notification.Name] = [
                 NSWindow.didResizeNotification, NSWindow.didEndLiveResizeNotification,
-                NSWindow.didExitFullScreenNotification, NSWindow.didBecomeKeyNotification,
+                NSWindow.didExitFullScreenNotification, NSWindow.didEnterFullScreenNotification,
+                NSWindow.didBecomeKeyNotification,
             ]
             var tokens = names.map { name in
                 center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
@@ -349,6 +357,26 @@ struct WindowChrome: NSViewRepresentable {
         func stopObserving() {
             observers.forEach(NotificationCenter.default.removeObserver)
             observers = []
+        }
+    }
+}
+
+/// Where the window buttons go inside the title bar container. The container's origin is the
+/// bottom left of the bar, so the result depends only on the bar height and the button metrics,
+/// never on the window size.
+@MainActor
+enum TrafficLightPlacement {
+    struct Metrics: Equatable {
+        var step: CGFloat
+        var size: CGSize
+    }
+
+    static func origins(barHeight: CGFloat, metrics: Metrics) -> [NSPoint] {
+        let span = metrics.step * 2 + metrics.size.width
+        let left = Sidebar.inset + (Sidebar.railWidth - span) / 2
+        let top = Sidebar.inset + 10 + 16
+        return (0..<3).map {
+            NSPoint(x: left + metrics.step * CGFloat($0), y: barHeight - top - metrics.size.height / 2)
         }
     }
 }
