@@ -9,13 +9,17 @@ final class SetupModel {
     private(set) var snapshot: SetupSnapshot?
     private(set) var busy: String?
     private(set) var notice: String?
+    private var loadFailed = false
 
     private let service: SetupService
     @ObservationIgnored let aliases: CalendarAliases
 
-    init(service: SetupService = SetupService(), aliases: CalendarAliases = .shared) {
+    @ObservationIgnored private let colors: CalendarColors
+
+    init(service: SetupService = SetupService(), aliases: CalendarAliases = .shared, colors: CalendarColors = .shared) {
         self.service = service
         self.aliases = aliases
+        self.colors = colors
     }
 
     var isBusy: Bool { busy != nil }
@@ -60,9 +64,20 @@ final class SetupModel {
     func reload() async {
         let service = service
         do {
-            snapshot = try await Task.detached { try service.snapshot() }.value
+            let loaded = try await Task.detached { try service.snapshot() }.value
+            snapshot = loaded
+            if loadFailed { notice = nil; loadFailed = false }
+            // Every screen shows calendar colors, so they are given out as soon as calendars are known.
+            colors.assignMissing(
+                to: loaded.connections.flatMap { connection in
+                    connection.calendars.map {
+                        CalendarColorSource(id: $0.id, providerColor: $0.providerColor, provider: connection.provider)
+                    }
+                },
+                ignoring: aliases.ignored)
         } catch {
             notice = service.message(for: error)
+            loadFailed = true
         }
     }
 
@@ -135,7 +150,10 @@ final class SetupModel {
         _ label: String?,
         _ work: @escaping @Sendable () async throws -> Void
     ) async {
-        guard busy == nil else { return }
+        guard busy == nil else {
+            notice = "Wait for the current change to finish, then try again."
+            return
+        }
         busy = label ?? "Saving…"
         notice = nil
         do {

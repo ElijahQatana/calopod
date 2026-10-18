@@ -62,8 +62,8 @@ struct MenuPopover: View {
     }
 
     private static var card: some View {
-        RoundedRectangle(cornerRadius: Theme.cardRadius - 4, style: .continuous).fill(Theme.innerFill)
-            .overlay(RoundedRectangle(cornerRadius: Theme.cardRadius - 4, style: .continuous).strokeBorder(Theme.paneLine, lineWidth: 1))
+        RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous).fill(Theme.innerFill)
+            .overlay(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous).strokeBorder(Theme.paneLine, lineWidth: 1))
     }
 
     private var nextEvent: ScheduleEvent? { UpNext.events(in: schedule.schedule, from: Date()).first }
@@ -155,7 +155,7 @@ struct WaitingCard: View {
             Button("Review", action: review).buttonStyle(.accentFilled).fixedSize()
         }
         .padding(12)
-        .background(RoundedRectangle(cornerRadius: Theme.cardRadius - 4, style: .continuous).fill(Theme.accent.opacity(0.12)))
+        .background(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous).fill(Theme.accent.opacity(0.12)))
     }
 }
 

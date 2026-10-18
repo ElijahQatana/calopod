@@ -195,7 +195,11 @@ public struct InboxReviewService: Sendable {
         } catch {
             // The intent may already be saved. If so the outcome is unclear, not failed.
             let saved = (try? controller().0.session(id: sessionID)).map(progress)
-            return (saved?.hasUnclear == true ? .unclear : .changed, saved)
+            if saved?.hasUnclear == true { return (.unclear, saved) }
+            // Only an event that moved on is "changed"; any other error is reported as it is.
+            let moved = error is InboxReviewSessionError || error is InboxCalendarContextError
+                || error as? InboxReviewSessionStoreError == .changed
+            return (moved ? .changed : .failed("Calopod could not finish that. Nothing was sent."), saved)
         }
     }
 

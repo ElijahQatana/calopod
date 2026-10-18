@@ -28,7 +28,6 @@ enum Theme {
         static let tinyBold = Font.system(size: 12, weight: .bold)
         /// Hour labels and day headers in the calendar.
         static let label = Font.system(size: 14)
-        static let labelMedium = Font.system(size: 14, weight: .medium)
         static let eventTitle = Font.system(size: 13, weight: .semibold)
         static let button = Font.system(size: 15, weight: .semibold)
         static let chip = Font.system(size: 14, weight: .medium)
@@ -46,7 +45,6 @@ enum Theme {
         static let smallChipHeight: CGFloat = 28
         static let rowHeight: CGFloat = 44
         static let popoverRowHeight: CGFloat = 36
-        static let iconBox: CGFloat = 24
         static let circle: CGFloat = 36
     }
 
@@ -129,7 +127,8 @@ enum Theme {
     static let panelShadow = Color(
         light: Color(red: 0.28, green: 0.13, blue: 0).opacity(0.30), dark: Color.black.opacity(0.45))
 
-    static let cardRadius: CGFloat = 20
+    /// The corner of a card, the inner panels of the pages and the popover cards.
+    static let cardRadius: CGFloat = 16
     static let controlRadius: CGFloat = 12
     static let pagePadding: CGFloat = 28
 
