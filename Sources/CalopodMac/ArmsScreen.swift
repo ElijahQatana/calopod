@@ -27,26 +27,21 @@ struct ArmsScreen: View {
                 }
             }
         }
-        .pageEdges()
+        .pageEdges(inlineHeader: true)
         .frame(maxWidth: 760)
         .frame(maxWidth: .infinity)
     }
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Arms").font(Theme.Fonts.pageTitle)
-                Text("An arm copies events from one or more calendars into another, as Busy blocks or with full details.")
-                    .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 8)
+        PageHeader(
+            title: "Arms",
+            subtitle: "An arm copies events from one or more calendars into another, as Busy blocks or with full details."
+        ) {
             Button { creating = true } label: { Label("New arm", systemImage: "plus") }
                 .buttonStyle(.accentFilled)
                 .disabled(model.isBusy)
                 .keyboardShortcut("n", modifiers: .command)
         }
-        .padding(.bottom, 6)
     }
 
     private var emptyState: some View {

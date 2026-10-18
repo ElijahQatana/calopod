@@ -68,9 +68,7 @@ struct CalendarScreen: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                Text(title).font(Theme.Fonts.heading).lineLimit(1).minimumScaleFactor(0.8)
-                Spacer(minLength: 8)
+            PageHeader(title: title, horizontal: Self.headerInset) {
                 PillPicker(options: [("Day", CalendarModel.Mode.day), ("Week", .week)], selection: Bindable(model).mode, quiet: true)
                     .fixedSize()
                 Button("Today") { model.goToToday() }
@@ -85,7 +83,6 @@ struct CalendarScreen: View {
                 }
                 .background(Capsule().fill(.quaternary))
             }
-            .titleClearOfToggle(horizontal: Self.headerInset)
             if !model.chipCalendars.isEmpty {
                 // One scrolling row, so the chips do not take a second and third line at narrow widths.
                 ScrollView(.horizontal, showsIndicators: false) {
