@@ -112,42 +112,7 @@ struct OverviewScreen: View {
     // MARK: Preview
 
     private func previewSection(_ preview: SyncPreview) -> some View {
-        CardSection("Review before syncing: \(Self.summaryLine(preview))") {
-            ForEach(preview.lines.prefix(8)) { line in
-                CardRow("\(line.action.capitalized) · \(line.armName)") {
-                    Text(line.reason).foregroundStyle(.secondary)
-                }
-            }
-            if preview.lines.count > 8 {
-                CardRow { Text("and \(preview.lines.count - 8) more").foregroundStyle(.secondary) }
-            }
-            if preview.removals > 0 {
-                CardRow { Banner(kind: .caution, text: "Includes removing copies Calopod made earlier.") }
-            }
-            ForEach(preview.warnings, id: \.self) { warning in
-                CardRow { Banner(kind: .caution, text: warning) }
-            }
-            CardRow {
-                HStack {
-                    Button("Cancel") { model.discardPreview() }
-                    Spacer()
-                    Button("Apply") { Task { await model.applyPreview() } }
-                        .buttonStyle(.accentFilled)
-                        .keyboardShortcut(.defaultAction)
-                }
-                .disabled(model.isBusy)
-            }
-        }
-    }
-
-    private static func summaryLine(_ preview: SyncPreview) -> String {
-        [
-            ("to create", preview.creates), ("to update", preview.updates),
-            ("to remove", preview.removals), ("to repair", preview.repairs),
-        ]
-        .filter { $0.1 > 0 }
-        .map { "\($0.1) \($0.0)" }
-        .joined(separator: ", ")
+        SyncReviewSection(model: model, preview: preview)
     }
 
     // MARK: Needs you and next up
