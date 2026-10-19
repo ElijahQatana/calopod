@@ -36,7 +36,7 @@ enum CalendarAccessState: Equatable {
         case .canAsk:
             "Allow access and macOS will ask once. Nothing is read until you say yes."
         case .blocked:
-            "Calendar access is off for Calopod EventKit Host. Turn it on with Full Access in System Settings, under Privacy & Security, Calendars."
+            "Calendar access is off for Calopod. Turn it on with Full Access in System Settings, under Privacy & Security, Calendars. \(Permissions.calendarListing)"
         case .unchecked, .granted:
             ""
         }
@@ -54,9 +54,9 @@ struct CalendarAccessResult: Equatable {
         case .granted:
             Self(message: "Calendar access is allowed.", offersWaysForward: false)
         case .denied:
-            Self(message: "Calendar access was denied. Turn it on in System Settings, or reset Calopod's Calendar decision so macOS asks again.", offersWaysForward: true)
+            Self(message: "Calendar access was denied. Turn it on in System Settings, or reset Calopod's Calendar decision so macOS asks again. \(Permissions.calendarListing)", offersWaysForward: true)
         case .undecided:
-            Self(message: "macOS did not show the prompt. Open Calendar privacy settings, or reset Calopod's Calendar decision so macOS asks again.", offersWaysForward: true)
+            Self(message: "macOS did not show the prompt. Open Calendar privacy settings, or reset Calopod's Calendar decision so macOS asks again. \(Permissions.calendarListing)", offersWaysForward: true)
         case .couldNotStart:
             Self(message: failure ?? "Calopod could not start its Calendar helper.", offersWaysForward: false)
         }

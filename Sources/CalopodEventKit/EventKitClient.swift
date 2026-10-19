@@ -149,15 +149,22 @@ private actor LiveEventKitGateway: EventKitGateway {
         }
     }
 
+    /// The store is only handed to the main queue for the one request call.
+    private struct UncheckedStore: @unchecked Sendable { let store: EKEventStore }
+
     func requestFullAccess() async throws {
-        // Older toolchains reject sending the store into the async overload, so use the callback
-        // form.
+        // macOS only shows the dialog reliably when the request starts on the main thread, and
+        // this actor runs on a pool thread. Older toolchains reject sending the store into the
+        // async overload, so use the callback form.
+        let store = UncheckedStore(store: self.store)
         _ = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Bool, Error>) in
-            store.requestFullAccessToEvents { granted, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume(returning: granted)
+            DispatchQueue.main.async {
+                store.store.requestFullAccessToEvents { granted, error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume(returning: granted)
+                    }
                 }
             }
         }

@@ -44,8 +44,9 @@ cp "$binary_root/calopod" "$contents_root/MacOS/calopod"
 mkdir -p "$contents_root/MacOS/eventkit-host"
 cp -R "$repository_root/.build/eventkit-host/Calopod EventKit Host.app" \
   "$contents_root/MacOS/eventkit-host/"
-# CALOPOD_SIGN_IDENTITY signs like a release: hardened runtime and a timestamp on every item,
-# the helper with its Calendar entitlement. The default is ad hoc. Sign inside out.
+# CALOPOD_SIGN_IDENTITY signs like a release: hardened runtime and a timestamp on every item, and
+# the Calendar entitlement on the helper, the agent, the command and the app. macOS charges the
+# helper's Calendar request to the outer app, so the app needs it too. The default is ad hoc. Sign inside out.
 . "$repository_root/Scripts/calopod-codesign.sh"
 sign_identity=${CALOPOD_SIGN_IDENTITY:--}
 host_path="$contents_root/MacOS/eventkit-host/Calopod EventKit Host.app"
@@ -60,9 +61,20 @@ else
     --entitlements "$repository_root/Support/EventKitHost/Entitlements.plist" \
     || sign_failed "the Calendar helper"
 fi
-calopod_sign_item codesign "$sign_identity" "$contents_root/MacOS/calopod-agent" || sign_failed "calopod-agent"
-calopod_sign_item codesign "$sign_identity" "$contents_root/MacOS/calopod" || sign_failed "calopod"
-calopod_sign_item codesign "$sign_identity" "$bundle_root" || sign_failed "the app"
+outer_entitlements="$repository_root/Support/Mac/Entitlements.plist"
+sign_outer() {
+  item=$1
+  label=$2
+  if [ "$sign_identity" = "-" ]; then
+    calopod_sign_item codesign "$sign_identity" "$item" || sign_failed "$label"
+  else
+    calopod_sign_item codesign "$sign_identity" "$item" --entitlements "$outer_entitlements" \
+      || sign_failed "$label"
+  fi
+}
+sign_outer "$contents_root/MacOS/calopod-agent" "calopod-agent"
+sign_outer "$contents_root/MacOS/calopod" "calopod"
+sign_outer "$bundle_root" "the app"
 codesign --verify --strict --deep "$bundle_root" || sign_failed "the app (verification failed)"
 calopod_show_signature codesign "$host_path"
 calopod_show_signature codesign "$contents_root/MacOS/calopod-agent"

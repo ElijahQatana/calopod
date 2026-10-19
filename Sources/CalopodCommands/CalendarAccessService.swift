@@ -40,13 +40,13 @@ public struct CalendarAccessService: Sendable {
     }
 }
 
-/// Clears macOS's Calendar decision for the Calopod helper only, so macOS asks again. It runs the
+/// Clears macOS's Calendar decision for Calopod and its helper only, so macOS asks again. It runs the
 /// per-user `tccutil` command and needs no admin rights.
 public struct CalendarDecisionReset: Sendable {
     public struct Failed: Error, Equatable {}
 
     public static let executablePath = "/usr/bin/tccutil"
-    public static let arguments = ["reset", "Calendar", Permissions.calendarHelperBundleID]
+    public static let arguments = Permissions.calendarBundleIDs.map { ["reset", "Calendar", $0] }
 
     /// Starts the command and returns its exit status.
     public typealias Runner = @Sendable (_ executable: String, _ arguments: [String]) throws -> Int32
@@ -56,7 +56,9 @@ public struct CalendarDecisionReset: Sendable {
     public init(runner: @escaping Runner = Self.runProcess) { self.runner = runner }
 
     public func reset() throws {
-        guard try runner(Self.executablePath, Self.arguments) == 0 else { throw Failed() }
+        var failed = false
+        for arguments in Self.arguments where try runner(Self.executablePath, arguments) != 0 { failed = true }
+        if failed { throw Failed() }
     }
 
     public static func runProcess(_ executable: String, _ arguments: [String]) throws -> Int32 {

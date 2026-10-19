@@ -183,7 +183,7 @@ func doctorReport(
                 warnings.append("Grant Calendar access, then refresh the Mac Connection.")
                 if response.status == .notDetermined || response.status == .denied {
                     warnings.append(
-                        "If macOS does not ask or the answer stays off, clear Calopod's Calendar decision with: \(Permissions.calendarResetCommand)")
+                        "\(Permissions.calendarListing) If macOS does not ask or the answer stays off, clear Calopod's Calendar decision with: \(Permissions.calendarResetCommand)")
                 }
             }
         } catch {

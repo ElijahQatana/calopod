@@ -80,10 +80,16 @@ public enum KeychainCheckOutcome: Equatable, Sendable {
 public enum Permissions {
     public static let calendarPrivacyURL = "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars"
 
-    /// The bundle id macOS keeps Calopod's Calendar decision under.
+    /// macOS files the helper's request under the app, so the decision can sit under either id.
+    public static let calendarAppBundleID = "pro.elijahquintana.calopod"
     public static let calendarHelperBundleID = "pro.elijahquintana.calopod.eventkit-host"
-    /// The command that clears that decision, for people who prefer to run it themselves.
-    public static let calendarResetCommand = "tccutil reset Calendar \(calendarHelperBundleID)"
+    public static let calendarBundleIDs = [calendarAppBundleID, calendarHelperBundleID]
+    /// The commands that clear that decision, for people who prefer to run them themselves.
+    public static let calendarResetCommand =
+        calendarBundleIDs.map { "tccutil reset Calendar \($0)" }.joined(separator: " && ")
+    /// Calendar privacy settings show one entry for the app, its helper and the agent.
+    public static let calendarListing =
+        "macOS lists Calopod once in Calendar privacy settings. That one entry covers the app, its calendar helper and the background agent."
     public static let calendarResetConfirmation =
         "This clears only Calopod's own Calendar decision on this Mac. Your calendars and other apps are not touched, and macOS will ask again."
 
@@ -102,10 +108,10 @@ public enum Permissions {
         case .notDetermined:
             return reading(
                 .notAsked, "Not asked yet",
-                "macOS has not asked yet. Choose Allow in Calopod, Settings, Permissions, and macOS will ask once. Nothing is read until you say yes.",
+                "macOS has not asked yet. Choose Allow in Calopod, Settings, Permissions, and macOS will ask once, naming Calopod. Nothing is read until you say yes.",
                 "not-asked")
         case .denied:
-            return reading(.blocked, "Denied", "Calendar access is off for Calopod. \(settings)", "denied")
+            return reading(.blocked, "Denied", "Calendar access is off for Calopod. \(settings) \(calendarListing)", "denied")
         case .restricted:
             return reading(
                 .blocked, "Restricted",
