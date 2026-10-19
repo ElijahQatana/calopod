@@ -1,10 +1,12 @@
 # iPhone feed
 
-The iPhone feed is a read-only copy of your Inbox, your busy time for the next two weeks, your calendar names with their colors, the events of the calendars you choose, and the time of the last sync. The Mac app puts it in your private iCloud so the iPhone app can show it. It is off until you turn it on, and nothing on the iPhone can change a calendar.
+The iPhone feed is a read-only copy of your Inbox, your busy time for the next two weeks, your calendar names with their colors, the events of the calendars you choose, your meeting reminder settings, and the time of the last sync. The Mac app puts it in your private iCloud so the iPhone app can show it. It is off until you turn it on, and nothing on the iPhone can change a calendar.
 
 What goes up: for each Inbox item, its time, title, location, notes, link, organizer, how many people have answered, and the events it overlaps. For busy time, only start and end times. Events marked private keep their time and lose their words. The feed is stored in your own iCloud account, not on a Calopod server, and nobody else can read it.
 
-Events are different: for each calendar you choose, the next 14 days of events go up with their titles, times, locations, whether they are all day, your reply and the calendar they belong to. So the titles of events on chosen calendars are stored in your iCloud. Notes, attendees and links are not sent, and neither are cancelled events, copies Calopod made, or calendars you ignored. No calendar is chosen until you pick one.
+Events are different: for each calendar you choose, the next 14 days of events go up with their titles, times, locations, whether they are all day, your reply and the calendar they belong to. So the titles of events on chosen calendars are stored in your iCloud. Notes and attendees are not sent, and neither are cancelled events, copies Calopod made, or calendars you ignored. No calendar is chosen until you pick one.
+
+Meeting links are the one link that goes up. An event that can get a reminder (timed, not declined, not yet over, not private) carries its Teams, Zoom, Meet or Webex link so the phone can offer Join. Those links are stored in your iCloud with the event. The reminder settings are the ones from `calopod notifications`: whether reminders are on, the first and final times, and whether titles are hidden. A change reaches the phone at the next sync, like the choice of calendars.
 
 ## Turning it on
 
@@ -31,11 +33,11 @@ Turning the feed off deletes the uploaded copy. If the app isn't running at that
 
 ## What is stored in iCloud
 
-One record type, `Snapshot`, in one zone, `Snapshots`, of the private database in container `iCloud.pro.elijahquintana.calopod`. There is one record per Inbox item, one per day of busy time, one for the calendar list and one for the sync status. Each day that has events on a chosen calendar adds one more, holding that day's events from all chosen calendars. The record name is the item's own id, so an upload replaces the old record.
+One record type, `Snapshot`, in one zone, `Snapshots`, of the private database in container `iCloud.pro.elijahquintana.calopod`. There is one record per Inbox item, one per day of busy time, one for the calendar list, one for the reminder settings and one for the sync status. Each day that has events on a chosen calendar adds one more, holding that day's events from all chosen calendars. The record name is the item's own id, so an upload replaces the old record.
 
 | Field | Type | Holds |
 |---|---|---|
-| `kind` | String | `inbox-item`, `availability-day`, `calendar-day`, `calendars` or `sync-status` |
+| `kind` | String | `inbox-item`, `availability-day`, `calendar-day`, `calendars`, `reminder-settings` or `sync-status` |
 | `schemaVersion` | Int(64) | The version of the payload, currently 1. A reader skips any `kind` it does not know |
 | `publishedAt` | Date/Time | When the Mac built the record |
 | `payload` | Bytes | The record as JSON, in the shapes defined by `CalopodSnapshot` |

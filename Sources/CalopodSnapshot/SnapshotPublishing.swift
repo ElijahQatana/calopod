@@ -7,6 +7,7 @@ public enum SnapshotKind: String, Codable, Sendable {
     case calendars
     case syncStatus = "sync-status"
     case calendarDay = "calendar-day"
+    case reminderSettings = "reminder-settings"
 }
 
 /// Names of the one CloudKit record type and zone the Mac writes. Production record types can

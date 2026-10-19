@@ -9,7 +9,22 @@ import Testing
 
 private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
-private func fixture() throws -> LocalStateRepository {
+private func event(
+    _ key: String, hour: Double, isPrivate: Bool, url: String? = nil, state response: EventResponseState = .needsResponse,
+    isAllDay: Bool = false
+) -> StoredNormalizedInstance {
+    StoredNormalizedInstance(
+        sourceKeyHash: key, connectionID: "c", calendarBindingID: "cal", providerEventID: key, recurrenceID: nil,
+        startsAt: now.addingTimeInterval(hour * 3600), endsAt: now.addingTimeInterval((hour + 1) * 3600),
+        isAllDay: isAllDay, availability: "busy", isCancelled: false, isPrivate: isPrivate, title: "Title \(key)",
+        contentFingerprint: key, providerUpdatedAt: nil, location: "Room 4", notes: String(repeating: "n", count: 5_000), url: url,
+        attendees: [EventParticipant(emailAddress: "a@example.com", status: "accepted"), EventParticipant(status: "declined")],
+        currentUserResponse: EventResponse(
+            state: response, evidence: .googleSelf,
+            actionCapability: RSVPActionCapability(supportedScopes: [.occurrence])))
+}
+
+private func fixture(extra: [StoredNormalizedInstance] = []) throws -> LocalStateRepository {
     let state = LocalStateRepository(database: try CalopodDatabase.inMemory())
     try state.saveConnection(StoredConnection(
         id: "c", configurationID: "config", provider: "google", displayLabel: "Example", isEnabled: true))
@@ -18,21 +33,10 @@ private func fixture() throws -> LocalStateRepository {
             id: "cal", connectionID: "c", providerCalendarID: "cal", displayLabel: "Work",
             isSelected: true, isReadOnly: false, responseIdentityScope: .authenticatedUser),
     ])
-    func event(_ key: String, hour: Double, isPrivate: Bool) -> StoredNormalizedInstance {
-        StoredNormalizedInstance(
-            sourceKeyHash: key, connectionID: "c", calendarBindingID: "cal", providerEventID: key, recurrenceID: nil,
-            startsAt: now.addingTimeInterval(hour * 3600), endsAt: now.addingTimeInterval((hour + 1) * 3600),
-            isAllDay: false, availability: "busy", isCancelled: false, isPrivate: isPrivate, title: "Title \(key)",
-            contentFingerprint: key, providerUpdatedAt: nil, location: "Room 4", notes: String(repeating: "n", count: 5_000),
-            attendees: [EventParticipant(emailAddress: "a@example.com", status: "accepted"), EventParticipant(status: "declined")],
-            currentUserResponse: EventResponse(
-                state: .needsResponse, evidence: .googleSelf,
-                actionCapability: RSVPActionCapability(supportedScopes: [.occurrence])))
-    }
     try state.applyEventRefresh(
         connectionID: "c", calendarBindingID: "cal", windowStart: now.addingTimeInterval(-86_400),
         windowEnd: now.addingTimeInterval(7 * 86_400),
-        instances: [event("a", hour: 2, isPrivate: false), event("b", hour: 2.5, isPrivate: true)],
+        instances: [event("a", hour: 2, isPrivate: false), event("b", hour: 2.5, isPrivate: true)] + extra,
         cancelledSourceKeyHashes: [], isFullRefresh: true, cursorUpdates: [])
     return state
 }
@@ -87,7 +91,7 @@ struct IPhoneFeedTests {
         try feed.setEnabled(true)
         guard case .published(let count) = await feed.run(publisher: remote) else { Issue.record("not published"); return }
         let stored = await remote.records.count
-        #expect(count == 2 + IPhoneFeedBuilder.availabilityDays + 2 && stored == count)
+        #expect(count == 2 + IPhoneFeedBuilder.availabilityDays + 3 && stored == count)
         #expect(await feed.run(publisher: remote) == .idle)
 
         try finishSync(state, id: "run2")
@@ -159,6 +163,27 @@ struct IPhoneFeedTests {
 
         try state.setCalendarIgnored(true, calendarID: "cal")
         #expect(!(try kinds()).contains(.calendarDay))
+    }
+
+    @Test("Only events that can get a reminder carry a join link, and the Mac's reminder settings go along")
+    func publishesJoinLinksAndSettings() throws {
+        let zoom = "https://example.zoom.us/j/123456789"
+        let state = try fixture(extra: [
+            event("j", hour: 3, isPrivate: false, url: zoom),
+            event("p", hour: 4, isPrivate: true, url: zoom),
+            event("d", hour: 5, isPrivate: false, url: zoom, state: .declined),
+            event("l", hour: 6, isPrivate: false, url: zoom, isAllDay: true),
+            event("o", hour: -3, isPrivate: false, url: zoom),
+        ])
+        try state.setIPhoneCalendar("cal", chosen: true)
+        try state.saveNotificationSettings(NotificationSettings(firstMinutes: 15, finalMinutes: 5, hideTitles: true))
+        let records = try IPhoneFeedBuilder.records(repository: state, now: now, calendar: Calendar(identifier: .gregorian))
+        let links = try records.filter { $0.kind == .calendarDay }
+            .flatMap { try SnapshotCoding.decode(CalendarDay.self, from: $0.bytes).record.events }
+            .reduce(into: [String: String]()) { $0[$1.id] = $1.joinURL }
+        #expect(links == ["j": zoom])
+        let settings = try #require(records.first { $0.kind == .reminderSettings })
+        #expect(try SnapshotCoding.decode(ReminderSettings.self, from: settings.bytes).record.leadMinutes == [15, 5])
     }
 
     @Test("Changing the choice republishes, and unchoosing removes the events")
