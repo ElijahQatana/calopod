@@ -20,8 +20,8 @@ struct SettingsScreen: View {
         appearance
         transparency
         windowStyle
-        commandLine
         permissionsSection
+        commandLine
     }
 
     private var permissionsSection: some View {
