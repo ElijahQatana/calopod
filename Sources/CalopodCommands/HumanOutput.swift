@@ -136,6 +136,10 @@ enum HumanOutputRenderer {
                             lines.append("  Destination: \(label(context.calendarLabels[target], fallback: "Unknown calendar"))")
                             if localIDs { lines.append("  Destination ID: \(clean(target))") }
                         }
+                    case "iphone.calendars":
+                        lines.append("\(index + 1). \(label(item.label, fallback: "Unnamed calendar"))")
+                        lines.append("  Sends events to the iPhone: \(item.enabled == true ? "yes" : "no")")
+                        if let color = item.color { lines.append("  Color: \(clean(color))") }
                     case let name where name.hasPrefix("calendars"):
                         lines.append("\(index + 1). \(label(item.alias ?? item.label, fallback: "Unnamed calendar"))")
                         if item.alias != nil { lines.append("  Real name: \(label(item.label, fallback: "Unnamed calendar"))") }

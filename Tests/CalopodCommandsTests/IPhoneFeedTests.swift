@@ -136,6 +136,51 @@ struct IPhoneFeedTests {
         #expect(await service(state, at: later).run(publisher: remote) == .idle)
     }
 
+    private func days(_ remote: InMemorySnapshotPublisher) async throws -> [CalendarEvent] {
+        try await remote.records.values.filter { $0.kind == .calendarDay }
+            .flatMap { try SnapshotCoding.decode(CalendarDay.self, from: $0.bytes).record.events }
+    }
+
+    @Test("Events go out only for chosen calendars, and a private one keeps only its time")
+    func publishesChosenEvents() throws {
+        let state = try fixture()
+        func kinds() throws -> [SnapshotKind] {
+            try IPhoneFeedBuilder.records(repository: state, now: now, calendar: Calendar(identifier: .gregorian)).map(\.kind)
+        }
+        #expect(!(try kinds()).contains(.calendarDay))
+
+        try state.setIPhoneCalendar("cal", chosen: true)
+        let records = try IPhoneFeedBuilder.records(repository: state, now: now, calendar: Calendar(identifier: .gregorian))
+        let events = try records.filter { $0.kind == .calendarDay }
+            .flatMap { try SnapshotCoding.decode(CalendarDay.self, from: $0.bytes).record.events }
+        let open = try #require(events.first { $0.id == "a" }), hidden = try #require(events.first { $0.id == "b" })
+        #expect(open.title == "Title a" && open.location == "Room 4" && open.calendarID == "cal" && open.response == .needsResponse)
+        #expect(hidden.title == nil && hidden.location == nil && hidden.endsAt > hidden.startsAt)
+
+        try state.setCalendarIgnored(true, calendarID: "cal")
+        #expect(!(try kinds()).contains(.calendarDay))
+    }
+
+    @Test("Changing the choice republishes, and unchoosing removes the events")
+    func choiceIsRepublished() async throws {
+        let state = try fixture()
+        try finishSync(state, id: "run1")
+        let feed = service(state), remote = InMemorySnapshotPublisher()
+        try feed.setEnabled(true)
+        _ = await feed.run(publisher: remote)
+        #expect(try await days(remote).isEmpty)
+
+        try feed.setCalendar("Work", chosen: true)
+        #expect(try feed.calendarChoices() == [.init(id: "cal", name: "Work", colorIndex: 11, isChosen: true)])
+        guard case .published = await feed.run(publisher: remote) else { Issue.record("not published"); return }
+        #expect(Set(try await days(remote).map(\.id)) == ["a", "b"])
+
+        try feed.setCalendar("cal", chosen: false)
+        guard case .published = await feed.run(publisher: remote) else { Issue.record("not republished"); return }
+        #expect(try await days(remote).isEmpty)
+        #expect(throws: (any Error).self) { try feed.setCalendar("Nowhere", chosen: true) }
+    }
+
     @Test("The command line says why the feed is not available")
     func availabilityWording() {
         let app = URL(fileURLWithPath: "/Applications/Calopod.app")

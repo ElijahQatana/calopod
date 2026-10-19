@@ -2,14 +2,14 @@ import ArgumentParser
 import CalopodStore
 import Foundation
 
-/// The iPhone feed is a read-only copy of the Inbox and busy time that the Mac app uploads to the
-/// private iCloud of whoever signed in. These commands only choose whether it is on; the app does the
-/// uploading.
+/// The iPhone feed is a read-only copy of the Inbox, busy time and the events of chosen calendars
+/// that the Mac app uploads to the private iCloud of whoever signed in. These commands only choose
+/// whether it is on and which calendars send events; the app does the uploading.
 public struct IPhoneCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "iphone",
         abstract: "Turn the iPhone feed on or off and see how it is doing.",
-        subcommands: [IPhoneOnCommand.self, IPhoneOffCommand.self, IPhoneStatusCommand.self],
+        subcommands: [IPhoneOnCommand.self, IPhoneOffCommand.self, IPhoneStatusCommand.self, IPhoneCalendarsCommand.self],
         defaultSubcommand: IPhoneStatusCommand.self
     )
 
@@ -70,7 +70,55 @@ public struct IPhoneStatusCommand: ParsableCommand {
     public func run() throws {
         do {
             let feed = try IPhoneFeedService().state()
-            try write("iphone.status", IPhoneFeedAvailability.current.describe(feed), output, enabled: feed.isEnabled)
+            var message = IPhoneFeedAvailability.current.describe(feed)
+            if IPhoneFeedAvailability.current.isAvailable {
+                let chosen = try IPhoneFeedService().calendarChoices().filter(\.isChosen).count
+                message += chosen == 0
+                    ? " No calendars are chosen, so no events are sent."
+                    : " Events are sent for \(chosen) \(chosen == 1 ? "calendar" : "calendars")."
+            }
+            try write("iphone.status", message, output, enabled: feed.isEnabled)
+        } catch {
+            try failCommand(error, format: output.format)
+        }
+    }
+}
+
+public struct IPhoneCalendarsCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "calendars",
+        abstract: "List the calendars and choose which ones send their events to the iPhone.",
+        discussion: "Example: calopod iphone calendars --on Work --off Holidays\n\n"
+            + "Nothing is chosen at first. Event titles for chosen calendars are stored in your private iCloud. "
+            + "Ignored calendars are not listed and send nothing."
+    )
+
+    @OptionGroup public var output: OutputOptions
+
+    @Option(name: .long, help: "Send this calendar's events (identifier or exact name). Repeat for more.")
+    public var on: [String] = []
+
+    @Option(name: .long, help: "Stop sending this calendar's events (identifier or exact name). Repeat for more.")
+    public var off: [String] = []
+
+    public init() {}
+
+    public func run() throws {
+        do {
+            let service = IPhoneFeedService()
+            for reference in on { try service.setCalendar(reference, chosen: true) }
+            for reference in off { try service.setCalendar(reference, chosen: false) }
+            let choices = try service.calendarChoices()
+            let chosen = choices.filter(\.isChosen).count
+            let message = choices.isEmpty ? "No calendars." : "\(chosen) of \(choices.count) calendars send events to the iPhone."
+            let items = choices.map {
+                CommandItem(
+                    id: $0.id, kind: "calendar", label: $0.name, enabled: $0.isChosen,
+                    color: CalendarPalette.entries[$0.colorIndex].id)
+            }
+            try OutputRenderer.write(
+                command: "iphone.calendars", payload: CommandPayload(status: "ok", message: message, count: choices.count, items: items),
+                format: output.format, showIDs: output.ids)
         } catch {
             try failCommand(error, format: output.format)
         }

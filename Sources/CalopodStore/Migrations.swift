@@ -23,6 +23,7 @@ extension CalopodDatabase {
         "v19_calendar_view_hidden",
         "v20_notification_settings",
         "v21_iphone_feed",
+        "v22_iphone_calendars",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -439,6 +440,11 @@ extension CalopodDatabase {
                     failure TEXT
                 )
                 """)
+        }
+
+        // The calendars whose events go to the iPhone. A calendar is here only while it is chosen.
+        migrator.registerMigration("v22_iphone_calendars") { database in
+            try database.execute(sql: "CREATE TABLE iphone_calendars (calendar_id TEXT PRIMARY KEY)")
         }
 
         return migrator

@@ -13,13 +13,13 @@ calopod availability
 calopod sync
 calopod inbox [activity | refresh | inspect | acknowledge | review | config]
 calopod agent enable | disable | pause | resume | interval | run-now | status
-calopod iphone [on | off | status]
+calopod iphone [on | off | status | calendars]
 calopod doctor
 calopod support export | backup | verify | restore
 calopod-setup [--arms]
 ```
 
-`iphone on` and `iphone off` choose whether the Mac app uploads the [iPhone feed](iphone-feed.md); `iphone status` shows the choice and how the last upload went. `on` needs the Mac app, and `off` deletes the uploaded copy.
+`iphone on` and `iphone off` choose whether the Mac app uploads the [iPhone feed](iphone-feed.md); `iphone status` shows the choice and how the last upload went. `on` needs the Mac app, and `off` deletes the uploaded copy. `iphone calendars` lists your calendars and, with `--on` and `--off` (a calendar's identifier or exact name, repeatable), chooses which ones send their events to the phone. None are chosen at first, and the event titles of chosen calendars are stored in your iCloud. `iphone status` says how many are chosen.
 
 `connection add` takes `mac`, `google` or `microsoft`. `events` and `availability` take `--cached` to read local data without refreshing.
 

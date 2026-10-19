@@ -73,3 +73,25 @@ extension LocalStateRepository {
         }
     }
 }
+
+extension LocalStateRepository {
+    /// The calendars whose events the iPhone gets. None until someone chooses.
+    public func iPhoneCalendarIDs() throws -> Set<String> {
+        try database.read { Set(try String.fetchAll($0, sql: "SELECT calendar_id FROM iphone_calendars")) }
+    }
+
+    /// Changing the choice makes the next sync publish again, so removed events leave iCloud. The
+    /// upload time stays, because something is still there to delete if the feed is turned off.
+    public func setIPhoneCalendar(_ calendarID: String, chosen: Bool) throws {
+        try database.write { db in
+            if chosen {
+                try db.execute(sql: "INSERT OR IGNORE INTO iphone_calendars (calendar_id) VALUES (?)", arguments: [calendarID])
+            } else {
+                try db.execute(sql: "DELETE FROM iphone_calendars WHERE calendar_id = ?", arguments: [calendarID])
+            }
+            if db.changesCount > 0 {
+                try db.execute(sql: "UPDATE iphone_feed SET published_run_id = NULL WHERE id = 1")
+            }
+        }
+    }
+}
