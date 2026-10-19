@@ -12,6 +12,8 @@ import SwiftUI
 final class IPhoneFeedModel {
     private(set) var feed = StoredIPhoneFeed()
     private(set) var isBusy = false
+    /// The calendars that can send events, with the choice made for each.
+    private(set) var calendars: [IPhoneFeedService.CalendarChoice] = []
     let availability: IPhoneFeedAvailability
 
     @ObservationIgnored private let service: IPhoneFeedService
@@ -48,6 +50,13 @@ final class IPhoneFeedModel {
         await run(force: true)
     }
 
+    /// Saves the choice, then uploads so the phone gets, or loses, that calendar's events.
+    func setCalendar(_ id: String, chosen: Bool) async {
+        _ = try? service.setCalendar(id, chosen: chosen)
+        reload()
+        await run(force: false)
+    }
+
     func retry() async { await run(force: true) }
 
     private func run(force: Bool) async {
@@ -59,7 +68,10 @@ final class IPhoneFeedModel {
         reload()
     }
 
-    private func reload() { feed = (try? service.state()) ?? feed }
+    private func reload() {
+        feed = (try? service.state()) ?? feed
+        calendars = (try? service.calendarChoices()) ?? calendars
+    }
 }
 
 private struct IPhoneFeedKey: EnvironmentKey {

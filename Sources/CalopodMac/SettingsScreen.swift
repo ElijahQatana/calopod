@@ -34,7 +34,7 @@ struct SettingsScreen: View {
             CardSection(
                 "iPhone",
                 footnote: feed.availability.isAvailable
-                    ? "Sends a read-only copy of your Inbox, busy time and calendar names to your private iCloud after each sync. Nothing is shared with anyone else, and nothing on the iPhone changes a calendar. Turning this off deletes the copy."
+                    ? "Sends a read-only copy of your Inbox, busy time, calendar names and the events of calendars you choose to your private iCloud after each sync. Nothing is shared with anyone else, and nothing on the iPhone changes a calendar. Turning this off deletes the copy."
                     : feed.availability.unavailableMessage
             ) {
                 CardRow("Show Inbox and busy time on iPhone") {
@@ -42,6 +42,7 @@ struct SettingsScreen: View {
                         .labelsHidden()
                         .disabled(!feed.availability.isAvailable || feed.isBusy)
                 }
+                if feed.availability.isAvailable { calendarRows(feed) }
                 if let problem = feed.problem {
                     CardRow {
                         VStack(alignment: .leading, spacing: 8) {
@@ -57,6 +58,29 @@ struct SettingsScreen: View {
                 }
             }
             .task { await feed.tick() }
+        }
+    }
+
+    /// One switch per calendar. Event titles of the chosen ones are stored in the user's iCloud.
+    @ViewBuilder
+    private func calendarRows(_ feed: IPhoneFeedModel) -> some View {
+        CardRow {
+            Text("Also send events from these calendars. Their titles are stored in your iCloud.")
+                .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+        }
+        ForEach(feed.calendars, id: \.id) { calendar in
+            CardRow {
+                HStack(spacing: 8) {
+                    Circle().fill(CalendarColors.shared.color(for: calendar.id).color).frame(width: 12, height: 12)
+                    Text(calendar.name).lineLimit(1)
+                    Spacer()
+                    Toggle("", isOn: Binding(
+                        get: { calendar.isChosen }, set: { on in Task { await feed.setCalendar(calendar.id, chosen: on) } }))
+                        .labelsHidden()
+                        .disabled(feed.isBusy)
+                        .accessibilityLabel("Send events from \(calendar.name)")
+                }
+            }
         }
     }
 
