@@ -25,7 +25,8 @@ check() {
 }
 
 check pass Apps/iOS/README.md 'See background@2x.png and user@example.com.'
-check block Apps/iOS/README.md 'Ask someone@mail.test.org.'
+# The address is built here so this file does not contain one for the check to flag.
+check block Apps/iOS/README.md "Ask someone$(printf '\100')mail.test.org."
 check pass Apps/iOS/Config.xcconfig '// Put DEVELOPMENT_TEAM in Local.xcconfig'
 check pass Apps/iOS/Config.xcconfig 'DEVELOPMENT_TEAM ='
 check block Apps/iOS/Config.xcconfig 'DEVELOPMENT_TEAM = YOUR_TEAM_ID'
