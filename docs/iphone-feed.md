@@ -48,6 +48,8 @@ One record type, `Snapshot`, in one zone, `Snapshots`, of the private database i
 | `publishedAt` | Date/Time | When the Mac built the record |
 | `payload` | Bytes | The record as JSON, in the shapes defined by `CalopodSnapshot` |
 
+The `availability-day` payload holds each of the next 14 days, already worked out with the same calculation as the Mac app and `calopod availability`, so the phone does no arithmetic of its own. Besides `day`, `timeZoneIdentifier` and `busy` (every busy block of that day, including any outside working hours, cut at midnight), it can carry `working` (the working hours of that day as a start and end, left out on a day off), `free` (the gaps inside `working`), `overlaps` (how many events start before an earlier one has ended) and `status` (`mostlyFree`, `tight`, `overbooked` or `dayOff`, with the thresholds of the Mac's day dots). Times are real dates rather than minutes after midnight, so a day with a clock change needs no special case. Free and busy totals are the sums of `free` and `busy`. A feed from an older Mac leaves the new fields out, and the phone then only has `busy`.
+
 ## For maintainers: deploy the schema first
 
 Production record types can't be removed, so check this list before deploying. In the CloudKit Dashboard, open the container, choose the Development environment, and create the record type `Snapshot` with exactly the four fields above (or let a Development build create it by publishing once). No indexes are needed: the app lists a zone's records by reading its changes, not by querying. Then use **Deploy Schema Changes** to push it to Production. A Developer ID build only ever talks to Production, so until this is deployed the upload fails.
