@@ -434,6 +434,8 @@ func afterMovingToTheAppControlsActOnTheBundledAgent() async throws {
     #expect(status.running)
     #expect(status.enabled)
     #expect(status.intervalSeconds == 600)
+    #expect(status.lookbackDays == 7)
+    #expect(status.horizonDays == 15)
 
     try service.setInterval(seconds: 300)
     #expect(try service.status().intervalSeconds == 300)

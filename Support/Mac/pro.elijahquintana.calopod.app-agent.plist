@@ -12,14 +12,8 @@
     </array>
     <key>EnvironmentVariables</key>
     <dict>
-        <key>CALOPOD_AGENT_INTERVAL_SECONDS</key>
-        <string>600</string>
-        <key>CALOPOD_AGENT_JITTER_SECONDS</key>
-        <string>30</string>
-        <key>CALOPOD_AGENT_LOOKBACK_DAYS</key>
+        <key>CALOPOD_AGENT_LOG_TO_FILES</key>
         <string>1</string>
-        <key>CALOPOD_AGENT_HORIZON_DAYS</key>
-        <string>4</string>
     </dict>
     <key>KeepAlive</key>
     <true/>

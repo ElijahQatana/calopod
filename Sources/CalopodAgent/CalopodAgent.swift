@@ -13,9 +13,15 @@ struct CalopodAgent {
         }
         do {
             let environment = try CalopodRuntimeEnvironment()
+            if ProcessInfo.processInfo.environment[AgentLogFiles.switchName] == "1" {
+                try? AgentLogFiles.redirectOutput(for: environment.stateLocation)
+            }
             let runner = CalopodAgentRunner(
                 environment: environment,
-                schedule: try AgentSchedule(environment: ProcessInfo.processInfo.environment)
+                schedule: try AgentSchedule(
+                    environment: ProcessInfo.processInfo.environment,
+                    fillingDefaults: true
+                )
             )
             if arguments == ["--once"] {
                 let report = await runner.runOnce()

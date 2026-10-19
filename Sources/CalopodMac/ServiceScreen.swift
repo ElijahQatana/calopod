@@ -131,6 +131,11 @@ struct ServiceScreen: View {
                 .fixedSize()
                 .disabled(model.isBusy)
             }
+            if let window = ServiceModel.windowText(
+                lookbackDays: status.lookbackDays, horizonDays: status.horizonDays
+            ) {
+                CardRow("Sync window", value: window)
+            }
             CardRow("Pause scheduled syncs") {
                 Toggle(
                     "Pause scheduled syncs",
