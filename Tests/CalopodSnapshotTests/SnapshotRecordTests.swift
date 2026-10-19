@@ -1,0 +1,91 @@
+import CalopodDomain
+import CalopodSnapshot
+import Foundation
+import Testing
+
+private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+private let item = InboxItem(
+    id: "abc123", reasons: [.needsRSVP, .conflict], changeOrderUncertain: true, title: "Planning",
+    startsAt: now, endsAt: now.addingTimeInterval(3600), timeZoneIdentifier: "Europe/Berlin",
+    sourceName: "Work", calendarID: "cal-1", response: .needsResponse, organizerName: "Sam Example",
+    attendees: AttendeeSummary(total: 4, accepted: 2, tentative: 1, declined: 0),
+    location: "Room 2", notes: "Agenda at https://example.com/agenda", url: "https://example.com/e",
+    conflicts: [ConflictingEvent(title: "Review", startsAt: now, endsAt: now.addingTimeInterval(1800))])
+
+private let day = AvailabilityDay(
+    day: "2027-01-15", timeZoneIdentifier: "Europe/Berlin",
+    busy: [BusyInterval(start: now, end: now.addingTimeInterval(3600))])
+
+private let status = SyncStatus(
+    lastSyncAt: now, issues: [SyncIssue(kind: .stale, calendarID: "cal-1", since: now), SyncIssue(kind: .partial)])
+
+private let calendars = CalendarList(calendars: [
+    CalendarEntry(id: "cal-1", name: "Work", colorIndex: 0),
+    CalendarEntry(id: "cal-2", name: "Home", colorIndex: 11),
+])
+
+private func roundTrip<R: SnapshotRecord>(_ record: R) throws -> R {
+    let data = try SnapshotCoding.encode(SnapshotEnvelope(generatedAt: now, record: record))
+    return try SnapshotCoding.decode(R.self, from: data).record
+}
+
+@Test
+func recordsSurviveARoundTrip() throws {
+    #expect(try roundTrip(item) == item)
+    #expect(try roundTrip(day) == day)
+    #expect(try roundTrip(status) == status)
+    #expect(try roundTrip(calendars) == calendars)
+    #expect(try roundTrip(SyncStatus(lastSyncAt: nil)) == SyncStatus(lastSyncAt: nil))
+}
+
+@Test
+func idsAreStable() {
+    #expect(item.id == "abc123")
+    #expect(day.id == "availability-2027-01-15")
+    #expect(status.id == "sync-status")
+    #expect(calendars.id == "calendars")
+    let later = AvailabilityDay(day: "2027-01-15", timeZoneIdentifier: "UTC", busy: [])
+    #expect(later.id == day.id)
+}
+
+@Test
+func newerVersionIsRefusedBeforeTheRecordIsRead() throws {
+    // The record body is in a shape this reader could not decode.
+    let json = #"{"schemaVersion":2,"generatedAt":"2027-01-15T08:00:00Z","record":{"moved":true}}"#
+    #expect(throws: SnapshotError.newerVersion(found: 2, supported: SnapshotSchema.currentVersion)) {
+        try SnapshotCoding.decode(InboxItem.self, from: Data(json.utf8))
+    }
+}
+
+@Test
+func unknownFieldsAreIgnored() throws {
+    let data = try SnapshotCoding.encode(SnapshotEnvelope(generatedAt: now, record: calendars))
+    var object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    var record = try #require(object["record"] as? [String: Any])
+    var entries = try #require(record["calendars"] as? [[String: Any]])
+    entries[0]["icon"] = "star"
+    record["calendars"] = entries
+    record["extra"] = ["a": 1]
+    object["record"] = record
+    object["note"] = "hello"
+    let changed = try JSONSerialization.data(withJSONObject: object)
+    #expect(try SnapshotCoding.decode(CalendarList.self, from: changed).record == calendars)
+}
+
+@Test
+func colorIndexOutsideThePaletteIsRejected() {
+    for index in [-1, 12] {
+        let json = #"{"id":"c","name":"Work","colorIndex":\#(index)}"#
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(CalendarEntry.self, from: Data(json.utf8))
+        }
+    }
+}
+
+@Test
+func recordsCarryNoAddressesOrTokens() throws {
+    let text = String(decoding: try SnapshotCoding.encode(SnapshotEnvelope(generatedAt: now, record: item)), as: UTF8.self)
+    #expect(!text.contains("@"))
+    #expect(!text.lowercased().contains("token"))
+}
