@@ -8,6 +8,10 @@ Events are different: for each calendar you choose, the next 14 days of events g
 
 Meeting links are the one link that goes up. An event that can get a reminder (timed, not declined, not yet over, not private) carries its Teams, Zoom, Meet or Webex link so the phone can offer Join. Those links are stored in your iCloud with the event. The reminder settings are the ones from `calopod notifications`: whether reminders are on, the first and final times, and whether titles are hidden. A change reaches the phone at the next sync, like the choice of calendars.
 
+## Calendar colors
+
+Calendar colors come from one palette of twelve, defined in `CalopodDomain` and used by the Mac app, the command line and the iPhone app. Each calendar in the feed carries the id of its color (for example `indigo`) and also its position in the palette. The phone uses the id. It falls back to the position only for a feed from a Mac that sent no id, and shows the neutral gray for an id or position it doesn't know. A position outside the palette still makes the calendar list unreadable, as before. Both fields are part of the calendar list's payload, so there is no change to the iCloud schema.
+
 ## Reminders on the iPhone
 
 The iPhone app schedules its own notifications from the feed. It keeps the next 24 hours of reminders pending, using the lead times and the hidden titles choice from the reminder settings record, for the same events the Mac reminds about. It does this every time it reads the feed and every time it comes forward. If the Mac has not published reminder settings (an older Mac), the phone sets none.

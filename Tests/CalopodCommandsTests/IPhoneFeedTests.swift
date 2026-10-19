@@ -84,7 +84,7 @@ struct IPhoneFeedTests {
 
         let list = try #require(records.first { $0.kind == .calendars })
         #expect(try SnapshotCoding.decode(CalendarList.self, from: list.bytes).record.calendars
-            == [CalendarEntry(id: "cal", name: "Work", colorIndex: 11)])
+            == [CalendarEntry(id: "cal", name: "Work", colorIndex: 11, color: "gray")])
         let status = try #require(records.first { $0.kind == .syncStatus })
         #expect(try SnapshotCoding.decode(SyncStatus.self, from: status.bytes).record.lastSyncAt == now)
     }
