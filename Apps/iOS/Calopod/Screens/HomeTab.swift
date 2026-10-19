@@ -21,7 +21,11 @@ struct HomeTab: View {
                     HomeSection("Next up today", link: "Open Calendar") { navigation.show(.calendar) } content: {
                         NextUp(summary: summary) { navigation.show(.calendar) }
                     }
-                    HomeSection("Availability today") { AvailabilityTodayTile() }
+                    if !context.isStale {
+                        HomeSection("Availability today", link: "Open Availability") { navigation.openAvailability() } content: {
+                            AvailabilityTodayTile(figures: summary.availability) { navigation.openAvailability() }
+                        }
+                    }
                     HomeSection("Calendars", link: "Open Status") { navigation.show(.status) } content: {
                         CalendarsCard(summary: summary) { navigation.show(.status) }
                     }
@@ -200,16 +204,42 @@ private struct NextUp: View {
     }
 }
 
-/// Today's free and busy time. It needs the worked-out day from the Mac, which comes with the
-/// availability update, so until then this says so and shows no numbers.
+/// Today's free and busy time as the Mac published it. An older Mac has the busy time only.
 struct AvailabilityTodayTile: View {
+    var figures: AvailabilityFigures?
+    var open: () -> Void
+
     var body: some View {
-        Card {
-            Label("Coming with the next update", systemImage: "clock")
-                .font(Theme.Fonts.secondary).foregroundStyle(Theme.secondary)
-                .padding(.horizontal, 14).padding(.vertical, 12)
+        Button(action: open) {
+            Card {
+                if let figures {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(alignment: .top, spacing: 24) {
+                            if let free = figures.freeTime { total(DurationText.text(free), "Free", Theme.good) }
+                            total(DurationText.text(figures.busyTime), "Busy", Theme.text)
+                            Spacer(minLength: 0)
+                        }
+                        Text(figures.hoursLine()).font(Theme.Fonts.secondary).foregroundStyle(Theme.secondary)
+                    }
+                    .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    Text("Nothing has been published for today.").font(Theme.Fonts.secondary).foregroundStyle(Theme.secondary)
+                        .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .shadow(color: Theme.text.opacity(0.06), radius: 6, y: 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens Availability")
+    }
+
+    private func total(_ value: String, _ label: String, _ color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(value).font(Theme.Fonts.heading).monospacedDigit().foregroundStyle(color)
+            Text(label).font(Theme.Fonts.secondary).foregroundStyle(Theme.secondary)
+        }
     }
 }
 

@@ -6,11 +6,10 @@ import SwiftUI
 struct CalendarTab: View {
     var context: SnapshotContext
     var filter: CalendarFilter
+    @Bindable var navigation: Navigation
     /// An event a tapped reminder asked to open. It is cleared once the event is shown.
     @Binding var requested: String?
-    @State private var selected: String?
     @State private var openEvent: CalendarEvent?
-    @State private var view = CalendarView.schedule
 
     var body: some View {
         Group {
@@ -32,12 +31,15 @@ struct CalendarTab: View {
         let snapshot = context.snapshot
         let hasEvents = !snapshot.days.isEmpty
         let days = DaySchedule.schedules(from: snapshot.availability)
+        let selected = navigation.calendarDay
         let day = days.first { $0.day == selected } ?? days.first { $0.interval.contains(context.now) } ?? days.first
+        let week = AvailabilityFigures.week(from: snapshot.availability)
+        let figures = week.first { $0.day == selected } ?? week.first { $0.interval.contains(context.now) } ?? week.first
         return Screen(
             title: "Calendar", subtitle: "\(hasEvents ? "Events" : "Busy time") \(context.fromMac)",
             pinned: {
-                Picker("View", selection: $view) {
-                    ForEach(CalendarView.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                Picker("View", selection: $navigation.calendarMode) {
+                    ForEach(Navigation.CalendarMode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal, Theme.sidePadding).padding(.top, 14)
@@ -47,11 +49,14 @@ struct CalendarTab: View {
                 StaleBanner(lastUpdate: snapshot.publishedAt, now: context.now, offline: context.offline)
             }
             Group {
-                if view == .availability {
-                    AvailabilityComingSoon()
+                if navigation.calendarMode == .availability {
+                    if let figures {
+                        AvailabilityPage(week: week, day: figures) { navigation.calendarDay = $0 }
+                    } else {
+                        Card { Text("No availability has been published.").font(Theme.Fonts.body).padding(16) }
+                    }
                 } else if let day {
-                    DayStrip(days: days, selected: day.day) { selected = $0 }
-                    DaySummary(day: day)
+                    DayStrip(days: days, selected: day.day) { navigation.calendarDay = $0 }
                     if hasEvents {
                         CalendarChips(calendars: CalendarFilter.listed(in: snapshot), filter: filter)
                         let events = DayEvents.make(from: snapshot.days.first { $0.day == day.day }, hidden: filter.hidden, in: day)
@@ -68,26 +73,6 @@ struct CalendarTab: View {
             }
             .opacity(context.isStale ? 0.6 : 1)
         }
-    }
-}
-
-private enum CalendarView: String, CaseIterable {
-    case schedule = "Schedule"
-    case availability = "Availability"
-}
-
-/// The week's free and busy time needs day values the Mac does not publish yet.
-private struct AvailabilityComingSoon: View {
-    var body: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Coming with the next update").font(Theme.Fonts.bodyStrong)
-                Text("Availability will show your week's free and busy time, worked out on your Mac. Schedule has your events for now.")
-                    .font(Theme.Fonts.secondary).foregroundStyle(Theme.secondary)
-            }
-            .padding(14).frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .shadow(color: Theme.text.opacity(0.06), radius: 6, y: 2)
     }
 }
 
@@ -127,28 +112,6 @@ private struct DayStrip: View {
             }
             .padding(.vertical, 4).padding(.horizontal, 2)
         }
-    }
-}
-
-private struct DaySummary: View {
-    var day: DaySchedule
-
-    var body: some View {
-        HStack(spacing: 12) {
-            tile(DurationText.text(day.freeTime), "Free", color: Theme.good)
-            tile(DurationText.text(day.busyTime), "Busy", color: Theme.text)
-        }
-    }
-
-    private func tile(_ value: String, _ label: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(value).font(Theme.Fonts.heading).foregroundStyle(color)
-            Text(label).font(Theme.Fonts.secondary).foregroundStyle(Theme.secondary)
-        }
-        .padding(14).frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
-        .shadow(color: Theme.text.opacity(0.06), radius: 6, y: 2)
-        .accessibilityElement(children: .combine)
     }
 }
 

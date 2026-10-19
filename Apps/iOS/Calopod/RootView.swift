@@ -86,7 +86,7 @@ struct RootView: View {
                         .tabItem { Label("Home", systemImage: "house") }.tag(Navigation.Tab.home)
                     InboxTab(context: context, filter: $navigation.inboxFilter)
                         .tabItem { Label("Inbox", systemImage: "tray") }.tag(Navigation.Tab.inbox)
-                    CalendarTab(context: context, filter: filter, requested: $reminders.requestedEvent)
+                    CalendarTab(context: context, filter: filter, navigation: navigation, requested: $reminders.requestedEvent)
                         .tabItem { Label("Calendar", systemImage: "calendar") }.tag(Navigation.Tab.calendar)
                     StatusTab(context: context)
                         .tabItem { Label("Status", systemImage: "waveform.path.ecg") }.tag(Navigation.Tab.status)

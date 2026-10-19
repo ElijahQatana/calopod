@@ -45,24 +45,21 @@ struct DayScheduleTests {
             record(1, [(date(1, 9), date(1, 11)), (date(1, 10), date(1, 12)), (date(1, 12), date(1, 13))])
         ])[0]
         #expect(day.busy.map(\.interval) == [DateInterval(start: date(1, 9), end: date(1, 13))])
-        #expect(day.busyTime == 4 * 3600)
-        #expect(day.freeTime == 20 * 3600)
     }
 
     @Test func busyTimeAcrossMidnightSplitsBetweenDays() {
         // Only the first day's record holds the whole stretch.
         let days = DaySchedule.schedules(from: [record(1, [(date(1, 22), date(2, 1))]), record(2, [])])
-        #expect(days[0].busyTime == 2 * 3600)
+        #expect(days[0].busy[0].interval.duration == 2 * 3600)
         #expect(days[0].busy[0].continuesTomorrow)
-        #expect(days[1].busyTime == 3600)
+        #expect(days[1].busy[0].interval.duration == 3600)
         #expect(days[1].busy[0].continuesFromYesterday)
         #expect(!days[1].busy[0].continuesTomorrow)
     }
 
-    @Test func emptyDayIsAllFree() {
+    @Test func emptyDayHasNoBusyBlocks() {
         let day = DaySchedule.schedules(from: [record(3, [])])[0]
         #expect(day.busy.isEmpty)
-        #expect(day.freeTime == 86400)
     }
 
     @Test func formatsDurations() {
