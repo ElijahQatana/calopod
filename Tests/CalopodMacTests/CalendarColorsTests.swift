@@ -9,6 +9,12 @@ final class CalendarColorsTests: XCTestCase {
         XCTAssertEqual(Set(CalendarColor.palette.map(\.light)).count, 12)
     }
 
+    func testMacColorsAreTheSharedPalette() {
+        XCTAssertEqual(
+            CalendarColor.palette.map { [$0.id, $0.name, String($0.light), String($0.dark)] },
+            CalendarPalette.entries.map { [$0.id, $0.name, String($0.light), String($0.dark)] })
+    }
+
     func testSuggestionFollowsUsedColors() {
         let cases: [(used: [String], expected: (String) -> Bool, note: String)] = [
             ([], { $0 == "blue" }, "empty starts at the first color"),
