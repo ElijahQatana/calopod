@@ -12,6 +12,7 @@ struct CalopodMacApp: App {
     @State private var access: CalendarAccessModel
     @State private var permissions: PermissionsModel
     @State private var refresh: OverviewRefresh
+    @State private var iPhoneFeed = IPhoneFeedModel()
     @State private var navigation = AppNavigation()
     @State private var sidebar = SidebarState()
 
@@ -48,6 +49,7 @@ struct CalopodMacApp: App {
                 .environment(access)
                 .environment(permissions)
                 .environment(refresh)
+                .environment(\.iPhoneFeed, iPhoneFeed)
                 .task { await inbox.reload() }
                 .task { await access.check() }
                 .onChange(of: access.status, initial: true) { refreshAccess() }
@@ -84,6 +86,7 @@ struct CalopodMacApp: App {
                 while !Task.isCancelled {
                     await inbox.reload()
                     await schedule.reload()
+                    await iPhoneFeed.tick()
                     try? await Task.sleep(for: .seconds(30))
                 }
             }

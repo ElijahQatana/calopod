@@ -55,6 +55,8 @@ struct SyncStatusCard: View {
     let preview: () -> Void
     let togglePause: () -> Void
     let enable: () -> Void
+    /// A failed iPhone upload. It never stops syncing, but it is not hidden either.
+    var feedProblem: String?
 
     var body: some View {
         CardSection {
@@ -101,6 +103,9 @@ struct SyncStatusCard: View {
             if let refreshed { Text(refreshed).font(Theme.Fonts.secondary).foregroundStyle(.secondary) }
             if let note = health.note {
                 Text(note).font(Theme.Fonts.body).foregroundStyle(Theme.cautionText)
+            }
+            if let feedProblem {
+                Text(feedProblem).font(Theme.Fonts.body).foregroundStyle(Theme.cautionText)
             }
             // While a sync runs, the busy line below already says why.
             if busy == nil, let reason = previewRule.disabledReason {
