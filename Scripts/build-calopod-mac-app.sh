@@ -74,6 +74,37 @@ sign_outer() {
 }
 sign_outer "$contents_root/MacOS/calopod-agent" "calopod-agent"
 sign_outer "$contents_root/MacOS/calopod" "calopod"
+# CALOPOD_PROVISIONING_PROFILE turns on the iPhone feed: the profile is embedded and the app alone
+# gets the iCloud entitlements. Only the app's main executable can hold them, so the agent and the
+# command, signed above, never do. Without a profile the app is signed as before, with no iCloud keys.
+profile=${CALOPOD_PROVISIONING_PROFILE:-}
+if [ -n "$profile" ]; then
+  [ "$sign_identity" != "-" ] || { echo "CALOPOD_PROVISIONING_PROFILE needs CALOPOD_SIGN_IDENTITY." >&2; exit 64; }
+  [ -f "$profile" ] || { echo "CALOPOD_PROVISIONING_PROFILE does not name a file." >&2; exit 66; }
+  decoded="$repository_root/.build/mac-app/profile.plist"
+  security cms -D -i "$profile" > "$decoded" 2>/dev/null || sign_failed "the app (the provisioning profile could not be read)"
+  entitlement_from_profile() {
+    plutil -extract "Entitlements.$(printf '%s' "$1" | sed 's/\./\\./g')" raw -o - "$decoded" 2>/dev/null || sign_failed "the app (the profile has no $1)"
+  }
+  application_identifier=$(entitlement_from_profile com.apple.application-identifier)
+  team_identifier=$(entitlement_from_profile com.apple.developer.team-identifier)
+  rm -f "$decoded"
+  cp "$profile" "$contents_root/embedded.provisionprofile"
+  app_entitlements="$repository_root/.build/mac-app/app-entitlements.plist"
+  cp "$outer_entitlements" "$app_entitlements"
+  add_entitlement() {
+    kind=$1
+    key=$2
+    value=$3
+    plutil -insert "$(printf '%s' "$key" | sed 's/\./\\./g')" "-$kind" "$value" "$app_entitlements"
+  }
+  add_entitlement string com.apple.application-identifier "$application_identifier"
+  add_entitlement string com.apple.developer.team-identifier "$team_identifier"
+  add_entitlement json com.apple.developer.icloud-services '["CloudKit"]'
+  add_entitlement json com.apple.developer.icloud-container-identifiers '["iCloud.pro.elijahquintana.calopod"]'
+  add_entitlement string com.apple.developer.icloud-container-environment Production
+  outer_entitlements=$app_entitlements
+fi
 sign_outer "$bundle_root" "the app"
 codesign --verify --strict --deep "$bundle_root" || sign_failed "the app (verification failed)"
 calopod_show_signature codesign "$host_path"

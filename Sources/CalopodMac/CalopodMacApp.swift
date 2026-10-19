@@ -16,6 +16,7 @@ struct CalopodMacApp: App {
     @State private var availability: AvailabilityModel
     @State private var reminders: ReminderScheduler
     @State private var refresh: OverviewRefresh
+    @State private var iPhoneFeed = IPhoneFeedModel()
     @State private var navigation = AppNavigation()
     @State private var sidebar = SidebarState()
 
@@ -68,6 +69,7 @@ struct CalopodMacApp: App {
                 .environment(workingHours)
                 .environment(availability)
                 .environment(refresh)
+                .environment(\.iPhoneFeed, iPhoneFeed)
                 .task { await inbox.reload() }
                 .task { await access.check() }
                 .onChange(of: access.status, initial: true) { refreshAccess() }
@@ -106,6 +108,7 @@ struct CalopodMacApp: App {
                 while !Task.isCancelled {
                     await inbox.reload()
                     await schedule.reload()
+                    await iPhoneFeed.tick()
                     if first {
                         first = false
                         // A click on a reminder that launched the app waits for this first read.

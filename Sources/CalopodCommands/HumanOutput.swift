@@ -110,7 +110,9 @@ enum HumanOutputRenderer {
                     lines.append("")
                     if shared {
                         // Shared health reports use only fixed check names, statuses, and reasons.
-                        if command == "doctor" || command == "support.export" {
+                        if command == "doctor", item.id == "iphone-feed", let text = item.label {
+                            lines.append(clean(text))
+                        } else if command == "doctor" || command == "support.export" {
                             lines.append("\(readable(item.id)): \(readable(item.kind))")
                             if let reason = item.reason { lines.append("  Reason: \(readable(reason))") }
                             if command == "doctor", ["calendar-permission", "permission-calendar"].contains(item.id), let helper = item.label { lines.append("  Helper: \(clean(helper))") }
@@ -134,6 +136,10 @@ enum HumanOutputRenderer {
                             lines.append("  Destination: \(label(context.calendarLabels[target], fallback: "Unknown calendar"))")
                             if localIDs { lines.append("  Destination ID: \(clean(target))") }
                         }
+                    case "iphone.calendars":
+                        lines.append("\(index + 1). \(label(item.label, fallback: "Unnamed calendar"))")
+                        lines.append("  Sends events to the iPhone: \(item.enabled == true ? "yes" : "no")")
+                        if let color = item.color { lines.append("  Color: \(clean(color))") }
                     case let name where name.hasPrefix("calendars"):
                         lines.append("\(index + 1). \(label(item.alias ?? item.label, fallback: "Unnamed calendar"))")
                         if item.alias != nil { lines.append("  Real name: \(label(item.label, fallback: "Unnamed calendar"))") }

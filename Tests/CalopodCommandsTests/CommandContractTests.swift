@@ -21,6 +21,7 @@ func rootExposesThePlannedCommandGroups() {
         "notifications",
         "availability",
         "hours",
+        "iphone",
         "sync",
         "doctor",
         "agent",

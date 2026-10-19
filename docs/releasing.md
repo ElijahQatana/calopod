@@ -54,6 +54,24 @@ codesign --verify --strict --check-notarization -R=notarized Calopod-*/bin/calop
 xcrun stapler validate -q "Calopod-*/eventkit-host/Calopod EventKit Host.app"
 ```
 
+## iPhone feed signing
+
+The iPhone feed needs the app to use iCloud, which needs a provisioning profile. Create a Developer ID profile for the app's App ID with iCloud (CloudKit) and the container `iCloud.pro.elijahquintana.calopod`, download it, and pass it to the app build:
+
+```sh
+CALOPOD_SIGN_IDENTITY="$signing_identity" \
+CALOPOD_PROVISIONING_PROFILE=/path/to/Calopod.provisionprofile \
+  Scripts/build-calopod-mac-app.sh
+```
+
+The script copies the profile to `Contents/embedded.provisionprofile` and signs the app with the iCloud entitlements, taking the app and team identifiers from the profile. Only the app's main executable can hold these entitlements, so the agent and the command are signed as before. Without `CALOPOD_PROVISIONING_PROFILE` the app is signed with no iCloud keys, and the feed's switch in Settings stays off. A profile needs a real signing identity, not ad hoc.
+
+Deploy the record type to the Production schema before the first release that uses it. The list is in [iPhone feed](iphone-feed.md). A signed, notarized app can't use the Development environment.
+
+## iPhone app
+
+The iPhone app has its own steps for making a TestFlight build, in [Apps/iOS/RELEASING.md](../Apps/iOS/RELEASING.md). Uploading is done by hand.
+
 ## Disk image
 
 The Mac app ships as a drag-to-install disk image. Build the app signed, then package it:

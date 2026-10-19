@@ -1,5 +1,6 @@
 import CalopodCommands
 import CalopodDomain
+import CalopodSnapshot
 import Foundation
 
 /// What Overview and the menu bar show. Counts come straight from the Inbox board, and
@@ -19,7 +20,8 @@ enum UpNext {
 
     /// Whether an event can be the next one: a real event, answered other than No, on a shown calendar.
     static func isCandidate(_ event: ScheduleEvent, ignored: (String) -> Bool) -> Bool {
-        !event.isCopy && !event.isAllDay && event.response != .declined && !ignored(event.calendarID)
+        !event.isCopy && ReminderEligibility.isEligible(isAllDay: event.isAllDay, isDeclined: event.response == .declined)
+            && !ignored(event.calendarID)
     }
 
     /// What the Next card shows. The same rule picks the event for `calopod join`.

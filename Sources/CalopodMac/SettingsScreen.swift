@@ -7,6 +7,7 @@ struct SettingsScreen: View {
     private let settings = AppSettings.shared
     @State private var command: CommandLineModel
     @Environment(PermissionsModel.self) private var permissions
+    @Environment(\.iPhoneFeed) private var iPhoneFeed
     @Environment(NotificationSettingsModel.self) private var reminders
     @Environment(WorkingHoursModel.self) private var workingHours
 
@@ -25,7 +26,64 @@ struct SettingsScreen: View {
         WorkingHoursSection(model: workingHours)
         NotificationsSection(model: reminders)
         permissionsSection
+        iPhoneSection
         commandLine
+    }
+
+    @ViewBuilder
+    private var iPhoneSection: some View {
+        if let feed = iPhoneFeed {
+            CardSection(
+                "iPhone",
+                footnote: feed.availability.isAvailable
+                    ? "Sends a read-only copy of your Inbox, busy time, calendar names and the events of calendars you choose to your private iCloud after each sync. Nothing is shared with anyone else, and nothing on the iPhone changes a calendar. Turning this off deletes the copy."
+                    : feed.availability.unavailableMessage
+            ) {
+                CardRow("Show Inbox and busy time on iPhone") {
+                    Toggle("", isOn: Binding(get: { feed.isOn }, set: { on in Task { await feed.setOn(on) } }))
+                        .labelsHidden()
+                        .disabled(!feed.availability.isAvailable || feed.isBusy)
+                }
+                if feed.availability.isAvailable { calendarRows(feed) }
+                if let problem = feed.problem {
+                    CardRow {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Banner(kind: .error, text: problem)
+                            Button("Try again") { Task { await feed.retry() } }.disabled(feed.isBusy)
+                        }
+                    }
+                } else if let published = feed.feed.publishedAt, feed.isOn {
+                    CardRow {
+                        Text("Last sent \(published.formatted(date: .abbreviated, time: .shortened))")
+                            .font(Theme.Fonts.body).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .task { await feed.tick() }
+        }
+    }
+
+    /// One switch per calendar. Event titles of the chosen ones are stored in the user's iCloud.
+    @ViewBuilder
+    private func calendarRows(_ feed: IPhoneFeedModel) -> some View {
+        CardRow {
+            Text("Also send events from these calendars. Their titles are stored in your iCloud.")
+                .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+        }
+        ForEach(feed.calendars, id: \.id) { choice in
+            CardRow {
+                HStack(spacing: 8) {
+                    Circle().fill(CalendarColors.shared.color(for: choice.id).color).frame(width: 12, height: 12)
+                    Text(choice.name).lineLimit(1)
+                    Spacer()
+                    Toggle("", isOn: Binding(
+                        get: { choice.isChosen }, set: { on in Task { await feed.setCalendar(choice.id, chosen: on) } }))
+                        .labelsHidden()
+                        .disabled(feed.isBusy)
+                        .accessibilityLabel("Send events from \(choice.name)")
+                }
+            }
+        }
     }
 
     private var permissionsSection: some View {

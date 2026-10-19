@@ -13,6 +13,7 @@ struct OverviewScreen: View {
     @Environment(AvailabilityModel.self) private var availability
     @Environment(OverviewRefresh.self) private var refresh
     @Environment(\.sidebarCollapsed) private var collapsed
+    @Environment(\.iPhoneFeed) private var iPhoneFeed
 
     @State private var progress = FirstRunProgress()
     @State private var showingSetup = false
@@ -84,7 +85,8 @@ struct OverviewScreen: View {
             pauseDisabled: model.isBusy,
             preview: { Task { await model.previewSync() } },
             togglePause: { Task { await model.setPaused(!status.paused) } },
-            enable: { Task { await model.setEnabled(true) } })
+            enable: { Task { await model.setEnabled(true) } },
+            feedProblem: iPhoneFeed?.problem)
     }
 
     // MARK: Preview

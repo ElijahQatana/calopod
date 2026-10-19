@@ -18,9 +18,10 @@ public struct DoctorCommand: ParsableCommand {
         #if os(macOS)
         do {
             let service = AgentControlService.current()
-            let report = withPermissions(
+            var report = withPermissions(
                 try service.doctor(), livePermissionReadings(calendar: service.calendarAccess, appPresent: service.runsFromApp),
                 calendarHelper: liveCalendarHelper(calendar: service.calendarAccess))
+            report = report.adding(iPhoneFeedDoctorItem())
             try OutputRenderer.write(
                 command: "doctor",
                 payload: CommandPayload(
@@ -53,6 +54,18 @@ struct DoctorReport: Equatable {
     let message: String
     let items: [CommandItem]
     let warnings: [String]
+}
+
+extension DoctorReport {
+    /// Adds a check. A warning from it is kept with the others.
+    func adding(_ check: (item: CommandItem, warning: String?)) -> DoctorReport {
+        let added = items + [check.item]
+        let merged = warnings + (check.warning.map { [$0] } ?? [])
+        guard status == "ok", check.item.kind == "attention" else {
+            return DoctorReport(status: status, message: message, items: added, warnings: merged)
+        }
+        return DoctorReport(status: "attention", message: "Automatic sync has checks that are not complete yet.", items: added, warnings: merged)
+    }
 }
 
 #if os(macOS)
