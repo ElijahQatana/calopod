@@ -44,9 +44,29 @@ cp "$binary_root/calopod" "$contents_root/MacOS/calopod"
 mkdir -p "$contents_root/MacOS/eventkit-host"
 cp -R "$repository_root/.build/eventkit-host/Calopod EventKit Host.app" \
   "$contents_root/MacOS/eventkit-host/"
-# CALOPOD_SIGN_IDENTITY signs with a developer identity; the default is ad hoc.
-codesign --force --sign "${CALOPOD_SIGN_IDENTITY:--}" "$contents_root/MacOS/calopod-agent" >/dev/null 2>&1
-codesign --force --sign "${CALOPOD_SIGN_IDENTITY:--}" "$contents_root/MacOS/calopod" >/dev/null 2>&1
-codesign --force --sign "${CALOPOD_SIGN_IDENTITY:--}" "$bundle_root" >/dev/null 2>&1
+# CALOPOD_SIGN_IDENTITY signs like a release: hardened runtime and a timestamp on every item,
+# the helper with its Calendar entitlement. The default is ad hoc. Sign inside out.
+. "$repository_root/Scripts/calopod-codesign.sh"
+sign_identity=${CALOPOD_SIGN_IDENTITY:--}
+host_path="$contents_root/MacOS/eventkit-host/Calopod EventKit Host.app"
+sign_failed() {
+  echo "Could not sign $1." >&2
+  exit 65
+}
+if [ "$sign_identity" = "-" ]; then
+  calopod_sign_item codesign "$sign_identity" "$host_path" || sign_failed "the Calendar helper"
+else
+  calopod_sign_item codesign "$sign_identity" "$host_path" \
+    --entitlements "$repository_root/Support/EventKitHost/Entitlements.plist" \
+    || sign_failed "the Calendar helper"
+fi
+calopod_sign_item codesign "$sign_identity" "$contents_root/MacOS/calopod-agent" || sign_failed "calopod-agent"
+calopod_sign_item codesign "$sign_identity" "$contents_root/MacOS/calopod" || sign_failed "calopod"
+calopod_sign_item codesign "$sign_identity" "$bundle_root" || sign_failed "the app"
+codesign --verify --strict --deep "$bundle_root" || sign_failed "the app (verification failed)"
+calopod_show_signature codesign "$host_path"
+calopod_show_signature codesign "$contents_root/MacOS/calopod-agent"
+calopod_show_signature codesign "$contents_root/MacOS/calopod"
+calopod_show_signature codesign "$bundle_root"
 
 echo "Built $bundle_root"

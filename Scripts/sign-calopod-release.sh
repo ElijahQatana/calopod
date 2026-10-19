@@ -142,16 +142,9 @@ awk -v expected="$signing_identity" '
   END { exit(found ? 0 : 1) }
 ' "$identity_file" || fail "The selected Developer ID Application identity is unavailable." 77
 
+. "$repository_root/Scripts/calopod-codesign.sh"
 sign_item() {
-  item_path=$1
-  shift
-  "$codesign_tool" \
-    --force \
-    --sign "$signing_identity" \
-    --options runtime \
-    --timestamp \
-    "$@" \
-    "$item_path" > /dev/null 2>&1 \
+  calopod_sign_item "$codesign_tool" "$signing_identity" "$@" \
     || fail "A release executable could not be signed." 65
 }
 

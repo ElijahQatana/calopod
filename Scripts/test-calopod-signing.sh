@@ -126,6 +126,22 @@ grep -- '--timestamp --entitlements .*Calopod EventKit Host.app$' "$call_log" > 
 ! grep -F "$identity" "$output_file" > /dev/null
 ! grep -F "$profile" "$output_file" > /dev/null
 
+# The local build signs through the same function as the release.
+: > "$call_log"
+(
+  . "$repository_root/Scripts/calopod-codesign.sh"
+  calopod_sign_item "$tool_root/codesign" "$identity" /example/item --entitlements /example/e.plist
+  calopod_sign_item "$tool_root/codesign" - /example/adhoc
+)
+[ "$(sed -n 1p "$call_log")" = "codesign --force --sign $identity --options runtime --timestamp --entitlements /example/e.plist /example/item" ]
+[ "$(sed -n 2p "$call_log")" = "codesign --force --sign - /example/adhoc" ]
+for script in build-calopod-mac-app.sh build-eventkit-host.sh sign-calopod-release.sh; do
+  grep -q 'calopod-codesign.sh' "$repository_root/Scripts/$script"
+done
+! grep -n '^codesign --force' "$repository_root/Scripts/build-calopod-mac-app.sh" "$repository_root/Scripts/build-eventkit-host.sh"
+grep -q -- '--verify --strict --deep' "$repository_root/Scripts/build-calopod-mac-app.sh"
+grep -q -- 'Entitlements.plist' "$repository_root/Scripts/build-calopod-mac-app.sh"
+
 if "$repository_root/Scripts/build-calopod-release.sh" \
   --output-directory "$test_root/unpaired-build" \
   --signing-identity "$identity" > /dev/null 2>&1; then
