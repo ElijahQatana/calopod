@@ -28,6 +28,19 @@ enum UpNext {
         }.map(name)
     }
 
+    /// The same check for today, with ignored calendars left out. Overview and the menu bar both use
+    /// this, and the Calendars list reads `CalendarFreshnessLabel`, so they cannot disagree.
+    static func staleToday(
+        in schedule: CalendarSchedule?, now: Date = Date(), calendar: Calendar = .current,
+        ignored: (ScheduleCalendar) -> Bool = { _ in false }, name: (ScheduleCalendar) -> String = { $0.name }
+    ) -> [String] {
+        guard let schedule else { return [] }
+        let start = calendar.startOfDay(for: now)
+        let range = start..<(calendar.date(byAdding: .day, value: 1, to: start) ?? start)
+        let kept = CalendarSchedule(calendars: schedule.calendars.filter { !ignored($0) }, events: [])
+        return staleCalendars(in: kept, range: range, now: now, name: name)
+    }
+
     /// Text beside the menu bar icon. Nothing when no invitation is waiting.
     static func menuBarText(waiting: Int) -> String? {
         waiting <= 0 ? nil : (waiting > 99 ? "99+" : "\(waiting)")

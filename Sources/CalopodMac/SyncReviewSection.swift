@@ -7,7 +7,6 @@ struct SyncReviewSection: View {
     let preview: SyncPreview
     @Environment(CalendarModel.self) private var schedule
     @Environment(CalendarAccessModel.self) private var access
-    @Environment(InboxModel.self) private var inbox
 
     private static let collapsedCount = 8
 
@@ -61,7 +60,7 @@ struct SyncReviewSection: View {
                     CalendarAccessCard(access: access, state: model.calendarAccess)
                 } else {
                     HStack {
-                        Button("Refresh calendars") { Task { await inbox.refresh() } }
+                        RefreshCalendarsButton()
                         Button("Try again") { Task { await model.previewSync() } }
                     }
                     .disabled(model.isBusy)

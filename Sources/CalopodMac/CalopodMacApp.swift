@@ -3,19 +3,25 @@ import SwiftUI
 
 @main
 struct CalopodMacApp: App {
-    @State private var service = ServiceModel()
+    @State private var service: ServiceModel
     @State private var setup = SetupModel()
-    @State private var inbox = InboxModel()
-    @State private var schedule = CalendarModel()
+    @State private var inbox: InboxModel
+    @State private var schedule: CalendarModel
     @State private var access: CalendarAccessModel
     @State private var permissions: PermissionsModel
+    @State private var refresh: OverviewRefresh
     @State private var navigation = AppNavigation()
     @State private var sidebar = SidebarState()
 
     init() {
         let access = CalendarAccessModel()
+        let service = ServiceModel(), inbox = InboxModel(), schedule = CalendarModel()
+        _service = State(initialValue: service)
+        _inbox = State(initialValue: inbox)
+        _schedule = State(initialValue: schedule)
         _access = State(initialValue: access)
         _permissions = State(initialValue: PermissionsModel(access: access))
+        _refresh = State(initialValue: OverviewRefresh(inbox: inbox, schedule: schedule, service: service, access: access))
         DockPresence.enter()
         AppConfiguration.apply()
         AppSettings.shared.applyAppearance()
@@ -35,6 +41,7 @@ struct CalopodMacApp: App {
                 .environment(schedule)
                 .environment(access)
                 .environment(permissions)
+                .environment(refresh)
                 .task { await inbox.reload() }
                 .task { await access.check() }
                 .onChange(of: access.status, initial: true) { refreshAccess() }

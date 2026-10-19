@@ -43,6 +43,8 @@ struct RunBars: View {
 /// The wide row at the top: what the sync is doing, how the last runs went, and the controls.
 struct SyncStatusCard: View {
     let health: SyncHealth
+    /// "Last refreshed just now", once Refresh calendars has finished.
+    var refreshed: String?
     let marks: [RunMark]
     let busy: String?
     /// Nil when automatic sync is off, so there is nothing to pause.
@@ -95,6 +97,7 @@ struct SyncStatusCard: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(health.headline).font(Theme.Fonts.sectionTitle)
             Text(health.detail).font(Theme.Fonts.body).foregroundStyle(.secondary)
+            if let refreshed { Text(refreshed).font(Theme.Fonts.secondary).foregroundStyle(.secondary) }
             if let note = health.note {
                 Text(note).font(Theme.Fonts.body).foregroundStyle(Theme.cautionText)
             }
@@ -290,5 +293,24 @@ struct AttentionRow: View {
                     .padding(.leading, 44)
             }
         }
+    }
+}
+
+/// Refresh calendars, the same action wherever Overview offers it.
+struct RefreshCalendarsButton: View {
+    @Environment(OverviewRefresh.self) private var refresh
+
+    var body: some View {
+        Button {
+            Task { await refresh.run() }
+        } label: {
+            HStack(spacing: 6) {
+                if refresh.isBusy { ProgressView().controlSize(.small) }
+                Text("Refresh calendars")
+            }
+        }
+        .buttonStyle(.neutral)
+        .fixedSize()
+        .disabled(refresh.isBusy)
     }
 }
