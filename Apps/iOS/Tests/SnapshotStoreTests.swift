@@ -20,6 +20,14 @@ struct SnapshotStoreTests {
         #expect(!Age.isStale(snapshot.publishedAt, now: now))
     }
 
+    @Test func noCalendarsFixtureHasNoEvents() async {
+        let store = SnapshotStore(reader: FixtureReader(scenario: .noCalendars, now: now), cache: cache())
+        await store.refresh()
+        guard case .content(let snapshot, _) = store.phase else { Issue.record("no content"); return }
+        #expect(snapshot.days.isEmpty)
+        #expect(!snapshot.availability.isEmpty)
+    }
+
     @Test func emptyStatesComeFromTheReader() async {
         for (scenario, phase) in [(FixtureReader.Scenario.sharingOff, SnapshotStore.Phase.sharingOff), (.nothingPublished, .nothingPublished)] {
             let store = SnapshotStore(reader: FixtureReader(scenario: scenario, now: now), cache: cache())
@@ -60,6 +68,7 @@ struct CloudKitAssembleTests {
         }
         return try snapshot.inbox.map { ("inbox-item", try wrap($0)) }
             + snapshot.availability.map { ("availability-day", try wrap($0)) }
+            + snapshot.days.map { ("calendar-day", try wrap($0)) }
             + [("calendars", try wrap(CalendarList(calendars: snapshot.calendars))), ("sync-status", try wrap(snapshot.status))]
     }
 
@@ -72,8 +81,28 @@ struct CloudKitAssembleTests {
         guard case .snapshot(let result) = try CloudKitReader.assemble(try payloads(fixture)) else { Issue.record("no snapshot"); return }
         #expect(result.inbox.count == fixture.inbox.count)
         #expect(result.availability.count == fixture.availability.count)
+        #expect(result.days == fixture.days)
+        #expect(!result.days.isEmpty)
         #expect(result.calendars == fixture.calendars)
         #expect(result.status == fixture.status)
+    }
+
+    @Test func noCalendarDaysMeansNoEvents() throws {
+        var fixture = FixtureReader.snapshot(publishedAt: now, now: now)
+        fixture.days = []
+        guard case .snapshot(let result) = try CloudKitReader.assemble(try payloads(fixture)) else { Issue.record("no snapshot"); return }
+        #expect(result.days.isEmpty)
+        #expect(result.inbox.count == fixture.inbox.count)
+    }
+
+    @Test func cacheFromBeforeEventsStillLoads() throws {
+        let cache = SnapshotCache(url: FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).json"))
+        cache.save(FixtureReader.snapshot(publishedAt: now, now: now))
+        var json = try JSONSerialization.jsonObject(with: Data(contentsOf: cache.url)) as! [String: Any]
+        json["days"] = nil
+        try JSONSerialization.data(withJSONObject: json).write(to: cache.url)
+        #expect(cache.load()?.days == [])
+        #expect(cache.load()?.inbox.count == 5)
     }
 
     @Test func newerSchemaNeedsANewerApp() throws {

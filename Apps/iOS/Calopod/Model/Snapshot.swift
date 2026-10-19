@@ -6,10 +6,27 @@ struct Snapshot: Codable, Equatable, Sendable {
     var publishedAt: Date
     var inbox: [InboxItem]
     var availability: [AvailabilityDay]
+    /// Events of the calendars chosen on the Mac. Empty when none is chosen.
+    var days: [CalendarDay] = []
     var calendars: [CalendarEntry]
     var status: SyncStatus
 
     func calendar(for id: String) -> CalendarEntry? { calendars.first { $0.id == id } }
+}
+
+extension Snapshot {
+    /// A copy saved before events existed has no `days`.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        publishedAt = try container.decode(Date.self, forKey: .publishedAt)
+        inbox = try container.decode([InboxItem].self, forKey: .inbox)
+        availability = try container.decode([AvailabilityDay].self, forKey: .availability)
+        days = try container.decodeIfPresent([CalendarDay].self, forKey: .days) ?? []
+        calendars = try container.decode([CalendarEntry].self, forKey: .calendars)
+        status = try container.decode(SyncStatus.self, forKey: .status)
+    }
+
+    private enum CodingKeys: String, CodingKey { case publishedAt, inbox, availability, days, calendars, status }
 }
 
 enum SnapshotResult: Equatable, Sendable {

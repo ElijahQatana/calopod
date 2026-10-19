@@ -14,7 +14,7 @@ struct SystemICloud: ICloudAvailability {
 /// Reads the snapshot the Mac publishes to the user's private iCloud database.
 ///
 /// The names below match docs/iphone-feed.md on the Mac publisher's branch: one `Snapshot` record
-/// per Inbox item and per day of busy time, plus one each for the calendar list and sync status,
+/// per Inbox item, per day of busy time and per day of events, plus one each for the calendar list and sync status,
 /// all in the `Snapshots` zone. They are copied, not shared, so keep them in step with the Mac.
 struct CloudKitReader: SnapshotReader {
     var iCloud: ICloudAvailability = SystemICloud()
@@ -51,6 +51,7 @@ struct CloudKitReader: SnapshotReader {
         do {
             var inbox: [InboxItem] = []
             var availability: [AvailabilityDay] = []
+            var days: [CalendarDay] = []
             var calendars: [CalendarEntry] = []
             var status = SyncStatus(lastSyncAt: nil)
             var publishedAt = Date.distantPast
@@ -63,6 +64,10 @@ struct CloudKitReader: SnapshotReader {
                 case "availability-day":
                     let day = try SnapshotCoding.decode(AvailabilityDay.self, from: data)
                     availability.append(day.record)
+                    publishedAt = max(publishedAt, day.generatedAt)
+                case "calendar-day":
+                    let day = try SnapshotCoding.decode(CalendarDay.self, from: data)
+                    days.append(day.record)
                     publishedAt = max(publishedAt, day.generatedAt)
                 case "calendars":
                     let list = try SnapshotCoding.decode(CalendarList.self, from: data)
@@ -78,7 +83,8 @@ struct CloudKitReader: SnapshotReader {
             }
             return .snapshot(Snapshot(
                 publishedAt: publishedAt, inbox: inbox.sorted { $0.startsAt < $1.startsAt },
-                availability: availability.sorted { $0.day < $1.day }, calendars: calendars, status: status))
+                availability: availability.sorted { $0.day < $1.day },
+                days: days.sorted { $0.day < $1.day }, calendars: calendars, status: status))
         } catch SnapshotError.newerVersion {
             throw ReaderError.needsNewerApp
         }

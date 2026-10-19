@@ -16,7 +16,7 @@ Without a team the app still runs, and shows "Sign in to iCloud to see your cale
 
 ## Fixture data
 
-Launch with `-fixture fresh`, `stale`, `sharingOff`, `nothingPublished` or `offline` to use synthetic data with no iCloud.
+Launch with `-fixture fresh`, `stale`, `noCalendars` (busy time but no calendar chosen), `sharingOff`, `nothingPublished` or `offline` to use synthetic data with no iCloud.
 
 ## Tests
 

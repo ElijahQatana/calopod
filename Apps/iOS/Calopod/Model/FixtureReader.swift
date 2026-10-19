@@ -1,10 +1,11 @@
+import CalopodDomain
 import CalopodSnapshot
 import Foundation
 
 /// Synthetic data for previews, tests and the simulator. Nothing here comes from a real calendar.
 struct FixtureReader: SnapshotReader {
     enum Scenario: String, Sendable {
-        case fresh, stale, sharingOff, nothingPublished, offline
+        case fresh, stale, noCalendars, sharingOff, nothingPublished, offline
     }
 
     var scenario: Scenario = .fresh
@@ -14,6 +15,12 @@ struct FixtureReader: SnapshotReader {
         switch scenario {
         case .fresh: .snapshot(Self.snapshot(publishedAt: now.addingTimeInterval(-420), now: now))
         case .stale: .snapshot(Self.snapshot(publishedAt: now.addingTimeInterval(-3 * 3600), now: now))
+        case .noCalendars:
+            .snapshot({
+                var snapshot = Self.snapshot(publishedAt: now.addingTimeInterval(-420), now: now)
+                snapshot.days = []
+                return snapshot
+            }())
         case .sharingOff: .sharingOff
         case .nothingPublished: .nothingPublished
         case .offline: throw ReaderError.unavailable
@@ -51,10 +58,28 @@ struct FixtureReader: SnapshotReader {
                 busy: [BusyInterval(start: at(day, 9), end: at(day, 10, 30)), BusyInterval(start: at(day, 13), end: at(day, 15))]
                     + (day == 0 ? [BusyInterval(start: at(0, 22, 30), end: at(1, 0, 30))] : []))
         }
+        let events = [
+            event("e1", "work", "Team standup", at(0, 9), at(0, 9, 30)),
+            event("e2", "work", "Quarterly planning", at(0, 13, 30), at(0, 15), location: "Room 4B, 12 Example Street", response: .needsResponse),
+            event("e3", "family", "School pickup", at(0, 14, 15), at(0, 14, 45)),
+            event("e4", "personal", nil, at(0, 14), at(0, 16)),
+            event("e5", "work", "Planning offsite", at(0, 0), at(1, 0), allDay: true),
+            event("e6", "personal", "Late flight", at(0, 22, 30), at(1, 0, 30), location: "Gate 12"),
+            event("e7", "client", "Design review", at(1, 10), at(1, 11), response: .accepted),
+            event("e8", "work", "Vendor call", at(1, 16), at(1, 16, 30), response: .tentative),
+            event("e9", "personal", "Dinner with a friend", at(3, 19), at(3, 21)),
+            event("e10", "family", "Grandma visiting", at(2, 0), at(4, 0), allDay: true),
+        ]
         return Snapshot(
             publishedAt: publishedAt,
             inbox: [planning, pickup, review, vendor, dinner],
             availability: busy,
+            days: (0..<5).compactMap { offset in
+                let start = at(offset, 0), end = at(offset + 1, 0)
+                let today = events.filter { $0.endsAt > start && $0.startsAt < end }
+                return today.isEmpty ? nil : CalendarDay(
+                    day: Self.dayKey(start, calendar: calendar), timeZoneIdentifier: calendar.timeZone.identifier, events: today)
+            },
             calendars: [
                 CalendarEntry(id: "work", name: "Work", colorIndex: 6),
                 CalendarEntry(id: "personal", name: "Personal", colorIndex: 4),
@@ -64,6 +89,15 @@ struct FixtureReader: SnapshotReader {
             status: SyncStatus(
                 lastSyncAt: publishedAt,
                 issues: [SyncIssue(kind: .stale, calendarID: "client", since: now.addingTimeInterval(-86400))]))
+    }
+
+    private static func event(
+        _ id: String, _ calendarID: String, _ title: String?, _ start: Date, _ end: Date,
+        allDay: Bool = false, location: String? = nil, response: EventResponseState = .organizer
+    ) -> CalendarEvent {
+        CalendarEvent(
+            id: id, calendarID: calendarID, title: title, startsAt: start, endsAt: end, isAllDay: allDay,
+            location: location, response: response)
     }
 
     private static func dayKey(_ date: Date, calendar: Calendar) -> String {
