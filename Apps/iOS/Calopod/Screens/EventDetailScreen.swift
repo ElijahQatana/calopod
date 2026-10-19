@@ -5,10 +5,12 @@ import SwiftUI
 struct EventDetailScreen: View {
     var item: InboxItem
     var context: SnapshotContext
+    /// What to call an event that came without a title.
+    var untitled = "Untitled"
     var back: BackAction
 
     var body: some View {
-        let detail = EventDetail(item: item)
+        let detail = EventDetail(item: item, untitled: untitled)
         let calendar = context.snapshot.calendar(for: item.calendarID)
         Screen(title: detail.title, subtitle: whenText, back: back) {
             if context.isStale {

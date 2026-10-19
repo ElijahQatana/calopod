@@ -116,3 +116,106 @@ struct StatusReportTests {
         #expect(failed.message(for: failed.issues[0]) == "The last sync failed.")
     }
 }
+
+struct DayEventsTests {
+    private func date(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
+        Date(timeIntervalSince1970: 1_798_761_600 + Double((day - 1) * 86400 + hour * 3600 + minute * 60))
+    }
+    private func event(
+        _ id: String, _ start: Date, _ end: Date, calendar: String = "work", allDay: Bool = false, title: String? = "x"
+    ) -> CalendarEvent {
+        CalendarEvent(id: id, calendarID: calendar, title: title, startsAt: start, endsAt: end, isAllDay: allDay, response: .accepted)
+    }
+    private func layout(_ events: [CalendarEvent], hidden: Set<String> = [], day: Int = 1) -> DayEvents {
+        let key = String(format: "2027-01-%02d", day)
+        let schedule = DaySchedule.schedules(from: [AvailabilityDay(day: key, timeZoneIdentifier: "UTC", busy: [])])[0]
+        return DayEvents.make(from: CalendarDay(day: key, timeZoneIdentifier: "UTC", events: events), hidden: hidden, in: schedule)
+    }
+
+    @Test func overlapsShareTheWidth() {
+        let blocks = layout([
+            event("a", date(1, 9), date(1, 11)), event("b", date(1, 10), date(1, 12)),
+            event("c", date(1, 10, 30), date(1, 11, 30)), event("d", date(1, 14), date(1, 15)),
+        ]).blocks
+        #expect(blocks.map(\.id) == ["a", "b", "c", "d"])
+        #expect(blocks.map(\.column) == [0, 1, 2, 0])
+        #expect(blocks.map(\.columns) == [3, 3, 3, 1])
+    }
+
+    @Test func aFreedColumnIsReused() {
+        let blocks = layout([
+            event("a", date(1, 9), date(1, 10)), event("b", date(1, 9), date(1, 12)), event("c", date(1, 10), date(1, 11)),
+        ]).blocks
+        // The longer event starts first and keeps column 0; the short ones take turns in column 1.
+        #expect(blocks.map(\.id) == ["b", "a", "c"])
+        #expect(blocks.map(\.column) == [0, 1, 1])
+        #expect(blocks.map(\.columns) == [2, 2, 2])
+    }
+
+    @Test func midnightCrossingIsCutToEachDay() {
+        let late = event("late", date(1, 22), date(2, 1))
+        let first = layout([late], day: 1).blocks[0]
+        #expect(first.interval == DateInterval(start: date(1, 22), end: date(2, 0)))
+        #expect(first.continuesTomorrow && !first.continuesFromYesterday)
+        let second = layout([late], day: 2).blocks[0]
+        #expect(second.interval == DateInterval(start: date(2, 0), end: date(2, 1)))
+        #expect(second.continuesFromYesterday && !second.continuesTomorrow)
+    }
+
+    @Test func allDayEventsGoToTheStrip() {
+        let result = layout([event("trip", date(1, 0), date(3, 0), allDay: true), event("a", date(1, 9), date(1, 10))])
+        #expect(result.allDay.map(\.id) == ["trip"])
+        #expect(result.blocks.map(\.id) == ["a"])
+    }
+
+    @Test func hiddenCalendarsAndUntitledEvents() {
+        let result = layout([event("a", date(1, 9), date(1, 10)), event("b", date(1, 9), date(1, 10), calendar: "home", title: nil)], hidden: ["work"])
+        #expect(result.blocks.map(\.id) == ["b"])
+        #expect(result.blocks[0].columns == 1)
+        #expect(result.blocks[0].event.displayTitle == "Busy")
+    }
+
+    @Test func zeroLengthEventKeepsAShortBlock() {
+        #expect(layout([event("a", date(1, 9), date(1, 9))]).blocks[0].interval.duration == DayEvents.shortest)
+    }
+
+    @Test func detailCarriesOnlyPublishedFields() {
+        let item = InboxItem(CalendarEvent(
+            id: "a", calendarID: "work", title: nil, startsAt: date(1, 9), endsAt: date(1, 10), location: nil, response: .tentative))
+        let detail = EventDetail(item: item, untitled: "Busy")
+        #expect(detail.title == "Busy")
+        #expect(detail.response == "Maybe")
+        #expect(detail.notes == nil && detail.link == nil && detail.guests == nil && detail.organizer == nil)
+    }
+}
+
+struct CalendarFilterTests {
+    private func defaults() -> UserDefaults {
+        let name = "filter-\(UUID())"
+        let defaults = UserDefaults(suiteName: name)!
+        defaults.removePersistentDomain(forName: name)
+        return defaults
+    }
+
+    @Test func everythingIsShownAtFirst() {
+        #expect(CalendarFilter(defaults: defaults()).isShown("work"))
+    }
+
+    @Test func choiceIsRemembered() {
+        let store = defaults()
+        let filter = CalendarFilter(defaults: store)
+        filter.setShown(false, for: "work")
+        filter.setShown(false, for: "home")
+        filter.setShown(true, for: "home")
+        let later = CalendarFilter(defaults: store)
+        #expect(!later.isShown("work"))
+        #expect(later.isShown("home"))
+    }
+
+    @Test func listsCalendarsThatHaveEvents() {
+        var snapshot = FixtureReader.snapshot(publishedAt: .now, now: .now)
+        #expect(CalendarFilter.listed(in: snapshot).map(\.id) == ["work", "personal", "family", "client"])
+        snapshot.days = []
+        #expect(CalendarFilter.listed(in: snapshot).isEmpty)
+    }
+}
