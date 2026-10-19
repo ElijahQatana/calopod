@@ -26,5 +26,9 @@
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Calopod reads the calendars you choose so it can work out when you are free and keep your calendars in sync.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>Calopod reads the calendars you choose so it can work out when you are free and keep your calendars in sync.</string>
 </dict>
 </plist>

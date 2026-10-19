@@ -119,8 +119,10 @@ env \
 (CDPATH= cd -- "$bundle_path" && shasum -a 256 -c SHA256SUMS > /dev/null)
 (CDPATH= cd -- "$test_root" && shasum -a 256 -c "$(basename "$checksum_path")" > /dev/null)
 [ "$(grep -c -- '--options runtime --timestamp' "$call_log")" = 3 ]
-[ "$(grep -c -- '--entitlements' "$call_log")" = 2 ]
+[ "$(grep -c -- '--entitlements' "$call_log")" = 4 ]
 grep -- '--timestamp --entitlements .*Calopod EventKit Host.app$' "$call_log" > /dev/null
+grep -- "--timestamp --entitlements $repository_root/Support/Mac/Entitlements.plist $bundle_path/bin/calopod\$" "$call_log" > /dev/null
+grep -- "--timestamp --entitlements $repository_root/Support/Mac/Entitlements.plist $bundle_path/bin/calopod-agent\$" "$call_log" > /dev/null
 [ "$(grep -c -- '--check-notarization -R=notarized' "$call_log")" = 2 ]
 [ "$(grep -c '^syspolicy distribution ' "$call_log")" = 1 ]
 ! grep -F "$identity" "$output_file" > /dev/null
@@ -141,6 +143,23 @@ done
 ! grep -n '^codesign --force' "$repository_root/Scripts/build-calopod-mac-app.sh" "$repository_root/Scripts/build-eventkit-host.sh"
 grep -q -- '--verify --strict --deep' "$repository_root/Scripts/build-calopod-mac-app.sh"
 grep -q -- 'Entitlements.plist' "$repository_root/Scripts/build-calopod-mac-app.sh"
+
+# The app, the agent and the command carry the Calendar entitlement, and the build prints it for the app.
+grep -q 'outer_entitlements="$repository_root/Support/Mac/Entitlements.plist"' "$repository_root/Scripts/build-calopod-mac-app.sh"
+grep -q -- '--entitlements "$outer_entitlements"' "$repository_root/Scripts/build-calopod-mac-app.sh"
+for item in '"$contents_root/MacOS/calopod-agent"' '"$contents_root/MacOS/calopod"' '"$bundle_root"'; do
+  grep -qF "sign_outer $item" "$repository_root/Scripts/build-calopod-mac-app.sh"
+done
+signed_app="$test_root/Calopod.app"
+mkdir -p "$signed_app"
+shown=$(
+  . "$repository_root/Scripts/calopod-codesign.sh"
+  entitlements_tool="$test_root/show-codesign"
+  printf '#!/bin/sh\n[ "$1" = -d ] && cat "%s"\nexit 0\n' "$repository_root/Support/Mac/Entitlements.plist" > "$entitlements_tool"
+  chmod 700 "$entitlements_tool"
+  calopod_show_signature "$entitlements_tool" "$signed_app"
+)
+printf '%s\n' "$shown" | grep -q '^    com.apple.security.personal-information.calendars$'
 
 if "$repository_root/Scripts/build-calopod-release.sh" \
   --output-directory "$test_root/unpaired-build" \

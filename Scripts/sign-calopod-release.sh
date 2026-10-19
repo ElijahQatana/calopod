@@ -148,8 +148,8 @@ sign_item() {
     || fail "A release executable could not be signed." 65
 }
 
-sign_item "$cli_path"
-sign_item "$agent_path"
+sign_item "$cli_path" --entitlements "$repository_root/Support/Mac/Entitlements.plist"
+sign_item "$agent_path" --entitlements "$repository_root/Support/Mac/Entitlements.plist"
 sign_item "$host_path" --entitlements "$repository_root/Support/EventKitHost/Entitlements.plist"
 
 host_entitlements="$temporary_root/host-entitlements.plist"

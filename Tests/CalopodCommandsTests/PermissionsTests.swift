@@ -125,15 +125,21 @@ func thePermissionPromptGetsTimeToBeAnswered() {
 }
 
 @Test
-func resetRunsTheUserLevelCommandForTheHelperOnly() throws {
+func resetRunsTheUserLevelCommandForTheAppAndTheHelperOnly() throws {
     let calls = CallLog()
     try CalendarDecisionReset(runner: { executable, arguments in
         calls.add(executable, arguments)
         return 0
     }).reset()
-    #expect(calls.all == [["/usr/bin/tccutil", "reset", "Calendar", "pro.elijahquintana.calopod.eventkit-host"]])
+    #expect(calls.all == [
+        ["/usr/bin/tccutil", "reset", "Calendar", "pro.elijahquintana.calopod"],
+        ["/usr/bin/tccutil", "reset", "Calendar", "pro.elijahquintana.calopod.eventkit-host"],
+    ])
     #expect(Permissions.calendarHelperBundleID == EventKitHostSignature.identifier)
-    #expect(Permissions.calendarResetCommand == "tccutil reset Calendar pro.elijahquintana.calopod.eventkit-host")
+    #expect(Permissions.calendarResetCommand
+        == "tccutil reset Calendar pro.elijahquintana.calopod && tccutil reset Calendar pro.elijahquintana.calopod.eventkit-host")
+    #expect(Permissions.calendarListing.contains("lists Calopod once"))
+    #expect(!Permissions.calendarListing.contains("EventKit Host"))
     #expect(!Permissions.calendarResetConfirmation.isEmpty)
     #expect(throws: CalendarDecisionReset.Failed()) {
         try CalendarDecisionReset(runner: { _, _ in 1 }).reset()

@@ -24,7 +24,7 @@ Without a signing identity the app is signed ad hoc, which macOS treats as a new
 CALOPOD_SIGN_IDENTITY="<identity>" Scripts/build-calopod-mac-app.sh
 ```
 
-Every item is signed with the hardened runtime and a timestamp, and the Calendar helper with its Calendar entitlement. The script verifies the result and prints each item's flags, team and entitlements. A build like this is not notarized, so Gatekeeper still reports it as unnotarized.
+Every item is signed with the hardened runtime and a timestamp, and the app, the agent, the command and the Calendar helper carry the Calendar entitlement. macOS charges the helper's request to the app, so the app needs the Calendar usage text and entitlement too. The script verifies the result and prints each item's flags, team and entitlements. A build like this is not notarized, so Gatekeeper still reports it as unnotarized.
 
 To install it, quit Calopod, copy it over the old one and ask the helper for access by hand:
 
