@@ -36,7 +36,7 @@ Availability rules:
 - Events marked free don't block time. Busy, tentative, unavailable and out-of-office events do.
 - Overlapping or touching busy time merges into one block, and free time is whatever is left.
 - Copies made by Calopod are left out, so nothing is counted twice.
-- Free time counts only inside your working hours, so 3 a.m. isn't free. Busy time outside them is still listed, so a late meeting doesn't disappear. Add `--ignore-working-hours` to count the whole day.
+- Free and busy time count only inside your working hours, so 3 a.m. isn't free and a 7 p.m. meeting doesn't make the day look fuller. Meetings before or after working hours, and every meeting on a day off, are listed separately as outside working hours, so a late meeting doesn't disappear. A meeting that crosses the start or end of the day is split there. Add `--ignore-working-hours` to count the whole day.
 
 Working hours are set per weekday in your local time zone, with days off allowed. Until you set them they are Monday to Friday, 9:00 to 17:00.
 
