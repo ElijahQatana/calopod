@@ -11,6 +11,8 @@ private let appProgram = "/Applications/Calopod.app/Contents/MacOS/calopod-agent
 
 private final class Calls: @unchecked Sendable {
     var verbs: [String] = []
+    var sourceLoaded: Bool?
+    var sourceDisabled = false
 }
 
 /// A temp folder with an app, a link to the command inside it, a source plist and a state file.
@@ -59,17 +61,25 @@ private struct World {
     ) -> AgentControlService {
         let home = home
         let appAgent = app.resolvingSymlinksInPath().appendingPathComponent("Contents/MacOS/calopod-agent").path
+        calls.sourceLoaded = sourceLoaded
         let controller: @Sendable () throws -> LaunchAgentController = {
             try LaunchAgentController(homeDirectory: home, userID: 501) { arguments in
                 calls.verbs.append(arguments.joined(separator: " "))
                 switch arguments.first {
                 case "print":
                     let isApp = (arguments.dropFirst().first ?? "").hasSuffix(appLabel)
-                    let loaded = isApp ? appLoaded : sourceLoaded
+                    let loaded = isApp ? appLoaded : (calls.sourceLoaded ?? false)
                     return LaunchctlResult(exitCode: loaded ? 0 : 113, output: isApp ? "\tprogram = \(appAgent)\n" : "")
-                default:
-                    return LaunchctlResult(exitCode: 0, output: "")
+                case "print-disabled":
+                    return LaunchctlResult(
+                        exitCode: 0, output: calls.sourceDisabled ? "\"pro.elijahquintana.calopod.agent\" => disabled" : "")
+                case "bootout": calls.sourceLoaded = false
+                case "bootstrap": calls.sourceLoaded = true
+                case "disable": calls.sourceDisabled = true
+                case "enable": calls.sourceDisabled = false
+                default: break
                 }
+                return LaunchctlResult(exitCode: 0, output: "")
             }
         }
         let state = state
@@ -187,8 +197,7 @@ func sourceOnlyIsDescribedAsTheOldSourceInstall() throws {
     let world = try World(sourceInstalled: true)
     defer { world.remove() }
     let status = try world.service(from: world.link, sourceLoaded: true).statusPayload()
-    #expect(status.service == "the old source install")
-    #expect(status.sourceInstall == nil)
+    #expect(status.service == nil && status.sourceInstall == nil)
     #expect(status.runState == "running" && status.intervalSeconds == 300)
 }
 
@@ -203,6 +212,47 @@ func bothLoadedReportsTheAppAndMentionsTheSourceInstall() throws {
     let items = try service.doctor().items
     #expect(items.contains { $0.id == "service-in-use" && $0.label == "the Calopod app's background service" })
     #expect(items.contains { $0.id == "source-install" })
+}
+
+/// A machine with only the command line install: no app bundle anywhere and no app label loaded.
+@Test
+func commandLineOnlyMachineBehavesAsBefore() async throws {
+    let world = try World(sourceInstalled: true)
+    defer { world.remove() }
+    let calls = Calls()
+    let cli = URL(fileURLWithPath: "/example/bin/calopod")
+    let service = world.service(from: cli, appLoaded: false, sourceLoaded: true, calls: calls)
+    #expect(!service.runsFromApp)
+
+    let status = try service.statusPayload()
+    #expect(status.service == nil && status.sourceInstall == nil)
+    #expect(status.runState == "running" && status.intervalSeconds == 300 && status.lookbackDays == 1 && status.horizonDays == 30)
+
+    // Control commands act on the source job's label only.
+    try service.setPaused(true)
+    try service.setEnabled(false)
+    try await service.enable()
+    let controlCalls = calls.verbs.filter { !$0.hasPrefix("print ") }
+    #expect(!controlCalls.isEmpty)
+    #expect(calls.verbs.allSatisfy { !$0.contains("app-agent") || $0.hasPrefix("print ") })
+
+    // Nothing in status or doctor mentions the app.
+    let doctor = try service.doctor()
+    #expect(!doctor.items.contains { ["service-in-use", "source-install"].contains($0.id) })
+    let words = ([status.message] + doctor.warnings + doctor.items.compactMap(\.label)).joined(separator: " ").lowercased()
+    #expect(!words.contains("app") && !words.contains("smappservice"))
+    #expect(try OutputRenderer.render(command: "agent.status", payload: status, format: .human).lowercased().contains("app") == false)
+}
+
+@Test
+func commandLineOnlyDisabledAndStoppedWordingNamesNoApp() throws {
+    let stopped = serviceHealthCheck(
+        LaunchAgentSnapshot(installed: true, loaded: false, disabled: false, configuration: nil))
+    let off = serviceHealthCheck(
+        LaunchAgentSnapshot(installed: true, loaded: false, disabled: true, configuration: nil))
+    for warning in [stopped.warning, off.warning] {
+        #expect(warning?.lowercased().contains("app") == false)
+    }
 }
 
 @Test

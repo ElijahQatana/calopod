@@ -383,7 +383,9 @@ func agentStatusPayload(
     let message: String
     if !enabled {
         status = "disabled"
-        message = "Automatic synchronization is disabled. Run calopod agent enable, or choose Enable automatic sync in the Calopod app."
+        message = usesBundled
+            ? "Automatic synchronization is disabled. Run calopod agent enable, or choose Enable automatic sync in the Calopod app."
+            : "Automatic synchronization is disabled. Run calopod agent enable."
     } else if paused {
         status = "paused"
         message = "Automatic synchronization is paused."
@@ -412,7 +414,7 @@ func agentStatusPayload(
         horizonDays: configuration.horizonDays,
         lastSuccessAgeSeconds: lastSuccessAgeSeconds,
         failureCategory: failureCategory,
-        service: usesBundled ? "the Calopod app's background service" : "the old source install",
+        service: usesBundled ? "the Calopod app's background service" : nil,
         sourceInstall: usesBundled && sourceLoaded
             ? "still loaded next to the app's service. Turn it off with: calopod agent disable --source" : nil,
         lastRunStatus: lastRun?.status,

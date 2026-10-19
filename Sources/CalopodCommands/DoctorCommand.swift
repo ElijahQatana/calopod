@@ -19,7 +19,7 @@ public struct DoctorCommand: ParsableCommand {
         do {
             let service = AgentControlService.current()
             let report = withPermissions(
-                try service.doctor(), livePermissionReadings(calendar: service.calendarAccess),
+                try service.doctor(), livePermissionReadings(calendar: service.calendarAccess, appPresent: service.runsFromApp),
                 calendarHelper: liveCalendarHelper(calendar: service.calendarAccess))
             try OutputRenderer.write(
                 command: "doctor",
@@ -99,8 +99,9 @@ func doctorReport(
 
     var items: [CommandItem] = []
     var warnings: [String] = []
-    items.append(doctorItem(
-        "service-in-use", "ok", label: usesBundled ? "the Calopod app's background service" : "the old source install"))
+    if usesBundled {
+        items.append(doctorItem("service-in-use", "ok", label: "the Calopod app's background service"))
+    }
     let hostExecutable = configuration.eventKitHostURL
         .appendingPathComponent("Contents/MacOS/CalopodEventKitHost")
     if FileManager.default.isExecutableFile(atPath: configuration.programURL.path),
@@ -110,7 +111,7 @@ func doctorReport(
         items.append(doctorItem("installation", "failed", "installation"))
         warnings.append("Rebuild and reinstall the user service.")
     }
-    let serviceCheck = serviceHealthCheck(snapshot)
+    let serviceCheck = serviceHealthCheck(snapshot, usesBundled: usesBundled)
     items.append(serviceCheck.item)
     if let warning = serviceCheck.warning {
         warnings.append(warning)
@@ -224,7 +225,9 @@ func doctorReport(
 }
 
 /// The three macOS permissions, read the way the app reads them. Nothing here can raise a prompt.
-func livePermissionReadings(calendar access: CalendarAccessService = CalendarAccessService()) -> [PermissionReading] {
+func livePermissionReadings(
+    calendar access: CalendarAccessService = CalendarAccessService(), appPresent: Bool = true
+) -> [PermissionReading] {
     let calendar: PermissionReading
     do {
         calendar = Permissions.calendar(status: try access.status())
@@ -233,9 +236,9 @@ func livePermissionReadings(calendar access: CalendarAccessService = CalendarAcc
     }
     return [
         calendar,
-        Permissions.backgroundService(.read()),
+        appPresent ? Permissions.backgroundService(.read()) : nil,
         Permissions.keychain(KeychainAccessCheck.live.run(interactive: false)),
-    ]
+    ].compactMap { $0 }
 }
 #endif
 
@@ -324,18 +327,23 @@ func automaticSyncSourceConnections(
 }
 
 func serviceHealthCheck(
-    _ snapshot: LaunchAgentSnapshot
+    _ snapshot: LaunchAgentSnapshot,
+    usesBundled: Bool = false
 ) -> (item: CommandItem, warning: String?) {
     if snapshot.disabled {
         return (
             doctorItem("service", "pending", "disabled"),
-            "Automatic sync is off. Run calopod agent enable, or choose Enable automatic sync in the Calopod app."
+            usesBundled
+                ? "Automatic sync is off. Run calopod agent enable, or choose Enable automatic sync in the Calopod app."
+                : "Automatic sync is off. Run calopod agent enable."
         )
     }
     if !snapshot.loaded {
         return (
             doctorItem("service", "failed", "stopped"),
-            "Automatic sync is enabled but not running. Run calopod agent enable to start it again, or choose Enable automatic sync in the Calopod app."
+            usesBundled
+                ? "Automatic sync is enabled but not running. Run calopod agent enable to start it again, or choose Enable automatic sync in the Calopod app."
+                : "Automatic sync is enabled but not running. Run calopod agent enable to start it again."
         )
     }
     return (doctorItem("service", "ok"), nil)
