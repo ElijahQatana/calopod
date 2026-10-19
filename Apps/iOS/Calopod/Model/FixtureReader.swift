@@ -6,6 +6,8 @@ import Foundation
 struct FixtureReader: SnapshotReader {
     enum Scenario: String, Sendable {
         case fresh, stale, noCalendars, sharingOff, nothingPublished, offline
+        /// A week around a spring clock change in London, and a feed from a Mac that sends busy time only.
+        case clockChange, oldMac
     }
 
     var scenario: Scenario = .fresh
@@ -19,6 +21,20 @@ struct FixtureReader: SnapshotReader {
             .snapshot({
                 var snapshot = Self.snapshot(publishedAt: now.addingTimeInterval(-420), now: now)
                 snapshot.days = []
+                return snapshot
+            }())
+        case .clockChange:
+            .snapshot({
+                var snapshot = Self.snapshot(publishedAt: now.addingTimeInterval(-420), now: now)
+                snapshot.availability = Self.clockChangeWeek
+                return snapshot
+            }())
+        case .oldMac:
+            .snapshot({
+                var snapshot = Self.snapshot(publishedAt: now.addingTimeInterval(-420), now: now)
+                snapshot.availability = snapshot.availability.map {
+                    AvailabilityDay(day: $0.day, timeZoneIdentifier: $0.timeZoneIdentifier, busy: $0.busy)
+                }
                 return snapshot
             }())
         case .sharingOff: .sharingOff
@@ -52,12 +68,25 @@ struct FixtureReader: SnapshotReader {
         let dinner = InboxItem(
             id: "fixture-5", reasons: [.unreadChange], changeOrderUncertain: true, title: "Dinner with a friend",
             startsAt: at(3, 19), endsAt: at(3, 21), calendarID: "personal", response: .accepted)
-        let busy = (0..<5).map { day in
+        // Hours are decimal: 9.75 is 9:45.
+        func span(_ day: Int, _ from: Double, _ to: Double) -> BusyInterval {
+            BusyInterval(start: at(day, 0).addingTimeInterval(from * 3600), end: at(day, 0).addingTimeInterval(to * 3600))
+        }
+        func worked(_ day: Int, busy: [(Double, Double)], free: [(Double, Double)], overlaps: Int = 0, status: AvailabilityStatus, off: Bool = false) -> AvailabilityDay {
             AvailabilityDay(
                 day: Self.dayKey(at(day, 0), calendar: calendar), timeZoneIdentifier: calendar.timeZone.identifier,
-                busy: [BusyInterval(start: at(day, 9), end: at(day, 10, 30)), BusyInterval(start: at(day, 13), end: at(day, 15))]
-                    + (day == 0 ? [BusyInterval(start: at(0, 22, 30), end: at(1, 0, 30))] : []))
+                busy: busy.map { span(day, $0, $1) }, working: off ? nil : span(day, 9, 17), free: free.map { span(day, $0, $1) },
+                overlaps: overlaps, status: status)
         }
+        let busy = [
+            worked(0, busy: [(9, 9.75), (10, 12.75), (13.5, 15), (16.5, 17)], free: [(9.75, 10), (12.75, 13.5), (15, 16.5)], overlaps: 1, status: .overbooked),
+            worked(1, busy: [(9.5, 12), (13, 15.5), (16, 17)], free: [(9, 9.5), (12, 13), (15.5, 16)], status: .tight),
+            worked(2, busy: [(10, 11)], free: [(9, 10), (11, 17)], status: .mostlyFree),
+            worked(3, busy: [], free: [], status: .dayOff, off: true),
+            worked(4, busy: [(13, 14)], free: [(9, 13), (14, 17)], status: .mostlyFree),
+            worked(5, busy: [], free: [(9, 17)], status: .mostlyFree),
+            worked(6, busy: [(10, 11)], free: [], status: .dayOff, off: true),
+        ]
         let events = [
             event("e1", "work", "Team standup", at(0, 9), at(0, 9, 30)),
             event("e2", "work", "Quarterly planning", at(0, 13, 30), at(0, 15), location: "Room 4B, 12 Example Street", response: .needsResponse,
@@ -93,6 +122,29 @@ struct FixtureReader: SnapshotReader {
                 lastSyncAt: publishedAt,
                 issues: [SyncIssue(kind: .stale, calendarID: "client", since: now.addingTimeInterval(-86400))]))
     }
+
+    /// The Sunday is the night the clocks go forward, so the day is 23 hours long and 00:00 to 09:00 is
+    /// 8 real hours. The ranges are real dates, as the Mac sends them.
+    private static let clockChangeWeek: [AvailabilityDay] = {
+        var calendar = Calendar(identifier: .gregorian)
+        let zone = TimeZone(identifier: "Europe/London")!
+        calendar.timeZone = zone
+        func start(_ day: Int) -> Date { calendar.date(from: DateComponents(year: 2027, month: 3, day: day))! }
+        func span(_ day: Int, _ from: Double, _ to: Double) -> BusyInterval {
+            BusyInterval(start: start(day).addingTimeInterval(from * 3600), end: start(day).addingTimeInterval(to * 3600))
+        }
+        return [
+            AvailabilityDay(
+                day: "2027-03-27", timeZoneIdentifier: zone.identifier, busy: [span(27, 10, 11)], working: span(27, 9, 17),
+                free: [span(27, 9, 10), span(27, 11, 17)], overlaps: 0, status: .mostlyFree),
+            AvailabilityDay(
+                day: "2027-03-28", timeZoneIdentifier: zone.identifier, busy: [span(28, 2, 3)], working: span(28, 0, 8),
+                free: [span(28, 0, 2), span(28, 3, 8)], overlaps: 0, status: .mostlyFree),
+            AvailabilityDay(
+                day: "2027-03-29", timeZoneIdentifier: zone.identifier, busy: [span(29, 9, 12)], working: span(29, 8, 16),
+                free: [span(29, 8, 9), span(29, 12, 16)], overlaps: 0, status: .tight),
+        ]
+    }()
 
     private static func event(
         _ id: String, _ calendarID: String, _ title: String?, _ start: Date, _ end: Date,

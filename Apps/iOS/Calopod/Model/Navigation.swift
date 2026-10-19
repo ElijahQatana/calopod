@@ -6,10 +6,14 @@ import Observation
 final class Navigation {
     enum Tab: CaseIterable { case home, inbox, calendar, status }
     enum Page { case settings, calendars, help, about }
+    enum CalendarMode: String, CaseIterable { case schedule = "Schedule", availability = "Availability" }
 
     var tab = Tab.home
     var inboxFilter = InboxFilter.all
     var menuOpen = false
+    /// Which side of Calendar is open and the day both sides show. Nil is today.
+    var calendarMode = CalendarMode.schedule
+    var calendarDay: String?
     /// Menu screens on top of the tabs. Back removes the top one.
     private(set) var pages: [Page] = []
 
@@ -18,6 +22,12 @@ final class Navigation {
     func openInbox(_ filter: InboxFilter) {
         inboxFilter = filter
         show(.inbox)
+    }
+
+    func openAvailability() {
+        calendarMode = .availability
+        calendarDay = nil
+        show(.calendar)
     }
 
     func show(_ tab: Tab) {

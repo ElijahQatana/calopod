@@ -23,6 +23,8 @@ struct HomeSummary: Equatable {
     var hasCalendars: Bool
     var next: [Next]
     var moreToday: Int
+    /// Today as the Mac published it. Nil when it sent nothing for today.
+    var availability: AvailabilityFigures?
     var calendars: [StatusReport.Row]
     var moreCalendars: Int
 
@@ -39,6 +41,7 @@ struct HomeSummary: Equatable {
         calendars = Array(report.rows.prefix(Self.calendarsShown))
         moreCalendars = max(0, report.rows.count - Self.calendarsShown)
 
+        availability = AvailabilityFigures.week(from: snapshot.availability).first { $0.interval.contains(now) }
         hasCalendars = !snapshot.days.isEmpty
         let endOfToday = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now
         var seen = Set<String>()
