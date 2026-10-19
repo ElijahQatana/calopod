@@ -19,12 +19,17 @@ final class CalendarModel {
     private(set) var hidden: Set<String> = []
     var selectedID: String?
     /// Whether Busy copies Calopod made are drawn. Only this view changes; Inbox and sync do not.
+    /// Each mode remembers its own choice; until it is changed a mode uses its default.
     var showCopies: Bool {
-        didSet {
-            defaults.set(showCopies, forKey: Self.showCopiesKey)
-            if !showCopies, selected?.isCopy == true { selectedID = nil }
+        get { copyChoices[viewMode] ?? viewMode.copiesShownByDefault }
+        set {
+            copyChoices[viewMode] = newValue
+            defaults.set(newValue, forKey: Self.showCopiesKey(viewMode))
+            if !newValue, selected?.isCopy == true { selectedID = nil }
         }
     }
+
+    private var copyChoices: [CalendarViewMode: Bool]
 
     /// Which calendars this view offers by their part in the arms. Hidden state per calendar is kept across modes.
     var viewMode: CalendarViewMode {
@@ -34,7 +39,10 @@ final class CalendarModel {
         }
     }
 
-    static let showCopiesKey = "calendarShowCopies"
+    /// All keeps the key the single setting used before modes existed.
+    static func showCopiesKey(_ mode: CalendarViewMode) -> String {
+        mode == .all ? "calendarShowCopies" : "calendarShowCopies.\(mode.rawValue)"
+    }
     static let viewModeKey = "calendarViewMode"
 
     let calendar: Calendar
@@ -55,7 +63,9 @@ final class CalendarModel {
         self.defaults = defaults
         self.aliases = aliases
         self.load = load
-        showCopies = defaults.object(forKey: Self.showCopiesKey) as? Bool ?? true
+        copyChoices = Dictionary(uniqueKeysWithValues: CalendarViewMode.allCases.compactMap { mode in
+            (defaults.object(forKey: Self.showCopiesKey(mode)) as? Bool).map { (mode, $0) }
+        })
         viewMode = defaults.string(forKey: Self.viewModeKey).flatMap(CalendarViewMode.init(rawValue:)) ?? .all
         anchor = now()
     }
@@ -81,19 +91,10 @@ final class CalendarModel {
         return calendars.filter { !aliases.isIgnored($0.id) && roles.includes($0.id, in: viewMode) }
     }
 
-    /// Destinations always draws the copies, since they are what it shows; Sources never does.
-    var copiesAreDrawn: Bool {
-        switch viewMode {
-        case .all: showCopies
-        case .sources: false
-        case .destinations: true
-        }
-    }
-
     private func isVisible(_ event: ScheduleEvent) -> Bool {
         let roles = schedule?.roles ?? CalendarRoles()
         return roles.includes(event.calendarID, in: viewMode) && !hidden.contains(event.calendarID)
-            && !aliases.isIgnored(event.calendarID) && (copiesAreDrawn || !event.isCopy)
+            && !aliases.isIgnored(event.calendarID) && (showCopies || !event.isCopy)
     }
 
     /// What one day column draws. Built once per schedule or filter change, not on every redraw.
@@ -124,7 +125,7 @@ final class CalendarModel {
             return cache
         }
         let roles = schedule?.roles ?? CalendarRoles()
-        let drawsCopies = copiesAreDrawn
+        let drawsCopies = showCopies
         let events = (schedule?.events ?? []).filter {
             !hidden.contains($0.calendarID) && !ignored.contains($0.calendarID) && roles.includes($0.calendarID, in: viewMode)
                 && (drawsCopies || !$0.isCopy)

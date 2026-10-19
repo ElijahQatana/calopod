@@ -26,6 +26,9 @@ public struct EventsCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Show all calendars, only those arms copy from (sources), or only those they write to (destinations).")
     public var view: CalendarViewMode = .all
 
+    @Flag(name: .long, inversion: .prefixedNo, help: "Include the copies Calopod made. On for --view destinations and off otherwise unless set.")
+    public var copies: Bool?
+
     public init() {}
 
     public func run() async throws {
@@ -50,7 +53,7 @@ public struct EventsCommand: AsyncParsableCommand {
                 from: resolved.window.start,
                 through: resolved.window.end
             )
-            let copies = view == .destinations
+            let copyItems = copies ?? view.copiesShownByDefault
                 ? try destinationCopies(arms: arms, repository: repository, into: Set(shown), range: resolved)
                 : []
             try OutputRenderer.write(
@@ -58,10 +61,10 @@ public struct EventsCommand: AsyncParsableCommand {
                 payload: CommandPayload(
                     status: cached || refresh.failedSourceCount != 0 ? "partial" : "ok",
                     message: events.isEmpty ? "No events were found." : "Events in the requested range.",
-                    count: events.count + copies.count,
+                    count: events.count + copyItems.count,
                     range: RangeOutput(range: resolved),
                     sources: commandSources(sources, names: names),
-                    items: copies + events.map {
+                    items: copyItems + events.map {
                         CommandItem(
                             id: $0.sourceKeyHash,
                             kind: "event",

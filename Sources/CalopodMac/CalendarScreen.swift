@@ -154,8 +154,7 @@ struct CalendarScreen: View {
     }
 
     private var copiesChip: some View {
-        let fixed = model.viewMode != .all
-        let shown = model.copiesAreDrawn
+        let shown = model.showCopies
         return Button { model.showCopies.toggle() } label: {
             HStack(spacing: 6) {
                 Image(systemName: shown ? "eye" : "eye.slash").font(Theme.Fonts.tiny)
@@ -163,22 +162,13 @@ struct CalendarScreen: View {
             }
             .padding(.horizontal, 12).frame(minHeight: Theme.Control.chipHeight)
             .background(Capsule().fill(.quaternary))
-            .opacity(shown ? (fixed ? 0.6 : 1) : 0.5)
+            .opacity(shown ? 1 : 0.5)
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .disabled(fixed)
         .accessibilityLabel("Calopod copies")
         .accessibilityValue(shown ? "Shown" : "Hidden")
-        .help(copiesHelp(shown))
-    }
-
-    private func copiesHelp(_ shown: Bool) -> String {
-        switch model.viewMode {
-        case .all: shown ? "Hide the Busy copies Calopod made" : "Show the Busy copies Calopod made"
-        case .sources: "Sources shows only the original events, never Calopod's copies."
-        case .destinations: "Destinations always shows the copies Calopod made, since they are what it is for."
-        }
+        .help(shown ? "Hide the Busy copies Calopod made" : "Show the Busy copies Calopod made")
     }
 
     private var title: String {

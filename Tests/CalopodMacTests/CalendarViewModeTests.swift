@@ -42,27 +42,42 @@ final class CalendarViewModeTests: XCTestCase {
         return model
     }
 
-    func testModesChooseCalendarsChipsAndCopies() async throws {
+    func testModesChooseCalendarsChipsAndCopyDefaults() async throws {
         let model = try await model()
-        XCTAssertEqual(Set(model.events.map(\.id)), ["w", "h", "o", "l", "copy-hub", "copy-home"])
+        XCTAssertEqual(Set(model.events.map(\.id)), ["w", "h", "o", "l"], "All starts without copies")
 
         model.viewMode = .sources
         XCTAssertEqual(model.chipCalendars.map(\.id), ["work", "hub"])
-        XCTAssertEqual(Set(model.events.map(\.id)), ["w", "h"], "Sources never draws copies")
+        XCTAssertEqual(Set(model.events.map(\.id)), ["w", "h"])
 
         model.viewMode = .destinations
         XCTAssertEqual(model.chipCalendars.map(\.id), ["hub", "home"])
         XCTAssertEqual(Set(model.events.map(\.id)), ["h", "o", "copy-hub", "copy-home"])
     }
 
-    func testDestinationsDrawsCopiesEvenWhenTheChipIsOff() async throws {
-        let model = try await model()
+    func testCopiesToggleWorksInEveryModeAndIsRememberedPerMode() async throws {
+        let store = try defaults()
+        let model = try await model(defaults: store)
+        model.viewMode = .sources
+        model.showCopies = true
+        XCTAssertEqual(Set(model.events.map(\.id)), ["w", "h", "copy-hub"])
+        model.viewMode = .destinations
         model.showCopies = false
         XCTAssertFalse(model.events.contains { $0.isCopy })
-        model.viewMode = .destinations
-        XCTAssertEqual(model.events.filter(\.isCopy).count, 2)
         model.viewMode = .all
-        XCTAssertFalse(model.events.contains { $0.isCopy }, "The chip choice comes back in All")
+        XCTAssertFalse(model.showCopies)
+        model.viewMode = .sources
+        XCTAssertTrue(model.showCopies)
+        model.viewMode = .destinations
+        XCTAssertFalse(model.showCopies)
+
+        let again = CalendarModel(defaults: store, load: { CalendarSchedule(calendars: [], events: []) })
+        again.viewMode = .sources
+        XCTAssertTrue(again.showCopies)
+        again.viewMode = .destinations
+        XCTAssertFalse(again.showCopies)
+        again.viewMode = .all
+        XCTAssertFalse(again.showCopies)
     }
 
     func testHiddenStateSurvivesSwitchingModes() async throws {

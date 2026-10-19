@@ -7,6 +7,9 @@ public enum CalendarViewMode: String, CaseIterable, Codable, Sendable, Expressib
     case sources
     case destinations
 
+    /// Copies are what Destinations is for; the other modes start without them.
+    public var copiesShownByDefault: Bool { self == .destinations }
+
     public var title: String {
         switch self {
         case .all: "All"
@@ -40,7 +43,4 @@ public struct CalendarRoles: Equatable, Sendable {
         case .destinations: destinations.contains(calendarID)
         }
     }
-
-    /// Copies are the content of Destinations and are never shown in the other modes' sources.
-    public func showsCopies(in mode: CalendarViewMode) -> Bool { mode != .sources }
 }

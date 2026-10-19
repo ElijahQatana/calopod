@@ -31,7 +31,7 @@ struct CalendarViewModeTests {
         for (id, modes) in table {
             #expect(CalendarViewMode.allCases.filter { roles.includes(id, in: $0) } == modes, "\(id)")
         }
-        #expect(roles.showsCopies(in: .all) && roles.showsCopies(in: .destinations) && !roles.showsCopies(in: .sources))
+        #expect(CalendarViewMode.allCases.map(\.copiesShownByDefault) == [false, false, true])
     }
 
     @Test("The flag takes the three values and defaults to all")
@@ -41,6 +41,9 @@ struct CalendarViewModeTests {
             #expect(try EventsCommand.parse(["--view", mode.rawValue]).view == mode)
         }
         #expect(throws: (any Error).self) { try EventsCommand.parse(["--view", "other"]) }
+        #expect(try EventsCommand.parse([]).copies == nil)
+        #expect(try EventsCommand.parse(["--copies"]).copies == true)
+        #expect(try EventsCommand.parse(["--no-copies"]).copies == false)
     }
 
     @Test("Destination copies come from active arms at the source's time")
