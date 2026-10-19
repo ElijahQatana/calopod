@@ -7,6 +7,11 @@ import Foundation
 public struct CalendarAccessService: Sendable {
     public init() {}
 
+    /// The helper app this process would ask.
+    public func hostURL() throws -> URL {
+        try EventKitHostRunner().hostURL
+    }
+
     public func status() throws -> EventKitAccessStatus {
         try EventKitHostRunner().perform(EventKitHostRequest(operation: .permissionStatus)).status
     }

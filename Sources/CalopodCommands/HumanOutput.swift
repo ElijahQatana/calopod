@@ -110,6 +110,7 @@ enum HumanOutputRenderer {
                         if command == "doctor" || command == "support.export" {
                             lines.append("\(readable(item.id)): \(readable(item.kind))")
                             if let reason = item.reason { lines.append("  Reason: \(readable(reason))") }
+                            if command == "doctor", ["calendar-permission", "permission-calendar"].contains(item.id), let helper = item.label { lines.append("  Helper: \(clean(helper))") }
                         }
                         continue
                     }
