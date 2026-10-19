@@ -56,6 +56,17 @@ enum DayStripLayout {
         min(max(CGFloat(minutes) * pointsPerMinute + 2 * inset, minimumHeight), maximumHeight)
     }
 
+    /// The most room an hour gets when the view fills a tall space, and the least before it scrolls.
+    static let maximumPointsPerHour: CGFloat = 120
+    static let minimumPointsPerHour: CGFloat = 44
+
+    /// Spreads whole hours over the room there is. It only drops below the minimum, and so scrolls,
+    /// when the hours cannot fit at that size.
+    static func pointsPerHour(hours: Double, available: CGFloat, inset: CGFloat = DayStripLayout.inset) -> CGFloat {
+        let fit = ((available - 2 * inset) / CGFloat(max(hours, 1))).rounded(.down)
+        return min(max(fit, minimumPointsPerHour), maximumPointsPerHour)
+    }
+
     /// The window moved out to whole hours, so every hour line inside it has a label.
     static func axis(start: Date, end: Date, calendar: Calendar = .current) -> (start: Date, end: Date) {
         let from = calendar.dateInterval(of: .hour, for: start)?.start ?? start
@@ -70,6 +81,8 @@ struct ContextStrip: View {
     let detail: InboxDetail
     let colors: CalendarColors
     private let aliases = CalendarAliases.shared
+    /// Fills the height it is given, spreading the hours over it, instead of a fixed height.
+    var fillsHeight = false
     private static let axisWidth: CGFloat = 52
 
     var body: some View {
@@ -77,9 +90,12 @@ struct ContextStrip: View {
         let minutes = max(axis.end.timeIntervalSince(axis.start) / 60, 60)
         let blocks = DayStripLayout.blocks(detail.context, windowStart: axis.start)
         let marks = DayStripLayout.hourMarks(from: axis.start, to: axis.end)
-        let total = CGFloat(minutes) * DayStripLayout.pointsPerMinute
         let inset = DayStripLayout.inset
         GeometryReader { proxy in
+            let perMinute = fillsHeight
+                ? DayStripLayout.pointsPerHour(hours: minutes / 60, available: proxy.size.height) / 60
+                : DayStripLayout.pointsPerMinute
+            let total = CGFloat(minutes) * perMinute
             ScrollViewReader { scroller in
                 ScrollView {
                     ZStack(alignment: .topLeading) {
@@ -90,16 +106,16 @@ struct ContextStrip: View {
                                     .frame(width: Self.axisWidth - 6, alignment: .trailing)
                                 Rectangle().fill(.quaternary).frame(height: 0.5)
                             }
-                            .offset(y: inset + CGFloat(mark.minutes) * DayStripLayout.pointsPerMinute - 8)
+                            .offset(y: inset + CGFloat(mark.minutes) * perMinute - 8)
                             .accessibilityHidden(true)
                         }
                         ForEach(blocks) { placed in
                             let area = max(proxy.size.width - Self.axisWidth - 8, 60)
                             let width = area / CGFloat(placed.columns)
                             block(placed.entry)
-                                .frame(width: max(width - 3, 24), height: max(CGFloat(placed.height) * DayStripLayout.pointsPerMinute - 2, 18))
+                                .frame(width: max(width - 3, 24), height: max(CGFloat(placed.height) * perMinute - 2, 18))
                                 .padding(.leading, Self.axisWidth + CGFloat(placed.column) * width)
-                                .padding(.top, inset + CGFloat(placed.top) * DayStripLayout.pointsPerMinute)
+                                .padding(.top, inset + CGFloat(placed.top) * perMinute)
                                 .id(placed.id)
                         }
                     }
@@ -111,7 +127,8 @@ struct ContextStrip: View {
                 }
             }
         }
-        .frame(height: DayStripLayout.height(forMinutes: minutes, inset: inset))
+        .frame(height: fillsHeight ? nil : DayStripLayout.height(forMinutes: minutes, inset: inset))
+        .frame(maxHeight: fillsHeight ? .infinity : nil)
         .padding(.vertical, 6).padding(.horizontal, 8)
         .cardSurface()
     }

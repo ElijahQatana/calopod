@@ -49,4 +49,15 @@ final class DayStripLayoutTests: XCTestCase {
         XCTAssertEqual(DayStripLayout.height(forMinutes: 60), 260)
         XCTAssertEqual(DayStripLayout.height(forMinutes: 600), 340)
     }
+
+    func testHoursSpreadOverTheRoomThenScroll() {
+        // 4 hours in 360 pt: (360 - 20) / 4 = 85 per hour, so everything shows.
+        XCTAssertEqual(DayStripLayout.pointsPerHour(hours: 4, available: 360), 85)
+        // Few hours stop growing at the maximum.
+        XCTAssertEqual(DayStripLayout.pointsPerHour(hours: 2, available: 600), DayStripLayout.maximumPointsPerHour)
+        // Three hours always fit at the minimum in a normal sheet.
+        XCTAssertLessThanOrEqual(3 * DayStripLayout.pointsPerHour(hours: 3, available: 200) + 20, 200)
+        // Nine hours in a short space keep the minimum and scroll.
+        XCTAssertEqual(DayStripLayout.pointsPerHour(hours: 9, available: 300), DayStripLayout.minimumPointsPerHour)
+    }
 }

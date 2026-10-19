@@ -2,35 +2,53 @@ import CalopodCommands
 import SwiftUI
 
 /// Goes through the inbox one event at a time. Everything is keyboard driven.
-/// The header and footer stay in place; only the middle scrolls, and only when it has to.
+/// The sheet is sized from the window. A card has its details on the left and the day view on the
+/// right, or stacks when the sheet is narrow, so it fits without scrolling on most displays.
 struct InboxReviewSheet: View {
     let model: InboxReviewModel
     let colors: CalendarColors
+    /// The size of the window the sheet hangs from.
+    var window = ReviewSheetLayout.fallbackWindow
     let close: () -> Void
     private let aliases = CalendarAliases.shared
 
     @FocusState private var focused: Bool
+    @State private var showsMore = false
 
-    private static let width: CGFloat = 640
-    /// One height for every step, so the sheet does not change size as the review moves along.
-    /// With the header and footer it fits a 580 pt window.
-    private static let bodyHeight: CGFloat = 380
+    private static let noticeSeconds = 4.0
+    private static let edge: CGFloat = 20
+
+    private var size: CGSize { ReviewSheetLayout.size(in: window) }
 
     var body: some View {
         VStack(spacing: 0) {
-            header.padding(.horizontal, 24).padding(.top, 20).padding(.bottom, 14)
+            header.padding(.horizontal, Self.edge).padding(.top, 14).padding(.bottom, 10)
             Divider()
-            scrollingBody
+            ZStack(alignment: .bottomLeading) {
+                mainBody
+                if let notice = model.notice, showsNotice {
+                    ReviewToast(text: notice, onDismiss: model.dismissNotice)
+                        .padding(.bottom, 10).padding(.horizontal, Self.edge)
+                        .transition(.opacity)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(.easeOut(duration: 0.15), value: model.notice)
             if let footer = footerContent {
                 Divider()
-                footer.controlSize(.large).padding(.horizontal, 24).padding(.vertical, 14)
+                footer.controlSize(.large).padding(.horizontal, Self.edge).padding(.vertical, 10)
             }
         }
-        .frame(width: Self.width)
+        .frame(width: size.width, height: size.height)
         .focusable()
         .focusEffectDisabled()
         .focused($focused)
         .onAppear { focused = true }
+        .task(id: model.notice) {
+            guard model.notice != nil else { return }
+            try? await Task.sleep(for: .seconds(Self.noticeSeconds))
+            if !Task.isCancelled { model.dismissNotice() }
+        }
         .onKeyPress(phases: .down) { press in
             let text = press.key == .return ? ReviewKeyboard.returnKey : press.key == .escape ? ReviewKeyboard.escapeKey : press.characters
             // Only keys the review uses are taken, so Esc still closes the sheet from a card.
@@ -40,17 +58,19 @@ struct InboxReviewSheet: View {
         }
     }
 
-    private var scrollingBody: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                if let notice = model.notice, showsNotice { Banner(kind: .info, text: notice, onDismiss: model.dismissNotice) }
-                content
+    @ViewBuilder
+    private var mainBody: some View {
+        if case .card(let card) = model.phase {
+            cardBody(card)
+        } else {
+            // Not a card: one centered column that scrolls only when it has to.
+            ScrollView {
+                content.padding(Self.edge)
+                    .frame(maxWidth: 560, alignment: .leading)
+                    .frame(maxWidth: .infinity)
             }
-            .padding(24)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .scrollBounceBehavior(.basedOnSize)
         }
-        .scrollBounceBehavior(.basedOnSize)
-        .frame(height: Self.bodyHeight)
     }
 
     private var showsNotice: Bool {
@@ -112,7 +132,7 @@ struct InboxReviewSheet: View {
         case .start: start
         case .working(let text):
             BusyLine(text: text).frame(maxWidth: .infinity, minHeight: 160)
-        case .card(let card): cardView(card)
+        case .card: EmptyView() // drawn by `cardBody`
         case .confirm(let card, let reply): confirmView(card, reply)
         case .problem(let text, _): Banner(kind: .caution, text: text)
         case .summary: ReviewSummary(progress: model.progress, paused: model.paused, calendarSkips: model.calendarSkips)
@@ -141,33 +161,85 @@ struct InboxReviewSheet: View {
         return "\(card.connection) / \(alias)"
     }
 
-    private func cardView(_ card: InboxReviewCardInfo) -> some View {
+    @ViewBuilder
+    private func cardBody(_ card: InboxReviewCardInfo) -> some View {
+        if ReviewSheetLayout.isSideBySide(width: size.width) {
+            HStack(alignment: .top, spacing: 20) {
+                ScrollView { details(card, stacked: false).frame(maxWidth: .infinity, alignment: .leading) }
+                    .scrollBounceBehavior(.basedOnSize)
+                dayView(card)
+                    .frame(width: ReviewSheetLayout.dayColumnWidth(body: size.width - 2 * Self.edge))
+            }
+            .padding(Self.edge)
+        } else {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    details(card, stacked: true)
+                    dayView(card).frame(height: ReviewSheetLayout.compactDayHeight + 24)
+                }
+                .padding(Self.edge)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        }
+    }
+
+    private func dayView(_ card: InboxReviewCardInfo) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Around this time").font(Theme.Fonts.bodySemibold)
+            ContextStrip(detail: card.detail, colors: colors, fillsHeight: true)
+        }
+    }
+
+    private func details(_ card: InboxReviewCardInfo, stacked: Bool) -> some View {
         let entry = card.entry
-        return VStack(alignment: .leading, spacing: 14) {
-            Text(entry.title).font(Theme.Fonts.sectionTitle).fixedSize(horizontal: false, vertical: true)
+        let when = entry.startsAt.formatted(.dateTime.weekday(.abbreviated).month().day()) + ", " + InboxText.time(entry)
+        return VStack(alignment: .leading, spacing: 12) {
+            Text(entry.title).font(Theme.Fonts.sectionTitle).lineLimit(stacked ? 2 : 3).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 ForEach(entry.reasons, id: \.self) { StatusPill(text: InboxText.label($0, entry), color: InboxText.tint($0)) }
             }
-            Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 14, verticalSpacing: 6) {
-                fact("When", entry.startsAt.formatted(.dateTime.weekday(.abbreviated).month().day()) + ", " + InboxText.time(entry))
-                if let place = entry.location, !place.isEmpty { fact("Where", place) }
-                if let organizer = entry.organizer { fact("Organizer", organizer) }
-                fact("Calendar", account(card))
+            if stacked {
+                fact("When", when)
+                if !card.neighbors.isEmpty { neighbors(card) }
+                note(card)
+                DisclosureGroup("More details", isExpanded: $showsMore) {
+                    VStack(alignment: .leading, spacing: 10) { extras(card, entry) }.padding(.top, 8)
+                }
+                .font(Theme.Fonts.secondaryMedium)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 16, alignment: .topLeading)],
+                          alignment: .leading, spacing: 10) {
+                    fact("When", when)
+                    extras(card, entry)
+                }
+                if !card.neighbors.isEmpty { neighbors(card) }
+                note(card)
             }
-            .font(Theme.Fonts.body)
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Around this time").font(Theme.Fonts.bodySemibold)
-                ContextStrip(detail: card.detail, colors: colors)
-            }
-            if !card.neighbors.isEmpty { neighbors(card) }
+        }
+    }
+
+    @ViewBuilder
+    private func extras(_ card: InboxReviewCardInfo, _ entry: InboxEntry) -> some View {
+        if let place = entry.location, !place.isEmpty { fact("Where", place) }
+        if let organizer = entry.organizer { fact("Organizer", organizer) }
+        fact("Calendar", account(card))
+    }
+
+    /// What replying does here. Calendars read through the Mac are answered in the Calendar app.
+    @ViewBuilder
+    private func note(_ card: InboxReviewCardInfo) -> some View {
+        if card.replies.isEmpty {
+            Text(card.detail.replyNote).font(Theme.Fonts.secondary).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 
     private func fact(_ label: String, _ value: String) -> some View {
-        GridRow {
-            Text(label).foregroundStyle(.secondary)
-            Text(value).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 1) {
+            Text(label).font(Theme.Fonts.tiny).foregroundStyle(.secondary)
+            Text(value).font(Theme.Fonts.label).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func neighbors(_ card: InboxReviewCardInfo) -> some View {
@@ -237,14 +309,7 @@ struct InboxReviewSheet: View {
     }
 
     /// Only choices that can be made are shown. Calendars read through the Mac are answered in Calendar.
-    private func cardFooter(_ card: InboxReviewCardInfo) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if card.replies.isEmpty {
-                Text(card.detail.replyNote).font(Theme.Fonts.secondary).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            }
-            cardButtons(card)
-        }
-    }
+    private func cardFooter(_ card: InboxReviewCardInfo) -> some View { cardButtons(card) }
 
     private func cardButtons(_ card: InboxReviewCardInfo) -> some View {
         HStack(spacing: 8) {
@@ -276,6 +341,31 @@ struct InboxReviewSheet: View {
             Text(title)
             Text(key).font(Theme.Fonts.tiny.monospaced()).opacity(0.55)
         }
+    }
+}
+
+/// A short notice over the bottom of the body, where the details leave room. It closes itself, so it never takes room from the card.
+private struct ReviewToast: View {
+    let text: String
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "info.circle.fill").foregroundStyle(Theme.accent)
+            Text(text).font(Theme.Fonts.secondary).lineLimit(1).truncationMode(.tail)
+            Button(action: onDismiss) {
+                Image(systemName: "xmark").font(Theme.Fonts.smallIcon).foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss")
+            .help("Dismiss")
+        }
+        .padding(.horizontal, 12).padding(.vertical, 6)
+        .background(Capsule().fill(Theme.pane))
+        .background(Capsule().fill(Theme.accent.opacity(0.12)))
+        .overlay(Capsule().strokeBorder(Theme.paneLine, lineWidth: 1))
+        .shadow(color: Theme.panelShadow, radius: 6, y: 2)
+        .help(text)
     }
 }
 
