@@ -41,6 +41,34 @@ final class PermissionsModelTests: XCTestCase {
         XCTAssertEqual(fakes.keychainCalls, [false])
     }
 
+    func testNotificationsAreReadQuietlyAndAsked() async {
+        let state = NotificationState()
+        let model = PermissionsModel(
+            access: CalendarAccessModel(readStatus: { .fullAccess }, requestAccess: { CalendarAccessAnswer(status: .fullAccess, outcome: .granted) }, open: { _ in }),
+            readLoginItems: { .enabled }, readKeychain: { _ in .noAccounts },
+            readNotifications: { state.value }, requestNotifications: { state.value = .allowed; return true }, open: { state.opened.append($0) })
+        await model.refresh()
+        XCTAssertEqual(model.notificationsReading.reason, "allowed")
+        state.value = .notDetermined
+        await model.refreshNotifications()
+        XCTAssertEqual(model.notificationsReading.state, "Not asked yet")
+        await model.allowNotifications()
+        XCTAssertEqual(model.notifications, .allowed)
+        state.value = .denied
+        await model.refreshNotifications()
+        XCTAssertEqual(model.notificationsReading.level, .blocked)
+        model.openNotificationsSettings()
+        XCTAssertEqual(state.opened.map(\.absoluteString), ["x-apple.systempreferences:com.apple.Notifications-Settings.extension"])
+    }
+
+    private final class NotificationState: @unchecked Sendable {
+        private let lock = NSLock()
+        private var _value = NotificationPermissionState.allowed
+        private var _opened: [URL] = []
+        var value: NotificationPermissionState { get { lock.withLock { _value } } set { lock.withLock { _value = newValue } } }
+        var opened: [URL] { get { lock.withLock { _opened } } set { lock.withLock { _opened = newValue } } }
+    }
+
     func testCheckingTheKeychainMayAskAndAgainClearsTheNotice() async {
         let fakes = Fakes()
         let model = fakes.model()

@@ -55,6 +55,8 @@ final class CalendarModel {
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored let aliases: CalendarAliases
     @ObservationIgnored private let state: LocalStateRepository?
+    /// Called after every successful read, whether or not it changed anything. Reminders follow the schedule here.
+    @ObservationIgnored var onReload: (@MainActor () -> Void)?
     /// Used when there is no local state, so a choice lasts until the app quits.
     @ObservationIgnored private var memoryHidden: [CalendarViewMode: Set<String>] = [:]
 
@@ -198,6 +200,7 @@ final class CalendarModel {
             if saved != hidden { hidden = saved }
             if loadFailed { loadFailed = false }
             if selectedID != nil, selected == nil { selectedID = nil }
+            onReload?()
         } catch {
             loadFailed = true
         }

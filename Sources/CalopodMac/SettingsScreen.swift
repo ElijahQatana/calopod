@@ -8,6 +8,7 @@ struct SettingsScreen: View {
     @State private var command: CommandLineModel
     @Environment(PermissionsModel.self) private var permissions
     @Environment(\.iPhoneFeed) private var iPhoneFeed
+    @Environment(NotificationSettingsModel.self) private var reminders
 
     init(command: CommandLineModel = CommandLineModel()) { _command = State(initialValue: command) }
 
@@ -21,6 +22,7 @@ struct SettingsScreen: View {
         appearance
         transparency
         windowStyle
+        NotificationsSection(model: reminders)
         permissionsSection
         iPhoneSection
         commandLine
@@ -81,6 +83,17 @@ struct SettingsScreen: View {
             permissionRow(permissions.backgroundService) {
                 if permissions.loginItems == .requiresApproval {
                     Button("Open Login Items settings") { permissions.openLoginItemsSettings() }
+                }
+            }
+            permissionRow(permissions.notificationsReading) {
+                switch permissions.notifications {
+                case .notDetermined?:
+                    Button("Allow") { Task { await permissions.allowNotifications() } }
+                        .disabled(permissions.askingNotifications)
+                case .denied?:
+                    Button("Open Notifications settings") { permissions.openNotificationsSettings() }
+                default:
+                    EmptyView()
                 }
             }
             permissionRow(permissions.savedSignIns) {

@@ -1,0 +1,12 @@
+{
+  "width": 700,
+  "height": 480,
+  "titleBar": 28,
+  "windowX": 200,
+  "windowY": 120,
+  "iconSize": 128,
+  "textSize": 13,
+  "iconCenterY": 215,
+  "appCenterX": 205,
+  "applicationsCenterX": 495
+}
