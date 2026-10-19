@@ -8,6 +8,7 @@ struct SettingsScreen: View {
     @State private var command: CommandLineModel
     @Environment(PermissionsModel.self) private var permissions
     @Environment(NotificationSettingsModel.self) private var reminders
+    @Environment(WorkingHoursModel.self) private var workingHours
 
     init(command: CommandLineModel = CommandLineModel()) { _command = State(initialValue: command) }
 
@@ -21,6 +22,7 @@ struct SettingsScreen: View {
         appearance
         transparency
         windowStyle
+        WorkingHoursSection(model: workingHours)
         NotificationsSection(model: reminders)
         permissionsSection
         commandLine
