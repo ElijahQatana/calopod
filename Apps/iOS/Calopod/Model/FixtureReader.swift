@@ -113,10 +113,12 @@ struct FixtureReader: SnapshotReader {
             reminders: ReminderSettings(
                 enabled: true, firstEnabled: true, firstMinutes: 10, finalEnabled: true, finalMinutes: 1, hideTitles: false),
             calendars: [
-                CalendarEntry(id: "work", name: "Work", colorIndex: 6),
-                CalendarEntry(id: "personal", name: "Personal", colorIndex: 4),
-                CalendarEntry(id: "family", name: "Family", colorIndex: 8),
-                CalendarEntry(id: "client", name: "Client", colorIndex: 9),
+                coloredCalendar("work", "Work", "blue"),
+                coloredCalendar("personal", "Personal", "green"),
+                coloredCalendar("family", "Family", "orange"),
+                coloredCalendar("client", "Client", "indigo"),
+                coloredCalendar("studio", "Studio", "amber"),
+                coloredCalendar("travel", "Travel", "red"),
             ],
             status: SyncStatus(
                 lastSyncAt: publishedAt,
@@ -153,6 +155,11 @@ struct FixtureReader: SnapshotReader {
         CalendarEvent(
             id: id, calendarID: calendarID, title: title, startsAt: start, endsAt: end, isAllDay: allDay,
             location: location, response: response, joinURL: join)
+    }
+
+    /// A calendar colored by Mac palette id, with the position an older feed would carry.
+    private static func coloredCalendar(_ id: String, _ name: String, _ color: String) -> CalendarEntry {
+        CalendarEntry(id: id, name: name, colorIndex: CalendarPalette.entries.firstIndex { $0.id == color } ?? 0, color: color)
     }
 
     private static func dayKey(_ date: Date, calendar: Calendar) -> String {

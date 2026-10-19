@@ -255,7 +255,7 @@ private struct CalendarsCard: View {
             ForEach(Array(summary.calendars.enumerated()), id: \.offset) { index, row in
                 HStack {
                     Label { Text(row.calendar.name) } icon: {
-                        Circle().fill(Theme.calendarColor(row.calendar.colorIndex)).frame(width: 10, height: 10)
+                        Circle().fill(Theme.calendarColor(row.calendar)).frame(width: 10, height: 10)
                     }
                     Spacer()
                     Text(row.issue?.kind.label ?? "Up to date").font(Theme.Fonts.secondary)

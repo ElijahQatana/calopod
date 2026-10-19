@@ -149,7 +149,7 @@ struct CalendarsScreen: View {
                 ForEach(Array(calendars.enumerated()), id: \.offset) { index, calendar in
                     Toggle(isOn: Binding(get: { filter.isShown(calendar.id) }, set: { filter.setShown($0, for: calendar.id) })) {
                         Label { Text(calendar.name) } icon: {
-                            Circle().fill(Theme.calendarColor(calendar.colorIndex)).frame(width: 10, height: 10)
+                            Circle().fill(Theme.calendarColor(calendar)).frame(width: 10, height: 10)
                         }
                     }
                     .font(Theme.Fonts.body).padding(.horizontal, 14).padding(.vertical, 8)
