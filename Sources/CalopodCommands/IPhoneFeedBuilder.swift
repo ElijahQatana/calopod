@@ -76,7 +76,7 @@ enum IPhoneFeedBuilder {
 
     // MARK: Availability
 
-    private static func availability(repository: LocalStateRepository, now: Date, calendar: Calendar) throws -> [AvailabilityDay] {
+    private static func availability(repository: LocalStateRepository, now: Date, calendar: Calendar) throws -> [CalopodSnapshot.AvailabilityDay] {
         let sources = (try? selectedCalendarSources(connectionID: nil, calendarID: nil, repository: repository)) ?? []
         let first = calendar.startOfDay(for: now)
         guard !sources.isEmpty, let end = calendar.date(byAdding: .day, value: availabilityDays, to: first) else { return [] }
@@ -89,7 +89,7 @@ enum IPhoneFeedBuilder {
             guard let start = calendar.date(byAdding: .day, value: offset, to: first),
                   let next = calendar.date(byAdding: .day, value: 1, to: start) else { return nil }
             let busy = AvailabilityCalculator.calculate(instances: events, from: start, through: next).busy
-            return AvailabilityDay(
+            return CalopodSnapshot.AvailabilityDay(
                 day: format.string(from: start), timeZoneIdentifier: calendar.timeZone.identifier,
                 busy: busy.map { BusyInterval(start: $0.start, end: $0.end) })
         }

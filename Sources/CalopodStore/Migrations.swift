@@ -22,8 +22,9 @@ extension CalopodDatabase {
         "v18_calendar_preferences",
         "v19_calendar_view_hidden",
         "v20_notification_settings",
-        "v21_iphone_feed",
-        "v22_iphone_calendars",
+        "v21_working_hours",
+        "v22_iphone_feed",
+        "v23_iphone_calendars",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -426,9 +427,22 @@ extension CalopodDatabase {
                 """)
         }
 
+        // Working hours per weekday, 1 is Monday. A day off has no times.
+        migrator.registerMigration("v21_working_hours") { database in
+            try database.execute(sql: """
+                CREATE TABLE working_hours (
+                    weekday INTEGER PRIMARY KEY CHECK (weekday BETWEEN 1 AND 7),
+                    start_minute INTEGER,
+                    end_minute INTEGER,
+                    CHECK ((start_minute IS NULL AND end_minute IS NULL)
+                        OR (start_minute >= 0 AND end_minute <= 1440 AND start_minute < end_minute))
+                );
+                """)
+        }
+
         // Whether this Mac publishes a read-only copy for the iPhone, and how the last upload went.
         // One row. `published_run_id` is the sync run the last upload was built from.
-        migrator.registerMigration("v21_iphone_feed") { database in
+        migrator.registerMigration("v22_iphone_feed") { database in
             try database.execute(sql: """
                 CREATE TABLE iphone_feed (
                     id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -443,7 +457,7 @@ extension CalopodDatabase {
         }
 
         // The calendars whose events go to the iPhone. A calendar is here only while it is chosen.
-        migrator.registerMigration("v22_iphone_calendars") { database in
+        migrator.registerMigration("v23_iphone_calendars") { database in
             try database.execute(sql: "CREATE TABLE iphone_calendars (calendar_id TEXT PRIMARY KEY)")
         }
 

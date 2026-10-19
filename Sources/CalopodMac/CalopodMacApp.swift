@@ -12,6 +12,8 @@ struct CalopodMacApp: App {
     @State private var access: CalendarAccessModel
     @State private var permissions: PermissionsModel
     @State private var reminderSettings: NotificationSettingsModel
+    @State private var workingHours: WorkingHoursModel
+    @State private var availability: AvailabilityModel
     @State private var reminders: ReminderScheduler
     @State private var refresh: OverviewRefresh
     @State private var iPhoneFeed = IPhoneFeedModel()
@@ -37,6 +39,10 @@ struct CalopodMacApp: App {
             shownName: { CalendarAliases.shared.name(for: $0.id, real: $0.name) })
         reminderSettings.onChange = { Task { await reminders.reconcile() } }
         schedule.onReload = { Task { await reminders.reconcile() } }
+        let workingHours = WorkingHoursModel(state: state), availability = AvailabilityModel()
+        workingHours.onChange = { Task { await availability.reload() } }
+        _workingHours = State(initialValue: workingHours)
+        _availability = State(initialValue: availability)
         _reminderSettings = State(initialValue: reminderSettings)
         _reminders = State(initialValue: reminders)
         _refresh = State(initialValue: OverviewRefresh(inbox: inbox, schedule: schedule, service: service, access: access))
@@ -60,6 +66,8 @@ struct CalopodMacApp: App {
                 .environment(access)
                 .environment(permissions)
                 .environment(reminderSettings)
+                .environment(workingHours)
+                .environment(availability)
                 .environment(refresh)
                 .environment(\.iPhoneFeed, iPhoneFeed)
                 .task { await inbox.reload() }
