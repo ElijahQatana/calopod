@@ -21,3 +21,9 @@ Launch with `-fixture fresh`, `stale`, `sharingOff`, `nothingPublished` or `offl
 ## Tests
 
     xcodebuild -project Apps/iOS/Calopod.xcodeproj -scheme Calopod -destination 'platform=iOS Simulator,name=iPhone 17' test
+
+Or run `Scripts/check-ios.sh` from the repository root, which also fails on warnings in this app's sources.
+
+## Releasing
+
+See [RELEASING.md](RELEASING.md).
