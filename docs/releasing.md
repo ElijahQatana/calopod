@@ -1,6 +1,6 @@
 # Releasing
 
-For maintainers. A release is a notarized ZIP for Apple Silicon Macs.
+For maintainers. A release is a notarized ZIP for Apple Silicon Macs, with an optional disk image for the app.
 
 ## Identifiers
 
@@ -49,6 +49,32 @@ shasum -a 256 -c Calopod-*.zip.sha256
 codesign --verify --strict --check-notarization -R=notarized Calopod-*/bin/calopod
 xcrun stapler validate -q "Calopod-*/eventkit-host/Calopod EventKit Host.app"
 ```
+
+## Disk image
+
+The Mac app ships as a drag-to-install disk image. Build the app signed, then package it:
+
+```sh
+signing_identity=$(security find-identity -v -p codesigning | awk '/Developer ID Application/ { print $2; exit }')
+CALOPOD_BUILD_CONFIGURATION=release CALOPOD_SIGN_IDENTITY="$signing_identity" Scripts/build-calopod-mac-app.sh
+Scripts/make-calopod-dmg.sh --identity "$signing_identity"
+```
+
+The script checks the app first and refuses one that is unsigned, ad hoc, missing the Hardened Runtime or missing the Calendar entitlement on the app or the helper. `--allow-adhoc` skips that for a local test and prints a warning. It writes `dist/Calopod-<version>.dmg` and a `.sha256` file, signs the image with `--identity` (default `CALOPOD_SIGN_IDENTITY`) and runs `hdiutil verify`. The window layout is written to the image directly, so no Finder session is opened. The first run installs a pinned copy of dmgbuild into `.build/dmg-venv`, which needs network access once.
+
+`Scripts/build-calopod-release.sh --dmg` builds the app and the image after the ZIP, with the same signing identity.
+
+Notarizing is a separate step and uses your own keychain profile. Run it yourself, or pass `--notarize PROFILE` to the script:
+
+```sh
+xcrun notarytool submit dist/Calopod-*.dmg --keychain-profile PROFILE --wait
+xcrun stapler staple dist/Calopod-*.dmg
+xcrun stapler validate dist/Calopod-*.dmg
+spctl -a -t open --context context:primary-signature -vv dist/Calopod-*.dmg
+shasum -a 256 dist/Calopod-*.dmg > dist/Calopod-<version>.dmg.sha256
+```
+
+The script's tests and the release builds never notarize. Stapling changes the file, so refresh the checksum afterwards (the script does this itself with `--notarize`). Publish the image and its `.sha256` only after you have opened it on a clean Mac.
 
 ## Publish
 
