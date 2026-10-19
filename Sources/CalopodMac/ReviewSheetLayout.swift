@@ -29,22 +29,25 @@ enum ReviewSheetLayout {
 /// Reports the size of the window the view is in, and keeps it current as the window is resized.
 struct WindowSizeReader: NSViewRepresentable {
     let onChange: (CGSize) -> Void
+    var center: NotificationCenter = .default
 
-    func makeNSView(context: Context) -> NSView { Probe(onChange: onChange) }
+    func makeNSView(context: Context) -> NSView { Probe(onChange: onChange, center: center) }
     func updateNSView(_ view: NSView, context: Context) { (view as? Probe)?.onChange = onChange }
 
-    private final class Probe: NSView {
+    final class Probe: NSView {
         var onChange: (CGSize) -> Void
-        init(onChange: @escaping (CGSize) -> Void) {
+        private let center: NotificationCenter
+        init(onChange: @escaping (CGSize) -> Void, center: NotificationCenter = .default) {
             self.onChange = onChange
+            self.center = center
             super.init(frame: .zero)
         }
         required init?(coder: NSCoder) { nil }
 
         override func viewDidMoveToWindow() {
-            NotificationCenter.default.removeObserver(self)
+            center.removeObserver(self)
             guard let window else { return }
-            NotificationCenter.default.addObserver(self, selector: #selector(report), name: NSWindow.didResizeNotification, object: window)
+            center.addObserver(self, selector: #selector(report), name: NSWindow.didResizeNotification, object: window)
             report()
         }
 
@@ -53,6 +56,6 @@ struct WindowSizeReader: NSViewRepresentable {
             DispatchQueue.main.async { [weak self] in self?.onChange(size) }
         }
 
-        deinit { NotificationCenter.default.removeObserver(self) }
+        deinit { center.removeObserver(self) }
     }
 }

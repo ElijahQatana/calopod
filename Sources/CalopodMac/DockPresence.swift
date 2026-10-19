@@ -20,26 +20,31 @@ extension View {
     }
 }
 
-private struct DockPresenceObserver: NSViewRepresentable {
+struct DockPresenceObserver: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView { Tracker() }
     func updateNSView(_ view: NSView, context: Context) {}
 
     final class Tracker: NSView {
         private var closing: NSObjectProtocol?
+        /// Tests swap these to count observers without changing the app's activation policy.
+        var center: NotificationCenter = .default
+        var enter: @MainActor () -> Void = { DockPresence.enter() }
+        var leave: @MainActor () -> Void = { DockPresence.leave() }
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
-            closing.map(NotificationCenter.default.removeObserver)
+            closing.map(center.removeObserver)
             closing = nil
             guard let window else { return }
-            DockPresence.enter()
-            closing = NotificationCenter.default.addObserver(
+            enter()
+            let (center, leave) = (center, leave)
+            closing = center.addObserver(
                 forName: NSWindow.willCloseNotification, object: window, queue: .main
             ) { [weak self] _ in
                 MainActor.assumeIsolated {
-                    DockPresence.leave()
+                    leave()
                     // Done with this window, so the observer is removed instead of left registered.
-                    self?.closing.map(NotificationCenter.default.removeObserver)
+                    self?.closing.map(center.removeObserver)
                     self?.closing = nil
                 }
             }
