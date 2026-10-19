@@ -33,6 +33,9 @@ final class MainWindowOpener {
         NSApplication.shared.windows.first { $0.title == "Calopod" && !($0 is NSPanel) }
     }
 
+    /// Shows the main window, opening or restoring it when needed.
+    func bringForward() { _ = handleDockClick() }
+
     /// Returns false when the click was handled here, so macOS does not open a window too.
     func handleDockClick() -> Bool {
         let window = mainWindow
@@ -55,6 +58,12 @@ final class MainWindowOpener {
 }
 
 final class CalopodAppDelegate: NSObject, NSApplicationDelegate {
+    override init() {
+        super.init()
+        // Set before any scene, so a click on a reminder that launched the app is delivered.
+        AppNotifications.install()
+    }
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         MainWindowOpener.shared.handleDockClick()
     }

@@ -11,6 +11,8 @@ struct CalopodMacApp: App {
     @State private var schedule: CalendarModel
     @State private var access: CalendarAccessModel
     @State private var permissions: PermissionsModel
+    @State private var reminderSettings: NotificationSettingsModel
+    @State private var reminders: ReminderScheduler
     @State private var refresh: OverviewRefresh
     @State private var navigation = AppNavigation()
     @State private var sidebar = SidebarState()
@@ -27,6 +29,15 @@ struct CalopodMacApp: App {
         _schedule = State(initialValue: schedule)
         _access = State(initialValue: access)
         _permissions = State(initialValue: PermissionsModel(access: access))
+        let reminderSettings = NotificationSettingsModel(state: state)
+        let reminders = ReminderScheduler(
+            center: AppNotifications.live, settings: { reminderSettings.current() }, schedule: { schedule.schedule },
+            ignored: { CalendarAliases.shared.isIgnored($0) },
+            shownName: { CalendarAliases.shared.name(for: $0.id, real: $0.name) })
+        reminderSettings.onChange = { Task { await reminders.reconcile() } }
+        schedule.onReload = { Task { await reminders.reconcile() } }
+        _reminderSettings = State(initialValue: reminderSettings)
+        _reminders = State(initialValue: reminders)
         _refresh = State(initialValue: OverviewRefresh(inbox: inbox, schedule: schedule, service: service, access: access))
         DockPresence.enter()
         AppConfiguration.apply()
@@ -47,6 +58,7 @@ struct CalopodMacApp: App {
                 .environment(schedule)
                 .environment(access)
                 .environment(permissions)
+                .environment(reminderSettings)
                 .environment(refresh)
                 .task { await inbox.reload() }
                 .task { await access.check() }
@@ -56,6 +68,7 @@ struct CalopodMacApp: App {
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
                     Task { await access.check() }
                 }
+                .onChange(of: permissions.notifications) { Task { await reminders.reconcile() } }
                 .dockPresence()
         }
         .windowStyle(.hiddenTitleBar)
@@ -81,10 +94,23 @@ struct CalopodMacApp: App {
             .registersWindowOpener()
             // Reads the local copy only, so the count stays current with the window closed.
             .task {
+                var first = true
                 while !Task.isCancelled {
                     await inbox.reload()
                     await schedule.reload()
+                    if first {
+                        first = false
+                        // A click on a reminder that launched the app waits for this first read.
+                        ReminderRouter.shared.attach { ReminderNavigation.open($0, schedule: schedule, navigation: navigation) }
+                    }
                     try? await Task.sleep(for: .seconds(30))
+                }
+            }
+            // Reminders are checked again whenever the app comes forward.
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                Task {
+                    await permissions.refreshNotifications()
+                    await reminders.reconcile()
                 }
             }
         }

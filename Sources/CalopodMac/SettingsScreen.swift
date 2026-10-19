@@ -7,6 +7,7 @@ struct SettingsScreen: View {
     private let settings = AppSettings.shared
     @State private var command: CommandLineModel
     @Environment(PermissionsModel.self) private var permissions
+    @Environment(NotificationSettingsModel.self) private var reminders
 
     init(command: CommandLineModel = CommandLineModel()) { _command = State(initialValue: command) }
 
@@ -20,6 +21,7 @@ struct SettingsScreen: View {
         appearance
         transparency
         windowStyle
+        NotificationsSection(model: reminders)
         permissionsSection
         commandLine
     }
@@ -47,6 +49,17 @@ struct SettingsScreen: View {
             permissionRow(permissions.backgroundService) {
                 if permissions.loginItems == .requiresApproval {
                     Button("Open Login Items settings") { permissions.openLoginItemsSettings() }
+                }
+            }
+            permissionRow(permissions.notificationsReading) {
+                switch permissions.notifications {
+                case .notDetermined?:
+                    Button("Allow") { Task { await permissions.allowNotifications() } }
+                        .disabled(permissions.askingNotifications)
+                case .denied?:
+                    Button("Open Notifications settings") { permissions.openNotificationsSettings() }
+                default:
+                    EmptyView()
                 }
             }
             permissionRow(permissions.savedSignIns) {
