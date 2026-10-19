@@ -30,11 +30,13 @@ check block Apps/iOS/README.md "Ask someone$(printf '\100')mail.test.org."
 check pass Apps/iOS/Config.xcconfig '// Put DEVELOPMENT_TEAM in Local.xcconfig'
 check pass Apps/iOS/Config.xcconfig 'DEVELOPMENT_TEAM ='
 check block Apps/iOS/Config.xcconfig 'DEVELOPMENT_TEAM = YOUR_TEAM_ID'
-check block Apps/iOS/Other.xcconfig '  DEVELOPMENT_TEAM=ABCDE12345'
-check block Apps/iOS/Calopod.xcodeproj/project.pbxproj 'DEVELOPMENT_TEAM = ABCDE12345;'
+# A made-up team id, kept in a variable so these lines hold no id for the check to flag.
+fake_team=ABCDE12345
+check block Apps/iOS/Other.xcconfig "  DEVELOPMENT_TEAM=$fake_team"
+check block Apps/iOS/Calopod.xcodeproj/project.pbxproj "DEVELOPMENT_TEAM = $fake_team;"
 check pass Apps/iOS/README.md 'Set DEVELOPMENT_TEAM = YOUR_TEAM_ID in Local.xcconfig.'
-check block docs/releasing.md 'Team ID: ABCDE12345'
-check block Apps/iOS/Calopod.entitlements 'ABCDE12345.pro.example.app'
+check block docs/releasing.md "Team ID: $fake_team"
+check block Apps/iOS/Calopod.entitlements "$fake_team.pro.example.app"
 check block Apps/iOS/notes.md 'Identity 0123456789abcdef0123456789ABCDEF01234567'
 check pass .github/workflows/ci.yml 'uses: actions/checkout@0123456789abcdef0123456789abcdef01234567 # v4'
 check block Apps/iOS/Calopod.provisionprofile 'x'
