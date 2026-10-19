@@ -92,3 +92,58 @@ func doctorAddsThePermissionsWithTheSameWords() {
     #expect(report.warnings == ["Calendar access: \(readings[0].detail)"])
     #expect(withPermissions(base, [readings[2]]).status == "ok")
 }
+
+#if os(macOS)
+@Test
+func requestOutcomesFollowTheStatusAfterTheRequest() {
+    let cases: [(EventKitAccessStatus, CalendarAccessOutcome)] = [
+        (.fullAccess, .granted), (.denied, .denied), (.restricted, .denied), (.writeOnly, .denied),
+        (.unknown, .denied), (.notDetermined, .undecided),
+    ]
+    for (status, outcome) in cases {
+        #expect(CalendarAccessOutcome(statusAfterRequest: status) == outcome)
+        #expect(CalendarAccessAnswer(response: EventKitHostResponse(status: status)).outcome == outcome)
+    }
+}
+
+@Test
+func hostReportedOutcomeWinsAndAnErrorMeansItCouldNotStart() throws {
+    let reported = EventKitHostResponse(status: .notDetermined, requestOutcome: .undecided)
+    #expect(CalendarAccessAnswer(response: reported) == CalendarAccessAnswer(status: .notDetermined, outcome: .undecided))
+    let failed = EventKitHostResponse(status: .notDetermined, errorCode: "host-failure")
+    #expect(CalendarAccessAnswer(response: failed).outcome == .couldNotStart)
+    let data = try JSONEncoder().encode(reported)
+    #expect(try JSONDecoder().decode(EventKitHostResponse.self, from: data).requestOutcome == .undecided)
+    let old = Data(#"{"status":"denied","calendars":[],"events":[],"managedEvents":[]}"#.utf8)
+    #expect(try JSONDecoder().decode(EventKitHostResponse.self, from: old).requestOutcome == nil)
+}
+
+@Test
+func thePermissionPromptGetsTimeToBeAnswered() {
+    #expect(EventKitHostLimits.permissionRequest >= 120)
+    #expect(EventKitHostLimits.permissionRequest > EventKitHostLimits.standard)
+}
+
+@Test
+func resetRunsTheUserLevelCommandForTheHelperOnly() throws {
+    let calls = CallLog()
+    try CalendarDecisionReset(runner: { executable, arguments in
+        calls.add(executable, arguments)
+        return 0
+    }).reset()
+    #expect(calls.all == [["/usr/bin/tccutil", "reset", "Calendar", "pro.elijahquintana.calopod.eventkit-host"]])
+    #expect(Permissions.calendarHelperBundleID == EventKitHostSignature.identifier)
+    #expect(Permissions.calendarResetCommand == "tccutil reset Calendar pro.elijahquintana.calopod.eventkit-host")
+    #expect(!Permissions.calendarResetConfirmation.isEmpty)
+    #expect(throws: CalendarDecisionReset.Failed()) {
+        try CalendarDecisionReset(runner: { _, _ in 1 }).reset()
+    }
+}
+
+private final class CallLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var calls: [[String]] = []
+    var all: [[String]] { lock.withLock { calls } }
+    func add(_ executable: String, _ arguments: [String]) { lock.withLock { calls.append([executable] + arguments) } }
+}
+#endif

@@ -1,3 +1,4 @@
+import AppKit
 import CalopodEventKit
 import CalopodProviders
 import Foundation
@@ -27,8 +28,15 @@ struct EventKitHostMain {
         do {
             let response: EventKitHostResponse
             if arguments == ["--request-permission"] {
+                // An agent app has no window, so bring it forward or the prompt can open behind
+                // other windows. The process stays alive until the answer comes back.
+                NSApplication.shared.setActivationPolicy(.accessory)
+                NSApplication.shared.activate(ignoringOtherApps: true)
                 let status = try await client.requestFullAccess()
-                response = EventKitHostResponse(status: status)
+                response = EventKitHostResponse(
+                    status: status,
+                    requestOutcome: CalendarAccessOutcome(statusAfterRequest: status)
+                )
             } else {
                 let requestData: Data
                 if arguments.count == 2, arguments[0] == "--request-file" {
@@ -52,13 +60,16 @@ struct EventKitHostMain {
             default:
                 code = "provider-failure"
             }
-            try? write(EventKitHostResponse(status: status, errorCode: code))
+            let outcome: CalendarAccessOutcome? = arguments == ["--request-permission"]
+                ? (code == "permission-denied" ? .denied : .couldNotStart) : nil
+            try? write(EventKitHostResponse(status: status, errorCode: code, requestOutcome: outcome))
             exit(77)
         } catch {
             try? write(
                 EventKitHostResponse(
                     status: await client.authorizationStatus,
-                    errorCode: "host-failure"
+                    errorCode: "host-failure",
+                    requestOutcome: arguments == ["--request-permission"] ? .couldNotStart : nil
                 )
             )
             exit(70)

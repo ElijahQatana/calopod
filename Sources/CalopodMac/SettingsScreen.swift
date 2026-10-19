@@ -37,6 +37,13 @@ struct SettingsScreen: View {
                     Button("Open Calendar privacy settings") { permissions.openCalendarPrivacy() }
                 }
             }
+            if CalendarAccessFeedback.isVisible(permissions.access, offerReset: calendarBlocked) {
+                CardRow {
+                    CalendarAccessFeedback(
+                        access: permissions.access, offerReset: calendarBlocked,
+                        showOpenSettings: permissions.calendar.level == .notAsked)
+                }
+            }
             permissionRow(permissions.backgroundService) {
                 if permissions.loginItems == .requiresApproval {
                     Button("Open Login Items settings") { permissions.openLoginItemsSettings() }
@@ -54,6 +61,8 @@ struct SettingsScreen: View {
             Task { await permissions.refresh() }
         }
     }
+
+    private var calendarBlocked: Bool { permissions.calendar.level == .blocked }
 
     private func permissionRow<Action: View>(
         _ reading: PermissionReading, @ViewBuilder action: () -> Action

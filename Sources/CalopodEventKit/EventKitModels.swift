@@ -11,6 +11,25 @@ public enum EventKitAccessStatus: String, Codable, Sendable {
     case unknown
 }
 
+/// How a request for Calendar access ended, as far as the person is concerned.
+public enum CalendarAccessOutcome: String, Codable, Equatable, Sendable {
+    case granted
+    case denied
+    /// The request returned and macOS still has no decision, so it never showed the prompt.
+    case undecided
+    /// The helper could not run or could not ask.
+    case couldNotStart
+
+    /// The outcome for the status read right after a request.
+    public init(statusAfterRequest status: EventKitAccessStatus) {
+        switch status {
+        case .fullAccess: self = .granted
+        case .notDetermined: self = .undecided
+        case .denied, .restricted, .writeOnly, .unknown: self = .denied
+        }
+    }
+}
+
 /// One calendar as reported by the host, with its account metadata for duplicate-source detection.
 public struct EventKitCalendarSnapshot: Codable, Equatable, Sendable {
     public let id: String
@@ -100,6 +119,8 @@ public struct EventKitHostResponse: Codable, Sendable {
     public let managedEvents: [ManagedEventSnapshot]
     public let managedEvent: ManagedEventWriteResult?
     public let errorCode: String?
+    /// Set only by the permission request.
+    public let requestOutcome: CalendarAccessOutcome?
 
     public init(
         status: EventKitAccessStatus,
@@ -109,8 +130,10 @@ public struct EventKitHostResponse: Codable, Sendable {
         events: [ProviderEvent] = [],
         managedEvents: [ManagedEventSnapshot] = [],
         managedEvent: ManagedEventWriteResult? = nil,
-        errorCode: String? = nil
+        errorCode: String? = nil,
+        requestOutcome: CalendarAccessOutcome? = nil
     ) {
+        self.requestOutcome = requestOutcome
         self.protocolVersion = protocolVersion
         self.batches = batches
         self.status = status

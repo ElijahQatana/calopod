@@ -18,7 +18,7 @@ final class PermissionsModelTests: XCTestCase {
         @MainActor func model() -> PermissionsModel {
             let access = CalendarAccessModel(
                 readStatus: { [self] in lock.withLock { calendar } },
-                requestAccess: { [self] in lock.withLock { calendar = .fullAccess; return calendar } },
+                requestAccess: { [self] in lock.withLock { calendar = .fullAccess; return CalendarAccessAnswer(status: calendar, outcome: .granted) } },
                 open: { [self] in opened.append($0) })
             return PermissionsModel(
                 access: access,

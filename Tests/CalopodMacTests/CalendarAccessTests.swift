@@ -1,3 +1,4 @@
+import CalopodCommands
 import CalopodEventKit
 import XCTest
 
@@ -60,6 +61,80 @@ final class CalendarAccessTests: XCTestCase {
         XCTAssertEqual(model.state(lastSyncFailure: "permission"), .granted)
     }
 
+    func testAllowShowsABusyStateThenTheResult() async {
+        let gate = DispatchSemaphore(value: 0)
+        let model = CalendarAccessModel(
+            readStatus: { .notDetermined },
+            requestAccess: { gate.wait(); return CalendarAccessAnswer(status: .fullAccess, outcome: .granted) },
+            open: { _ in })
+        let task = Task { await model.allow() }
+        while !model.asking { await Task.yield() }
+        XCTAssertNil(model.result)
+        gate.signal()
+        await task.value
+        XCTAssertFalse(model.asking)
+        XCTAssertEqual(model.result?.message, "Calendar access is allowed.")
+    }
+
+    func testEveryOutcomeHasAMessageAndOnlyUndecidedOrDeniedOfferWaysForward() {
+        let cases: [(CalendarAccessOutcome, Bool)] = [
+            (.granted, false), (.denied, true), (.undecided, true), (.couldNotStart, false),
+        ]
+        for (outcome, ways) in cases {
+            let result = CalendarAccessResult.after(outcome)
+            XCTAssertFalse(result.message.isEmpty, "\(outcome)")
+            XCTAssertEqual(result.offersWaysForward, ways, "\(outcome)")
+        }
+        XCTAssertTrue(CalendarAccessResult.after(.undecided).message.contains("macOS did not show the prompt"))
+        XCTAssertFalse(CalendarAccessResult.resetFailed.message.isEmpty)
+    }
+
+    func testAStillUndecidedAnswerSaysSoAndOffersTheWaysForward() async {
+        let host = FakeHost(status: .notDetermined, afterRequest: .notDetermined)
+        let model = host.model()
+        await model.allow()
+        XCTAssertEqual(model.state(lastSyncFailure: nil), .canAsk)
+        XCTAssertEqual(model.result, .after(.undecided))
+        XCTAssertEqual(model.result?.offersWaysForward, true)
+    }
+
+    func testAnUnreachableHelperDuringAllowStillGivesAMessage() async {
+        let host = FakeHost(status: .notDetermined, afterRequest: .fullAccess)
+        let model = CalendarAccessModel(
+            readStatus: { .notDetermined }, requestAccess: { throw FakeHost.Unreachable() }, open: { _ in })
+        await model.allow()
+        XCTAssertFalse(model.result?.message.isEmpty ?? true)
+        XCTAssertEqual(model.result?.offersWaysForward, false)
+        _ = host
+    }
+
+    func testResetAsksForConfirmationThenRunsTheResetAndAsksAgain() async {
+        let host = FakeHost(status: .denied, afterRequest: .fullAccess)
+        let model = host.model()
+        await model.check()
+        model.askToReset()
+        XCTAssertTrue(model.confirmingReset)
+        XCTAssertEqual(host.resets, 0)
+        model.cancelReset()
+        XCTAssertFalse(model.confirmingReset)
+        XCTAssertEqual(host.resets, 0)
+        model.askToReset()
+        await model.confirmReset()
+        XCTAssertEqual(host.resets, 1)
+        XCTAssertEqual(host.requests, 1)
+        XCTAssertFalse(model.confirmingReset)
+        XCTAssertEqual(model.state(lastSyncFailure: nil), .granted)
+    }
+
+    func testAFailedResetSaysSoWithTheCommandAndDoesNotAsk() async {
+        let host = FakeHost(status: .denied, afterRequest: .fullAccess)
+        host.resetFails = true
+        let model = host.model()
+        await model.confirmReset()
+        XCTAssertEqual(host.requests, 0)
+        XCTAssertTrue(model.result?.message.contains(Permissions.calendarResetCommand) == true)
+    }
+
     func testAnUnreachableHostKeepsTheLastAnswer() async {
         let host = FakeHost(status: .denied, afterRequest: .denied)
         let model = host.model()
@@ -77,6 +152,8 @@ private final class FakeHost: @unchecked Sendable {
     private let afterRequest: EventKitAccessStatus
     private var _requests = 0
     private var _fail = false
+    private var _resets = 0
+    private var _resetFails = false
     private(set) var opened: [URL] = []
 
     init(status: EventKitAccessStatus, afterRequest: EventKitAccessStatus) {
@@ -85,6 +162,11 @@ private final class FakeHost: @unchecked Sendable {
     }
 
     var requests: Int { lock.withLock { _requests } }
+    var resets: Int { lock.withLock { _resets } }
+    var resetFails: Bool {
+        get { lock.withLock { _resetFails } }
+        set { lock.withLock { _resetFails = newValue } }
+    }
     var fail: Bool {
         get { lock.withLock { _fail } }
         set { lock.withLock { _fail = newValue } }
@@ -104,7 +186,14 @@ private final class FakeHost: @unchecked Sendable {
                 lock.withLock {
                     _requests += 1
                     if status == .notDetermined { status = afterRequest }
-                    return status
+                    return CalendarAccessAnswer(status: status, outcome: CalendarAccessOutcome(statusAfterRequest: status))
+                }
+            },
+            resetDecision: { [self] in
+                try lock.withLock {
+                    if _resetFails { throw Unreachable() }
+                    _resets += 1
+                    status = .notDetermined
                 }
             },
             open: { [self] in opened.append($0) })

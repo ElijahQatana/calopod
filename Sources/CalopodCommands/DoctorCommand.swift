@@ -181,6 +181,10 @@ func doctorReport(
             } else {
                 items.append(doctorItem("calendar-permission", "failed", "permission", label: helper.map(shortPath)))
                 warnings.append("Grant Calendar access, then refresh the Mac Connection.")
+                if response.status == .notDetermined || response.status == .denied {
+                    warnings.append(
+                        "If macOS does not ask or the answer stays off, clear Calopod's Calendar decision with: \(Permissions.calendarResetCommand)")
+                }
             }
         } catch {
             var category = "eventkit-host"
