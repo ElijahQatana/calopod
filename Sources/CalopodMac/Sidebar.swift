@@ -211,9 +211,7 @@ struct WindowChrome: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSView {
         let view = WindowObserver()
-        view.onWindow = { [weak coordinator = context.coordinator] in coordinator?.windowAttached($0) }
-        view.onRemoved = { [weak coordinator = context.coordinator] in coordinator?.stopObserving() }
-        context.coordinator.view = view
+        context.coordinator.attach(to: view)
         return view
     }
 
@@ -242,6 +240,8 @@ struct WindowChrome: NSViewRepresentable {
     @MainActor
     final class Coordinator {
         weak var view: NSView?
+        /// Tests pass their own center to count what is registered.
+        private let center: NotificationCenter
         private var observers: [NSObjectProtocol] = []
         /// Watches for the window being shown. Unlike `observers` it survives a close, because the
         /// same window comes back when it is opened again from the menu bar.
@@ -249,6 +249,14 @@ struct WindowChrome: NSViewRepresentable {
         private var clearedFocus = false
         private var metrics: TrafficLightPlacement.Metrics?
         private lazy var pass = ApplyCoalescer { [weak self] in self?.apply() }
+
+        init(center: NotificationCenter = .default) { self.center = center }
+
+        func attach(to view: WindowObserver) {
+            view.onWindow = { [weak self] in self?.windowAttached($0) }
+            view.onRemoved = { [weak self] in self?.stopObserving() }
+            self.view = view
+        }
 
         /// Frame changes made by apply() itself land here too, so asking never runs it inline.
         func request() { pass.request() }
@@ -261,7 +269,6 @@ struct WindowChrome: NSViewRepresentable {
 
         func windowAttached(_ window: NSWindow) {
             if showObservers.isEmpty {
-                let center = NotificationCenter.default
                 // A window brought back by ordering front can get its title bar laid out after the
                 // first pass, and AppKit puts the buttons back in its own spot when it does.
                 let names: [Notification.Name] = [
@@ -323,7 +330,6 @@ struct WindowChrome: NSViewRepresentable {
         }
 
         private func observe(_ window: NSWindow, watching views: [NSView]) {
-            let center = NotificationCenter.default
             let names: [Notification.Name] = [
                 NSWindow.didResizeNotification, NSWindow.didEndLiveResizeNotification,
                 NSWindow.didExitFullScreenNotification, NSWindow.didEnterFullScreenNotification,
@@ -360,12 +366,12 @@ struct WindowChrome: NSViewRepresentable {
             dropFrameObservers()
             // A window that is going away for good is not shown again, and the view leaving it is
             // the only sign of that.
-            showObservers.forEach(NotificationCenter.default.removeObserver)
+            showObservers.forEach(center.removeObserver)
             showObservers = []
         }
 
         private func dropFrameObservers() {
-            observers.forEach(NotificationCenter.default.removeObserver)
+            observers.forEach(center.removeObserver)
             observers = []
         }
     }
