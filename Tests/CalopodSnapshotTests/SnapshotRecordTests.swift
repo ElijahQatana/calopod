@@ -17,6 +17,15 @@ private let day = AvailabilityDay(
     day: "2027-01-15", timeZoneIdentifier: "Europe/Berlin",
     busy: [BusyInterval(start: now, end: now.addingTimeInterval(3600))])
 
+private let calendarDay = CalendarDay(
+    day: "2027-01-15", timeZoneIdentifier: "Europe/Berlin",
+    events: [
+        CalendarEvent(
+            id: "e1", calendarID: "cal-1", title: "Planning", startsAt: now, endsAt: now.addingTimeInterval(3600),
+            location: "Room 2", response: .accepted),
+        CalendarEvent(id: "e2", calendarID: "cal-2", title: nil, startsAt: now, endsAt: now.addingTimeInterval(60), isAllDay: true, response: .unknown),
+    ])
+
 private let status = SyncStatus(
     lastSyncAt: now, issues: [SyncIssue(kind: .stale, calendarID: "cal-1", since: now), SyncIssue(kind: .partial)])
 
@@ -34,6 +43,7 @@ private func roundTrip<R: SnapshotRecord>(_ record: R) throws -> R {
 func recordsSurviveARoundTrip() throws {
     #expect(try roundTrip(item) == item)
     #expect(try roundTrip(day) == day)
+    #expect(try roundTrip(calendarDay) == calendarDay)
     #expect(try roundTrip(status) == status)
     #expect(try roundTrip(calendars) == calendars)
     #expect(try roundTrip(SyncStatus(lastSyncAt: nil)) == SyncStatus(lastSyncAt: nil))
@@ -43,6 +53,7 @@ func recordsSurviveARoundTrip() throws {
 func idsAreStable() {
     #expect(item.id == "abc123")
     #expect(day.id == "availability-2027-01-15")
+    #expect(calendarDay.id == "calendar-day-2027-01-15")
     #expect(status.id == "sync-status")
     #expect(calendars.id == "calendars")
     let later = AvailabilityDay(day: "2027-01-15", timeZoneIdentifier: "UTC", busy: [])

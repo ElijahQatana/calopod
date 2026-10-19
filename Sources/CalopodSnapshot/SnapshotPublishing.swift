@@ -6,6 +6,7 @@ public enum SnapshotKind: String, Codable, Sendable {
     case availabilityDay = "availability-day"
     case calendars
     case syncStatus = "sync-status"
+    case calendarDay = "calendar-day"
 }
 
 /// Names of the one CloudKit record type and zone the Mac writes. Production record types can
