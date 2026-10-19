@@ -40,19 +40,25 @@ enum JoinSelector {
         MeetingLink.find(url: event.url, location: event.location, notes: event.notes)
     }
 
-    /// With an id, that event. Without one, the earliest event that is still running or starts within 12 hours and has a link.
+    /// With an id, that event. Without one, the event the menu bar card treats as next (`NextUpSelection`)
+    /// among those running or starting within 12 hours. When that event has no link, the card's second
+    /// line is tried, then says it has no link.
     static func choose(id: String?, from events: [StoredNormalizedInstance], now: Date) -> JoinChoice {
         if let id {
             guard let event = events.first(where: { $0.sourceKeyHash == id }) else { return .unknownEvent }
             return link(for: event).map { .event(event, $0) } ?? .noLink
         }
-        let soon = events
-            .filter { !$0.isAllDay && !$0.isCancelled && $0.endsAt > now && $0.startsAt <= now.addingTimeInterval(lookahead) }
-            .sorted { ($0.startsAt, $0.sourceKeyHash) < ($1.startsAt, $1.sourceKeyHash) }
-        for event in soon {
-            if let link = link(for: event) { return .event(event, link) }
+        let candidates = events.filter {
+            !$0.isAllDay && !$0.isCancelled && $0.currentUserResponse.state != .declined
+                && $0.startsAt <= now.addingTimeInterval(lookahead)
         }
-        return .nothingSoon
+        let byID = Dictionary(candidates.map { ($0.sourceKeyHash, $0) }, uniquingKeysWith: { first, _ in first })
+        let chosen = NextUpSelection.select(
+            candidates.map { NextUpEntry(id: $0.sourceKeyHash, startsAt: $0.startsAt, endsAt: $0.endsAt) }, now: now)
+        for line in [chosen.primary, chosen.secondary].compactMap({ $0 }) {
+            if let event = byID[line.event.id], let link = link(for: event) { return .event(event, link) }
+        }
+        return chosen.primary == nil ? .nothingSoon : .noLink
     }
 
     /// Original events only. A copy Calopod made never offers Join.
@@ -68,7 +74,7 @@ public struct JoinCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "join",
         abstract: "Open the meeting link of an event.",
-        discussion: "Takes an id from `calopod events --ids`. Without one, joins the next event with a link that is on now or starts within 12 hours. Opens the meeting app when it is installed, otherwise the web link."
+        discussion: "Takes an id from `calopod events --ids`. Without one, joins the event the menu bar card shows as next: the one on now during its first 10 minutes, then the next one to start. Opens the meeting app when it is installed, otherwise the web link."
     )
 
     @Argument(help: "An event id from `calopod events --ids`.")
@@ -92,7 +98,7 @@ public struct JoinCommand: AsyncParsableCommand {
         switch JoinSelector.choose(id: id, from: events, now: now) {
         case .unknownEvent: return "No event with that id was found. Ids are listed by `calopod events --ids`."
         case .noLink: return "That event has no meeting link."
-        case .nothingSoon: return "No event with a meeting link is on now or starts within 12 hours."
+        case .nothingSoon: return "No event is on now or starts within 12 hours."
         case let .event(event, link):
             let title = event.title.flatMap { $0.isEmpty ? nil : $0 } ?? "Untitled event"
             switch await joiner.join(link) {

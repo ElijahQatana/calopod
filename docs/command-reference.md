@@ -20,7 +20,7 @@ calopod-setup [--arms]
 
 `connection add` takes `mac`, `google` or `microsoft`. `events` and `availability` take `--cached` to read local data without refreshing.
 
-`events` lists the Teams, Zoom, Meet or Webex link of each event (`Join:` in text, `joinProvider` and `joinURL` in JSON). `join` opens one: give it an id from `events --ids`, or leave it out for the next event with a link that is on now or starts within 12 hours. It opens the meeting app when there is one, otherwise the link in the browser.
+`events` lists the Teams, Zoom, Meet or Webex link of each event (`Join:` in text, `joinProvider` and `joinURL` in JSON). `join` opens one: give it an id from `events --ids`, or leave it out for the event the menu bar card shows as next: the meeting that is on now during its first 10 minutes, then the next one to start within 12 hours. It opens the meeting app when there is one, otherwise the link in the browser.
 
 `events --view all|sources|destinations` shows the calendars that view offers and leaves out the ones hidden in it. Each view keeps its own hidden calendars, the same ones the Mac app's Calendar screen remembers. `calendars hide CALENDAR --view VIEW` and `calendars show CALENDAR --view VIEW` change them. Without `--view`, or with `--calendar`, `events` hides nothing.
 

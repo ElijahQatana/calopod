@@ -12,9 +12,43 @@ enum UpNext {
             .sorted { ($0.startsAt, $0.id) < ($1.startsAt, $1.id) }
     }
 
-    static func today(in schedule: CalendarSchedule?, now: Date, calendar: Calendar = .current) -> [ScheduleEvent] {
+    static func today(in schedule: CalendarSchedule?, now: Date, calendar: Calendar = .current, ignored: (String) -> Bool = { _ in false }) -> [ScheduleEvent] {
         let end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))
-        return events(in: schedule, from: now, before: end)
+        return events(in: schedule, from: now, before: end).filter { isCandidate($0, ignored: ignored) }
+    }
+
+    /// Whether an event can be the next one: a real event, answered other than No, on a shown calendar.
+    static func isCandidate(_ event: ScheduleEvent, ignored: (String) -> Bool) -> Bool {
+        !event.isCopy && !event.isAllDay && event.response != .declined && !ignored(event.calendarID)
+    }
+
+    /// What the Next card shows. The same rule picks the event for `calopod join`.
+    struct Next: Equatable {
+        struct Line: Equatable {
+            let event: ScheduleEvent
+            let role: NextUpSelection.Role
+        }
+        var primary: Line?
+        var secondary: Line?
+        var alsoRunning: [ScheduleEvent] = []
+        /// When the choice can change next, so the card can refresh then.
+        var changesAt: Date?
+    }
+
+    static func next(
+        in schedule: CalendarSchedule?, now: Date, ignored: (String) -> Bool = { _ in false }
+    ) -> Next {
+        let candidates = events(in: schedule, from: now).filter { isCandidate($0, ignored: ignored) }
+        let entries = candidates.map { NextUpEntry(id: $0.id, startsAt: $0.startsAt, endsAt: $0.endsAt) }
+        let byID = Dictionary(candidates.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let chosen = NextUpSelection.select(entries, now: now)
+        func line(_ line: NextUpSelection.Line?) -> Next.Line? {
+            line.flatMap { l in byID[l.event.id].map { Next.Line(event: $0, role: l.role) } }
+        }
+        return Next(
+            primary: line(chosen.primary), secondary: line(chosen.secondary),
+            alsoRunning: chosen.alsoRunning.compactMap { byID[$0.id] },
+            changesAt: NextUpSelection.nextChange(entries, after: now))
     }
 
     /// Calendars whose copy is old or missing, so the list above may be incomplete. With a range,
