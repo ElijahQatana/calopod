@@ -83,7 +83,7 @@ struct FirstRunSheet: View {
             } else if service.pendingPreview != nil {
                 Button("Discard preview") { service.discardPreview() }.disabled(isWorking)
                 Button("Approve and sync") { Task { await approve() } }
-                    .buttonStyle(.accentFilled).disabled(isWorking)
+                    .buttonStyle(.accentFilled).disabled(isWorking || service.pendingPreview?.canApply == false)
             } else if previewed && service.notice == nil {
                 Button("Finish") { progress.approvePreview() }.buttonStyle(.accentFilled)
             } else {
@@ -233,7 +233,8 @@ struct FirstRunSheet: View {
             Text("Review before syncing").font(Theme.Fonts.bodySemibold)
             Text("\(preview.creates) to create, \(preview.updates) to update, \(preview.removals) to remove, \(preview.repairs) to repair")
                 .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
-            ForEach(preview.lines.prefix(6)) { line in
+            if !preview.canApply { Banner(kind: .caution, text: SyncPreview.uncheckedExplanation) }
+            ForEach(preview.lines.filter { !$0.isUnchecked }.prefix(6)) { line in
                 LabeledContent {
                     Text(line.reason).foregroundStyle(.secondary)
                 } label: {
@@ -241,8 +242,8 @@ struct FirstRunSheet: View {
                 }
                 .font(Theme.Fonts.body)
             }
-            if preview.lines.count > 6 {
-                Text("and \(preview.lines.count - 6) more").font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+            if preview.lines.filter({ !$0.isUnchecked }).count > 6 {
+                Text("and \(preview.lines.filter { !$0.isUnchecked }.count - 6) more").font(Theme.Fonts.secondary).foregroundStyle(.secondary)
             }
             if preview.removals > 0 {
                 Banner(kind: .caution, text: "Includes removing copies Calopod made earlier.")

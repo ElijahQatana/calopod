@@ -148,6 +148,7 @@ public struct SyncEngine: Sendable {
         var review = SyncReviewSummary()
         var observationsByArm: [String: [TargetEventObservation]] = [:]
         var targetFailureCount = 0
+        var uncheckedArmIDs = Set<String>()
         var targetWarnings: [String] = []
         var writerBlockedArmIDs = Set<String>()
         let secretStore = KeychainSecretStore()
@@ -203,9 +204,10 @@ public struct SyncEngine: Sendable {
                 observations = []
                 targetComplete = false
                 targetFailureCount += 1
-                targetWarnings.append(
-                    "A managed target could not be refreshed; no writes will be attempted."
-                )
+                uncheckedArmIDs.insert(arm.id)
+                if targetFailureCount == 1 {
+                    targetWarnings.append(SyncPlanItem.uncheckedExplanation)
+                }
             }
             observationsByArm[arm.id] = observations
             let plan = SyncPlanner.plan(
@@ -252,14 +254,11 @@ public struct SyncEngine: Sendable {
         guard refresh.failedSourceCount == 0 else {
             throw CalopodRuntimeError.sourceRefreshFailed
         }
-        guard targetFailureCount == 0 else {
-            throw CalopodRuntimeError.targetRefreshFailed
-        }
         guard writerBlockedArmIDs.isEmpty else {
             throw CalopodRuntimeError.writerNotPreferred
         }
         guard !planItems.contains(where: {
-            $0.action == .repair && !isDeterministicRepair($0)
+            $0.action == .repair && !$0.isUnchecked && !isDeterministicRepair($0)
         }) else {
             throw CalopodRuntimeError.ambiguousRepair
         }
@@ -274,7 +273,7 @@ public struct SyncEngine: Sendable {
         var appliedCount = 0
         var reconciledCount = 0
         var noOpCount = 0
-        for armID in armsByID.keys.sorted() {
+        for armID in armsByID.keys.sorted() where !uncheckedArmIDs.contains(armID) {
             guard let arm = armsByID[armID],
                   let target = try repository.calendarBinding(id: arm.targetBindingID),
                   let targetConnection = try repository.connection(id: target.connectionID),
@@ -323,8 +322,9 @@ public struct SyncEngine: Sendable {
             noOpCount += summary.noOpCount
         }
 
+        // A target that could not be read is skipped, not treated as empty. The rest still sync.
         return SyncExecutionResult(
-            status: "ok",
+            status: uncheckedArmIDs.isEmpty ? "ok" : "partial",
             mode: mode,
             window: window,
             items: planItems,

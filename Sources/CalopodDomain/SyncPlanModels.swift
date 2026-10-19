@@ -90,6 +90,12 @@ public struct SyncPlanItem: Codable, Equatable, Sendable {
         self.desiredFingerprint = desiredFingerprint
         self.payload = payload
     }
+
+    /// The target was not fully read, so nothing is known about this copy. Never written.
+    public var isUnchecked: Bool { action == .repair && reason == .targetSnapshotIncomplete }
+
+    public static let uncheckedExplanation =
+        "Calopod could not read the target calendars, so it cannot tell what needs repairing. Nothing will be changed until they are read."
 }
 
 /// All decisions for one Arm over one window. Output of `SyncPlanner.plan`, input to

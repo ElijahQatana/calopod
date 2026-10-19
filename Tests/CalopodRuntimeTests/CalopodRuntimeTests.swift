@@ -243,6 +243,49 @@ func aNewRunMarksAnUnfinishedRunInterrupted() throws {
 }
 
 @Test
+func automaticRunReportsUnreadTargetsAsSkippedNotRepairs() async throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("calopod-agent-test-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let environment = try CalopodRuntimeEnvironment(
+        variables: [:],
+        stateLocation: try CalopodStateLocation(
+            environment: ["CALOPOD_STATE_PATH": directory.appendingPathComponent("state.sqlite").path]
+        ),
+        executableURL: directory.appendingPathComponent("calopod-agent")
+    )
+    let window = try SyncWindow(
+        start: Date(timeIntervalSince1970: 1_788_566_400),
+        end: Date(timeIntervalSince1970: 1_788_652_800)
+    )
+    let unread = SyncPlanItem(
+        id: "one", armID: "arm", mirrorKey: "mirror", sourceKeyHash: "source", action: .repair,
+        reason: .targetSnapshotIncomplete, desiredFingerprint: nil, payload: nil
+    )
+    let runner = CalopodAgentRunner(
+        environment: environment,
+        schedule: try AgentSchedule(interval: 600, maximumJitter: 30, lookbackDays: 2, horizonDays: 14),
+        now: { Date(timeIntervalSince1970: 1_788_600_000) },
+        randomUnit: { 0.5 },
+        sleep: { _ in },
+        runSync: { _ in
+            SyncExecutionResult(
+                status: "partial", mode: .apply, window: window, items: [unread],
+                appliedCount: 0, reconciledCount: 0, noOpCount: 0, warnings: [SyncPlanItem.uncheckedExplanation]
+            )
+        }
+    )
+
+    let report = await runner.runOnce()
+
+    #expect(report.status == "partial")
+    #expect(report.applied == 0)
+    #expect(report.skipped == 1)
+    #expect(report.repairs == 0)
+}
+
+@Test
 func automaticRunSkipsDisabledConfigurationWithoutProviderAccess() async throws {
     let directory = FileManager.default.temporaryDirectory
         .appendingPathComponent("calopod-agent-test-\(UUID().uuidString)", isDirectory: true)

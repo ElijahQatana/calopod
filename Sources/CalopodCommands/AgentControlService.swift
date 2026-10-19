@@ -66,11 +66,13 @@ public struct SyncPreview: Equatable, Sendable {
         public let sourceCalendarID: String?
         /// The calendar that holds, or will hold, the copy.
         public let targetCalendarID: String
+        /// The target was not fully read, so this copy is unknown, not broken.
+        public let isUnchecked: Bool
 
         public init(
             id: String, armName: String, action: String, reason: String, title: String? = nil,
             startsAt: Date? = nil, endsAt: Date? = nil, isAllDay: Bool = false,
-            sourceCalendarID: String? = nil, targetCalendarID: String
+            sourceCalendarID: String? = nil, targetCalendarID: String, isUnchecked: Bool = false
         ) {
             self.id = id
             self.armName = armName
@@ -82,6 +84,7 @@ public struct SyncPreview: Equatable, Sendable {
             self.isAllDay = isAllDay
             self.sourceCalendarID = sourceCalendarID
             self.targetCalendarID = targetCalendarID
+            self.isUnchecked = isUnchecked
         }
 
         static func make(
@@ -95,7 +98,7 @@ public struct SyncPreview: Equatable, Sendable {
                 endsAt: source?.endsAt ?? item.payload?.endsAt,
                 isAllDay: source?.isAllDay ?? item.payload?.isAllDay ?? false,
                 sourceCalendarID: source?.calendarBindingID,
-                targetCalendarID: arm?.targetBindingID ?? ""
+                targetCalendarID: arm?.targetBindingID ?? "", isUnchecked: item.isUnchecked
             )
         }
     }
@@ -104,12 +107,32 @@ public struct SyncPreview: Equatable, Sendable {
     public let updates: Int
     public let removals: Int
     public let repairs: Int
+    /// Copies whose target calendar could not be read. They are not counted as repairs.
+    public let unchecked: Int
     public let noOps: Int
     public let warnings: [String]
     /// Every planned change; unchanged events are only counted.
     public let lines: [Line]
 
-    public var changeCount: Int { creates + updates + removals + repairs }
+    public init(
+        creates: Int = 0, updates: Int = 0, removals: Int = 0, repairs: Int = 0, unchecked: Int = 0,
+        noOps: Int = 0, warnings: [String] = [], lines: [Line] = []
+    ) {
+        self.creates = creates
+        self.updates = updates
+        self.removals = removals
+        self.repairs = repairs
+        self.unchecked = unchecked
+        self.noOps = noOps
+        self.warnings = warnings
+        self.lines = lines
+    }
+
+    public static let uncheckedExplanation = SyncPlanItem.uncheckedExplanation
+
+    public var changeCount: Int { creates + updates + removals + repairs + unchecked }
+    /// Applying is off while any target is unread; nothing is written to it.
+    public var canApply: Bool { unchecked == 0 }
 }
 
 public struct HealthReport: Equatable, Sendable {
@@ -452,9 +475,10 @@ public struct AgentControlService: Sendable {
             creates: count(.create),
             updates: count(.update),
             removals: count(.remove),
-            repairs: count(.repair),
+            repairs: result.items.filter { $0.action == .repair && !$0.isUnchecked }.count,
+            unchecked: result.items.filter(\.isUnchecked).count,
             noOps: result.noOpCount + count(.noOp),
-            warnings: result.warnings,
+            warnings: result.warnings.filter { $0 != SyncPlanItem.uncheckedExplanation },
             lines: result.items.filter { $0.action != .noOp }.map {
                 SyncPreview.Line.make(
                     item: $0, arm: arms[$0.armID], armName: arms[$0.armID]?.displayName ?? "Unknown Arm",

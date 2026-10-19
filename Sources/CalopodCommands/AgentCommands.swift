@@ -403,6 +403,7 @@ private func requireInstalledConfiguration(
 private func agentRunMessage(status: String) -> String {
     switch status {
     case "ok": "The automatic synchronization run completed."
+    case "partial": "Some target calendars could not be read, so nothing was changed on them."
     case "busy": "Another synchronization run already holds the process lock."
     case "interrupted": "The automatic synchronization run was interrupted."
     default: "The automatic synchronization run failed."

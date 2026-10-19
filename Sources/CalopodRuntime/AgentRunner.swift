@@ -170,6 +170,8 @@ public struct AgentRunReport: Codable, Equatable, Sendable {
     public let updates: Int
     public let removals: Int
     public let repairs: Int
+    /// Items left alone because their target calendar could not be read.
+    public let skipped: Int?
     public let noOps: Int
     public let warningCount: Int
     public let failureCategory: String?
@@ -182,6 +184,7 @@ public struct AgentRunReport: Codable, Equatable, Sendable {
         updates: Int = 0,
         removals: Int = 0,
         repairs: Int = 0,
+        skipped: Int? = nil,
         noOps: Int = 0,
         warningCount: Int = 0,
         failureCategory: String? = nil
@@ -194,6 +197,7 @@ public struct AgentRunReport: Codable, Equatable, Sendable {
         self.updates = updates
         self.removals = removals
         self.repairs = repairs
+        self.skipped = skipped
         self.noOps = noOps
         self.warningCount = warningCount
         self.failureCategory = failureCategory
@@ -264,7 +268,8 @@ public struct CalopodAgentRunner: Sendable {
                 creates: result.items.filter { $0.action == .create }.count,
                 updates: result.items.filter { $0.action == .update }.count,
                 removals: result.items.filter { $0.action == .remove }.count,
-                repairs: result.items.filter { $0.action == .repair }.count,
+                repairs: result.items.filter { $0.action == .repair && !$0.isUnchecked }.count,
+                skipped: result.items.filter(\.isUnchecked).count,
                 noOps: result.noOpCount,
                 warningCount: result.warnings.count
             )

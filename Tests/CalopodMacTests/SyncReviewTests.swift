@@ -35,4 +35,17 @@ final class SyncReviewTests: XCTestCase {
         let text = SyncReviewSection.detail(line("a", "remove", title: nil, source: nil), calendarName: { names[$0] })
         XCTAssertEqual(text, "copy on Main · Target copy is out of date")
     }
+
+    func testUncheckedLinesBlockApplyAndAreNotRepairs() {
+        let unchecked = SyncPreview.Line(
+            id: "u", armName: "Main", action: "repair", reason: "Target calendar could not be fully read",
+            title: "Standup", startsAt: Date(timeIntervalSince1970: 1_800_000_000), targetCalendarID: "main", isUnchecked: true)
+        let preview = SyncPreview(unchecked: 276, lines: [unchecked])
+        XCTAssertFalse(preview.canApply)
+        XCTAssertEqual(preview.changeCount, 276)
+        XCTAssertEqual(SyncReviewSection.summaryLine(preview), "276 could not be checked")
+        XCTAssertEqual(SyncReviewSection.label(unchecked), "Not checked")
+        XCTAssertFalse(SyncReviewSection.detail(unchecked, calendarName: { names[$0] }).contains("could not be fully read"))
+        XCTAssertTrue(SyncPreview(repairs: 1).canApply)
+    }
 }
