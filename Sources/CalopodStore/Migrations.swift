@@ -20,6 +20,7 @@ extension CalopodDatabase {
         "v16_calendar_provider_color",
         "v17_copy_external_id",
         "v18_calendar_preferences",
+        "v19_calendar_view_hidden",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -392,6 +393,18 @@ extension CalopodDatabase {
                     color TEXT
                 );
                 CREATE TABLE calendar_preferences_import (id INTEGER PRIMARY KEY CHECK (id = 1));
+                """)
+        }
+
+        // Calendars hidden in one Calendar view (all, sources, destinations). A row only exists while the
+        // calendar is hidden, so one that is new to a view is shown. No foreign key, as with preferences.
+        migrator.registerMigration("v19_calendar_view_hidden") { database in
+            try database.execute(sql: """
+                CREATE TABLE calendar_view_hidden (
+                    view TEXT NOT NULL,
+                    calendar_id TEXT NOT NULL,
+                    PRIMARY KEY (view, calendar_id)
+                ) WITHOUT ROWID;
                 """)
         }
 

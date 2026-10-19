@@ -46,6 +46,22 @@ import Testing
         #expect(throws: (any Error).self) { try CalendarsEdit.name("work", to: "  ", repository: repository) }
     }
 
+    @Test func hideAndShowApplyToOneViewOnly() throws {
+        let repository = try repository()
+        #expect(try CalopodRoot.parseAsRoot(["calendars", "hide", "work", "--view", "sources"]) is CalendarsHideCommand)
+        #expect(try CalopodRoot.parseAsRoot(["calendars", "show", "work", "--view", "all"]) is CalendarsShowCommand)
+        #expect(throws: (any Error).self) { try CalopodRoot.parseAsRoot(["calendars", "hide", "work"]) }
+
+        _ = try CalendarsEdit.hide("Work", true, view: .sources, repository: repository)
+        _ = try CalendarsEdit.hide("home", true, view: .all, repository: repository)
+        #expect(try repository.hiddenCalendars(view: "sources") == ["work"])
+        #expect(try repository.hiddenCalendars(view: "all") == ["home"])
+        #expect(try repository.hiddenCalendars(view: "destinations").isEmpty)
+        _ = try CalendarsEdit.hide("work", false, view: .sources, repository: repository)
+        #expect(try repository.hiddenCalendars(view: "sources").isEmpty)
+        #expect(throws: (any Error).self) { try CalendarsEdit.hide("nope", true, view: .all, repository: repository) }
+    }
+
     @Test func ambiguousAndMissingNamesFail() throws {
         let repository = try repository()
         #expect(try resolveCalendar("home2", repository: repository).id == "home2")

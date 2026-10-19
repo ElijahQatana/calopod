@@ -34,9 +34,9 @@ struct CalendarViewModeTests {
         #expect(CalendarViewMode.allCases.map(\.copiesShownByDefault) == [false, false, true])
     }
 
-    @Test("The flag takes the three values and defaults to all")
+    @Test("The flag takes the three values and is unset by default")
     func flag() throws {
-        #expect(try EventsCommand.parse([]).view == .all)
+        #expect(try EventsCommand.parse([]).view == nil)
         for mode in CalendarViewMode.allCases {
             #expect(try EventsCommand.parse(["--view", mode.rawValue]).view == mode)
         }

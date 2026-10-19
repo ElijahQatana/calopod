@@ -16,11 +16,12 @@ struct CalopodMacApp: App {
     @State private var sidebar = SidebarState()
 
     init() {
-        if let state = try? LocalState.repository() {
+        let state = try? LocalState.repository()
+        if let state {
             CalendarPreferenceMigration.launch(defaults: AppDefaults.standard, state: state)
         }
         let access = CalendarAccessModel()
-        let service = ServiceModel(), inbox = InboxModel(), schedule = CalendarModel(aliases: .shared)
+        let service = ServiceModel(), inbox = InboxModel(), schedule = CalendarModel(aliases: .shared, state: state)
         _service = State(initialValue: service)
         _inbox = State(initialValue: inbox)
         _schedule = State(initialValue: schedule)
