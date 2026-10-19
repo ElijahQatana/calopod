@@ -257,7 +257,7 @@ private struct EventDay: View {
                         let y = CGFloat(hour - hours.lowerBound) * hourHeight
                         Text(hourLabel(hour)).font(.caption2).foregroundStyle(Theme.faint)
                             .frame(width: labelWidth - 6, alignment: .trailing).offset(x: 0, y: y - 6)
-                        Rectangle().fill(Theme.line).frame(height: 1).offset(x: labelWidth, y: y)
+                        Rectangle().fill(Theme.line).frame(width: proxy.size.width - labelWidth, height: 1).offset(x: labelWidth, y: y)
                     }
                     ForEach(events.blocks) { block in
                         let slot = width / CGFloat(block.columns)
