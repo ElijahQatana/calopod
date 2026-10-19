@@ -1,6 +1,24 @@
 import CalopodDomain
 import Foundation
 
+/// What the app's background service runs with when its plist gives no numbers. These match the
+/// source install, and the Mac app reads them from here too, so the two cannot drift.
+public enum AgentScheduleDefaults {
+    public static let intervalSeconds = 600
+    public static let jitterSeconds = 30
+    public static let lookbackDays = 7
+    public static let horizonDays = 15
+
+    public static var environment: [String: String] {
+        [
+            "CALOPOD_AGENT_INTERVAL_SECONDS": String(intervalSeconds),
+            "CALOPOD_AGENT_JITTER_SECONDS": String(jitterSeconds),
+            "CALOPOD_AGENT_LOOKBACK_DAYS": String(lookbackDays),
+            "CALOPOD_AGENT_HORIZON_DAYS": String(horizonDays),
+        ]
+    }
+}
+
 public struct AgentSchedule: Equatable, Sendable {
     public let interval: TimeInterval
     public let maximumJitter: TimeInterval
@@ -37,6 +55,15 @@ public struct AgentSchedule: Equatable, Sendable {
             maximumJitter: maximumJitter,
             lookbackDays: lookbackDays,
             horizonDays: horizonDays
+        )
+    }
+
+    /// The schedule from `environment`, with the defaults filling in whatever it leaves out.
+    public init(environment: [String: String], fillingDefaults: Bool) throws {
+        try self.init(
+            environment: fillingDefaults
+                ? AgentScheduleDefaults.environment.merging(environment) { _, given in given }
+                : environment
         )
     }
 

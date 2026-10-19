@@ -69,3 +69,13 @@ final class ServiceInstallTests: XCTestCase {
         XCTAssertEqual(result.calls, [false])
     }
 }
+
+final class ServiceWindowTextTests: XCTestCase {
+    func testWindowTextNamesBothSides() {
+        XCTAssertEqual(
+            ServiceModel.windowText(lookbackDays: 7, horizonDays: 15), "Looks back 7 days, plans 15 days ahead")
+        XCTAssertEqual(
+            ServiceModel.windowText(lookbackDays: 1, horizonDays: 1), "Looks back 1 day, plans 1 day ahead")
+        XCTAssertNil(ServiceModel.windowText(lookbackDays: nil, horizonDays: 15))
+    }
+}

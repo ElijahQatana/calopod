@@ -21,6 +21,9 @@ public struct AgentControlStatus: Equatable, Sendable {
     public let usesBundledService: Bool
     /// A source-installed agent is loaded in launchd right now, whichever service is reported.
     public let sourceLoaded: Bool
+    /// The window each run covers, when the service's schedule is known.
+    public var lookbackDays: Int? = nil
+    public var horizonDays: Int? = nil
 }
 
 public struct AgentControlOverview: Equatable, Sendable {
@@ -126,11 +129,6 @@ public struct HealthReport: Equatable, Sendable {
 public struct AgentControlService: Sendable {
     public static let bundledLabel = "pro.elijahquintana.calopod.app-agent"
 
-    /// Matches the bundled agent's plist in Support/Mac.
-    private static let bundledSchedule = (
-        interval: 600, jitter: 30, lookbackDays: 1, horizonDays: 4
-    )
-
     private let bundledAgentExecutable: URL?
     private let makeController: @Sendable () throws -> LaunchAgentController
     private let baseEnvironment: @Sendable () -> [String: String]
@@ -187,12 +185,8 @@ public struct AgentControlService: Sendable {
                 sourceSnapshot: snapshot
             )
         }
-        let defaults = Self.bundledSchedule
-        var variables = baseEnvironment()
-        variables["CALOPOD_AGENT_INTERVAL_SECONDS"] = String(defaults.interval)
-        variables["CALOPOD_AGENT_JITTER_SECONDS"] = String(defaults.jitter)
-        variables["CALOPOD_AGENT_LOOKBACK_DAYS"] = String(defaults.lookbackDays)
-        variables["CALOPOD_AGENT_HORIZON_DAYS"] = String(defaults.horizonDays)
+        // The bundled plist gives no numbers; the agent falls back to the same defaults.
+        var variables = baseEnvironment().merging(AgentScheduleDefaults.environment) { _, defaults in defaults }
         let location = try CalopodStateLocation(environment: variables)
         let override = AgentScheduleOverride.load(from: location)
         let loaded = (try? controller.isLoaded(label: Self.bundledLabel)) ?? false
@@ -201,10 +195,10 @@ public struct AgentControlService: Sendable {
             stateURL: location.databaseURL,
             eventKitHostURL: executable.deletingLastPathComponent()
                 .appendingPathComponent("eventkit-host/Calopod EventKit Host.app", isDirectory: true),
-            intervalSeconds: override?.intervalSeconds ?? defaults.interval,
-            jitterSeconds: defaults.jitter,
-            lookbackDays: defaults.lookbackDays,
-            horizonDays: defaults.horizonDays,
+            intervalSeconds: override?.intervalSeconds ?? AgentScheduleDefaults.intervalSeconds,
+            jitterSeconds: AgentScheduleDefaults.jitterSeconds,
+            lookbackDays: AgentScheduleDefaults.lookbackDays,
+            horizonDays: AgentScheduleDefaults.horizonDays,
             environment: variables
         )
         return Context(
@@ -248,7 +242,9 @@ public struct AgentControlService: Sendable {
             failureCategory: payload.failureCategory,
             failureAgeSeconds: payload.failureCategory == nil ? nil : failureAge(in: context),
             usesBundledService: context.isBundled,
-            sourceLoaded: context.sourceLoaded
+            sourceLoaded: context.sourceLoaded,
+            lookbackDays: context.snapshot.configuration?.lookbackDays,
+            horizonDays: context.snapshot.configuration?.horizonDays
         )
     }
 

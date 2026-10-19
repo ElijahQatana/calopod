@@ -183,6 +183,13 @@ final class ServiceModel {
         }
     }
 
+    /// "Looks back 7 days, plans 15 days ahead". Nil when the service's window is unknown.
+    nonisolated static func windowText(lookbackDays: Int?, horizonDays: Int?) -> String? {
+        guard let lookbackDays, let horizonDays else { return nil }
+        func days(_ count: Int) -> String { count == 1 ? "1 day" : "\(count) days" }
+        return "Looks back \(days(lookbackDays)), plans \(days(horizonDays)) ahead"
+    }
+
     func setInterval(seconds: Int) async {
         let service = service
         await perform("Updating interval…") {

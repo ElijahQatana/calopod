@@ -863,3 +863,46 @@ func changingTheOverrideEndsTheCurrentWaitEarly() async throws {
 
     #expect(reports.values.count >= 2)
 }
+
+@Test
+func theAppServiceDefaultsMatchTheSourceInstallAndFillGaps() throws {
+    let schedule = try AgentSchedule(environment: [:], fillingDefaults: true)
+    #expect(schedule.interval == 600)
+    #expect(schedule.maximumJitter == 30)
+    #expect(schedule.lookbackDays == 7)
+    #expect(schedule.horizonDays == 15)
+    let given = try AgentSchedule(environment: ["CALOPOD_AGENT_HORIZON_DAYS": "30"], fillingDefaults: true)
+    #expect(given.horizonDays == 30)
+    #expect(given.lookbackDays == 7)
+}
+
+@Test
+func theBundledPlistLeavesNumbersToTheDefaultsAndAsksForLogFiles() throws {
+    let plist = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("Support/Mac/pro.elijahquintana.calopod.app-agent.plist")
+    let values = try #require(
+        PropertyListSerialization.propertyList(from: Data(contentsOf: plist), format: nil) as? [String: Any]
+    )
+    let environment = try #require(values["EnvironmentVariables"] as? [String: String])
+    #expect(environment[AgentLogFiles.switchName] == "1")
+    #expect(environment.keys.filter { $0.hasPrefix("CALOPOD_AGENT_") && $0 != AgentLogFiles.switchName }.isEmpty)
+}
+
+@Test
+func serviceLogsLiveBesideTheStateAndAreCreatedOwnerOnly() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent("calopod-logs-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let location = try CalopodStateLocation(applicationSupportURL: root)
+
+    try AgentLogFiles.prepare(for: location)
+
+    let logs = root.appendingPathComponent("Calopod/Service/logs")
+    #expect(AgentLogFiles.standardOutputURL(for: location).path == logs.appendingPathComponent("agent.stdout.log").path)
+    #expect(AgentLogFiles.standardErrorURL(for: location).path == logs.appendingPathComponent("agent.stderr.log").path)
+    for url in [logs, AgentLogFiles.standardOutputURL(for: location)] {
+        let mode = try #require(FileManager.default.attributesOfItem(atPath: url.path)[.posixPermissions] as? NSNumber)
+        #expect(mode.intValue & 0o077 == 0)
+    }
+}
