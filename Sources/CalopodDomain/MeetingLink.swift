@@ -51,6 +51,11 @@ public struct MeetingLink: Equatable, Sendable {
         startsAt <= now.addingTimeInterval(12 * 3600) && (endsAt > now || startsAt >= now.addingTimeInterval(-3600))
     }
 
+    /// Whether the event is on now or starts within ten minutes. The Next surfaces fill Join only then.
+    public static func isImminent(startsAt: Date, endsAt: Date, now: Date = Date()) -> Bool {
+        startsAt <= now.addingTimeInterval(10 * 60) && endsAt > now
+    }
+
     // MARK: Finding links
 
     private static let separators: CharacterSet = {
