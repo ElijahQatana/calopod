@@ -1,0 +1,127 @@
+import CalopodDomain
+import CalopodSnapshot
+import CalopodStore
+import CalopodSync
+import Foundation
+
+/// Turns the local copy into the records the iPhone reads. It uses the same Inbox query, calendar
+/// choice and availability calculation as the app and the command line, then keeps only what the
+/// phone shows.
+enum IPhoneFeedBuilder {
+    /// How many days of busy time are published, starting with today.
+    static let availabilityDays = 14
+    /// Long notes are cut, so one record stays well under CloudKit's size limit.
+    static let notesLimit = 2_000
+
+    static func records(
+        repository: LocalStateRepository, now: Date = Date(), calendar: Calendar = .current
+    ) throws -> [SnapshotPayload] {
+        let cutoff = now.addingTimeInterval(-3600)
+        let snapshot = try repository.inboxContextSnapshot()
+        let result = InboxAttentionQuery.evaluate(snapshot, filter: InboxAttentionFilter(asOf: now), freshnessCutoff: cutoff)
+
+        var records: [SnapshotPayload] = []
+        for row in result.rows {
+            records.append(try SnapshotPayload(inboxItem(row, in: snapshot), kind: .inboxItem, at: now))
+        }
+        for day in try availability(repository: repository, now: now, calendar: calendar) {
+            records.append(try SnapshotPayload(day, kind: .availabilityDay, at: now))
+        }
+        records.append(try SnapshotPayload(calendars(snapshot, repository: repository), kind: .calendars, at: now))
+        records.append(try SnapshotPayload(try syncStatus(snapshot, repository: repository, cutoff: cutoff), kind: .syncStatus, at: now))
+        return records
+    }
+
+    // MARK: Inbox
+
+    static func inboxItem(_ row: InboxAttentionRow, in snapshot: InboxContextSnapshot) -> InboxItem {
+        let event = row.item.event
+        // A private event keeps its time but none of its words.
+        let shown = !event.isPrivate
+        let titles = Dictionary(
+            snapshot.events.map { ($0.event.sourceKeyHash, $0.event) }, uniquingKeysWith: { first, _ in first })
+        let conflicts = row.conflicts.compactMap { conflict -> ConflictingEvent? in
+            let other = conflict.pair.first == event.sourceKeyHash ? conflict.pair.second : conflict.pair.first
+            guard let other = titles[other] else { return nil }
+            return ConflictingEvent(title: other.isPrivate ? nil : other.title, startsAt: other.startsAt, endsAt: other.endsAt)
+        }
+        return InboxItem(
+            id: event.sourceKeyHash, reasons: row.reasons.map(reason), changeOrderUncertain: row.changeTiming == .uncertain,
+            title: shown ? event.title : nil, startsAt: event.startsAt, endsAt: event.endsAt, isAllDay: event.isAllDay,
+            timeZoneIdentifier: event.timeZoneIdentifier, sourceName: row.source.connectionLabel ?? row.source.provider,
+            calendarID: event.calendarBindingID, response: event.currentUserResponse.state,
+            organizerName: shown ? event.organizer.flatMap { $0.name ?? $0.emailAddress } : nil,
+            attendees: summary(event.attendees), location: shown ? event.location : nil,
+            notes: shown ? event.notes.map { String($0.prefix(notesLimit)) } : nil, url: shown ? event.url : nil, conflicts: conflicts)
+    }
+
+    private static func reason(_ reason: InboxAttentionReason) -> InboxReason {
+        switch reason {
+        case .needsResponse: .needsRSVP
+        case .maybe: .maybe
+        case .changedAfterResponse: .unreadChange
+        case .conflict: .conflict
+        }
+    }
+
+    private static func summary(_ attendees: [EventParticipant]) -> AttendeeSummary {
+        func count(_ words: Set<String>) -> Int { attendees.filter { words.contains($0.status?.lowercased() ?? "") }.count }
+        return AttendeeSummary(
+            total: attendees.count, accepted: count(["accepted"]),
+            tentative: count(["tentative", "tentativelyaccepted"]), declined: count(["declined"]))
+    }
+
+    // MARK: Availability
+
+    private static func availability(repository: LocalStateRepository, now: Date, calendar: Calendar) throws -> [AvailabilityDay] {
+        let sources = (try? selectedCalendarSources(connectionID: nil, calendarID: nil, repository: repository)) ?? []
+        let first = calendar.startOfDay(for: now)
+        guard !sources.isEmpty, let end = calendar.date(byAdding: .day, value: availabilityDays, to: first) else { return [] }
+        let events = try repository.normalizedInstances(calendarBindingIDs: sources.map(\.calendar.id), from: first, through: end)
+        let format = DateFormatter()
+        format.locale = Locale(identifier: "en_US_POSIX")
+        format.timeZone = calendar.timeZone
+        format.dateFormat = "yyyy-MM-dd"
+        return (0..<availabilityDays).compactMap { offset in
+            guard let start = calendar.date(byAdding: .day, value: offset, to: first),
+                  let next = calendar.date(byAdding: .day, value: 1, to: start) else { return nil }
+            let busy = AvailabilityCalculator.calculate(instances: events, from: start, through: next).busy
+            return AvailabilityDay(
+                day: format.string(from: start), timeZoneIdentifier: calendar.timeZone.identifier,
+                busy: busy.map { BusyInterval(start: $0.start, end: $0.end) })
+        }
+    }
+
+    // MARK: Calendars and status
+
+    private static func calendars(_ snapshot: InboxContextSnapshot, repository: LocalStateRepository) -> CalendarList {
+        let names = CalendarNames(repository)
+        let palette = CalendarPalette.entries.map(\.id)
+        let gray = palette.firstIndex(of: "gray") ?? 0
+        return CalendarList(calendars: snapshot.sources.filter { !names.isIgnored($0.bindingID) }.map { source in
+            CalendarEntry(
+                id: source.bindingID,
+                name: names.shown(source.bindingID, real: source.calendarLabel) ?? source.connectionLabel ?? "Calendar",
+                colorIndex: names.preferences[source.bindingID]?.color.flatMap(palette.firstIndex(of:)) ?? gray)
+        })
+    }
+
+    private static func syncStatus(
+        _ snapshot: InboxContextSnapshot, repository: LocalStateRepository, cutoff: Date
+    ) throws -> SyncStatus {
+        var issues: [SyncIssue] = []
+        for source in snapshot.sources {
+            if let since = source.staleSince {
+                issues.append(SyncIssue(kind: .stale, calendarID: source.bindingID, since: since))
+            } else if let health = source.healthStatus, health != "healthy" {
+                issues.append(SyncIssue(kind: .failed, calendarID: source.bindingID))
+            } else if source.coverage.map({ $0.observedAt < cutoff }) ?? true {
+                issues.append(SyncIssue(kind: .partial, calendarID: source.bindingID))
+            }
+        }
+        if let latest = try repository.latestSyncRun(), ["failed", "interrupted"].contains(latest.status) {
+            issues.append(SyncIssue(kind: .failed, since: latest.finishedAt ?? latest.startedAt))
+        }
+        return SyncStatus(lastSyncAt: try repository.latestSuccessfulSyncRun()?.finishedAt, issues: issues)
+    }
+}

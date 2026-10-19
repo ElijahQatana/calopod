@@ -60,6 +60,14 @@ enum AppServiceLocator {
         )
     }
 
+    /// The Calopod.app that holds this command, or else the one in Applications, if either is there.
+    static func installedApp(
+        executableURL: URL = realExecutableURL(),
+        exists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+    ) -> URL? {
+        enclosingApp(of: executableURL) ?? (exists(defaultApp.path) ? defaultApp : nil)
+    }
+
     /// The running command's real path, not `argv[0]` and not the bundle.
     static func realExecutableURL() -> URL {
         let path = Bundle.main.executablePath ?? CommandLine.arguments[0]

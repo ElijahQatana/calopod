@@ -87,6 +87,7 @@ let package = Package(
                 "CalopodMicrosoft",
                 "CalopodProviders",
                 "CalopodRuntime",
+                "CalopodSnapshot",
                 "CalopodStore",
                 "CalopodSync",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
@@ -98,7 +99,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "CalopodMac",
-            dependencies: ["CalopodCommands", "CalopodEventKit", "CalopodRuntime"]
+            dependencies: ["CalopodCommands", "CalopodEventKit", "CalopodRuntime", "CalopodSnapshot"]
         ),
         .executableTarget(
             name: "CalopodAgent",
@@ -154,7 +155,7 @@ let package = Package(
         ),
         .testTarget(
             name: "CalopodCommandsTests",
-            dependencies: ["CalopodCommands", "CalopodStore", "CalopodTestSupport"]
+            dependencies: ["CalopodCommands", "CalopodSnapshot", "CalopodStore", "CalopodTestSupport"]
         ),
         .testTarget(
             name: "CalopodGoogleTests",
