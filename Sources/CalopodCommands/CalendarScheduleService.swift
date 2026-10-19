@@ -86,13 +86,15 @@ public struct ScheduleEvent: Identifiable, Equatable, Sendable {
     /// Yes, Maybe, No that the provider allows. Empty when it does not.
     public let replies: [ConflictChoice]
     public let replyUnavailableReason: String?
+    /// The Teams, Zoom, Meet or Webex link in the event. Copies never have one.
+    public let meeting: MeetingLink?
 
     public init(
         id: String, calendarID: String, title: String, startsAt: Date, endsAt: Date,
         isAllDay: Bool = false, location: String? = nil, organizer: String? = nil,
         response: ScheduleResponse = .accepted, isCopy: Bool = false, overlaps: [String] = [], copyOverlaps: [String] = [],
         change: ScheduleChange = .none, copiedTo: [ScheduleCopy] = [],
-        replies: [ConflictChoice] = [], replyUnavailableReason: String? = nil
+        replies: [ConflictChoice] = [], replyUnavailableReason: String? = nil, meeting: MeetingLink? = nil
     ) {
         self.id = id
         self.calendarID = calendarID
@@ -110,6 +112,7 @@ public struct ScheduleEvent: Identifiable, Equatable, Sendable {
         self.copiedTo = copiedTo
         self.replies = replies
         self.replyUnavailableReason = replyUnavailableReason
+        self.meeting = meeting
     }
 }
 
@@ -119,7 +122,7 @@ extension ScheduleEvent {
             id: id, calendarID: calendarID, title: title, startsAt: startsAt, endsAt: endsAt,
             isAllDay: isAllDay, location: location, organizer: organizer, response: response,
             isCopy: isCopy, overlaps: overlaps, copyOverlaps: titles, change: change,
-            copiedTo: copiedTo, replies: replies, replyUnavailableReason: replyUnavailableReason)
+            copiedTo: copiedTo, replies: replies, replyUnavailableReason: replyUnavailableReason, meeting: meeting)
     }
 }
 
@@ -220,7 +223,8 @@ public struct CalendarScheduleService: Sendable {
                 change: changes[event.sourceKeyHash] ?? .none,
                 copiedTo: targets.map { ScheduleCopy(calendarName: calendarName($0.binding), fullDetails: $0.fullDetails, calendarID: $0.binding) },
                 replies: replies,
-                replyUnavailableReason: replies.isEmpty ? ConflictResolutionService.reasonText(choices.unavailableReasons) : nil
+                replyUnavailableReason: replies.isEmpty ? ConflictResolutionService.reasonText(choices.unavailableReasons) : nil,
+                meeting: JoinSelector.link(for: event)
             ))
             // The copy is drawn at the source's time on the calendar that holds it.
             for target in targets where names[target.binding] != nil && target.binding != event.calendarBindingID {

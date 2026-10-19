@@ -12,12 +12,14 @@ struct MacFixture {
     let state = LocalStateRepository(database: try! CalopodDatabase.inMemory())
     let remote: FakeRemote
     let overlapping: Bool
+    let url: String?
     let window = try! SyncWindow(start: Date(timeIntervalSince1970: 0), end: Date(timeIntervalSince1970: 200_000))
     let lock = FileManager.default.temporaryDirectory.appendingPathComponent("mac-\(UUID().uuidString).lock")
     let now = Date(timeIntervalSince1970: 5_000)
 
-    init(count: Int, overlapping: Bool = false, provider: String = "google") throws {
+    init(count: Int, overlapping: Bool = false, provider: String = "google", url: String? = nil) throws {
         self.overlapping = overlapping
+        self.url = url
         remote = FakeRemote(state: state, window: window)
         try state.saveConnection(StoredConnection(id: "c", configurationID: "d", provider: provider, displayLabel: "Example", isEnabled: true))
         try state.replaceCalendarBindings(connectionID: "c", bindings: [
@@ -45,19 +47,19 @@ struct MacFixture {
     func apply(keys: [String], title: String? = nil, response: EventResponseState = .needsResponse) throws {
         let events = keys.enumerated().map { index, key in
             let start = overlapping ? 10_000 : 10_000 + Double(index) * 20_000
-            return event(key, start: start, title: title ?? "Example \(key)", response: response)
+            return event(key, start: start, title: title ?? "Example \(key)", response: response, url: url)
         }
         try state.applyEventRefresh(connectionID: "c", calendarBindingID: "cal", windowStart: window.start, windowEnd: window.end,
                                     instances: events, cancelledSourceKeyHashes: [], isFullRefresh: true, cursorUpdates: [])
     }
 }
 
-func event(_ key: String, start: Double, title: String, response: EventResponseState) -> StoredNormalizedInstance {
+func event(_ key: String, start: Double, title: String, response: EventResponseState, url: String? = nil) -> StoredNormalizedInstance {
     StoredNormalizedInstance(
         sourceKeyHash: key, connectionID: "c", calendarBindingID: "cal", providerEventID: key,
         recurrenceID: nil, startsAt: Date(timeIntervalSince1970: start), endsAt: Date(timeIntervalSince1970: start + 1000),
         isAllDay: false, availability: "busy", isCancelled: false, isPrivate: false, title: title,
-        contentFingerprint: title, providerUpdatedAt: nil,
+        contentFingerprint: title, providerUpdatedAt: nil, url: url,
         organizer: EventParticipant(name: "Taylor Example", emailAddress: "taylor@example.com"),
         currentUserResponse: EventResponse(state: response, evidence: .googleSelf,
                                            actionCapability: RSVPActionCapability(supportedScopes: [.occurrence])))

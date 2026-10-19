@@ -235,6 +235,9 @@ public struct CommandItem: Codable, Equatable, Sendable {
     public let alias: String?
     public let ignored: Bool?
     public let color: String?
+    /// For events with a meeting link: "Teams", "Zoom", "Meet" or "Webex", and the web link.
+    public let joinProvider: String?
+    public let joinURL: String?
     let inbox: InboxItemDetail?
 
     public init(
@@ -262,6 +265,8 @@ public struct CommandItem: Codable, Equatable, Sendable {
         alias: String? = nil,
         ignored: Bool? = nil,
         color: String? = nil,
+        joinProvider: String? = nil,
+        joinURL: String? = nil,
         inbox: InboxItemDetail? = nil
     ) {
         self.id = id
@@ -288,6 +293,8 @@ public struct CommandItem: Codable, Equatable, Sendable {
         self.alias = alias
         self.ignored = ignored
         self.color = color
+        self.joinProvider = joinProvider
+        self.joinURL = joinURL
         self.inbox = inbox
     }
 }

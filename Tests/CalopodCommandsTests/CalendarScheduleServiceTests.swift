@@ -29,6 +29,7 @@ struct CalendarScheduleServiceTests {
                 endsAt: Date(timeIntervalSince1970: Double(hour + 2) * 3600),
                 isAllDay: false, availability: "busy", isCancelled: false, isPrivate: false,
                 title: "Event \(key)", contentFingerprint: key, providerUpdatedAt: nil,
+                url: "https://zoom.us/j/123456789",
                 currentUserResponse: EventResponse(
                     state: response, evidence: .googleSelf,
                     actionCapability: RSVPActionCapability(supportedScopes: [.occurrence])))
@@ -55,6 +56,8 @@ struct CalendarScheduleServiceTests {
         let copy = try #require(byID["copy:main:c"])
         #expect(copy.isCopy && copy.title == "Busy" && copy.calendarID == "main")
         #expect(copy.replies.isEmpty && copy.replyUnavailableReason != nil)
+        #expect(byID["a"]?.meeting?.provider == .zoom)
+        #expect(copy.meeting == nil)
         #expect(byID["d"]?.copyOverlaps == ["Busy"])
         #expect(byID["c"]?.copyOverlaps == [] && byID["a"]?.copyOverlaps == [])
         #expect(schedule.events.count == 5)

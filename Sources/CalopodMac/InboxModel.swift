@@ -1,4 +1,5 @@
 import CalopodCommands
+import CalopodDomain
 import CalopodRuntime
 import Foundation
 import Observation
@@ -24,6 +25,7 @@ final class InboxModel {
     private let service: InboxScreenService
     private let send: @Sendable (String, ConflictChoice) async -> InboxReplyResult
     private let calendar: CalendarOpening
+    private let joiner: any MeetingJoining
     private let afterSend: (@MainActor () async -> Void)?
     private let readDetail: @Sendable (String) throws -> InboxDetail
     private var loads = 0
@@ -35,9 +37,11 @@ final class InboxModel {
         send: (@Sendable (String, ConflictChoice) async -> InboxReplyResult)? = nil,
         afterSend: (@MainActor () async -> Void)? = nil,
         readDetail: (@Sendable (String) throws -> InboxDetail)? = nil,
-        calendar: CalendarOpening = SystemCalendarOpener()
+        calendar: CalendarOpening = SystemCalendarOpener(),
+        joiner: any MeetingJoining = MeetingJoiner.system
     ) {
         self.calendar = calendar
+        self.joiner = joiner
         self.service = service
         self.readDetail = readDetail ?? { try service.detail(for: $0) }
         self.send = send ?? { await service.reply(to: $0, $1) }
@@ -143,6 +147,15 @@ final class InboxModel {
         let result = calendar.open(eventID: id, startsAt: startsAt)
         notice = CalendarOpenText.message(for: result, title: detail.entry.title, startsAt: startsAt)
         calendarHint = result == .opened ? notice : nil
+    }
+
+    /// Joins the selected event's meeting. A failure shows in the same banner as other notices.
+    func joinMeeting() async {
+        guard let link = detail?.entry.meeting else { return }
+        if await joiner.join(link) == .failed {
+            notice = MeetingJoinText.failed
+            calendarHint = nil
+        }
     }
 
     /// Moves on without replying or changing anything.

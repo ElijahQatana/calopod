@@ -49,6 +49,7 @@ public struct InboxEntry: Identifiable, Equatable, Sendable {
     /// The edit may have come before the reply, so it is not shown as a proven change.
     public let changeIsUncertain: Bool
     public let overlapCount: Int
+    public var meeting: MeetingLink?
 
     /// Only a change after a reply can be acknowledged.
     public var canAcknowledge: Bool { reasons.contains(.changedAfterResponse) }
@@ -286,7 +287,7 @@ public struct InboxScreenService: Sendable {
             calendarName: source.calendarLabel ?? source.connectionLabel ?? "Unknown calendar",
             organizer: organizer, location: event.location,
             response: event.currentUserResponse.state, reasons: reasons,
-            changeIsUncertain: changeIsUncertain, overlapCount: overlapCount)
+            changeIsUncertain: changeIsUncertain, overlapCount: overlapCount, meeting: JoinSelector.link(for: event))
     }
 
     /// The strip of surrounding events. `focusedKey` is the one being looked at.

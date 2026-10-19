@@ -1,4 +1,5 @@
 import CalopodCommands
+import CalopodDomain
 import SwiftUI
 
 /// Details for the selected event. Replies are made from Inbox, so this only points there.
@@ -9,6 +10,8 @@ struct EventInspector: View {
     private let aliases = CalendarAliases.shared
     let close: () -> Void
     var openInbox: () -> Void = {}
+    var joiner: any MeetingJoining = MeetingJoiner.system
+    @State private var joinNotice: String?
 
     var body: some View {
         ScrollView { content }
@@ -26,6 +29,7 @@ struct EventInspector: View {
                     .accessibilityLabel("Close details")
             }
             lead
+            joinSection
             if hasPeopleAndPlace { peopleAndPlace }
             if !event.copiedTo.isEmpty { copies }
             notes
@@ -38,6 +42,20 @@ struct EventInspector: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(event.title).font(Theme.Fonts.sectionTitle).fixedSize(horizontal: false, vertical: true)
             Text(when).font(Theme.Fonts.body).foregroundStyle(.secondary)
+        }
+    }
+
+    /// Copies never carry a meeting link, so only the real event offers Join.
+    @ViewBuilder
+    private var joinSection: some View {
+        if !event.isCopy, let link = event.meeting {
+            VStack(alignment: .leading, spacing: 8) {
+                JoinButton(link: link, prominent: MeetingLink.isNear(startsAt: event.startsAt, endsAt: event.endsAt)) {
+                    Task { if await joiner.join(link) == .failed { joinNotice = MeetingJoinText.failed } }
+                }
+                .help(JoinButton.help(for: link))
+                if let joinNotice { Banner(kind: .error, text: joinNotice, onDismiss: { self.joinNotice = nil }) }
+            }
         }
     }
 

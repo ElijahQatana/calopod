@@ -159,6 +159,7 @@ enum HumanOutputRenderer {
                         if item.allDay == true { lines.append("  All day: yes") }
                         if item.cancelled == true { lines.append("  Cancelled: yes") }
                         if let availability = item.availability { lines.append("  Availability: \(readable(availability))") }
+                        if let provider = item.joinProvider, let link = item.joinURL { lines.append("  Join: \(clean(provider)) \(clean(link))") }
                     case "availability":
                         lines.append("\(index + 1). \(readable(item.availability ?? "unknown"))")
                         if let start = item.startsAt { lines.append("  From: \(clean(start))") }
@@ -299,7 +300,7 @@ enum HumanOutputRenderer {
 
     private static func wrap(_ line: String, width: Int) -> [String] {
         // Exact identifiers stay on one line so copying never changes their value.
-        if ["ID: ", "Source ID: ", "Connection ID: ", "Destination ID: ", "Calendar ID: "].contains(where: { line.trimmingCharacters(in: .whitespaces).hasPrefix($0) }) { return [line] }
+        if ["ID: ", "Source ID: ", "Connection ID: ", "Destination ID: ", "Calendar ID: ", "Join: "].contains(where: { line.trimmingCharacters(in: .whitespaces).hasPrefix($0) }) { return [line] }
         let indentation = String(line.prefix(while: { $0 == " " }))
         var remaining = String(line.dropFirst(indentation.count))
         var result: [String] = []

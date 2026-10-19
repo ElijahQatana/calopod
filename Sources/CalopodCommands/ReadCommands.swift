@@ -44,6 +44,8 @@ public struct EventsCommand: AsyncParsableCommand {
                 from: resolved.window.start,
                 through: resolved.window.end
             )
+            // Copies Calopod made never get a Join link.
+            let originals = Set(((try? repository.inboxContextSnapshot()) ?? InboxContextSnapshot(sources: [], events: [])).events.map(\.event.sourceKeyHash))
             try OutputRenderer.write(
                 command: "events",
                 payload: CommandPayload(
@@ -53,7 +55,8 @@ public struct EventsCommand: AsyncParsableCommand {
                     range: RangeOutput(range: resolved),
                     sources: commandSources(sources, names: names),
                     items: events.map {
-                        CommandItem(
+                        let join = originals.contains($0.sourceKeyHash) ? JoinSelector.link(for: $0) : nil
+                        return CommandItem(
                             id: $0.sourceKeyHash,
                             kind: "event",
                             label: $0.title,
@@ -62,7 +65,9 @@ public struct EventsCommand: AsyncParsableCommand {
                             endsAt: outputDate($0.endsAt),
                             allDay: $0.isAllDay,
                             cancelled: false,
-                            availability: $0.availability
+                            availability: $0.availability,
+                            joinProvider: join?.provider.displayName,
+                            joinURL: join?.webURL.absoluteString
                         )
                     },
                     ingestion: refresh.ingestion
