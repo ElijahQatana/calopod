@@ -18,6 +18,7 @@ func rootExposesThePlannedCommandGroups() {
         "events",
         "join",
         "inbox",
+        "notifications",
         "availability",
         "sync",
         "doctor",
