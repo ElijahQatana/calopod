@@ -47,36 +47,20 @@ struct EventKitHostRunner {
         }
     }
 
+    /// The helper app this runner launches.
+    var hostURL: URL { appURL }
+
     static func resolveAppURL(
         environment: [String: String],
         executableURL: URL
     ) throws -> URL {
-        if let configured = environment["CALOPOD_EVENTKIT_HOST_APP"], !configured.isEmpty {
-            guard configured.hasPrefix("/") else {
-                throw CommandEnvironmentError.invalidEventKitHostPath
-            }
-            return URL(fileURLWithPath: configured, isDirectory: true).standardizedFileURL
+        do {
+            return try EventKitHostLocator.resolve(variables: environment, executableURL: executableURL)
+        } catch EventKitHostLocatorError.invalidPath {
+            throw CommandEnvironmentError.invalidEventKitHostPath
+        } catch {
+            throw CommandEnvironmentError.missingEventKitHost
         }
-
-        var ancestor = executableURL.standardizedFileURL
-            .resolvingSymlinksInPath()
-            .deletingLastPathComponent()
-        while ancestor.path != "/" {
-            let packaged = ancestor
-                .appendingPathComponent("eventkit-host", isDirectory: true)
-                .appendingPathComponent("Calopod EventKit Host.app", isDirectory: true)
-            if FileManager.default.fileExists(atPath: packaged.path) {
-                return packaged.standardizedFileURL
-            }
-            let development = ancestor
-                .appendingPathComponent(".build/eventkit-host", isDirectory: true)
-                .appendingPathComponent("Calopod EventKit Host.app", isDirectory: true)
-            if FileManager.default.fileExists(atPath: development.path) {
-                return development.standardizedFileURL
-            }
-            ancestor.deleteLastPathComponent()
-        }
-        throw CommandEnvironmentError.missingEventKitHost
     }
 
     func requestPermission() throws -> EventKitHostResponse {

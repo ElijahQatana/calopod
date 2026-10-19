@@ -42,39 +42,18 @@ struct EventKitHostRunner: Sendable {
         }
     }
 
-    /// Finds the host app: an absolute `CALOPOD_EVENTKIT_HOST_APP` first (required for a
-    /// LaunchAgent), otherwise searches up from the executable for `eventkit-host` or
-    /// `.build/eventkit-host`. Installed symlinks must resolve to the service payload first.
+    /// Finds the host app; see `EventKitHostLocator`.
     static func resolveAppURL(
         variables: [String: String],
         executableURL: URL
     ) throws -> URL {
-        if let configured = variables["CALOPOD_EVENTKIT_HOST_APP"], !configured.isEmpty {
-            guard configured.hasPrefix("/") else {
-                throw CalopodRuntimeError.invalidEventKitHostPath
-            }
-            return URL(fileURLWithPath: configured, isDirectory: true).standardizedFileURL
+        do {
+            return try EventKitHostLocator.resolve(variables: variables, executableURL: executableURL)
+        } catch EventKitHostLocatorError.invalidPath {
+            throw CalopodRuntimeError.invalidEventKitHostPath
+        } catch {
+            throw CalopodRuntimeError.missingEventKitHost
         }
-
-        var ancestor = executableURL.standardizedFileURL
-            .resolvingSymlinksInPath()
-            .deletingLastPathComponent()
-        while ancestor.path != "/" {
-            let candidate = ancestor
-                .appendingPathComponent("eventkit-host", isDirectory: true)
-                .appendingPathComponent("Calopod EventKit Host.app", isDirectory: true)
-            if FileManager.default.fileExists(atPath: candidate.path) {
-                return candidate.standardizedFileURL
-            }
-            let buildCandidate = ancestor
-                .appendingPathComponent(".build/eventkit-host", isDirectory: true)
-                .appendingPathComponent("Calopod EventKit Host.app", isDirectory: true)
-            if FileManager.default.fileExists(atPath: buildCandidate.path) {
-                return buildCandidate.standardizedFileURL
-            }
-            ancestor.deleteLastPathComponent()
-        }
-        throw CalopodRuntimeError.missingEventKitHost
     }
 
     func requestPermission() throws -> EventKitHostResponse {

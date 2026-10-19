@@ -110,3 +110,40 @@ private final class FakeHost: @unchecked Sendable {
             open: { [self] in opened.append($0) })
     }
 }
+
+final class DevHelperChoiceTests: XCTestCase {
+    private func layout() throws -> (executable: URL, installed: URL, root: URL) {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("calopod-dev-host-\(UUID().uuidString)", isDirectory: true)
+        let macOS = root.appendingPathComponent("Calopod.app/Contents/MacOS", isDirectory: true)
+        let installed = root.appendingPathComponent("Service/eventkit-host/Calopod EventKit Host.app", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: macOS.appendingPathComponent("eventkit-host/Calopod EventKit Host.app"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: installed, withIntermediateDirectories: true)
+        return (macOS.appendingPathComponent("CalopodMac"), installed, root)
+    }
+
+    func testATrustedBundledHelperBeatsTheSourceInstall() throws {
+        let found = try layout()
+        defer { try? FileManager.default.removeItem(at: found.root) }
+        XCTAssertNil(AppConfiguration.devHost(
+            environment: [:], executableURL: found.executable, installed: found.installed, verify: { _ in }))
+    }
+
+    func testAnUntrustedBundledHelperFallsBackToTheSourceInstall() throws {
+        let found = try layout()
+        defer { try? FileManager.default.removeItem(at: found.root) }
+        let host = AppConfiguration.devHost(
+            environment: [:], executableURL: found.executable, installed: found.installed,
+            verify: { _ in throw EventKitHostSignatureError.untrusted })
+        XCTAssertEqual(host, found.installed)
+    }
+
+    func testASetPathIsLeftAlone() throws {
+        let found = try layout()
+        defer { try? FileManager.default.removeItem(at: found.root) }
+        XCTAssertNil(AppConfiguration.devHost(
+            environment: ["CALOPOD_EVENTKIT_HOST_APP": "/example/host.app"], executableURL: found.executable,
+            installed: found.installed, verify: { _ in throw EventKitHostSignatureError.untrusted }))
+    }
+}

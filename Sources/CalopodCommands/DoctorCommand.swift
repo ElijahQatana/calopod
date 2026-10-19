@@ -17,7 +17,7 @@ public struct DoctorCommand: ParsableCommand {
     public func run() throws {
         #if os(macOS)
         do {
-            let report = try doctorReport(controller: LaunchAgentController(), permissions: livePermissionReadings)
+            let report = try doctorReport(controller: LaunchAgentController(), permissions: livePermissionReadings, calendarHelper: liveCalendarHelper)
             try OutputRenderer.write(
                 command: "doctor",
                 payload: CommandPayload(
@@ -55,9 +55,10 @@ struct DoctorReport: Equatable {
 #if os(macOS)
 func doctorReport(
     controller: LaunchAgentController,
-    permissions: () -> [PermissionReading] = { [] }
+    permissions: () -> [PermissionReading] = { [] },
+    calendarHelper: () -> String? = { nil }
 ) throws -> DoctorReport {
-    withPermissions(try serviceReport(controller: controller), permissions())
+    withPermissions(try serviceReport(controller: controller), permissions(), calendarHelper: calendarHelper())
 }
 
 private func serviceReport(controller: LaunchAgentController) throws -> DoctorReport {
@@ -162,13 +163,16 @@ func doctorReport(
     }
 
     if connections.contains(where: { $0.provider == "eventkit" }) {
+        var helper: String?
         do {
-            let response = try EventKitHostRunner(environment: configuration.environment)
+            let runner = try EventKitHostRunner(environment: configuration.environment)
+            helper = runner.hostURL.path
+            let response = try runner
                 .perform(EventKitHostRequest(operation: .permissionStatus))
             if response.status == .fullAccess, response.errorCode == nil {
-                items.append(doctorItem("calendar-permission", "ok"))
+                items.append(doctorItem("calendar-permission", "ok", label: helper.map(shortPath)))
             } else {
-                items.append(doctorItem("calendar-permission", "failed", "permission"))
+                items.append(doctorItem("calendar-permission", "failed", "permission", label: helper.map(shortPath)))
                 warnings.append("Grant Calendar access, then refresh the Mac Connection.")
             }
         } catch {
@@ -176,7 +180,7 @@ func doctorReport(
             if case CommandEnvironmentError.eventKitHostTimedOut = error {
                 category = "eventkit-host-timeout"
             }
-            items.append(doctorItem("calendar-permission", "failed", category))
+            items.append(doctorItem("calendar-permission", "failed", category, label: helper.map(shortPath)))
             warnings.append(actionForFailure(category))
         }
     }
@@ -213,9 +217,18 @@ func livePermissionReadings() -> [PermissionReading] {
 }
 #endif
 
+/// The Calendar helper this command would ask, so a mismatch with the app is visible.
+func liveCalendarHelper() -> String? {
+    try? CalendarAccessService().hostURL().path
+}
+
+private func shortPath(_ path: String) -> String {
+    (path as NSString).abbreviatingWithTildeInPath
+}
+
 /// Adds the permission checks to a report. Anything not allowed is flagged for attention, and
 /// the warning carries the same words as the app's Permissions list.
-func withPermissions(_ report: DoctorReport, _ readings: [PermissionReading]) -> DoctorReport {
+func withPermissions(_ report: DoctorReport, _ readings: [PermissionReading], calendarHelper: String? = nil) -> DoctorReport {
     guard !readings.isEmpty else { return report }
     let ids = [PermissionReading.ID.calendar: "permission-calendar", .loginItems: "permission-login-items", .keychain: "permission-keychain"]
     var items = report.items
@@ -227,7 +240,8 @@ func withPermissions(_ report: DoctorReport, _ readings: [PermissionReading]) ->
         case .notAsked, .blocked: kind = "attention"
         case .unknown: kind = reading.reason == "unreachable" ? "attention" : "skipped"
         }
-        items.append(doctorItem(ids[reading.id] ?? reading.id.rawValue, kind, reading.reason))
+        let helper = reading.id == .calendar ? calendarHelper.map(shortPath) : nil
+        items.append(doctorItem(ids[reading.id] ?? reading.id.rawValue, kind, reading.reason, label: helper))
         if kind == "attention" { warnings.append("\(reading.title): \(reading.detail)") }
     }
     let merged = doctorReport(items: items, warnings: warnings)
@@ -338,9 +352,10 @@ func genericFailureCategory(_ value: String?) -> String {
 private func doctorItem(
     _ id: String,
     _ kind: String,
-    _ reason: String? = nil
+    _ reason: String? = nil,
+    label: String? = nil
 ) -> CommandItem {
-    CommandItem(id: id, kind: kind, reason: reason)
+    CommandItem(id: id, kind: kind, label: label, reason: reason)
 }
 
 private func actionForFailure(_ category: String?) -> String {
