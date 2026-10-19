@@ -111,6 +111,7 @@ enum HumanOutputRenderer {
                             lines.append("\(readable(item.id)): \(readable(item.kind))")
                             if let reason = item.reason { lines.append("  Reason: \(readable(reason))") }
                             if command == "doctor", ["calendar-permission", "permission-calendar"].contains(item.id), let helper = item.label { lines.append("  Helper: \(clean(helper))") }
+                            if command == "doctor", ["service-in-use", "automatic-run"].contains(item.id), let detail = item.label { lines.append("  \(item.id == "automatic-run" ? "Last failed run" : "Using"): \(clean(detail))") }
                         }
                         continue
                     }
@@ -199,6 +200,8 @@ enum HumanOutputRenderer {
                 }
             }
         }
+        if let service = payload.service { lines.append("Service: \(service)") }
+        if let source = payload.sourceInstall { lines.append("Old source install: \(source)") }
         if let installed = payload.installed { lines.append("Installed: \(installed ? "yes" : "no")") }
         if let enabled = payload.enabled { lines.append("Enabled: \(enabled ? "yes" : "no")") }
         if let paused = payload.paused { lines.append("Paused: \(paused ? "yes" : "no")") }
@@ -208,11 +211,15 @@ enum HumanOutputRenderer {
         if let jitter = payload.jitterSeconds { lines.append("Jitter: \(jitter) seconds") }
         if let lookback = payload.lookbackDays { lines.append("Lookback: \(lookback) days") }
         if let horizon = payload.horizonDays { lines.append("Horizon: \(horizon) days") }
+        if let run = payload.lastRunStatus, let age = payload.lastRunAgeSeconds {
+            lines.append("Last automatic run: \(run), \(FailureStep.ago(age)) ago")
+        }
         if let age = payload.lastSuccessAgeSeconds {
             lines.append("Last success age: \(age) seconds")
         }
         if let failure = payload.failureCategory {
             lines.append("Failure category: \(failure)")
+            lines.append("Failed step: \(FailureStep.description(for: failure))")
         }
         if let planned = payload.planned { lines.append("Planned: \(planned)") }
         if let applied = payload.applied { lines.append("Applied: \(applied)") }

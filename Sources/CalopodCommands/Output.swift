@@ -63,6 +63,13 @@ public struct CommandPayload: Codable, Equatable, Sendable {
     public let horizonDays: Int?
     public let lastSuccessAgeSeconds: Int?
     public let failureCategory: String?
+    /// Which service the numbers above describe, in words.
+    public let service: String?
+    /// The old source install, when it is still on next to the app's service.
+    public let sourceInstall: String?
+    /// How the last automatic run ended, and how long ago.
+    public let lastRunStatus: String?
+    public let lastRunAgeSeconds: Int?
     public let planned: Int?
     public let applied: Int?
     public let creates: Int?
@@ -105,6 +112,10 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         horizonDays: Int? = nil,
         lastSuccessAgeSeconds: Int? = nil,
         failureCategory: String? = nil,
+        service: String? = nil,
+        sourceInstall: String? = nil,
+        lastRunStatus: String? = nil,
+        lastRunAgeSeconds: Int? = nil,
         planned: Int? = nil,
         applied: Int? = nil,
         creates: Int? = nil,
@@ -145,6 +156,10 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         self.horizonDays = horizonDays
         self.lastSuccessAgeSeconds = lastSuccessAgeSeconds
         self.failureCategory = failureCategory
+        self.service = service
+        self.sourceInstall = sourceInstall
+        self.lastRunStatus = lastRunStatus
+        self.lastRunAgeSeconds = lastRunAgeSeconds
         self.planned = planned
         self.applied = applied
         self.creates = creates
