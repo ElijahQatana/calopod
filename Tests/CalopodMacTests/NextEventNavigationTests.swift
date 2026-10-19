@@ -23,7 +23,7 @@ final class NextEventNavigationTests: XCTestCase {
         suite.removePersistentDomain(forName: name)
         let now = utc.date(from: DateComponents(year: 2026, month: 10, day: 14, hour: 9))!
         let schedule = CalendarSchedule(calendars: [], events: events)
-        let model = CalendarModel(calendar: utc, now: { now }, defaults: suite, load: { schedule })
+        let model = CalendarModel(calendar: utc, now: { now }, defaults: suite, aliases: .isolated(), load: { schedule })
         await model.reload()
         return model
     }

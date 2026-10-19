@@ -34,7 +34,7 @@ final class UpNextTests: XCTestCase {
                 ScheduleCalendar(id: "a", name: "Work", account: "", provider: "google"),
                 ScheduleCalendar(id: "b", name: "Team", account: "", provider: "google", freshness: .stale(since: nil)),
             ], events: [])
-        XCTAssertEqual(UpNext.staleCalendars(in: schedule), ["Team"])
+        XCTAssertEqual(UpNext.staleCalendars(in: schedule, name: { $0.name }), ["Team"])
     }
 
     func testMenuBarTextDropsWhenNothingWaits() {

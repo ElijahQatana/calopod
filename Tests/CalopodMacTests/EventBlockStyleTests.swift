@@ -58,13 +58,13 @@ final class EventBlockStyleTests: XCTestCase {
         suite.removePersistentDomain(forName: "EventBlockStyleTests")
         let copied = copy(.fullDetails, .accepted)
         let schedule = CalendarSchedule(calendars: [], events: [plain(.accepted), copied])
-        let model = CalendarModel(now: { self.start }, defaults: suite, load: { schedule })
+        let model = CalendarModel(now: { self.start }, defaults: suite, aliases: .isolated(), load: { schedule })
         await model.reload()
         XCTAssertEqual(model.original(of: copied)?.id, "a")
         model.show(try XCTUnwrap(model.original(of: copied)))
         XCTAssertEqual(model.selectedID, "a")
 
-        let loose = CalendarModel(now: { self.start }, defaults: suite, load: { CalendarSchedule(calendars: [], events: [copied]) })
+        let loose = CalendarModel(now: { self.start }, defaults: suite, aliases: .isolated(), load: { CalendarSchedule(calendars: [], events: [copied]) })
         await loose.reload()
         XCTAssertNil(loose.original(of: copied))
     }

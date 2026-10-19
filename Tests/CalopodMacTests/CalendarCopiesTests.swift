@@ -27,7 +27,7 @@ final class CalendarCopiesTests: XCTestCase {
 
     func testHiddenCopiesLeaveTheLayoutAndFreeTheColumns() async throws {
         let schedule = CalendarSchedule(calendars: [], events: [event("a", copy: false), event("a-busy", copy: true)])
-        let model = CalendarModel(calendar: calendar, now: { self.start }, defaults: try defaults(), load: { schedule })
+        let model = CalendarModel(calendar: calendar, now: { self.start }, defaults: try defaults(), aliases: .isolated(), load: { schedule })
         await model.reload()
         model.showCopies = true
         let day = calendar.startOfDay(for: model.anchor)
@@ -43,7 +43,7 @@ final class CalendarCopiesTests: XCTestCase {
 
     func testHidingCopiesClosesAnOpenCopyOnly() async throws {
         let schedule = CalendarSchedule(calendars: [], events: [event("a", copy: false), event("a-busy", copy: true)])
-        let model = CalendarModel(calendar: calendar, now: { self.start }, defaults: try defaults(), load: { schedule })
+        let model = CalendarModel(calendar: calendar, now: { self.start }, defaults: try defaults(), aliases: .isolated(), load: { schedule })
         await model.reload()
         model.showCopies = true
 
@@ -59,8 +59,8 @@ final class CalendarCopiesTests: XCTestCase {
 
     func testCopiesAreOffByDefaultAndTheChoiceIsRemembered() throws {
         let store = try defaults()
-        XCTAssertFalse(CalendarModel(defaults: store, load: { CalendarSchedule(calendars: [], events: []) }).showCopies)
-        CalendarModel(defaults: store, load: { CalendarSchedule(calendars: [], events: []) }).showCopies = true
-        XCTAssertTrue(CalendarModel(defaults: store, load: { CalendarSchedule(calendars: [], events: []) }).showCopies)
+        XCTAssertFalse(CalendarModel(defaults: store, aliases: .isolated(), load: { CalendarSchedule(calendars: [], events: []) }).showCopies)
+        CalendarModel(defaults: store, aliases: .isolated(), load: { CalendarSchedule(calendars: [], events: []) }).showCopies = true
+        XCTAssertTrue(CalendarModel(defaults: store, aliases: .isolated(), load: { CalendarSchedule(calendars: [], events: []) }).showCopies)
     }
 }

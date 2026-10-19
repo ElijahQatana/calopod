@@ -101,7 +101,7 @@ enum ScheduleLayout {
     /// One line per visible calendar whose local copy is old, missing, or does not reach the range.
     static func notices(
         calendars: [ScheduleCalendar], hidden: Set<String>, range: Range<Date>, now: Date, timeZone: TimeZone = .current,
-        name: (ScheduleCalendar) -> String = { $0.name }
+        name: (ScheduleCalendar) -> String
     ) -> [String] {
         calendars.filter { !hidden.contains($0.id) }.compactMap { calendar in
             switch calendar.freshness {

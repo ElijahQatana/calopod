@@ -67,7 +67,7 @@ enum GlassBase {
 @MainActor
 @Observable
 final class AppSettings {
-    static let shared = AppSettings()
+    static let shared = AppSettings(defaults: AppDefaults.forSingleton)
 
     static let appearanceKey = "calopod.appearance"
     static let windowStyleKey = "calopod.windowStyle"
@@ -85,7 +85,7 @@ final class AppSettings {
 
     @ObservationIgnored private let defaults: UserDefaults
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = AppDefaults.standard) {
         self.defaults = defaults
         appearance = .parse(defaults.string(forKey: Self.appearanceKey))
         let style = WindowStyle.parse(defaults.string(forKey: Self.windowStyleKey))

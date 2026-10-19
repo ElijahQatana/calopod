@@ -1,7 +1,7 @@
 @testable import CalopodCommands
 import ArgumentParser
 import CalopodDomain
-import CalopodStore
+@testable import CalopodStore
 import Foundation
 import Testing
 
@@ -94,5 +94,42 @@ import Testing
         #expect(human.contains("Calendar: Office") && !human.contains("Work"))
         let json = try OutputRenderer.render(command: "inbox", payload: payload, format: .json)
         #expect(json.contains("\"label\":\"Work\"") && json.contains("\"alias\":\"Office\"") && json.contains("\"ignored\":true"))
+    }
+
+    @Test func prunePreferencesCountsFirstAndKeepsRealCalendars() throws {
+        #expect(try CalopodRoot.parseAsRoot(["calendars", "prune-preferences", "--dry-run"]) is CalendarsPrunePreferencesCommand)
+        let repository = try repository()
+        _ = try CalendarsEdit.name("work", to: "Office", repository: repository)
+        try repository.setCalendarAlias("Leftover", calendarID: "fam")
+        try repository.setCalendarColor("red", calendarID: "hol")
+
+        let dry = try CalendarsEdit.prune(dryRun: true, repository: repository)
+        #expect(dry.count == 2 && dry.message.contains("would be removed"))
+        #expect(try repository.calendarPreferences().count == 3)
+
+        let done = try CalendarsEdit.prune(dryRun: false, repository: repository)
+        #expect(done.count == 2)
+        #expect(Set(try repository.calendarPreferences().keys) == ["work"])
+        #expect(try CalendarsEdit.prune(dryRun: false, repository: repository).message == "Nothing to remove.")
+    }
+
+    @Test func everyReadPathUsesTheChosenName() throws {
+        let repository = try repository()
+        _ = try CalendarsEdit.name("work", to: "Office", repository: repository)
+        // A blank name left in the database counts as no name.
+        try repository.database.write {
+            try $0.execute(sql: "INSERT INTO calendar_preferences (calendar_id, alias) VALUES ('home', '')")
+        }
+        let names = CalendarNames(repository)
+
+        // events and read: the source carries the alias, sync preview and arms: the label map.
+        let source = names.source(CommandSource(id: "work", connectionID: "conn", provider: "google", label: "Work"))
+        #expect(source.alias == "Office")
+        #expect(names.source(CommandSource(id: "home", connectionID: "conn", provider: "google", label: "Home")).alias == nil)
+        let context = try OutputOptions.parse([]).localContext(repository: repository)
+        #expect(context.calendarLabels["work"] == "Office" && context.calendarLabels["home"] == "Home")
+
+        // The inbox review terminal and the Inbox list read through this same lookup.
+        #expect(names.shown("work", real: "Work") == "Office" && names.shown("home", real: "Home") == "Home")
     }
 }

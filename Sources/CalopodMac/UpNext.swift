@@ -20,7 +20,7 @@ enum UpNext {
     /// a calendar read only part of the way across it counts too.
     static func staleCalendars(
         in schedule: CalendarSchedule?, range: Range<Date>? = nil, now: Date = Date(),
-        name: (ScheduleCalendar) -> String = { $0.name }
+        name: (ScheduleCalendar) -> String
     ) -> [String] {
         (schedule?.calendars ?? []).filter { calendar in
             guard let range else { return calendar.freshness != .current }
@@ -32,7 +32,7 @@ enum UpNext {
     /// this, and the Calendars list reads `CalendarFreshnessLabel`, so they cannot disagree.
     static func staleToday(
         in schedule: CalendarSchedule?, now: Date = Date(), calendar: Calendar = .current,
-        ignored: (ScheduleCalendar) -> Bool = { _ in false }, name: (ScheduleCalendar) -> String = { $0.name }
+        ignored: (ScheduleCalendar) -> Bool = { _ in false }, name: (ScheduleCalendar) -> String
     ) -> [String] {
         guard let schedule else { return [] }
         let start = calendar.startOfDay(for: now)

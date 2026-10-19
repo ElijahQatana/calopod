@@ -118,7 +118,7 @@ struct InboxDetailView: View {
 
     private func confirm(_ reply: ConflictChoice) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            ReplyConfirmView(confirmation: ReplyConfirmation(detail: detail, reply: reply))
+            ReplyConfirmView(confirmation: ReplyConfirmation(detail: detail, reply: reply, aliases: aliases))
             HStack {
                 Button("Cancel") { model.cancelReply() }.keyboardShortcut(.cancelAction)
                 Spacer()

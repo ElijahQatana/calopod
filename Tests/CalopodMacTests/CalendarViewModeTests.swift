@@ -71,7 +71,7 @@ final class CalendarViewModeTests: XCTestCase {
         model.viewMode = .destinations
         XCTAssertFalse(model.showCopies)
 
-        let again = CalendarModel(defaults: store, load: { CalendarSchedule(calendars: [], events: []) })
+        let again = CalendarModel(defaults: store, aliases: .isolated(), load: { CalendarSchedule(calendars: [], events: []) })
         again.viewMode = .sources
         XCTAssertTrue(again.showCopies)
         again.viewMode = .destinations
@@ -113,7 +113,7 @@ final class CalendarViewModeTests: XCTestCase {
         let store = try defaults()
         let model = try await model(defaults: store)
         model.viewMode = .destinations
-        let again = CalendarModel(defaults: store, load: { CalendarSchedule(calendars: [], events: []) })
+        let again = CalendarModel(defaults: store, aliases: .isolated(), load: { CalendarSchedule(calendars: [], events: []) })
         XCTAssertEqual(again.viewMode, .destinations)
     }
 }

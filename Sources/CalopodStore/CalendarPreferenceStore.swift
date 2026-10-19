@@ -39,34 +39,58 @@ extension LocalStateRepository {
         try setPreference("color", color, calendarID: calendarID)
     }
 
-    /// Copies choices an older version kept elsewhere, once. Only fields never chosen are filled, so
-    /// nothing already in the database is overwritten. Returns false when the import already ran.
+    /// Copies choices an older version kept elsewhere into rows that lack them. A missing, empty or
+    /// blank alias or color is filled, and so is a never-chosen ignore flag; a value already there is
+    /// never replaced. Safe to repeat. Returns how many values were filled.
     @discardableResult
     public func importCalendarPreferences(
         aliases: [String: String], ignored: Set<String>, colors: [String: String]
-    ) throws -> Bool {
+    ) throws -> Int {
         try database.write { db in
-            guard try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM calendar_preferences_import") == 0 else { return false }
-            try db.execute(sql: "INSERT INTO calendar_preferences_import (id) VALUES (1)")
+            var filled = 0
             for id in Set(aliases.keys).union(ignored).union(colors.keys) {
                 try db.execute(sql: """
                     INSERT OR IGNORE INTO calendar_preferences (calendar_id, connection_id)
                     VALUES (?1, (SELECT connection_id FROM calendar_bindings WHERE id = ?1))
                     """, arguments: [id])
-                if let alias = aliases[id] {
-                    try db.execute(sql: "UPDATE calendar_preferences SET alias = ? WHERE calendar_id = ? AND alias IS NULL",
-                                   arguments: [alias, id])
+                if let alias = aliases[id]?.trimmingCharacters(in: .whitespacesAndNewlines), !alias.isEmpty {
+                    try db.execute(sql: """
+                        UPDATE calendar_preferences SET alias = ?
+                        WHERE calendar_id = ? AND (alias IS NULL OR TRIM(alias) = '')
+                        """, arguments: [alias, id])
+                    filled += db.changesCount
                 }
                 if ignored.contains(id) {
                     try db.execute(sql: "UPDATE calendar_preferences SET is_ignored = 1 WHERE calendar_id = ? AND is_ignored IS NULL",
                                    arguments: [id])
+                    filled += db.changesCount
                 }
-                if let color = colors[id] {
-                    try db.execute(sql: "UPDATE calendar_preferences SET color = ? WHERE calendar_id = ? AND color IS NULL",
-                                   arguments: [color, id])
+                if let color = colors[id], !color.isEmpty {
+                    try db.execute(sql: """
+                        UPDATE calendar_preferences SET color = ?
+                        WHERE calendar_id = ? AND (color IS NULL OR TRIM(color) = '')
+                        """, arguments: [color, id])
+                    filled += db.changesCount
                 }
             }
-            return true
+            return filled
+        }
+    }
+
+    /// Preference rows for calendars with no binding and no connection, such as ones left by old test
+    /// runs. A row for a calendar that exists, or whose connection exists, is never touched. With
+    /// `dryRun` nothing is removed. Returns how many rows match.
+    @discardableResult
+    public func pruneCalendarPreferences(dryRun: Bool = false) throws -> Int {
+        try database.write { db in
+            let orphaned = """
+                FROM calendar_preferences
+                WHERE calendar_id NOT IN (SELECT id FROM calendar_bindings)
+                  AND (connection_id IS NULL OR connection_id NOT IN (SELECT id FROM connections))
+                """
+            let count = try Int.fetchOne(db, sql: "SELECT COUNT(*) " + orphaned) ?? 0
+            if !dryRun, count > 0 { try db.execute(sql: "DELETE " + orphaned) }
+            return count
         }
     }
 
@@ -108,4 +132,16 @@ public enum CalendarPalette {
     ]
 
     public static func entry(id: String) -> CalendarPaletteEntry? { entries.first { $0.id == id } }
+}
+
+/// The one rule for the name shown for a calendar, used by the app and the command line: the name
+/// chosen on this Mac, unless it is blank or the same as the provider's.
+public enum CalendarDisplayName {
+    /// The chosen name when it differs from the real one, else nil.
+    public static func alias(_ alias: String?, real: String?) -> String? {
+        guard let text = alias?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty, text != real else { return nil }
+        return text
+    }
+
+    public static func shown(alias: String?, real: String?) -> String? { Self.alias(alias, real: real) ?? real }
 }

@@ -16,7 +16,7 @@ final class SetupModel {
 
     @ObservationIgnored private let colors: CalendarColors
 
-    init(service: SetupService = SetupService(), aliases: CalendarAliases = .shared, colors: CalendarColors = .shared) {
+    init(service: SetupService = SetupService(), aliases: CalendarAliases, colors: CalendarColors) {
         self.service = service
         self.aliases = aliases
         self.colors = colors
