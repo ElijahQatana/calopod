@@ -3,7 +3,7 @@ import SwiftUI
 @main
 struct CalopodApp: App {
     @State private var store = SnapshotStore(reader: Self.reader(), cache: Self.cache())
-    @State private var reminders = Reminders(center: Self.isFixture ? nil : UserNotificationCenter())
+    @State private var reminders = Reminders(center: Self.isFixture ? FixtureNotificationCenter() : UserNotificationCenter())
 
     var body: some Scene {
         WindowGroup { RootView(store: store, reminders: reminders) }

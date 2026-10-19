@@ -5,11 +5,12 @@ import SwiftUI
 /// without, only the busy time, which carries no titles.
 struct CalendarTab: View {
     var context: SnapshotContext
+    var filter: CalendarFilter
     /// An event a tapped reminder asked to open. It is cleared once the event is shown.
     @Binding var requested: String?
     @State private var selected: String?
     @State private var openEvent: CalendarEvent?
-    @State private var filter = CalendarFilter()
+    @State private var view = CalendarView.schedule
 
     var body: some View {
         Group {
@@ -32,12 +33,23 @@ struct CalendarTab: View {
         let hasEvents = !snapshot.days.isEmpty
         let days = DaySchedule.schedules(from: snapshot.availability)
         let day = days.first { $0.day == selected } ?? days.first { $0.interval.contains(context.now) } ?? days.first
-        return Screen(title: "Calendar", subtitle: "\(hasEvents ? "Events" : "Busy time") \(context.fromMac)") {
+        return Screen(
+            title: "Calendar", subtitle: "\(hasEvents ? "Events" : "Busy time") \(context.fromMac)",
+            pinned: {
+                Picker("View", selection: $view) {
+                    ForEach(CalendarView.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, Theme.sidePadding).padding(.top, 14)
+            }
+        ) {
             if context.isStale {
                 StaleBanner(lastUpdate: snapshot.publishedAt, now: context.now, offline: context.offline)
             }
             Group {
-                if let day {
+                if view == .availability {
+                    AvailabilityComingSoon()
+                } else if let day {
                     DayStrip(days: days, selected: day.day) { selected = $0 }
                     DaySummary(day: day)
                     if hasEvents {
@@ -56,6 +68,26 @@ struct CalendarTab: View {
             }
             .opacity(context.isStale ? 0.6 : 1)
         }
+    }
+}
+
+private enum CalendarView: String, CaseIterable {
+    case schedule = "Schedule"
+    case availability = "Availability"
+}
+
+/// The week's free and busy time needs day values the Mac does not publish yet.
+private struct AvailabilityComingSoon: View {
+    var body: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Coming with the next update").font(Theme.Fonts.bodyStrong)
+                Text("Availability will show your week's free and busy time, worked out on your Mac. Schedule has your events for now.")
+                    .font(Theme.Fonts.secondary).foregroundStyle(Theme.secondary)
+            }
+            .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .shadow(color: Theme.text.opacity(0.06), radius: 6, y: 2)
     }
 }
 
