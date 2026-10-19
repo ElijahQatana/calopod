@@ -24,31 +24,21 @@ struct EventKitHostMain {
             }
             exit(0)
         }
+        if arguments == ["--request-permission"] {
+            PermissionRequest.run()
+        }
         let client = EventKitClient()
         do {
-            let response: EventKitHostResponse
-            if arguments == ["--request-permission"] {
-                // An agent app has no window, so bring it forward or the prompt can open behind
-                // other windows. The process stays alive until the answer comes back.
-                NSApplication.shared.setActivationPolicy(.accessory)
-                NSApplication.shared.activate(ignoringOtherApps: true)
-                let status = try await client.requestFullAccess()
-                response = EventKitHostResponse(
-                    status: status,
-                    requestOutcome: CalendarAccessOutcome(statusAfterRequest: status)
-                )
+            let requestData: Data
+            if arguments.count == 2, arguments[0] == "--request-file" {
+                requestData = try Data(contentsOf: URL(fileURLWithPath: arguments[1]))
+            } else if arguments.isEmpty {
+                requestData = FileHandle.standardInput.readDataToEndOfFile()
             } else {
-                let requestData: Data
-                if arguments.count == 2, arguments[0] == "--request-file" {
-                    requestData = try Data(contentsOf: URL(fileURLWithPath: arguments[1]))
-                } else if arguments.isEmpty {
-                    requestData = FileHandle.standardInput.readDataToEndOfFile()
-                } else {
-                    throw ProviderFailure.invalidResponse
-                }
-                let request = try JSONDecoder().decode(EventKitHostRequest.self, from: requestData)
-                response = try await handle(request, client: client)
+                throw ProviderFailure.invalidResponse
             }
+            let request = try JSONDecoder().decode(EventKitHostRequest.self, from: requestData)
+            let response = try await handle(request, client: client)
             try write(response)
             exit(response.errorCode == nil ? 0 : 77)
         } catch let error as ProviderFailure {
@@ -60,16 +50,13 @@ struct EventKitHostMain {
             default:
                 code = "provider-failure"
             }
-            let outcome: CalendarAccessOutcome? = arguments == ["--request-permission"]
-                ? (code == "permission-denied" ? .denied : .couldNotStart) : nil
-            try? write(EventKitHostResponse(status: status, errorCode: code, requestOutcome: outcome))
+            try? write(EventKitHostResponse(status: status, errorCode: code))
             exit(77)
         } catch {
             try? write(
                 EventKitHostResponse(
                     status: await client.authorizationStatus,
-                    errorCode: "host-failure",
-                    requestOutcome: arguments == ["--request-permission"] ? .couldNotStart : nil
+                    errorCode: "host-failure"
                 )
             )
             exit(70)
@@ -167,11 +154,69 @@ struct EventKitHostMain {
         }
     }
 
-    private static func write(_ response: EventKitHostResponse) throws {
+    static func write(_ response: EventKitHostResponse) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         let data = try encoder.encode(response)
         FileHandle.standardOutput.write(data)
         FileHandle.standardOutput.write(Data("\n".utf8))
+    }
+}
+
+/// The Calendar prompt needs a real app: a process that never starts NSApplication is not activated
+/// and macOS has nothing to attach the prompt to. So this runs the request inside the app loop,
+/// then exits once the answer has been written.
+@MainActor
+enum PermissionRequest {
+    private static let delegate = Delegate()
+
+    static func run() -> Never {
+        let app = NSApplication.shared
+        app.delegate = delegate
+        app.setActivationPolicy(.accessory)
+        app.run()
+        exit(70)
+    }
+
+    private static func finish(_ response: EventKitHostResponse, reason: String?, code: Int32) -> Never {
+        try? EventKitHostMain.write(response)
+        if let reason {
+            try? FileHandle.standardError.write(contentsOf: Data("\(reason)\n".utf8))
+        }
+        exit(code)
+    }
+
+    @MainActor private final class Delegate: NSObject, NSApplicationDelegate {
+        func applicationDidFinishLaunching(_ notification: Notification) {
+            // An agent app's prompt can open behind other windows, so come forward first.
+            NSApp.activate(ignoringOtherApps: true)
+            Task { @MainActor in await ask() }
+        }
+
+        private func ask() async {
+            let client = EventKitClient()
+            do {
+                let status = try await client.requestFullAccess()
+                let outcome = CalendarAccessOutcome(statusAfterRequest: status)
+                let reason: String? = switch outcome {
+                case .granted: nil
+                case .denied: "Calendar access was denied (\(status.rawValue))."
+                case .undecided: "The request returned but macOS gave no answer, so it did not show the prompt."
+                case .couldNotStart: "The Calendar request could not start."
+                }
+                PermissionRequest.finish(
+                    EventKitHostResponse(status: status, requestOutcome: outcome), reason: reason, code: 0)
+            } catch {
+                let denied: Bool
+                if let failure = error as? ProviderFailure, case .permissionDenied = failure { denied = true } else { denied = false }
+                PermissionRequest.finish(
+                    EventKitHostResponse(
+                        status: await client.authorizationStatus,
+                        errorCode: denied ? "permission-denied" : "host-failure",
+                        requestOutcome: denied ? .denied : .couldNotStart),
+                    reason: denied ? "Calendar access was denied." : "The Calendar request failed before macOS answered.",
+                    code: denied ? 77 : 70)
+            }
+        }
     }
 }
