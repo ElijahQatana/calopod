@@ -14,7 +14,7 @@ struct InboxScreen: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             header
-            if let notice = model.notice { Banner(kind: .error, text: notice, onDismiss: model.dismissNotice) }
+            if let notice = model.notice { Banner(kind: model.noticeIsHint ? .info : .error, text: notice, onDismiss: model.dismissNotice) }
             if let board = model.board, !board.isComplete { staleBanner(board) }
             if let board = model.board {
                 filters(board)

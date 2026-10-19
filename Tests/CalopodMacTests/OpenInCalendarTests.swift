@@ -22,7 +22,9 @@ final class OpenInCalendarTests: XCTestCase {
         let model = InboxModel(service: f.inbox, calendar: opener)
         await model.reload()
         model.selection = "key0"
-        for _ in 0..<50 where model.detail == nil { await Task.yield() }
+        // Loading the detail runs off the main actor, so under load it can take a while.
+        let deadline = ContinuousClock.now + .seconds(10)
+        while model.detail == nil, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
         return (model, try XCTUnwrap(model.detail))
     }
 
@@ -40,7 +42,8 @@ final class OpenInCalendarTests: XCTestCase {
         let (model, before) = try await detail("eventkit", opener)
         model.openInCalendar()
         XCTAssertEqual(opener.opened, ["key0"])
-        XCTAssertNil(model.notice)
+        XCTAssertTrue(model.noticeIsHint)
+        XCTAssertTrue(try XCTUnwrap(model.notice).hasPrefix("Calendar is open. Look for “"))
         await model.reload()
         XCTAssertEqual(model.board?.entries.first?.reasons, before.entry.reasons)
         XCTAssertTrue(before.entry.reasons.contains(.needsResponse))
@@ -54,6 +57,23 @@ final class OpenInCalendarTests: XCTestCase {
         XCTAssertNil(model.notice)
     }
 
+    func testTheHintNamesTheEventAndItsDay() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "UTC"))
+        calendar.locale = Locale(identifier: "en_US")
+        let day = Date(timeIntervalSinceReferenceDate: 86_400 * 3 + 43_200)
+        XCTAssertEqual(
+            CalendarOpenText.hint(title: "Planning", startsAt: day, calendar: calendar),
+            "Calendar is open. Look for “Planning” on Thursday, January 4.")
+    }
+
+    func testCalendarThatCannotStartShowsAProblemNotAHint() async throws {
+        let (model, _) = try await detail("eventkit", Opener(.unavailable))
+        model.openInCalendar()
+        XCTAssertEqual(model.notice, CalendarOpenText.unavailable)
+        XCTAssertFalse(model.noticeIsHint)
+    }
+
     func testTheReviewShowsTheMessageAndDoesNotMarkItOpened() async throws {
         let f = try MacFixture(count: 1, provider: "eventkit")
         let model = InboxReviewModel(service: f.review, calendar: Opener(.notFound))
@@ -62,5 +82,15 @@ final class OpenInCalendarTests: XCTestCase {
         await model.perform(.openCalendar)
         XCTAssertEqual(model.notice, CalendarOpenText.notFound)
         XCTAssertNil(model.openedKey)
+    }
+
+    func testTheReviewMarksItOpenedAndShowsTheHint() async throws {
+        let f = try MacFixture(count: 1, provider: "eventkit")
+        let model = InboxReviewModel(service: f.review, calendar: Opener(.opened))
+        model.open(filter: .all)
+        await model.begin()
+        await model.perform(.openCalendar)
+        XCTAssertNotNil(model.openedKey)
+        XCTAssertTrue(try XCTUnwrap(model.notice).hasPrefix("Calendar is open."))
     }
 }

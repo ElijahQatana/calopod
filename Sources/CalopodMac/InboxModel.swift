@@ -10,6 +10,9 @@ final class InboxModel {
     private(set) var detail: InboxDetail?
     private(set) var busy: String?
     private(set) var notice: String?
+    /// The notice text that is a pointer to the event in Calendar rather than a problem.
+    private(set) var calendarHint: String?
+    var noticeIsHint: Bool { notice != nil && notice == calendarHint }
     private(set) var result: InboxReplyResult?
     /// A reply waiting for the person to confirm it. Nothing is sent until then.
     private(set) var pendingReply: ConflictChoice?
@@ -136,7 +139,10 @@ final class InboxModel {
     /// Opens the event in the Calendar app. This is not a reply and changes nothing in the inbox.
     func openInCalendar() {
         guard let detail, let id = detail.calendarEventID else { return }
-        notice = calendar.open(eventID: id, startsAt: detail.entry.startsAt) == .opened ? nil : CalendarOpenText.notFound
+        let startsAt = detail.entry.startsAt
+        let result = calendar.open(eventID: id, startsAt: startsAt)
+        notice = CalendarOpenText.message(for: result, title: detail.entry.title, startsAt: startsAt)
+        calendarHint = result == .opened ? notice : nil
     }
 
     /// Moves on without replying or changing anything.

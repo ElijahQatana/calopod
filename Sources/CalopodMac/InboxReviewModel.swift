@@ -116,12 +116,9 @@ final class InboxReviewModel {
         case (.card(let card), .openCalendar) where card.detail.canOpenInCalendar:
             // Nothing is sent. The person answers in Calendar and comes back.
             guard let id = card.detail.calendarEventID else { return }
-            if calendar.open(eventID: id, startsAt: card.entry.startsAt) == .opened {
-                openedKey = card.entry.id
-                notice = nil
-            } else {
-                notice = CalendarOpenText.notFound
-            }
+            let result = calendar.open(eventID: id, startsAt: card.entry.startsAt)
+            if result == .opened { openedKey = card.entry.id }
+            notice = CalendarOpenText.message(for: result, title: card.entry.title, startsAt: card.entry.startsAt)
         case (.card(let card), .doneInCalendar) where card.isMacCalendar && card.replies.isEmpty:
             let result = await service.hold(card: card)
             if result.0 == .held { calendarSkips += 1 }
