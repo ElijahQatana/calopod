@@ -174,11 +174,8 @@ struct SettingsScreen: View {
             CardRow { slider("Frame", .frame) }
             CardRow { slider("Sidebar", .sidebar) }
             CardRow { slider("Content", .content) }
-            CardRow {
-                Button("Reset to defaults") { settings.resetTransparency() }
-                    .buttonStyle(.plain)
-                    .font(Theme.Fonts.bodyMedium)
-                    .foregroundStyle(Theme.accent)
+            CardButtonRow(label: "Reset to defaults") { settings.resetTransparency() } content: {
+                Text("Reset to defaults").font(Theme.Fonts.bodyMedium).foregroundStyle(Theme.accent)
             }
         }
     }

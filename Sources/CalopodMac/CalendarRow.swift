@@ -19,9 +19,9 @@ struct CalendarList: View {
     @ViewBuilder
     private func ignoredList(_ calendars: [SetupCalendar]) -> some View {
         let open = model.aliases.isExpanded(connection.id)
-        CardRow { Button {
+        CardButtonRow(label: "Ignored (\(calendars.count))") {
             model.aliases.setExpanded(!open, for: connection.id)
-        } label: {
+        } content: {
             HStack(spacing: 6) {
                 Image(systemName: "chevron.right").font(Theme.Fonts.secondarySemibold)
                     .rotationEffect(.degrees(open ? 90 : 0))
@@ -29,10 +29,8 @@ struct CalendarList: View {
                 Spacer()
             }
             .foregroundStyle(.secondary)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityValue(open ? "Expanded" : "Collapsed") }
+        .accessibilityValue(open ? "Expanded" : "Collapsed")
         if open {
             ForEach(calendars) { calendar in
                 CardRow { CalendarRow(calendar: calendar, model: model, colors: colors) }

@@ -62,6 +62,7 @@ struct ArmCard: View {
         .font(Theme.Fonts.secondaryMedium)
         .padding(.horizontal, 12).frame(minHeight: Theme.Control.smallChipHeight)
         .background(Capsule().fill(Color.primary.opacity(0.07)))
+        .contentShape(Capsule())
         .fixedSize()
         if arm.canChangeRule {
             Menu {
@@ -203,7 +204,7 @@ private struct ArmTitle: View {
                 HStack(spacing: 6) {
                     Text(arm.name).font(Theme.Fonts.bodySemibold).lineLimit(1).truncationMode(.tail)
                     Button { editing = true } label: { Image(systemName: "pencil") }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.bare)
                         .foregroundStyle(.secondary)
                         .opacity(hovering ? 1 : 0)
                         .help("Rename")
