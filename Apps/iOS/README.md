@@ -20,7 +20,11 @@ iCloud only works when the build is signed with a team that owns the container. 
 
     DEVELOPMENT_TEAM = YOUR_TEAM_ID
 
+Builds run from Xcode (Debug) read the CloudKit Production environment, where the Mac publishes, so a development-signed phone sees the same feed as TestFlight. This comes from `CalopodDebug.entitlements`; Release uses `Calopod.entitlements`, and App Store builds are always Production.
+
 Without a team the app still runs, and shows "Sign in to iCloud to see your calendar" instead of reading anything.
+
+The app icon is `Support/EventKitHost/Calopod.icon`, the same file the Mac app uses. The project references it in place, so there is only one copy to edit.
 
 ## Fixture data
 
