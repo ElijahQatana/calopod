@@ -67,7 +67,7 @@ struct OverviewScreen: View {
         SyncStatusCard(
             health: model.syncHealth, marks: model.recentRuns, busy: model.busyAction,
             paused: status.enabled ? status.paused : nil,
-            previewDisabled: model.isBusy || model.pendingPreview != nil || accessState.isMissing,
+            previewRule: model.previewRule,
             pauseDisabled: model.isBusy,
             preview: { Task { await model.previewSync() } },
             togglePause: { Task { await model.setPaused(!status.paused) } },
