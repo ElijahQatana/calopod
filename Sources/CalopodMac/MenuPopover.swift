@@ -64,7 +64,9 @@ struct MenuPopover: View {
     private var todayCount: Int? {
         schedule.schedule == nil ? nil : UpNext.today(in: schedule.schedule, now: Date()).count
     }
-    private var stale: [String] { UpNext.staleCalendars(in: schedule.schedule, name: { CalendarAliases.shared.name(for: $0.id, real: $0.name) }) }
+    private var stale: [String] { UpNext.staleToday(
+        in: schedule.schedule, ignored: { CalendarAliases.shared.isIgnored($0.id) },
+        name: { CalendarAliases.shared.name(for: $0.id, real: $0.name) }) }
 
     private func nextCard(_ event: ScheduleEvent) -> some View {
         NextCard(event: event) {
