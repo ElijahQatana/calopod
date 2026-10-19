@@ -170,7 +170,7 @@ final class ServiceModel {
     func setEnabled(_ enabled: Bool) async {
         let service = service
         await perform(enabled ? "Enabling…" : "Disabling…") {
-            try service.setEnabled(enabled)
+            if enabled { try await service.enable() } else { try service.setEnabled(false) }
             return nil
         }
     }
@@ -198,23 +198,17 @@ final class ServiceModel {
         }
     }
 
-    /// A source-installed agent is loaded in launchd. A leftover plist, or the app's own service
-    /// reporting as installed, does not count.
-    var legacyServiceActive: Bool { status?.sourceLoaded ?? false }
-
-    /// The source install is what the numbers describe and it is switched on, loaded or not.
-    /// It has to be switched off before the app's service can take over.
-    private var legacyServiceEnabled: Bool {
-        guard let status, !status.usesBundledService, status.installed else { return false }
-        return status.enabled || status.running
-    }
+    /// The source install is still switched on or loaded in launchd. A leftover plist, or the app's
+    /// own service reporting as installed, does not count. It has to be switched off before the
+    /// app's service can be the only one.
+    var legacyServiceActive: Bool { (status?.sourceLoaded ?? false) || (status?.sourceEnabled ?? false) }
 
     /// Stops the source-installed agent first so two never run. It is turned back on if registering
     /// fails or macOS still needs approval, so syncing never stops without the new service taking over.
     func installBundledService() async {
         let service = service
         let registrar = registrar
-        let legacyActive = legacyServiceActive || legacyServiceEnabled
+        let legacyActive = legacyServiceActive
         await perform("Installing background service…") {
             try Self.install(legacyActive: legacyActive, registrar: registrar, setLegacyEnabled: { try service.setEnabled($0) })
             return nil
@@ -225,21 +219,29 @@ final class ServiceModel {
         legacyActive: Bool, registrar: some BundledServiceRegistering, setLegacyEnabled: (Bool) throws -> Void
     ) throws {
         if legacyActive { try setLegacyEnabled(false) }
+        // Putting the old service back is the saved previous state. If that fails, say so rather
+        // than leave automatic sync off without a word.
+        func restore() throws {
+            guard legacyActive else { return }
+            do { try setLegacyEnabled(true) } catch { throw InstallError.leftOff }
+        }
         do {
             // Already approved when finishing a move, and registering twice is an error.
             if registrar.state() != .enabled { try registrar.register() }
         } catch {
-            if legacyActive { try? setLegacyEnabled(true) }
+            try restore()
             throw error
         }
         if legacyActive, registrar.state() != .enabled {
-            try? setLegacyEnabled(true)
+            try restore()
             throw InstallError.needsApproval
         }
     }
 
     enum InstallError: Error {
         case needsApproval
+        /// Moving did not finish and the old service could not be turned back on.
+        case leftOff
     }
 
     func removeBundledService() async {
@@ -266,8 +268,13 @@ final class ServiceModel {
             _ = try await Task.detached { try await work() }.value
         } catch {
             let nsError = error as NSError
-            if error is InstallError {
-                notice = "Allow Calopod in System Settings, General, Login Items, then choose Move to the app again. Your current service keeps running until then."
+            if let install = error as? InstallError {
+                notice = switch install {
+                case .needsApproval:
+                    "Allow Calopod in System Settings, General, Login Items, then choose Move to the app again. Your current service keeps running until then."
+                case .leftOff:
+                    "Moving to the app did not finish and automatic sync is off. Choose Enable automatic sync to turn it back on."
+                }
             } else {
                 notice = nsError.domain == "SMAppServiceErrorDomain"
                     ? nsError.localizedDescription

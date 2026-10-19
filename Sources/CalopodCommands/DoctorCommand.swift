@@ -17,7 +17,8 @@ public struct DoctorCommand: ParsableCommand {
     public func run() throws {
         #if os(macOS)
         do {
-            let report = try doctorReport(controller: LaunchAgentController(), permissions: livePermissionReadings, calendarHelper: liveCalendarHelper)
+            let report = withPermissions(
+                try AgentControlService.current().doctor(), livePermissionReadings(), calendarHelper: liveCalendarHelper())
             try OutputRenderer.write(
                 command: "doctor",
                 payload: CommandPayload(
@@ -81,7 +82,9 @@ private func serviceReport(controller: LaunchAgentController) throws -> DoctorRe
 
 func doctorReport(
     snapshot: LaunchAgentSnapshot,
-    environment makeEnvironment: () throws -> CalopodRuntimeEnvironment
+    environment makeEnvironment: () throws -> CalopodRuntimeEnvironment,
+    usesBundled: Bool = false,
+    sourceLoaded: Bool = false
 ) throws -> DoctorReport {
     guard let configuration = snapshot.configuration else {
         return DoctorReport(
@@ -107,6 +110,10 @@ func doctorReport(
     items.append(serviceCheck.item)
     if let warning = serviceCheck.warning {
         warnings.append(warning)
+    }
+    if usesBundled, sourceLoaded {
+        items.append(doctorItem("source-install", "pending", "also-running"))
+        warnings.append("The old source-installed service is still running next to the app's service. Turn it off with Background sync in the Calopod app.")
     }
 
     guard FileManager.default.fileExists(atPath: configuration.stateURL.path) else {
@@ -307,13 +314,13 @@ func serviceHealthCheck(
     if snapshot.disabled {
         return (
             doctorItem("service", "pending", "disabled"),
-            "Enable automatic sync when scheduled runs should continue."
+            "Automatic sync is off. Run calopod agent enable, or choose Enable automatic sync in the Calopod app."
         )
     }
     if !snapshot.loaded {
         return (
             doctorItem("service", "failed", "stopped"),
-            "Enable automatic sync to start the installed service."
+            "Automatic sync is enabled but not running. Run calopod agent enable to start it again, or choose Enable automatic sync in the Calopod app."
         )
     }
     return (doctorItem("service", "ok"), nil)

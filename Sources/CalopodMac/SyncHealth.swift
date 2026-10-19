@@ -22,6 +22,10 @@ struct SyncHealth: Equatable {
     let detail: String
     /// Seconds since the last good sync, from whichever source is newer.
     let lastSyncedAge: Int?
+    /// Automatic sync is switched off, so Overview and the menu offer a button to turn it on.
+    var offersEnable = false
+    /// A plain line under the headline when a good manual sync is not the whole story.
+    var note: String?
 
     var color: Color {
         switch tone {
@@ -32,7 +36,9 @@ struct SyncHealth: Equatable {
         }
     }
 
-    /// A manual run wins only when it finished after the agent's last result.
+    /// A good manual run keeps its own headline, but never reads as an all-clear while automatic sync is
+    /// off, stopped, paused or failing: the icon turns to caution and a note says what is wrong. An
+    /// automatic failure after the manual run still wins the headline.
     static func make(status: AgentControlStatus?, statusAt: Date, run: ManualRun?, access: CalendarAccessState = .unchecked, now: Date = Date()) -> SyncHealth {
         guard let status else {
             return SyncHealth(tone: .unknown, symbol: "exclamationmark", label: "Checking…", headline: "Checking sync…", detail: "", lastSyncedAge: nil)
@@ -52,28 +58,56 @@ struct SyncHealth: Equatable {
             return parts.isEmpty ? status.message : parts.joined(separator: " · ")
         }
 
-        if let run, newer(run, than: status, statusAt: statusAt), ["ok", "failed", "stopped"].contains(status.state) {
-            let age = max(0, Int(now.timeIntervalSince(run.finishedAt)))
-            if run.succeeded {
-                return SyncHealth(tone: .good, symbol: "checkmark", label: "Syncing", headline: run.summary, detail: detail(age), lastSyncedAge: age)
+        let fresh = run.flatMap { newer($0, than: status, statusAt: statusAt) ? $0 : nil }
+        let manualAge = fresh.map { max(0, Int(now.timeIntervalSince($0.finishedAt))) }
+
+        if let fresh, let manualAge, ["ok", "failed", "stopped"].contains(status.state) {
+            if fresh.succeeded, status.state == "ok" {
+                return SyncHealth(tone: .good, symbol: "checkmark", label: "Syncing", headline: fresh.summary, detail: detail(manualAge), lastSyncedAge: manualAge)
             }
-            return SyncHealth(tone: .bad, symbol: "exclamationmark", label: "Needs attention", headline: run.summary, detail: detail(status.lastSuccessAgeSeconds), lastSyncedAge: status.lastSuccessAgeSeconds)
+            if !fresh.succeeded {
+                return SyncHealth(tone: .bad, symbol: "exclamationmark", label: "Needs attention", headline: fresh.summary, detail: detail(status.lastSuccessAgeSeconds), lastSyncedAge: status.lastSuccessAgeSeconds)
+            }
+        }
+
+        if let fresh, let manualAge, fresh.succeeded, status.state != "ok", !failedAfter(fresh, status: status, statusAt: statusAt) {
+            let note: String
+            switch status.state {
+            case "disabled": note = "Automatic sync is off, so changes will not sync by themselves."
+            case "paused": note = "Scheduled syncs are paused, so changes will not sync by themselves."
+            case "failed": note = status.message.isEmpty ? "The last automatic sync didn't finish." : status.message
+            default: note = status.message.isEmpty ? "Automatic sync is stopped, so changes will not sync by themselves." : status.message
+            }
+            let symbol = status.state == "disabled" ? "power" : status.state == "paused" ? "pause.fill" : "exclamationmark"
+            let label = ["disabled": "Sync is off", "paused": "Paused", "failed": "Needs attention"][status.state] ?? "Stopped"
+            return SyncHealth(tone: .caution, symbol: symbol, label: label, headline: fresh.summary, detail: detail(manualAge), lastSyncedAge: manualAge, offersEnable: Self.canEnable(status), note: note)
         }
 
         let age = status.lastSuccessAgeSeconds
+        func reason(_ text: String) -> String { text.isEmpty ? detail(age) : text }
         switch status.state {
         case "ok":
             return SyncHealth(tone: .good, symbol: "checkmark", label: "Syncing", headline: "Everything is in sync", detail: detail(age), lastSyncedAge: age)
         case "paused":
             return SyncHealth(tone: .caution, symbol: "pause.fill", label: "Paused", headline: "Scheduled syncs are paused", detail: detail(age), lastSyncedAge: age)
         case "disabled":
-            return SyncHealth(tone: .caution, symbol: "power", label: "Sync is off", headline: "Automatic sync is off", detail: detail(age), lastSyncedAge: age)
+            return SyncHealth(tone: .caution, symbol: "power", label: "Sync is off", headline: "Automatic sync is off", detail: detail(age), lastSyncedAge: age, offersEnable: true)
         case "failed":
-            let reason = status.message.isEmpty ? detail(age) : status.message
-            return SyncHealth(tone: .bad, symbol: "exclamationmark", label: "Needs attention", headline: "The last sync didn't finish", detail: reason, lastSyncedAge: age)
+            return SyncHealth(tone: .bad, symbol: "exclamationmark", label: "Needs attention", headline: "The last sync didn't finish", detail: reason(status.message), lastSyncedAge: age)
         default:
-            return SyncHealth(tone: .bad, symbol: "exclamationmark", label: "Stopped", headline: "Automatic sync is stopped", detail: status.message.isEmpty ? detail(age) : status.message, lastSyncedAge: age)
+            return SyncHealth(tone: .bad, symbol: "exclamationmark", label: "Stopped", headline: "Automatic sync is stopped", detail: reason(status.message), lastSyncedAge: age, offersEnable: Self.canEnable(status))
         }
+    }
+
+    /// Off, or on but not running. Enable starts whichever service is the live one.
+    static func canEnable(_ status: AgentControlStatus) -> Bool {
+        status.state == "disabled" || status.state == "stopped"
+    }
+
+    /// An automatic run failed after the manual run finished.
+    static func failedAfter(_ run: ManualRun, status: AgentControlStatus, statusAt: Date) -> Bool {
+        guard status.state == "failed", let ago = status.failureAgeSeconds else { return false }
+        return statusAt.addingTimeInterval(-Double(ago)) > run.finishedAt
     }
 
     /// True when the agent's last good run came before the manual run finished.

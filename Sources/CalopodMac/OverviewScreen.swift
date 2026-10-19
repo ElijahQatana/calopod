@@ -70,7 +70,8 @@ struct OverviewScreen: View {
             previewDisabled: model.isBusy || model.pendingPreview != nil || accessState.isMissing,
             pauseDisabled: model.isBusy,
             preview: { Task { await model.previewSync() } },
-            togglePause: { Task { await model.setPaused(!status.paused) } })
+            togglePause: { Task { await model.setPaused(!status.paused) } },
+            enable: { Task { await model.setEnabled(true) } })
     }
 
     // MARK: Preview

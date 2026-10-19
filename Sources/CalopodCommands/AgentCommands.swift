@@ -20,7 +20,7 @@ public struct AgentCommand: AsyncParsableCommand {
     public init() {}
 }
 
-public struct AgentEnableCommand: ParsableCommand {
+public struct AgentEnableCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "enable",
         abstract: "Enable and start automatic synchronization."
@@ -30,17 +30,15 @@ public struct AgentEnableCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
+    public func run() async throws {
         #if os(macOS)
         do {
-            let controller = try LaunchAgentController()
-            try controller.enable()
-            try writeAgentControlResult(
+            let service = AgentControlService.current()
+            try await service.enable()
+            try OutputRenderer.write(
                 command: "agent.enable",
-                message: "Automatic synchronization is enabled.",
-                controller: controller,
-                format: output.format
-            )
+                payload: try service.controlResult(message: "Automatic synchronization is enabled."),
+                format: output.format)
         } catch {
             try failCommand(error)
         }
@@ -63,14 +61,12 @@ public struct AgentDisableCommand: ParsableCommand {
     public func run() throws {
         #if os(macOS)
         do {
-            let controller = try LaunchAgentController()
-            try controller.disable()
-            try writeAgentControlResult(
+            let service = AgentControlService.current()
+            try service.setEnabled(false)
+            try OutputRenderer.write(
                 command: "agent.disable",
-                message: "Automatic synchronization is disabled.",
-                controller: controller,
-                format: output.format
-            )
+                payload: try service.controlResult(message: "Automatic synchronization is disabled."),
+                format: output.format)
         } catch {
             try failCommand(error)
         }
@@ -93,16 +89,12 @@ public struct AgentPauseCommand: ParsableCommand {
     public func run() throws {
         #if os(macOS)
         do {
-            let controller = try LaunchAgentController()
-            let environment = try installedAgentEnvironment(controller: controller)
-            try environment.repository().setAgentPaused(true)
-            try controller.restartIfEnabled()
-            try writeAgentControlResult(
+            let service = AgentControlService.current()
+            try service.setPaused(true)
+            try OutputRenderer.write(
                 command: "agent.pause",
-                message: "Automatic synchronization is paused.",
-                controller: controller,
-                format: output.format
-            )
+                payload: try service.controlResult(message: "Automatic synchronization is paused."),
+                format: output.format)
         } catch {
             try failCommand(error)
         }
@@ -125,16 +117,12 @@ public struct AgentResumeCommand: ParsableCommand {
     public func run() throws {
         #if os(macOS)
         do {
-            let controller = try LaunchAgentController()
-            let environment = try installedAgentEnvironment(controller: controller)
-            try environment.repository().setAgentPaused(false)
-            try controller.restartIfEnabled()
-            try writeAgentControlResult(
+            let service = AgentControlService.current()
+            try service.setPaused(false)
+            try OutputRenderer.write(
                 command: "agent.resume",
-                message: "Automatic synchronization is resumed.",
-                controller: controller,
-                format: output.format
-            )
+                payload: try service.controlResult(message: "Automatic synchronization is resumed."),
+                format: output.format)
         } catch {
             try failCommand(error)
         }
@@ -272,10 +260,9 @@ public struct AgentStatusCommand: ParsableCommand {
     public func run() throws {
         #if os(macOS)
         do {
-            let controller = try LaunchAgentController()
             try OutputRenderer.write(
                 command: "agent.status",
-                payload: try agentStatusPayload(controller: controller),
+                payload: try AgentControlService.current().statusPayload(),
                 format: output.format
             )
         } catch {
@@ -362,7 +349,7 @@ func agentStatusPayload(
     let message: String
     if !enabled {
         status = "disabled"
-        message = "Automatic synchronization is disabled."
+        message = "Automatic synchronization is disabled. Run calopod agent enable, or choose Enable automatic sync in the Calopod app."
     } else if paused {
         status = "paused"
         message = "Automatic synchronization is paused."

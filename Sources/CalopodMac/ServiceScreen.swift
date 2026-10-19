@@ -14,6 +14,7 @@ struct ServiceScreen: View {
         CardPage(title: "Background sync") {
             if let busy = model.busyAction { BusyLine(text: busy) }
             if let notice = model.notice { Banner(kind: .error, text: notice, onDismiss: model.dismissNotice) }
+            if model.syncHealth.offersEnable { offSection }
             serviceSection
             if let status = model.status, status.installed { scheduleSection(status) }
         }
@@ -22,6 +23,22 @@ struct ServiceScreen: View {
             Task { await model.refresh() }
         }
         .onDisappear { model.dismissNotice() }
+    }
+
+    // MARK: Off
+
+    private var offSection: some View {
+        CardSection(
+            "Automatic sync",
+            footnote: "Nothing syncs on its own until this is on. The same as running calopod agent enable."
+        ) {
+            CardRow("Status", value: model.syncHealth.label)
+            CardRow {
+                Button("Enable automatic sync") { Task { await model.setEnabled(true) } }
+                    .buttonStyle(.accentFilled)
+                    .disabled(model.isBusy)
+            }
+        }
     }
 
     // MARK: Service
@@ -90,10 +107,10 @@ struct ServiceScreen: View {
                 CardRow("Status", value: "Installed")
                 if model.legacyServiceActive {
                     CardRow {
-                        Banner(kind: .info, text: "The source-installed service is still running. Finish moving to stop it so only the app's service syncs.")
+                        Banner(kind: .info, text: "The old source-installed service is still on next to the app's service. Turn it off so only the app's service syncs.")
                     }
                     CardRow {
-                        Button("Finish moving") { Task { await model.installBundledService() } }
+                        Button("Turn off source install") { Task { await model.installBundledService() } }
                             .disabled(model.isBusy)
                     }
                 }

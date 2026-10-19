@@ -405,7 +405,7 @@ private func controlService(
 }
 
 @Test("The source install counts only while launchd has it loaded", arguments: [
-    (true, false, false, true), (false, true, true, false), (false, false, false, false),
+    (true, false, false, true), (false, true, true, true), (false, false, false, true),
 ])
 func sourceInstallIsReportedOnlyWhileLoaded(
     legacyDisabled: Bool, legacyLoaded: Bool, sourceLoaded: Bool, usesBundled: Bool
@@ -447,23 +447,127 @@ func afterMovingToTheAppControlsActOnTheBundledAgent() async throws {
     #expect(!verbs.value.contains("bootout"))
     #expect(!verbs.value.contains("bootstrap"))
 
-    #expect(throws: LaunchAgentControlError.unavailable) { try service.setEnabled(false) }
+    #expect(throws: LaunchAgentControlError.runsFromApp) { try service.setEnabled(false) }
 }
 
 @Test
-func anEnabledSourceInstalledAgentStillWinsOverTheBundledOne() throws {
+func theAppsServiceStaysLiveWhileTheSourceInstallIsAlsoOn() throws {
     let fixture = try LaunchAgentFixture()
     defer { fixture.remove() }
-    let verbs = Box<[String]>([])
     let service = controlService(
-        fixture: fixture, legacyDisabled: false, bundledLoaded: true, bundled: true, verbs: verbs
-    )
+        fixture: fixture, legacyDisabled: false, bundledLoaded: true, bundled: true, verbs: Box([]), legacyLoaded: true)
 
     try service.setInterval(seconds: 900)
 
-    // The source-installed plist is rewritten and no override file is created.
-    #expect(try AgentServiceConfiguration.load(from: fixture.propertyListURL).intervalSeconds == 900)
-    #expect(!FileManager.default.fileExists(atPath: fixture.stateURL.path + ".schedule.json"))
+    // The override file is written for the app's service and the source plist is left alone.
+    #expect(try AgentServiceConfiguration.load(from: fixture.propertyListURL).intervalSeconds == 600)
+    #expect(FileManager.default.fileExists(atPath: fixture.stateURL.path + ".schedule.json"))
+    let status = try service.status()
+    #expect(status.usesBundledService)
+    #expect(status.sourceLoaded)
+    #expect(status.sourceEnabled)
+}
+
+private func enableBox(
+    _ fixture: LaunchAgentFixture, appRegistered: Bool, appLoaded: Bool, sourceLoaded: Bool
+) -> (service: AgentControlService, verbs: Box<[String]>, reregistered: Box<Int>) {
+    let verbs = Box<[String]>([])
+    let counter = Box(0)
+    let started = Box(sourceLoaded)
+    let home = fixture.homeDirectory
+    let state = fixture.stateURL
+    let service = AgentControlService(
+        bundledAgentExecutable: appRegistered ? URL(fileURLWithPath: "/Applications/Calopod.app/Contents/MacOS/calopod-agent") : nil,
+        makeController: {
+            try LaunchAgentController(homeDirectory: home, userID: 501) { arguments in
+                verbs.value.append(arguments.first ?? "")
+                if arguments.first == "bootstrap" { started.value = true }
+                if arguments.first == "print" {
+                    let isApp = (arguments.dropFirst().first ?? "").hasSuffix(bundledLabel)
+                    return LaunchctlResult(exitCode: (isApp ? appLoaded : started.value) ? 0 : 1, output: "")
+                }
+                if arguments.first == "print-disabled" {
+                    return LaunchctlResult(exitCode: 0, output: started.value ? "" : #""pro.elijahquintana.calopod.agent" => disabled"#)
+                }
+                return LaunchctlResult(exitCode: 0, output: "")
+            }
+        },
+        baseEnvironment: { ["CALOPOD_STATE_PATH": state.path] },
+        reregisterBundled: { counter.value += 1 })
+    return (service, verbs, counter)
+}
+
+@Test
+func enableNeverStartsTheSourceInstallWhileTheAppsServiceIsRunning() async throws {
+    let fixture = try LaunchAgentFixture()
+    defer { fixture.remove() }
+    // Only the app's service, running: nothing to do.
+    let onlyApp = enableBox(fixture, appRegistered: true, appLoaded: true, sourceLoaded: false)
+    try await onlyApp.service.enable()
+    #expect(onlyApp.reregistered.value == 0)
+    #expect(!onlyApp.verbs.value.contains("bootstrap") && !onlyApp.verbs.value.contains("enable"))
+
+    // Both loaded: the app's service stays the live one, and the source install is not touched.
+    let both = enableBox(fixture, appRegistered: true, appLoaded: true, sourceLoaded: true)
+    try await both.service.enable()
+    #expect(!both.verbs.value.contains("bootstrap") && !both.verbs.value.contains("enable"))
+    #expect(try both.service.status().sourceLoaded)
+
+    // The app's service registered but not running is registered again.
+    let stopped = enableBox(fixture, appRegistered: true, appLoaded: false, sourceLoaded: false)
+    try await stopped.service.enable()
+    #expect(stopped.reregistered.value == 1)
+    #expect(!stopped.verbs.value.contains("bootstrap"))
+}
+
+@Test
+func enableRefusesToStartTheSourceInstallWhenTheAppsServiceIsLoadedButNotReported() async throws {
+    let fixture = try LaunchAgentFixture()
+    defer { fixture.remove() }
+    // A command run outside the app cannot read the registration, but launchd shows the app's service.
+    let outside = enableBox(fixture, appRegistered: false, appLoaded: true, sourceLoaded: false)
+    await #expect(throws: LaunchAgentControlError.appServiceRunning) { try await outside.service.enable() }
+    #expect(!outside.verbs.value.contains("bootstrap"))
+}
+
+@Test
+func enableStartsTheSourceInstallOnlyWhenNoAppServiceExists() async throws {
+    let fixture = try LaunchAgentFixture()
+    defer { fixture.remove() }
+    let onlySource = enableBox(fixture, appRegistered: false, appLoaded: false, sourceLoaded: false)
+    try await onlySource.service.enable()
+    #expect(onlySource.verbs.value.contains("enable"))
+    #expect(onlySource.reregistered.value == 0)
+}
+
+@Test
+func disableLeavesTheAppsServiceAlone() throws {
+    let fixture = try LaunchAgentFixture()
+    defer { fixture.remove() }
+    let app = enableBox(fixture, appRegistered: true, appLoaded: true, sourceLoaded: false)
+    #expect(throws: LaunchAgentControlError.runsFromApp) { try app.service.setEnabled(false) }
+    #expect(!app.verbs.value.contains("bootout") && !app.verbs.value.contains("disable"))
+}
+
+@Test
+func doctorNamesTheSourceInstallWhenBothAreLoaded() throws {
+    let fixture = try LaunchAgentFixture()
+    defer { fixture.remove() }
+    let both = enableBox(fixture, appRegistered: true, appLoaded: true, sourceLoaded: true)
+    let report = try both.service.doctor()
+    #expect(report.items.contains { $0.id == "source-install" && $0.reason == "also-running" })
+    let only = enableBox(fixture, appRegistered: true, appLoaded: true, sourceLoaded: false)
+    #expect(try !only.service.doctor().items.contains { $0.id == "source-install" })
+}
+
+@Test
+func neitherServiceRunningIsReportedAsDisabledOrStoppedWithAFix() throws {
+    let fixture = try LaunchAgentFixture()
+    defer { fixture.remove() }
+    let neither = enableBox(fixture, appRegistered: false, appLoaded: false, sourceLoaded: false)
+    let payload = try neither.service.statusPayload()
+    #expect(payload.status == "disabled")
+    #expect(payload.message.contains("calopod agent enable") == true)
 }
 
 @Test

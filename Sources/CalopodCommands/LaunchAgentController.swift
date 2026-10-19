@@ -4,6 +4,10 @@ enum LaunchAgentControlError: Error, Equatable {
     case notInstalled
     case rootUnsupported
     case unavailable
+    /// The app's own service is the live one, so the source install must not be started.
+    case appServiceRunning
+    /// The app's service is not switched off with `agent disable`.
+    case runsFromApp
     case operationFailed(String)
 }
 

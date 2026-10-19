@@ -51,6 +51,7 @@ struct SyncStatusCard: View {
     let pauseDisabled: Bool
     let preview: () -> Void
     let togglePause: () -> Void
+    let enable: () -> Void
 
     var body: some View {
         CardSection {
@@ -94,11 +95,19 @@ struct SyncStatusCard: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(health.headline).font(Theme.Fonts.sectionTitle)
             Text(health.detail).font(Theme.Fonts.body).foregroundStyle(.secondary)
+            if let note = health.note {
+                Text(note).font(Theme.Fonts.body).foregroundStyle(Theme.cautionText)
+            }
         }
     }
 
     private var buttons: some View {
         HStack(spacing: 10) {
+            if health.offersEnable {
+                Button("Enable automatic sync", action: enable)
+                    .buttonStyle(.accentFilled)
+                    .disabled(pauseDisabled)
+            }
             Button("Preview sync", action: preview)
                 .buttonStyle(.accentFilled)
                 .disabled(previewDisabled)

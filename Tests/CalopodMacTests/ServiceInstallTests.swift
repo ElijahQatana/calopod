@@ -68,6 +68,18 @@ final class ServiceInstallTests: XCTestCase {
         XCTAssertEqual(registrar.registered, 0)
         XCTAssertEqual(result.calls, [false])
     }
+
+    func testAFailedRestoreIsReportedInsteadOfLeavingSyncOffQuietly() {
+        let registrar = Registrar([.notRegistered, .requiresApproval])
+        var calls: [Bool] = []
+        XCTAssertThrowsError(
+            try ServiceModel.install(legacyActive: true, registrar: registrar, setLegacyEnabled: {
+                calls.append($0)
+                if $0 { throw Refused() }
+            })
+        ) { XCTAssertEqual($0 as? ServiceModel.InstallError, .leftOff) }
+        XCTAssertEqual(calls, [false, true])
+    }
 }
 
 final class ServiceWindowTextTests: XCTestCase {
