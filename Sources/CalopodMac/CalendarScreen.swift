@@ -83,12 +83,18 @@ struct CalendarScreen: View {
                 }
                 .background(Capsule().fill(.quaternary))
             }
-            if !model.chipCalendars.isEmpty {
-                // One scrolling row, so the chips do not take a second and third line at narrow widths.
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(model.chipCalendars) { calendar in chip(calendar) }
-                        copiesChip
+            if !model.calendars.isEmpty {
+                // One row: the view mode stays put and the chips scroll, so nothing wraps at narrow widths.
+                HStack(spacing: 10) {
+                    PillPicker(
+                        options: CalendarViewMode.allCases.map { ($0.title, $0) }, selection: Bindable(model).viewMode, quiet: true
+                    )
+                    .fixedSize()
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(model.chipCalendars) { calendar in chip(calendar) }
+                            copiesChip
+                        }
                     }
                 }
             }
@@ -148,7 +154,8 @@ struct CalendarScreen: View {
     }
 
     private var copiesChip: some View {
-        let shown = model.showCopies
+        let fixed = model.viewMode != .all
+        let shown = model.copiesAreDrawn
         return Button { model.showCopies.toggle() } label: {
             HStack(spacing: 6) {
                 Image(systemName: shown ? "eye" : "eye.slash").font(Theme.Fonts.tiny)
@@ -156,13 +163,22 @@ struct CalendarScreen: View {
             }
             .padding(.horizontal, 12).frame(minHeight: Theme.Control.chipHeight)
             .background(Capsule().fill(.quaternary))
-            .opacity(shown ? 1 : 0.5)
+            .opacity(shown ? (fixed ? 0.6 : 1) : 0.5)
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .disabled(fixed)
         .accessibilityLabel("Calopod copies")
         .accessibilityValue(shown ? "Shown" : "Hidden")
-        .help(shown ? "Hide the Busy copies Calopod made" : "Show the Busy copies Calopod made")
+        .help(copiesHelp(shown))
+    }
+
+    private func copiesHelp(_ shown: Bool) -> String {
+        switch model.viewMode {
+        case .all: shown ? "Hide the Busy copies Calopod made" : "Show the Busy copies Calopod made"
+        case .sources: "Sources shows only the original events, never Calopod's copies."
+        case .destinations: "Destinations always shows the copies Calopod made, since they are what it is for."
+        }
     }
 
     private var title: String {
