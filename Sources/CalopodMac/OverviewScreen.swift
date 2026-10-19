@@ -21,8 +21,45 @@ struct OverviewScreen: View {
     @State private var openReasons: Set<String> = []
     @State private var joinNotice: String?
 
+    /// What Overview shows. A window too short for everything drops the lists, least important first.
+    private enum Detail {
+        case full, withoutGlance, essential, minimal
+
+        var events: Int { self == .minimal ? 1 : self == .essential ? 2 : 3 }
+        var listsMore: Bool { self == .full || self == .withoutGlance }
+    }
+
     var body: some View {
-        CardPage(title: "Overview", trailing: Date().formatted(.dateTime.weekday(.wide).day().month(.wide)), maxWidth: 1180) {
+        CardPage(
+            title: "Overview", trailing: Date().formatted(.dateTime.weekday(.wide).day().month(.wide)), maxWidth: 1180, scrolls: false
+        ) {
+            ViewThatFits(in: .vertical) {
+                page(.full)
+                page(.withoutGlance)
+                page(.essential)
+                page(.minimal)
+                ScrollView { page(.minimal) }
+            }
+        }
+        .onDisappear {
+            model.dismissNotice()
+            refresh.dismissAll()
+        }
+        .sheet(isPresented: $showingSetup) {
+            FirstRunSheet(progress: progress, setup: setup, service: model, navigation: navigation)
+                .appTypography()
+        }
+        .task {
+            await setup.reload()
+            let fresh = model.status.map { !$0.installed } ?? false
+            if fresh && progress.shouldOpenAutomatically && (setup.snapshot?.connections.isEmpty ?? true) {
+                showingSetup = true
+            }
+        }
+    }
+
+    private func page(_ detail: Detail) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
             if let notice = model.notice { Banner(kind: .error, text: notice, onDismiss: model.dismissNotice) }
             if let joinNotice { Banner(kind: .error, text: joinNotice, onDismiss: { self.joinNotice = nil }) }
             ForEach(refresh.messages) { message in
@@ -39,36 +76,21 @@ struct OverviewScreen: View {
                 statusCard(status)
                 if let preview = model.pendingPreview { previewSection(preview) }
                 OverviewColumns(sidebarCollapsed: collapsed) {
-                    VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 12) {
                         needsYou
-                        nextUp
-                        availabilityCard
+                        nextUp(detail)
+                        availabilitySummary
                     }
-                    VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 12) {
                         attention(status)
-                        calendarsCard
-                        glance
+                        if detail == .full { calendarsCard }
+                        if detail == .full || detail == .withoutGlance { glance }
                     }
                 }
             } else if model.status != nil {
                 gettingStarted
             } else {
                 CardSection { CardRow { ProgressView().frame(maxWidth: .infinity).padding(40) } }
-            }
-        }
-        .onDisappear {
-            model.dismissNotice()
-            refresh.dismissAll()
-        }
-        .sheet(isPresented: $showingSetup) {
-            FirstRunSheet(progress: progress, setup: setup, service: model, navigation: navigation)
-                .appTypography()
-        }
-        .task {
-            await setup.reload()
-            let fresh = model.status.map { !$0.installed } ?? false
-            if fresh && progress.shouldOpenAutomatically && (setup.snapshot?.connections.isEmpty ?? true) {
-                showingSetup = true
             }
         }
     }
@@ -116,9 +138,9 @@ struct OverviewScreen: View {
                         ("Overlapping events", inbox.overlaps, .conflicts, false),
                         ("Changed since you last looked", inbox.changes, .changed, false),
                     ]
-                    CardRow {
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack(alignment: .top, spacing: 12) {
+                    CardRow(dense: true) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(alignment: .top, spacing: 10) {
                                 ForEach(tiles, id: \.2) { title, count, filter, highlight in
                                     NeedsYouTile(title: title, count: count, highlight: highlight) {
                                         navigation.openInbox(filter)
@@ -147,7 +169,7 @@ struct OverviewScreen: View {
     }
 
     @ViewBuilder
-    private var nextUp: some View {
+    private func nextUp(_ detail: Detail) -> some View {
         if let current = schedule.schedule {
             let now = Date()
             let ignored: (String) -> Bool = { CalendarAliases.shared.isIgnored($0) }
@@ -171,7 +193,7 @@ struct OverviewScreen: View {
                             }
                         }
                     }
-                    ForEach(events.prefix(4)) { event in
+                    ForEach(events.prefix(detail.events)) { event in
                         NextUpRow(
                             event: event, calendarName: names[event.calendarID] ?? "Calendar",
                             color: CalendarColors.shared.color(for: event.calendarID).color,
@@ -179,20 +201,14 @@ struct OverviewScreen: View {
                             join: { link in Task { joinNotice = await JoinOffer.join(link, using: joiner) } }
                         ) { navigation.openCalendar(showing: event, in: schedule) }
                     }
-                    if events.count > 4 { CardRow { Text("and \(events.count - 4) more").foregroundStyle(.secondary) } }
+                    if detail.listsMore, events.count > detail.events { CardRow(dense: true) { Text("and \(events.count - detail.events) more").foregroundStyle(.secondary) } }
                     if events.isEmpty { CardRow { Text("Nothing else today").foregroundStyle(.secondary) } }
                 })
         }
     }
 
-    @ViewBuilder
-    private var availabilityCard: some View {
-        // The same warnings as the Calendar screen, for the week shown.
-        let notices = ScheduleLayout.notices(
-            calendars: schedule.calendars, hidden: [], range: availability.range, now: Date(),
-            name: { CalendarAliases.shared.name(for: $0.id, real: $0.name) })
-        AvailabilityCard(model: availability, notices: notices) { navigation.selection = .settings }
-            .task { await availability.reload() }
+    private var availabilitySummary: some View {
+        AvailabilitySummary(model: availability) { navigation.openAvailability() }
             .onChange(of: schedule.schedule) { Task { await availability.reload() } }
     }
 
@@ -259,11 +275,12 @@ struct OverviewScreen: View {
         if !calendars.isEmpty {
             let now = Date()
             let labels = calendars.map { CalendarFreshnessLabel.make($0, range: today, now: now) }
+            let shown = 4
             CardSection(
                 header: OverviewSectionHeader(title: "Calendars", link: "Manage") { navigation.selection = .calendars },
                 content: {
-                    ForEach(Array(zip(calendars, labels)), id: \.0.id) { calendar, label in
-                        CardRow {
+                    ForEach(Array(zip(calendars, labels).prefix(shown)), id: \.0.id) { calendar, label in
+                        CardRow(dense: true) {
                             HStack(spacing: 10) {
                                 Circle().fill(CalendarColors.shared.color(for: calendar.id).color).frame(width: 10, height: 10)
                                 Text(CalendarAliases.shared.name(for: calendar.id, real: calendar.name)).lineLimit(1)
@@ -273,8 +290,11 @@ struct OverviewScreen: View {
                             }
                         }
                     }
+                    if calendars.count > shown {
+                        CardRow(dense: true) { Text("and \(calendars.count - shown) more").foregroundStyle(.secondary) }
+                    }
                     if labels.contains(where: \.isBehind) {
-                        CardRow { HStack { refreshButton; Spacer(minLength: 0) } }
+                        CardRow(dense: true) { HStack { refreshButton; Spacer(minLength: 0) } }
                     }
                 })
         }
@@ -283,28 +303,31 @@ struct OverviewScreen: View {
     // MARK: At a glance
 
     private var glance: some View {
-        CardSection("At a glance") {
-            glanceRow("Connected accounts", "\(model.overview?.connections.count ?? 0)", .calendars)
-            glanceRow(
-                "Calendars in use",
-                "\(model.overview?.connections.reduce(0) { $0 + $1.selectedCalendarCount } ?? 0)",
-                .calendars
-            )
-            glanceRow("Active arms", "\(model.overview?.arms.filter(\.isEnabled).count ?? 0)", .arms)
-        }
-    }
-
-    private func glanceRow(_ title: String, _ value: String, _ screen: Screen, filter: InboxFilter? = nil) -> some View {
-        CardButtonRow(label: title) {
-            if let filter { navigation.openInbox(filter) } else { navigation.selection = screen }
-        } content: {
-            CardLabeled(title: title) {
-                HStack(spacing: 6) {
-                    Text(value).monospacedDigit()
-                    Image(systemName: "chevron.right").font(Theme.Fonts.secondary).foregroundStyle(.tertiary)
+        let accounts = model.overview?.connections.count ?? 0
+        let calendars = model.overview?.connections.reduce(0) { $0 + $1.selectedCalendarCount } ?? 0
+        let arms = model.overview?.arms.filter(\.isEnabled).count ?? 0
+        return CardSection("At a glance") {
+            CardRow(dense: true) {
+                HStack(spacing: 8) {
+                    glanceFigure("Accounts", accounts, .calendars)
+                    glanceFigure("Calendars", calendars, .calendars)
+                    glanceFigure("Arms", arms, .arms)
                 }
             }
         }
+    }
+
+    private func glanceFigure(_ title: String, _ value: Int, _ screen: Screen) -> some View {
+        Button { navigation.selection = screen } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                Text("\(value)").font(Theme.Fonts.bodySemibold).monospacedDigit()
+                Text(title).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(value) \(title)")
     }
 
     // MARK: First run

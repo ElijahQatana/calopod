@@ -29,7 +29,7 @@ final class FirstRunProgress {
 
     @ObservationIgnored private let defaults: UserDefaults
 
-    init(defaults: UserDefaults = AppDefaults.standard) {
+    init(defaults: UserDefaults = AppDefaults.forSingleton) {
         self.defaults = defaults
         step = Step(rawValue: defaults.integer(forKey: Self.stepKey)) ?? .connect
         started = defaults.bool(forKey: Self.startedKey)

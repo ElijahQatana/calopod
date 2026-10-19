@@ -96,7 +96,7 @@ struct CalendarColorSource: Equatable, Sendable {
 @MainActor
 @Observable
 final class CalendarColors {
-    static let shared = CalendarColors(defaults: AppDefaults.standard, state: try? LocalState.repository())
+    static let shared = CalendarColors(defaults: AppDefaults.forSingleton, state: try? LocalState.repository())
 
     private(set) var choices: [String: String]
     private(set) var sources: [String: CalendarColorSource] = [:]
