@@ -14,6 +14,10 @@ Before archiving, run `Scripts/check-ios.sh` from the repository root. It builds
 
        DEVELOPMENT_TEAM = YOUR_TEAM_ID
 
+## What the project already sets
+
+The icon comes from `Support/EventKitHost/Calopod.icon`, shared with the Mac app, and Xcode compiles it into the 1024 pixel icon App Store Connect asks for. `ITSAppUsesNonExemptEncryption` is `NO` because the app only uses the encryption built into Apple's frameworks through CloudKit, so TestFlight doesn't ask the export compliance question for each build. Archives use `Calopod.entitlements`. Debug builds use `CalopodDebug.entitlements`, which adds the Production CloudKit environment so a build run from Xcode reads the same data as the Mac and TestFlight.
+
 ## Before each build
 
 **Deploy the CloudKit schema.** A TestFlight build talks to the Production environment, and a record type that exists only in Development does not work there. Record types can't be removed from Production, so deploy only what the build reads. The current record type and fields are listed in [iPhone feed](../../docs/iphone-feed.md#for-maintainers-deploy-the-schema-first). Do this in the CloudKit Dashboard with **Deploy Schema Changes**, before the build goes to testers.
