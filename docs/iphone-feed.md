@@ -8,6 +8,12 @@ Events are different: for each calendar you choose, the next 14 days of events g
 
 Meeting links are the one link that goes up. An event that can get a reminder (timed, not declined, not yet over, not private) carries its Teams, Zoom, Meet or Webex link so the phone can offer Join. Those links are stored in your iCloud with the event. The reminder settings are the ones from `calopod notifications`: whether reminders are on, the first and final times, and whether titles are hidden. A change reaches the phone at the next sync, like the choice of calendars.
 
+## Reminders on the iPhone
+
+The iPhone app schedules its own notifications from the feed. It keeps the next 24 hours of reminders pending, using the lead times and the hidden titles choice from the reminder settings record, for the same events the Mac reminds about. It does this every time it reads the feed and every time it comes forward. If the Mac has not published reminder settings (an older Mac), the phone sets none.
+
+Because the phone and the Mac both remind you, the iPhone app has one switch under Status to turn its reminders off. It is not shared with the Mac. Reminders appear only after the app has read a feed that lists the event, so a meeting added on the Mac just before it starts may not get one on the phone.
+
 ## Turning it on
 
 In the Mac app, open Settings and use **Show Inbox and busy time on iPhone**. From the command line:

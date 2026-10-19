@@ -5,16 +5,25 @@ import SwiftUI
 /// without, only the busy time, which carries no titles.
 struct CalendarTab: View {
     var context: SnapshotContext
+    /// An event a tapped reminder asked to open. It is cleared once the event is shown.
+    @Binding var requested: String?
     @State private var selected: String?
     @State private var openEvent: CalendarEvent?
     @State private var filter = CalendarFilter()
 
     var body: some View {
-        if let event = openEvent {
-            EventDetailScreen(
-                item: InboxItem(event), context: context, untitled: "Busy", back: BackAction(label: "Calendar") { openEvent = nil })
-        } else {
-            schedule
+        Group {
+            if let event = openEvent {
+                EventDetailScreen(
+                    item: InboxItem(event), context: context, untitled: "Busy", back: BackAction(label: "Calendar") { openEvent = nil })
+            } else {
+                schedule
+            }
+        }
+        .onChange(of: requested, initial: true) { _, id in
+            guard let id else { return }
+            openEvent = context.snapshot.days.flatMap(\.events).first { $0.id == id }
+            requested = nil
         }
     }
 

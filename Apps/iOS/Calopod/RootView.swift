@@ -2,7 +2,12 @@ import SwiftUI
 
 struct RootView: View {
     var store: SnapshotStore
+    @Bindable var reminders: Reminders
     var now: () -> Date = { .now }
+    @State private var tab = Tab.inbox
+    @Environment(\.scenePhase) private var scenePhase
+
+    private enum Tab { case inbox, calendar, status }
 
     var body: some View {
         Group {
@@ -37,14 +42,28 @@ struct RootView: View {
                     systemImage: "arrow.down.app")
             case .content(let snapshot, let offline):
                 let context = SnapshotContext(snapshot: snapshot, offline: offline, now: now())
-                TabView {
-                    InboxTab(context: context).tabItem { Label("Inbox", systemImage: "tray") }
-                    CalendarTab(context: context).tabItem { Label("Calendar", systemImage: "calendar") }
-                    StatusTab(context: context).tabItem { Label("Status", systemImage: "waveform.path.ecg") }
+                TabView(selection: $tab) {
+                    InboxTab(context: context).tabItem { Label("Inbox", systemImage: "tray") }.tag(Tab.inbox)
+                    CalendarTab(context: context, requested: $reminders.requestedEvent)
+                        .tabItem { Label("Calendar", systemImage: "calendar") }.tag(Tab.calendar)
+                    StatusTab(context: context, reminders: reminders)
+                        .tabItem { Label("Status", systemImage: "waveform.path.ecg") }.tag(Tab.status)
                 }
             }
         }
         .tint(Theme.accent)
-        .task { await store.refresh() }
+        .task { await refresh() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await refresh() } }
+        }
+        .onChange(of: reminders.requestedEvent, initial: true) { _, id in
+            if id != nil { tab = .calendar }
+        }
+    }
+
+    /// Reads the Mac's latest snapshot, then brings the reminders in step with it.
+    private func refresh() async {
+        await store.refresh()
+        await reminders.update(for: store.phase)
     }
 }

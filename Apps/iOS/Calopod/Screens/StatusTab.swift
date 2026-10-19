@@ -3,6 +3,7 @@ import SwiftUI
 
 struct StatusTab: View {
     var context: SnapshotContext
+    var reminders: Reminders
 
     var body: some View {
         let report = StatusReport(status: context.snapshot.status, calendars: context.snapshot.calendars)
@@ -48,6 +49,10 @@ struct StatusTab: View {
                 }
                 .shadow(color: Theme.text.opacity(0.06), radius: 6, y: 2)
             }
+            if reminders.permission != .unavailable {
+                SectionLabel(text: "Meeting reminders")
+                ReminderCard(reminders: reminders, settings: context.snapshot.reminders)
+            }
             SectionLabel(text: "Calendars")
             Card {
                 ForEach(Array(report.rows.enumerated()), id: \.offset) { index, row in
@@ -87,5 +92,43 @@ struct StatusTab: View {
         case .partial: "Partial"
         case .stale: "Behind"
         }
+    }
+}
+
+/// The phone's permission and its one switch for meeting reminders. The times come from the Mac.
+private struct ReminderCard: View {
+    @Bindable var reminders: Reminders
+    var settings: ReminderSettings?
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 10) {
+                switch reminders.permission {
+                case .allowed:
+                    Toggle("Remind me on this phone", isOn: $reminders.isOn).font(Theme.Fonts.bodyStrong)
+                    Text(ReminderPlan.summary(settings)).font(Theme.Fonts.secondary).foregroundStyle(Theme.secondary)
+                    Text("Turn this off if your Mac already reminds you and you don't want both.")
+                        .font(Theme.Fonts.secondary).foregroundStyle(Theme.secondary)
+                case .denied:
+                    Text("Reminders are blocked").font(Theme.Fonts.bodyStrong)
+                    Text("Notifications are off for Calopod. Allow them in Settings to get reminders on this phone.")
+                        .font(Theme.Fonts.secondary).foregroundStyle(Theme.secondary)
+                    Button("Open Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                    }
+                    .font(Theme.Fonts.bodyStrong)
+                default:
+                    Text("Get a reminder before each meeting").font(Theme.Fonts.bodyStrong)
+                    Text("Calopod sets reminders on this phone from the events your Mac shares, at the times chosen on your Mac. To show them it needs your permission to send notifications.")
+                        .font(Theme.Fonts.secondary).foregroundStyle(Theme.secondary)
+                    Button("Allow reminders") { Task { await reminders.requestPermission() } }
+                        .font(Theme.Fonts.bodyStrong)
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .shadow(color: Theme.text.opacity(0.06), radius: 6, y: 2)
     }
 }
