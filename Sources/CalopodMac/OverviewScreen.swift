@@ -154,13 +154,11 @@ struct OverviewScreen: View {
                         CardRow { Banner(kind: .caution, text: "\(stale.joined(separator: ", ")) \(stale.count == 1 ? "is" : "are") out of date, so events may be missing.") }
                     }
                     ForEach(Array(events.prefix(4).enumerated()), id: \.element.id) { index, event in
-                        CardRow {
-                            NextUpRow(
-                                event: event, calendarName: names[event.calendarID] ?? "Calendar",
-                                color: CalendarColors.shared.color(for: event.calendarID).color,
-                                tags: UpNextTag.tags(for: event, isNext: index == 0, now: now)
-                            ) { navigation.selection = .calendar }
-                        }
+                        NextUpRow(
+                            event: event, calendarName: names[event.calendarID] ?? "Calendar",
+                            color: CalendarColors.shared.color(for: event.calendarID).color,
+                            tags: UpNextTag.tags(for: event, isNext: index == 0, now: now)
+                        ) { navigation.openCalendar(showing: event, in: schedule) }
                     }
                     if events.count > 4 { CardRow { Text("and \(events.count - 4) more").foregroundStyle(.secondary) } }
                     if events.isEmpty { CardRow { Text("Nothing else today").foregroundStyle(.secondary) } }

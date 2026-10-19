@@ -86,6 +86,12 @@ final class AppNavigation {
         openInbox(ScheduleLayout.inboxFilter(for: event), event: event.id)
     }
 
+    /// Brings Calendar forward on the event. The menu bar and Overview both open events this way.
+    func openCalendar(showing event: ScheduleEvent, in model: CalendarModel) {
+        model.open(event)
+        selection = .calendar
+    }
+
     /// The requested event if the list holds it. Either way the request is done.
     func takeInboxEvent(in entries: [InboxEntry]) -> String? {
         defer { inboxEvent = nil }
