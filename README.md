@@ -18,7 +18,7 @@ If your calendars live in different places (work, personal, a side project), eac
 
 
 
-It never edits or deletes events it didn't create. Sign-in tokens go in your Keychain, and everything else stays on your Mac.
+It never edits or deletes events it didn't create. Sign-in tokens go in your Keychain, and everything else stays on your Mac. The one exception is the optional [iPhone feed](docs/iphone-feed.md), which is off until you turn it on and goes only to your own private iCloud.
 
 ## Words you'll see
 
@@ -52,6 +52,7 @@ swift test --disable-sandbox
 - [Using Calopod](docs/using-calopod.md)
 - [The Mac app](docs/mac-app.md)
 - [Inbox and invitations](docs/inbox.md)
+- [iPhone feed](docs/iphone-feed.md)
 - [Automatic sync](docs/automatic-sync.md)
 - [Google and Microsoft accounts](docs/google-and-microsoft.md)
 - [Troubleshooting and backups](docs/troubleshooting.md)
