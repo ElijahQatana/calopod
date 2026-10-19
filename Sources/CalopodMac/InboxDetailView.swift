@@ -11,13 +11,13 @@ struct InboxDetailView: View {
 
     private var entry: InboxEntry { detail.entry }
 
-    /// Below this pane width the two cards stack, details first.
-    private static let twoColumnWidth: CGFloat = 700
+    /// Below twice this pane width the two cards stack, details first.
+    private static let columnWidth: CGFloat = 342
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(entry.title).font(Theme.Fonts.sectionTitle)
-            DetailColumns(threshold: Self.twoColumnWidth, spacing: 16) {
+            CardColumns(minColumnWidth: Self.columnWidth) {
                 detailsCard
                 actionsCard
             }
@@ -39,7 +39,7 @@ struct InboxDetailView: View {
                 }
                 facts
             }
-            .padding(14).frame(maxWidth: .infinity, alignment: .leading).cardSurface()
+            .padding(14).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).cardSurface()
         }
     }
 
@@ -54,7 +54,7 @@ struct InboxDetailView: View {
                     Banner(kind: result.status == .confirmed ? .info : .caution, text: result.message)
                 }
             }
-            .padding(14).frame(maxWidth: .infinity, alignment: .leading).cardSurface()
+            .padding(14).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).cardSurface()
         }
     }
 
@@ -132,41 +132,5 @@ struct InboxDetailView: View {
     private func reply(_ title: String, _ choice: ConflictChoice) -> some View {
         Button(title) { model.askToReply(choice) }
             .disabled(model.isBusy || !detail.replies.contains(choice))
-    }
-}
-
-/// Two cards side by side when the pane is at least `threshold` wide, otherwise stacked.
-private struct DetailColumns: Layout {
-    let threshold: CGFloat
-    let spacing: CGFloat
-
-    private func columns(_ width: CGFloat) -> Bool { width >= threshold }
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.width ?? threshold
-        if columns(width) {
-            let each = (width - spacing) / 2
-            let height = subviews.map { $0.sizeThatFits(ProposedViewSize(width: each, height: nil)).height }.max() ?? 0
-            return CGSize(width: width, height: height)
-        }
-        let heights = subviews.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height }
-        return CGSize(width: width, height: heights.reduce(0, +) + spacing * CGFloat(max(heights.count - 1, 0)))
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        if columns(bounds.width) {
-            let each = (bounds.width - spacing) / 2
-            for (index, view) in subviews.enumerated() {
-                view.place(at: CGPoint(x: bounds.minX + CGFloat(index) * (each + spacing), y: bounds.minY), anchor: .topLeading,
-                           proposal: ProposedViewSize(width: each, height: nil))
-            }
-        } else {
-            var y = bounds.minY
-            for view in subviews {
-                let height = view.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil)).height
-                view.place(at: CGPoint(x: bounds.minX, y: y), anchor: .topLeading, proposal: ProposedViewSize(width: bounds.width, height: nil))
-                y += height + spacing
-            }
-        }
     }
 }
