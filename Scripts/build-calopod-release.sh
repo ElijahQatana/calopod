@@ -14,12 +14,16 @@ usage() {
   cat <<'EOF'
 Usage:
   Scripts/build-calopod-release.sh [--output-directory PATH] \
-    [--signing-identity SHA1 --notary-profile NAME]
+    [--signing-identity SHA1 --notary-profile NAME] [--dmg]
+
+--dmg also builds the Mac app and a drag-to-install disk image next to the ZIP. The image is
+signed with the same identity but never notarized here; see docs/releasing.md.
 EOF
 }
 
 signing_identity=""
 notary_profile=""
+build_dmg=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --output-directory)
@@ -36,6 +40,10 @@ while [ "$#" -gt 0 ]; do
       [ "$#" -ge 2 ] || fail "--notary-profile requires a value." 64
       notary_profile=$2
       shift 2
+      ;;
+    --dmg)
+      build_dmg=1
+      shift
       ;;
     -h|--help)
       usage
@@ -175,3 +183,17 @@ rm -rf "$staging_root"
 staging_root=""
 
 echo "Built $bundle_name.zip and its SHA-256 checksum."
+
+if [ "$build_dmg" = "1" ]; then
+  if [ "$distribution_build" = "1" ]; then
+    CALOPOD_BUILD_CONFIGURATION=release CALOPOD_SIGN_IDENTITY="$signing_identity" \
+      "$repository_root/Scripts/build-calopod-mac-app.sh"
+    "$repository_root/Scripts/make-calopod-dmg.sh" \
+      --output-directory "$output_directory" --identity "$signing_identity"
+  else
+    CALOPOD_BUILD_CONFIGURATION=release CALOPOD_SIGN_IDENTITY= \
+      "$repository_root/Scripts/build-calopod-mac-app.sh"
+    "$repository_root/Scripts/make-calopod-dmg.sh" \
+      --output-directory "$output_directory" --identity "" --allow-adhoc
+  fi
+fi
