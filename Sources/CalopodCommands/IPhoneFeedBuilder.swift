@@ -82,6 +82,7 @@ enum IPhoneFeedBuilder {
         let first = calendar.startOfDay(for: now)
         guard !sources.isEmpty, let end = calendar.date(byAdding: .day, value: availabilityDays, to: first) else { return [] }
         let events = try repository.normalizedInstances(calendarBindingIDs: sources.map(\.calendar.id), from: first, through: end)
+        let hours = try repository.workingHours()
         let format = DateFormatter()
         format.locale = Locale(identifier: "en_US_POSIX")
         format.timeZone = calendar.timeZone
@@ -89,10 +90,24 @@ enum IPhoneFeedBuilder {
         return (0..<availabilityDays).compactMap { offset in
             guard let start = calendar.date(byAdding: .day, value: offset, to: first),
                   let next = calendar.date(byAdding: .day, value: 1, to: start) else { return nil }
-            let busy = AvailabilityCalculator.calculate(instances: events, from: start, through: next).busy
+            let range = DateInterval(start: start, end: next)
+            let result = AvailabilityCalculator.calculate(
+                instances: events, from: start, through: next, workingHours: hours, timeZone: calendar.timeZone)
+            let summary = CalopodSync.AvailabilityDay(result, day: range)
+            func ranges(_ list: [AvailabilityInterval]) -> [BusyInterval] { list.map { BusyInterval(start: $0.start, end: $0.end) } }
             return CalopodSnapshot.AvailabilityDay(
                 day: format.string(from: start), timeZoneIdentifier: calendar.timeZone.identifier,
-                busy: busy.map { BusyInterval(start: $0.start, end: $0.end) })
+                busy: ranges(result.busy), working: result.workingWindows?.first.map { BusyInterval(start: $0.start, end: $0.end) },
+                free: ranges(result.free), overlaps: result.overlaps, status: status(summary.load))
+        }
+    }
+
+    private static func status(_ load: AvailabilityLoad) -> AvailabilityStatus {
+        switch load {
+        case .mostlyFree: .mostlyFree
+        case .tight: .tight
+        case .overbooked: .overbooked
+        case .dayOff: .dayOff
         }
     }
 

@@ -2,6 +2,7 @@
 import CalopodDomain
 import CalopodSnapshot
 import CalopodStore
+import CalopodSync
 import Foundation
 import Testing
 
@@ -11,11 +12,11 @@ private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
 private func event(
     _ key: String, hour: Double, isPrivate: Bool, url: String? = nil, state response: EventResponseState = .needsResponse,
-    isAllDay: Bool = false
+    isAllDay: Bool = false, hours: Double = 1
 ) -> StoredNormalizedInstance {
     StoredNormalizedInstance(
         sourceKeyHash: key, connectionID: "c", calendarBindingID: "cal", providerEventID: key, recurrenceID: nil,
-        startsAt: now.addingTimeInterval(hour * 3600), endsAt: now.addingTimeInterval((hour + 1) * 3600),
+        startsAt: now.addingTimeInterval(hour * 3600), endsAt: now.addingTimeInterval((hour + hours) * 3600),
         isAllDay: isAllDay, availability: "busy", isCancelled: false, isPrivate: isPrivate, title: "Title \(key)",
         contentFingerprint: key, providerUpdatedAt: nil, location: "Room 4", notes: String(repeating: "n", count: 5_000), url: url,
         attendees: [EventParticipant(emailAddress: "a@example.com", status: "accepted"), EventParticipant(status: "declined")],
@@ -48,6 +49,14 @@ private func finishSync(_ state: LocalStateRepository, id: String) throws {
 
 private func service(_ state: LocalStateRepository, at date: Date = now) -> IPhoneFeedService {
     IPhoneFeedService(makeRepository: { state }, now: { date })
+}
+
+private func zoned(_ day: Int, _ hour: Double) -> Date {
+    // March 2027 in New York: the clocks go forward on the 14th.
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "America/New_York")!
+    let start = calendar.date(from: DateComponents(year: 2027, month: 3, day: day))!
+    return calendar.date(bySettingHour: Int(hour), minute: Int(hour * 60) % 60, second: 0, of: start)!
 }
 
 @Suite("iPhone feed")
@@ -217,6 +226,64 @@ struct IPhoneFeedTests {
         #expect(signed.describe(StoredIPhoneFeed()) == "iPhone feed: off")
         let item = iPhoneFeedDoctorItem(availability: .noApp, feed: { nil })
         #expect(item.item.kind == "skipped" && item.item.reason == "no-app" && item.warning == nil)
+    }
+
+    @Test("Each day is published worked out by the same code as the Mac")
+    func publishesWorkedOutDays() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York")!
+        let today = zoned(12, 12)
+        let slots: [(Double, Double, Double, Double)] = [
+            (12, 10, 12, 11), (12, 10.5, 12, 11.5), (12, 17.5, 12, 18.5), (12, 22, 13, 2), (14, 9, 14, 10),
+        ]
+        let events = slots.enumerated().map { index, slot in
+            let start = zoned(Int(slot.0), slot.1), end = zoned(Int(slot.2), slot.3)
+            return event(
+                "e\(index)", hour: start.timeIntervalSince(now) / 3600, isPrivate: false, state: .accepted,
+                hours: end.timeIntervalSince(start) / 3600)
+        }
+        let state = LocalStateRepository(database: try CalopodDatabase.inMemory())
+        try state.saveConnection(StoredConnection(
+            id: "c", configurationID: "config", provider: "google", displayLabel: "Example", isEnabled: true))
+        try state.replaceCalendarBindings(connectionID: "c", bindings: [
+            StoredCalendarBinding(
+                id: "cal", connectionID: "c", providerCalendarID: "cal", displayLabel: "Work",
+                isSelected: true, isReadOnly: false, responseIdentityScope: .authenticatedUser),
+        ])
+        try state.applyEventRefresh(
+            connectionID: "c", calendarBindingID: "cal", windowStart: zoned(1, 0), windowEnd: zoned(31, 0),
+            instances: events, cancelledSourceKeyHashes: [], isFullRefresh: true, cursorUpdates: [])
+        // Sunday is a working day here, so the clock change falls inside working hours.
+        let sunday = try WorkingHours.Day(startMinute: 540, endMinute: 1020)
+        try state.saveWorkingHours(state.workingHours().setting(isoWeekday: 7, to: sunday))
+
+        let records = try IPhoneFeedBuilder.records(repository: state, now: today, calendar: calendar)
+        let days = try records.filter { $0.kind == .availabilityDay }.map {
+            try SnapshotCoding.decode(CalopodSnapshot.AvailabilityDay.self, from: $0.bytes).record
+        }
+        #expect(days.count == IPhoneFeedBuilder.availabilityDays)
+        let friday = days[0], saturday = days[1], sunday14 = days[2]
+        #expect(friday.day == "2027-03-12" && friday.status == .mostlyFree && friday.overlaps == 1)
+        #expect(friday.working == BusyInterval(start: zoned(12, 9), end: zoned(12, 17)))
+        // Busy time after 17:00 stays in the list, and an event over midnight is cut at the day's end.
+        #expect(friday.busy.last == BusyInterval(start: zoned(12, 22), end: zoned(13, 0)))
+        #expect(friday.busy.count == 3)
+        #expect(saturday.status == .dayOff && saturday.working == nil && saturday.free == [])
+        #expect(saturday.busy == [BusyInterval(start: zoned(13, 0), end: zoned(13, 2))])
+        #expect(sunday14.status == .mostlyFree && sunday14.working == BusyInterval(start: zoned(14, 9), end: zoned(14, 17)))
+        #expect(sunday14.free == [BusyInterval(start: zoned(14, 10), end: zoned(14, 17))])
+
+        // The totals match `calopod availability` for the same days.
+        let reports = try AvailabilityService(makeRepository: { state }).report(
+            days: (0..<IPhoneFeedBuilder.availabilityDays).map { calendar.date(byAdding: .day, value: $0, to: zoned(12, 0))! },
+            calendar: calendar)
+        func seconds(_ list: [BusyInterval]) -> TimeInterval { list.reduce(0) { $0 + $1.end.timeIntervalSince($1.start) } }
+        for (published, report) in zip(days, reports) {
+            #expect(seconds(published.free ?? []) == report.summary.freeSeconds)
+            #expect(seconds(published.busy) == report.summary.busySeconds)
+            #expect(published.overlaps == report.summary.overlaps)
+        }
+        #expect(seconds(sunday14.free ?? []) == 7 * 3600)
     }
 }
 #endif
