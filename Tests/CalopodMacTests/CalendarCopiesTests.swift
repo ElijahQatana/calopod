@@ -29,6 +29,7 @@ final class CalendarCopiesTests: XCTestCase {
         let schedule = CalendarSchedule(calendars: [], events: [event("a", copy: false), event("a-busy", copy: true)])
         let model = CalendarModel(calendar: calendar, now: { self.start }, defaults: try defaults(), load: { schedule })
         await model.reload()
+        model.showCopies = true
         let day = calendar.startOfDay(for: model.anchor)
 
         let shown = ScheduleLayout.placements(model.events, on: day, calendar: calendar)
@@ -44,6 +45,7 @@ final class CalendarCopiesTests: XCTestCase {
         let schedule = CalendarSchedule(calendars: [], events: [event("a", copy: false), event("a-busy", copy: true)])
         let model = CalendarModel(calendar: calendar, now: { self.start }, defaults: try defaults(), load: { schedule })
         await model.reload()
+        model.showCopies = true
 
         model.selectedID = "a"
         model.showCopies = false
@@ -55,10 +57,10 @@ final class CalendarCopiesTests: XCTestCase {
         XCTAssertNil(model.selectedID)
     }
 
-    func testChoiceIsRememberedAndCopiesShowByDefault() throws {
+    func testCopiesAreOffByDefaultAndTheChoiceIsRemembered() throws {
         let store = try defaults()
-        XCTAssertTrue(CalendarModel(defaults: store, load: { CalendarSchedule(calendars: [], events: []) }).showCopies)
-        CalendarModel(defaults: store, load: { CalendarSchedule(calendars: [], events: []) }).showCopies = false
         XCTAssertFalse(CalendarModel(defaults: store, load: { CalendarSchedule(calendars: [], events: []) }).showCopies)
+        CalendarModel(defaults: store, load: { CalendarSchedule(calendars: [], events: []) }).showCopies = true
+        XCTAssertTrue(CalendarModel(defaults: store, load: { CalendarSchedule(calendars: [], events: []) }).showCopies)
     }
 }
