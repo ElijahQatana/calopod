@@ -33,6 +33,13 @@ enum Screen: String, CaseIterable, Identifiable {
     }
 }
 
+/// The pages inside Calendar: the schedule grid and the week's free and busy time.
+enum CalendarPage: String, CaseIterable {
+    case schedule, availability
+
+    var title: String { self == .schedule ? "Schedule" : "Availability" }
+}
+
 extension Screen {
     /// Screens listed in the sidebar.
     static let main: [Screen] = [.overview, .calendar, .inbox]
@@ -65,6 +72,8 @@ final class SidebarState {
 @Observable
 final class AppNavigation {
     var selection: Screen
+    /// The page Calendar shows. Set it with `openAvailability` from other screens.
+    var calendarPage: CalendarPage = .schedule
     /// The Inbox filter to show. Set it with `openInbox` from other screens.
     var inboxFilter: InboxFilter = .all
     /// An event to select when Inbox opens. Inbox clears it once it has looked for the event.
@@ -81,6 +90,11 @@ final class AppNavigation {
         selection = .inbox
     }
 
+    func openAvailability() {
+        calendarPage = .availability
+        selection = .calendar
+    }
+
     /// Opens Inbox on the first filter that holds the event, or All, with the event selected.
     func openInbox(showing event: ScheduleEvent) {
         openInbox(ScheduleLayout.inboxFilter(for: event), event: event.id)
@@ -89,6 +103,7 @@ final class AppNavigation {
     /// Brings Calendar forward on the event. The menu bar and Overview both open events this way.
     func openCalendar(showing event: ScheduleEvent, in model: CalendarModel) {
         model.open(event)
+        calendarPage = .schedule
         selection = .calendar
     }
 
