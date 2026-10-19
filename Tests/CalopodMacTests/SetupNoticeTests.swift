@@ -7,7 +7,7 @@ import XCTest
 final class SetupNoticeTests: XCTestCase {
     private var saved: [String: String?] = [:]
 
-    override func setUp() {
+    override func setUp() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         for (key, value) in [
             ("CALOPOD_STATE_PATH", root.appendingPathComponent("state.sqlite").path),
@@ -18,7 +18,7 @@ final class SetupNoticeTests: XCTestCase {
         }
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         for (key, value) in saved {
             if let value { setenv(key, value, 1) } else { unsetenv(key) }
         }

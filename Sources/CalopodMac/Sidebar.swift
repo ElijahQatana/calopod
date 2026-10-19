@@ -3,9 +3,9 @@ import SwiftUI
 
 /// Floating sidebar. Full width with labels, or a narrow icon rail.
 struct Sidebar: View {
-    static let width: CGFloat = 240
-    static let railWidth: CGFloat = 76
-    static let inset: CGFloat = 10
+    nonisolated static let width: CGFloat = 240
+    nonisolated static let railWidth: CGFloat = 76
+    nonisolated static let inset: CGFloat = 10
 
     let navigation: AppNavigation
     let state: SidebarState

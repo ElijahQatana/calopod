@@ -1,0 +1,2 @@
+# Warnings from code we cannot change, one fragment per line, matched as plain text.
+# Add the file, line and a note on why next to each entry.

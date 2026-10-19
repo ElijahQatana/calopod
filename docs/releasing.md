@@ -14,6 +14,10 @@ The helper's bundle ID and the service's associated bundle ID must match. Calend
 
 The app icon source is `Support/EventKitHost/Calopod.icon`.
 
+## Before you build
+
+Run `Scripts/check-build-warnings.sh`. It builds everything, tests included, in a throwaway folder and fails on any compiler warning from our own `Sources` or `Tests`. It takes a few minutes, so it is not part of `swift test`. A warning from code we cannot change can go in `Scripts/build-warnings-ignore.txt`, with a note on why.
+
 ## Local build
 
 ```sh

@@ -123,8 +123,8 @@ struct CalendarRow: View {
         .foregroundStyle(emphasized ? .secondary : .tertiary)
     }
 
-    static func renameLabel(_ name: String) -> String { "Rename \(name)" }
-    static func ignoreLabel(_ name: String, ignored: Bool) -> String { (ignored ? "Stop ignoring " : "Ignore ") + name }
+    nonisolated static func renameLabel(_ name: String) -> String { "Rename \(name)" }
+    nonisolated static func ignoreLabel(_ name: String, ignored: Bool) -> String { (ignored ? "Stop ignoring " : "Ignore ") + name }
 }
 
 /// Edits the name Calopod shows for a calendar. The calendar itself is never renamed.
