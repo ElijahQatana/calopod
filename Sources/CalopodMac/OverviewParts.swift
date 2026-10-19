@@ -47,7 +47,7 @@ struct SyncStatusCard: View {
     let busy: String?
     /// Nil when automatic sync is off, so there is nothing to pause.
     let paused: Bool?
-    let previewDisabled: Bool
+    let previewRule: PreviewSyncRule
     let pauseDisabled: Bool
     let preview: () -> Void
     let togglePause: () -> Void
@@ -98,6 +98,11 @@ struct SyncStatusCard: View {
             if let note = health.note {
                 Text(note).font(Theme.Fonts.body).foregroundStyle(Theme.cautionText)
             }
+            // While a sync runs, the busy line below already says why.
+            if busy == nil, let reason = previewRule.disabledReason {
+                Text("Preview sync is unavailable: \(reason.prefix(1).lowercased() + reason.dropFirst()).")
+                    .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -110,7 +115,7 @@ struct SyncStatusCard: View {
             }
             Button("Preview sync", action: preview)
                 .buttonStyle(.accentFilled)
-                .disabled(previewDisabled)
+                .previewSync(previewRule)
             if let paused {
                 Button(paused ? "Resume" : "Pause", action: togglePause)
                     .buttonStyle(.neutral)

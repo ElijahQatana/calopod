@@ -54,6 +54,10 @@ final class ServiceModel {
 
     var isBusy: Bool { busyAction != nil }
 
+    var previewRule: PreviewSyncRule {
+        PreviewSyncRule.make(status: status, access: calendarAccess, busy: isBusy, hasPendingPreview: pendingPreview != nil)
+    }
+
     private static var bundledAgentExecutable: URL {
         Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/calopod-agent")
     }

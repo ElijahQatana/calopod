@@ -34,23 +34,12 @@ struct MenuPopover: View {
             }
 
             if let status = model.status, status.installed {
-                HStack(spacing: 8) {
-                    Button("Preview sync") { open(.overview, keepMenu: true); Task { await model.previewSync() } }
-                        .buttonStyle(.accentFilled)
-                        .disabled(model.isBusy)
-                    if model.syncHealth.offersEnable {
-                        Button("Enable") { Task { await model.setEnabled(true) } }
-                            .buttonStyle(.neutral)
-                            .disabled(model.isBusy)
-                    }
-                    if status.enabled {
-                        Button(status.paused ? "Resume" : "Pause") {
-                            Task { await model.setPaused(!status.paused) }
-                        }
-                        .buttonStyle(.neutral)
-                        .disabled(model.isBusy)
-                    }
-                }
+                MenuSyncControls(
+                    rule: model.previewRule, busy: model.isBusy, offersEnable: model.syncHealth.offersEnable,
+                    pausable: status.enabled ? status.paused : nil,
+                    preview: { open(.overview, keepMenu: true); Task { await model.previewSync() } },
+                    enable: { Task { await model.setEnabled(true) } },
+                    togglePause: { Task { await model.setPaused(!status.paused) } })
             }
 
             VStack(spacing: 2) {
@@ -112,6 +101,39 @@ struct MenuPopover: View {
         dismiss()
         // dismiss() is not honored by every popover, so close its window as well.
         DispatchQueue.main.async { if popover?.isVisible == true { popover?.close() } }
+    }
+}
+
+/// Preview, Enable and Pause under the status card, with the reason when Preview is unavailable.
+struct MenuSyncControls: View {
+    let rule: PreviewSyncRule
+    let busy: Bool
+    let offersEnable: Bool
+    /// Nil when automatic sync is off, so there is nothing to pause.
+    let pausable: Bool?
+    let preview: () -> Void
+    let enable: () -> Void
+    let togglePause: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Button("Preview sync", action: preview)
+                    .buttonStyle(.accentFilled)
+                    .previewSync(rule)
+                if offersEnable {
+                    Button("Enable", action: enable).buttonStyle(.neutral).disabled(busy)
+                }
+                if let paused = pausable {
+                    Button(paused ? "Resume" : "Pause", action: togglePause).buttonStyle(.neutral).disabled(busy)
+                }
+            }
+            // While a sync runs, the busy line above already says why.
+            if !busy, let reason = rule.disabledReason {
+                Text("Preview sync is unavailable: \(reason.prefix(1).lowercased() + reason.dropFirst()).")
+                    .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+            }
+        }
     }
 }
 
