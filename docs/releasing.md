@@ -64,7 +64,7 @@ CALOPOD_BUILD_CONFIGURATION=release CALOPOD_SIGN_IDENTITY="$signing_identity" Sc
 Scripts/make-calopod-dmg.sh --identity "$signing_identity"
 ```
 
-The script checks the app first and refuses one that is unsigned, ad hoc, missing the Hardened Runtime or missing the Calendar entitlement on the app or the helper. `--allow-adhoc` skips that for a local test and prints a warning. It writes `dist/Calopod-<version>.dmg` and a `.sha256` file, signs the image with `--identity` (default `CALOPOD_SIGN_IDENTITY`) and runs `hdiutil verify`. The window layout is written to the image directly, so no Finder session is opened. The first run installs a pinned copy of dmgbuild into `.build/dmg-venv`, which needs network access once.
+The script checks the app first and refuses one that is unsigned, ad hoc, missing the Hardened Runtime or missing the Calendar entitlement on the app or the helper. `--allow-adhoc` skips that for a local test and prints a warning. It writes `dist/Calopod-<version>.dmg` and a `.sha256` file, signs the image with `--identity` (default `CALOPOD_SIGN_IDENTITY`) and runs `hdiutil verify`. The window layout is written to the image directly, so no Finder session is opened. Window size, background size and icon positions come from `Scripts/dmg/layout.json`. The image holds only the app and the Applications link; the hint about the command line is part of the background. The first run installs a pinned copy of dmgbuild into `.build/dmg-venv`, which needs network access once.
 
 `Scripts/build-calopod-release.sh --dmg` builds the app and the image after the ZIP, with the same signing identity.
 
