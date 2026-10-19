@@ -25,6 +25,16 @@ A fresh install syncs every 10 minutes with up to 30 seconds of random jitter, l
 
 The installer links `calopod`, `calopod-setup` and `calopod-uninstall` into `~/.local/bin`. Add that folder to your `PATH` if it isn't there already. It doesn't edit your shell files and it doesn't start automatic sync.
 
+If `calopod` already points into Calopod.app, the installer leaves that link alone, links `calopod-setup` and `calopod-uninstall` as usual and says so. To point `calopod` at this install instead, run `./install --replace-app-command`.
+
+## Three ways to install
+
+- **Command line only.** Run `./install` as above. You get `calopod`, `calopod-setup` and `calopod-uninstall`, and the background service runs from the install. No app is needed.
+- **App only.** The app registers its own background service in Background sync. It has no `calopod` command until you add one.
+- **App and command.** In the app's Settings, Command line links `~/.local/bin/calopod` to the command inside the app, so updating the app updates the command.
+
+If you started with the command line install, Move to the app in Background sync switches your sync over to the app and then offers to link `calopod` to the app too. Replace in Settings does that for an existing `calopod` link at any time. To go back, remove the app's command link in Settings and run `./install` again, or run `./install --replace-app-command`.
+
 ## Set up
 
 ```sh

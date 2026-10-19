@@ -44,17 +44,31 @@ struct CommandLink {
         return fileManager.fileExists(atPath: resolved) ? .elsewhere(target: resolved) : .broken(target: resolved)
     }
 
+    /// Whether the link points at the command of the source install, the one Move to the app replaces.
+    var linksToSourceInstall: Bool {
+        guard case .elsewhere(let target) = state() else { return false }
+        let source = home.appendingPathComponent("Library/Application Support/Calopod/Service/bin/calopod")
+        return target == source.standardizedFileURL.path
+    }
+
     /// Links the command. A working link to something else is replaced only with `replacingOther`.
-    /// Move to the app will take over a source-installed link in a later step.
+    /// The new link is made beside the old one and moved over it, so a failure keeps the old link.
     func install(replacingOther: Bool = false) throws {
         switch state() {
         case .occupied: throw Failure.occupied
         case .elsewhere where !replacingOther: throw Failure.needsReplaceConfirmation
-        case .notInstalled: break
-        default: try fileManager.removeItem(at: linkURL)
+        default: break
         }
         try fileManager.createDirectory(at: binDirectory, withIntermediateDirectories: true)
-        try fileManager.createSymbolicLink(atPath: linkURL.path, withDestinationPath: commandURL.path)
+        let temporary = binDirectory.appendingPathComponent(".calopod.installing.\(ProcessInfo.processInfo.processIdentifier)")
+        try? fileManager.removeItem(at: temporary)
+        try fileManager.createSymbolicLink(atPath: temporary.path, withDestinationPath: commandURL.path)
+        // rename(2) replaces the old link in one step.
+        if rename(temporary.path, linkURL.path) != 0 {
+            let code = errno
+            try? fileManager.removeItem(at: temporary)
+            throw NSError(domain: NSPOSIXErrorDomain, code: Int(code))
+        }
     }
 
     /// Deletes the link only when it points into this app, whether or not the target is still there.

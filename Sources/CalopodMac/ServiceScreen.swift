@@ -4,6 +4,7 @@ import SwiftUI
 
 struct ServiceScreen: View {
     let model: ServiceModel
+    @State private var command = CommandLineModel()
 
     private static let intervals: [(label: String, seconds: Int)] = [
         ("5 minutes", 300), ("10 minutes", 600), ("15 minutes", 900),
@@ -18,9 +19,10 @@ struct ServiceScreen: View {
             serviceSection
             if let status = model.status, status.installed { scheduleSection(status) }
         }
-        .task { await model.refresh() }
+        .task { await model.refresh(); command.refresh() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             Task { await model.refresh() }
+            command.refresh()
         }
         .onDisappear { model.dismissNotice() }
     }
@@ -114,11 +116,29 @@ struct ServiceScreen: View {
                             .disabled(model.isBusy)
                     }
                 }
+                if !model.legacyServiceActive, command.offersTakeover { takeoverRows }
+                if let notice = command.notice { CardRow { Banner(kind: .error, text: notice) } }
                 CardRow {
                     Button("Remove", role: .destructive) { Task { await model.removeBundledService() } }
                         .buttonStyle(.quiet)
                         .disabled(model.isBusy)
                 }
+            }
+        }
+    }
+
+    /// Asked after the move, never done silently. Remove in Settings undoes it.
+    @ViewBuilder
+    private var takeoverRows: some View {
+        CardRow {
+            Text("Also use the command inside this app, so updating the app updates calopod")
+                .font(Theme.Fonts.body)
+        }
+        CardRow {
+            HStack {
+                Button("Use the app's command") { command.takeOver() }
+                    .disabled(model.isBusy)
+                Button("Not now") { command.declineTakeover() }.buttonStyle(.quiet)
             }
         }
     }

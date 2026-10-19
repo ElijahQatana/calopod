@@ -69,4 +69,51 @@ final class CommandLineModelTests: XCTestCase {
         XCTAssertNil(model.notice)
         XCTAssertEqual(model.state, .notInstalled)
     }
+
+    private func pointAtSourceInstall() throws -> String {
+        let source = link.home.appendingPathComponent("Library/Application Support/Calopod/Service/bin/calopod")
+        try fileManager.createDirectory(at: source.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try "#!/bin/sh\n".write(to: source, atomically: true, encoding: .utf8)
+        try fileManager.createSymbolicLink(atPath: link.linkURL.path, withDestinationPath: source.path)
+        return source.path
+    }
+
+    func testSourceLinkIsOfferedAndRelinkedAfterConfirm() throws {
+        _ = try pointAtSourceInstall()
+        let model = CommandLineModel(link: link)
+        XCTAssertTrue(model.offersTakeover)
+        model.takeOver()
+        XCTAssertNil(model.notice)
+        XCTAssertEqual(model.state, .installed)
+        XCTAssertFalse(model.offersTakeover)
+        model.remove()
+        XCTAssertEqual(model.state, .notInstalled)
+    }
+
+    func testDecliningLeavesTheSourceLink() throws {
+        let source = try pointAtSourceInstall()
+        let model = CommandLineModel(link: link)
+        model.declineTakeover()
+        XCTAssertFalse(model.offersTakeover)
+        model.takeOver()
+        XCTAssertEqual(try fileManager.destinationOfSymbolicLink(atPath: link.linkURL.path), source)
+    }
+
+    func testFailedLinkKeepsTheOldOne() throws {
+        let source = try pointAtSourceInstall()
+        let model = CommandLineModel(link: link)
+        try fileManager.setAttributes([.posixPermissions: 0o555], ofItemAtPath: link.binDirectory.path)
+        defer { try? fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: link.binDirectory.path) }
+        model.takeOver()
+        XCTAssertNotNil(model.notice)
+        XCTAssertEqual(try fileManager.destinationOfSymbolicLink(atPath: link.linkURL.path), source)
+    }
+
+    func testAnotherLinkIsNotOfferedForTakeover() throws {
+        _ = try pointElsewhere()
+        let model = CommandLineModel(link: link)
+        XCTAssertFalse(model.offersTakeover)
+        model.takeOver()
+        XCTAssertEqual(model.state, .elsewhere(target: root.appendingPathComponent("source/calopod").standardizedFileURL.path))
+    }
 }

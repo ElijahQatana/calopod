@@ -9,6 +9,8 @@ final class CommandLineModel {
     private(set) var notice: String?
     private(set) var confirmingReplace = false
     private(set) var showsPathLine = false
+    /// Set when the person said no to taking over a source-installed link, until the app restarts.
+    private(set) var takeoverDeclined = false
 
     @ObservationIgnored private let link: CommandLink?
 
@@ -44,6 +46,17 @@ final class CommandLineModel {
         run { try link.install(replacingOther: replacing) }
     }
 
+    /// The link still points at the source install, so Move to the app can offer to take it over.
+    var offersTakeover: Bool { link?.linksToSourceInstall == true && !takeoverDeclined }
+
+    /// After the person confirmed. A failed link leaves the old one and says so.
+    func takeOver() {
+        guard offersTakeover, let link else { return }
+        run { try link.install(replacingOther: true) }
+    }
+
+    func declineTakeover() { takeoverDeclined = true }
+
     func cancelReplace() { confirmingReplace = false }
 
     func remove() {
@@ -66,7 +79,7 @@ final class CommandLineModel {
         case nil:
             // Only file system errors have wording worth showing; other errors would expose type names.
             let reason = (error as NSError).domain == NSCocoaErrorDomain ? " \(error.localizedDescription)" : ""
-            return "Could not change ~/.local/bin/calopod.\(reason)"
+            return "Could not change ~/.local/bin/calopod.\(reason) The existing link was left as it was."
         }
     }
 }

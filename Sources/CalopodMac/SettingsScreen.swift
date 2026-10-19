@@ -130,6 +130,9 @@ struct SettingsScreen: View {
 
     private var commandFootnote: String {
         "Links ~/.local/bin/calopod to the command inside this app, so updating the app updates the command. No administrator password needed."
+            + (command.state == .installed
+                ? " To go back to a source install, choose Remove, then run ./install from its folder."
+                : "")
     }
 
     private var commandStatus: String {

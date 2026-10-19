@@ -41,6 +41,8 @@ resolve_home() {
   CDPATH= cd -- "$HOME" && pwd -P
 }
 
+# Only a link to this install's own files is removed. A calopod link into an app, or any
+# other link or file, stays.
 remove_managed_link() {
   link_path=$1
   expected_target=$2

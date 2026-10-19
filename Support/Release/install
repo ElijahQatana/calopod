@@ -46,7 +46,10 @@ usage() {
   cat <<'EOF'
 Usage:
   ./install [--interval-seconds N] [--jitter-seconds N] \
-    [--lookback-days N] [--horizon-days N]
+    [--lookback-days N] [--horizon-days N] [--replace-app-command]
+
+A calopod command that already points into Calopod.app is left alone.
+--replace-app-command links calopod to this install instead.
 
 Fresh defaults: interval 600 seconds, jitter 30 seconds, lookback 1 day,
 horizon 30 days. Upgrades preserve saved values unless overridden.
@@ -64,6 +67,16 @@ validate_link_slot() {
   fi
 }
 
+# A link into an app, such as Calopod.app/Contents/MacOS/calopod, belongs to the app.
+points_into_app() {
+  [ -L "$1" ] || return 1
+  case "$(readlink "$1")" in
+    /*.app/Contents/MacOS/calopod) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+replace_app_command=0
 interval_seconds=""
 jitter_seconds=""
 lookback_days=""
@@ -93,6 +106,10 @@ while [ "$#" -gt 0 ]; do
       [ -n "$2" ] || fail "--horizon-days requires a value." 64
       horizon_days=$2
       shift 2
+      ;;
+    --replace-app-command)
+      replace_app_command=1
+      shift
       ;;
     -h|--help)
       usage
@@ -250,7 +267,17 @@ if [ "$test_mode" != "1" ] \
   cleanup_identity
 fi
 
-validate_link_slot "$cli_link" "$installed_cli"
+link_cli=1
+if points_into_app "$cli_link"; then
+  if [ "$replace_app_command" = "1" ]; then
+    :
+  else
+    link_cli=0
+    echo "calopod already points to the command in the app, so it was left alone. Use --replace-app-command to point it here."
+  fi
+else
+  validate_link_slot "$cli_link" "$installed_cli"
+fi
 validate_link_slot "$setup_link" "$installed_setup"
 validate_link_slot "$uninstall_link" "$installed_uninstaller"
 umask 077
@@ -266,7 +293,7 @@ cleanup_links() {
   [ ! -L "$temporary_uninstall_link" ] || rm -f "$temporary_uninstall_link"
 }
 trap cleanup_links EXIT HUP INT TERM
-ln -s "$installed_cli" "$temporary_cli_link"
+[ "$link_cli" = "0" ] || ln -s "$installed_cli" "$temporary_cli_link"
 ln -s "$installed_setup" "$temporary_setup_link"
 ln -s "$installed_uninstaller" "$temporary_uninstall_link"
 
@@ -283,7 +310,7 @@ env \
     --lookback-days "$lookback_days" \
     --horizon-days "$horizon_days"
 
-mv -f "$temporary_cli_link" "$cli_link"
+[ "$link_cli" = "0" ] || mv -f "$temporary_cli_link" "$cli_link"
 mv -f "$temporary_setup_link" "$setup_link"
 mv -f "$temporary_uninstall_link" "$uninstall_link"
 trap - EXIT HUP INT TERM
