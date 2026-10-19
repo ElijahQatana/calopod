@@ -154,6 +154,9 @@ public struct AvailabilityCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Limit Availability to one selected calendar identifier.")
     public var calendar: String?
 
+    @Flag(name: .long, help: "Count free time all day instead of only inside working hours (see `calopod hours`).")
+    public var ignoreWorkingHours = false
+
     public init() {}
 
     public func run() async throws {
@@ -176,13 +179,19 @@ public struct AvailabilityCommand: AsyncParsableCommand {
             let availability = AvailabilityCalculator.calculate(
                 instances: events,
                 from: resolved.window.start,
-                through: resolved.window.end
+                through: resolved.window.end,
+                workingHours: ignoreWorkingHours ? nil : try repository.workingHours(),
+                timeZone: TimeZone(identifier: resolved.timeZoneIdentifier) ?? .current
             )
             let intervals = (availability.busy + availability.free).sorted {
                 if $0.start == $1.start {
                     return $0.kind.rawValue < $1.kind.rawValue
                 }
                 return $0.start < $1.start
+            }
+            var human = output.localContext(repository: repository)
+            if availability.workingWindows != nil {
+                human.footer = ["Free time counts only inside working hours (see calopod hours). Use --ignore-working-hours to count the whole day."]
             }
             try OutputRenderer.write(
                 command: "availability",
@@ -204,12 +213,15 @@ public struct AvailabilityCommand: AsyncParsableCommand {
                             availability: interval.kind.rawValue
                         )
                     },
-                    ingestion: refresh.ingestion
+                    ingestion: refresh.ingestion,
+                    workingWindows: availability.workingWindows?.map {
+                        WorkingWindowOutput(startsAt: outputDate($0.start)!, endsAt: outputDate($0.end)!)
+                    }
                 ),
                 warnings: refresh.warnings,
                 format: output.format,
                 showIDs: output.ids,
-                human: output.localContext(repository: repository)
+                human: human
             )
         } catch {
             try failCommand(error, format: output.format)

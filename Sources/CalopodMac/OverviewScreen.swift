@@ -10,6 +10,7 @@ struct OverviewScreen: View {
     @Environment(InboxModel.self) private var inbox
     @Environment(CalendarModel.self) private var schedule
     @Environment(CalendarAccessModel.self) private var access
+    @Environment(AvailabilityModel.self) private var availability
     @Environment(OverviewRefresh.self) private var refresh
     @Environment(\.sidebarCollapsed) private var collapsed
     @Environment(\.iPhoneFeed) private var iPhoneFeed
@@ -41,6 +42,7 @@ struct OverviewScreen: View {
                     VStack(alignment: .leading, spacing: 16) {
                         needsYou
                         nextUp
+                        availabilityCard
                     }
                     VStack(alignment: .leading, spacing: 16) {
                         attention(status)
@@ -181,6 +183,17 @@ struct OverviewScreen: View {
                     if events.isEmpty { CardRow { Text("Nothing else today").foregroundStyle(.secondary) } }
                 })
         }
+    }
+
+    @ViewBuilder
+    private var availabilityCard: some View {
+        // The same warnings as the Calendar screen, for the week shown.
+        let notices = ScheduleLayout.notices(
+            calendars: schedule.calendars, hidden: [], range: availability.range, now: Date(),
+            name: { CalendarAliases.shared.name(for: $0.id, real: $0.name) })
+        AvailabilityCard(model: availability, notices: notices) { navigation.selection = .settings }
+            .task { await availability.reload() }
+            .onChange(of: schedule.schedule) { Task { await availability.reload() } }
     }
 
     private func staleNextUp(_ stale: [String]) -> some View {

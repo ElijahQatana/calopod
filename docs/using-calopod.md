@@ -36,6 +36,18 @@ Availability rules:
 - Events marked free don't block time. Busy, tentative, unavailable and out-of-office events do.
 - Overlapping or touching busy time merges into one block, and free time is whatever is left.
 - Copies made by Calopod are left out, so nothing is counted twice.
+- Free time counts only inside your working hours, so 3 a.m. isn't free. Busy time outside them is still listed, so a late meeting doesn't disappear. Add `--ignore-working-hours` to count the whole day.
+
+Working hours are set per weekday in your local time zone, with days off allowed. Until you set them they are Monday to Friday, 9:00 to 17:00.
+
+```sh
+calopod hours
+calopod hours set --days mon-thu --start 08:30 --end 17:00
+calopod hours set --days fri --start 08:30 --end 13:00
+calopod hours set --days sat,sun --off
+```
+
+The Mac app reads and changes the same hours in Settings.
 
 Dates can be a single `--day`, or `--from` and `--through`. A plain date means the whole local day, in your time zone unless you pass `--timezone`. Full timestamps need an offset such as `-04:00`.
 

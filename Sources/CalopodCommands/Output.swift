@@ -100,6 +100,11 @@ public struct CommandPayload: Codable, Equatable, Sendable {
     public let fix: String?
     /// For `calopod notifications`.
     public let notifications: NotificationSettingsOutput?
+    /// For `calopod hours`.
+    public let workingHours: WorkingHoursOutput?
+    /// For `calopod availability`: the working windows free time was limited to. Absent when
+    /// working hours were ignored.
+    public let workingWindows: [WorkingWindowOutput]?
 
     public init(
         status: String,
@@ -149,7 +154,9 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         helperPath: String? = nil,
         accessStatus: String? = nil,
         fix: String? = nil,
-        notifications: NotificationSettingsOutput? = nil
+        notifications: NotificationSettingsOutput? = nil,
+        workingHours: WorkingHoursOutput? = nil,
+        workingWindows: [WorkingWindowOutput]? = nil
     ) {
         self.status = status
         self.message = message
@@ -199,6 +206,8 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         self.accessStatus = accessStatus
         self.fix = fix
         self.notifications = notifications
+        self.workingHours = workingHours
+        self.workingWindows = workingWindows
     }
 }
 

@@ -76,4 +76,7 @@ enum EventDuration {
         default: return "\(hours) hr \(rest) min"
         }
     }
+
+    /// Like `text`, but says "0 min" for no time at all.
+    static func total(_ seconds: TimeInterval) -> String { seconds < 30 ? "0 min" : text(seconds) }
 }

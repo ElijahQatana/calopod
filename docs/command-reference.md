@@ -10,6 +10,7 @@ calopod main configure | inspect
 calopod events
 calopod join [event]
 calopod availability
+calopod hours [set]
 calopod sync
 calopod inbox [activity | refresh | inspect | acknowledge | review | config]
 calopod agent enable | disable | pause | resume | interval | run-now | status
@@ -22,6 +23,10 @@ calopod-setup [--arms]
 `iphone on` and `iphone off` choose whether the Mac app uploads the [iPhone feed](iphone-feed.md); `iphone status` shows the choice and how the last upload went. `on` needs the Mac app, and `off` deletes the uploaded copy. `iphone calendars` lists your calendars and, with `--on` and `--off` (a calendar's identifier or exact name, repeatable), chooses which ones send their events to the phone. None are chosen at first, and the event titles of chosen calendars are stored in your iCloud. `iphone status` says how many are chosen.
 
 `connection add` takes `mac`, `google` or `microsoft`. `events` and `availability` take `--cached` to read local data without refreshing.
+
+`hours` shows your working hours, one line per weekday, and `hours set --days mon-fri --start 09:00 --end 17:00` changes them. `--days` takes day names or short forms, ranges such as `mon-thu`, or `weekdays`, `weekend` and `all`, separated by commas. `--off` makes those days days off. On a working day you can give just `--start` or just `--end`; a day that is off needs both. The default is Monday to Friday, 9:00 to 17:00, and the times are in your local time zone. The Mac app edits the same hours in Settings.
+
+`availability` counts free time only inside working hours and still lists busy time outside them. `--ignore-working-hours` counts the whole day. The JSON keeps its existing fields and adds `workingWindows`, one start and end for each working window in the range; it is left out when working hours are ignored.
 
 `events` lists the Teams, Zoom, Meet or Webex link of each event (`Join:` in text, `joinProvider` and `joinURL` in JSON). `join` opens one: give it an id from `events --ids`, or leave it out for the event the menu bar card shows as next: the meeting that is on now during its first 10 minutes, then the next one to start within 12 hours. It opens the meeting app when there is one, otherwise the link in the browser.
 
