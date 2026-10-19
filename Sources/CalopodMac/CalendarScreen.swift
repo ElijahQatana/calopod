@@ -6,6 +6,7 @@ struct CalendarScreen: View {
     @Environment(CalendarModel.self) private var model
     private let colors = CalendarColors.shared
     @Environment(\.sidebarCollapsed) private var collapsed
+    let navigation: AppNavigation
 
     /// Opens Inbox with this event selected.
     var openInbox: (ScheduleEvent) -> Void = { _ in }
@@ -13,13 +14,17 @@ struct CalendarScreen: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            notices
-            // The inspector always sits beside the grid; a narrow grid scrolls instead of being covered.
-            HStack(alignment: .top, spacing: 0) {
-                content
-                if model.selected != nil { inspector.frame(width: 270).padding([.trailing, .bottom], 12) }
+            if navigation.calendarPage == .availability {
+                AvailabilityPage(openSettings: { navigation.selection = .settings }).frame(maxHeight: .infinity)
+            } else {
+                notices
+                // The inspector always sits beside the grid; a narrow grid scrolls instead of being covered.
+                HStack(alignment: .top, spacing: 0) {
+                    content
+                    if model.selected != nil { inspector.frame(width: 270).padding([.trailing, .bottom], 12) }
+                }
+                .frame(maxHeight: .infinity)
             }
-            .frame(maxHeight: .infinity)
         }
         .task {
             // Reads the local copy only, so it shows at once even while a sync is running.
@@ -70,25 +75,31 @@ struct CalendarScreen: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
             PageHeader(title: title, horizontal: Self.headerInset) {
-                PillPicker(options: [("Day", CalendarModel.Mode.day), ("Week", .week)], selection: Bindable(model).mode, quiet: true)
-                    .fixedSize()
-                Button { model.goToToday() } label: {
-                    Text("Today")
-                        .font(Theme.Fonts.bodyMedium)
-                        .padding(.horizontal, 16).frame(height: Self.controlHeight)
-                        .background(Capsule().fill(.quaternary))
-                        .contentShape(Capsule())
+                if navigation.calendarPage == .schedule {
+                    PillPicker(options: [("Day", CalendarModel.Mode.day), ("Week", .week)], selection: Bindable(model).mode, quiet: true)
+                        .fixedSize()
+                    Button { model.goToToday() } label: {
+                        Text("Today")
+                            .font(Theme.Fonts.bodyMedium)
+                            .padding(.horizontal, 16).frame(height: Self.controlHeight)
+                            .background(Capsule().fill(.quaternary))
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    HStack(spacing: 0) {
+                        stepButton("chevron.left", label: "Previous", by: -1)
+                        stepButton("chevron.right", label: "Next", by: 1)
+                    }
+                    .background(Capsule().fill(.quaternary))
                 }
-                .buttonStyle(.plain)
-                HStack(spacing: 0) {
-                    stepButton("chevron.left", label: "Previous", by: -1)
-                    stepButton("chevron.right", label: "Next", by: 1)
-                }
-                .background(Capsule().fill(.quaternary))
             }
-            if !model.calendars.isEmpty {
-                // One row: the view mode stays put and the chips scroll, so nothing wraps at narrow widths.
-                HStack(spacing: 10) {
+            // One row: the page and view mode stay put and the chips scroll, so nothing wraps at narrow widths.
+            HStack(spacing: 10) {
+                PillPicker(
+                    options: CalendarPage.allCases.map { ($0.title, $0) }, selection: Bindable(navigation).calendarPage, quiet: true
+                )
+                .fixedSize()
+                if navigation.calendarPage == .schedule && !model.calendars.isEmpty {
                     PillPicker(
                         options: CalendarViewMode.allCases.map { ($0.title, $0) }, selection: Bindable(model).viewMode, quiet: true
                     )
@@ -175,6 +186,7 @@ struct CalendarScreen: View {
     }
 
     private var title: String {
+        if navigation.calendarPage == .availability { return "Availability" }
         let days = model.days
         guard let first = days.first, let last = days.last else { return "" }
         if model.mode == .day { return first.formatted(.dateTime.weekday(.wide).month(.wide).day()) }

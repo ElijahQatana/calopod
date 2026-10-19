@@ -32,10 +32,10 @@ struct RunBars: View {
             ForEach(Array(marks.enumerated()), id: \.offset) { _, mark in
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
                     .fill(mark == .good ? Theme.good : Theme.bad)
-                    .frame(width: 5, height: mark == .good ? 28 : 20)
+                    .frame(width: 5, height: mark == .good ? 18 : 12)
             }
         }
-        .frame(height: 28, alignment: .bottom)
+        .frame(height: 18, alignment: .bottom)
         .accessibilityElement()
         .accessibilityLabel("Last \(marks.count) sync runs, \(marks.filter { $0 == .failed }.count) failed")
     }
@@ -60,19 +60,19 @@ struct SyncStatusCard: View {
 
     var body: some View {
         CardSection {
-            CardRow {
+            CardRow(dense: true) {
                 ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 16) {
+                    HStack(spacing: 14) {
                         icon
                         message
                         Spacer(minLength: 12)
                         if !marks.isEmpty {
                             RunBars(marks: marks)
-                            Divider().frame(height: 36)
+                            Divider().frame(height: 28)
                         }
                         buttons
                     }
-                    VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 10) {
                         HStack(spacing: 14) { icon; message }
                         HStack(spacing: 16) {
                             RunBars(marks: marks)
@@ -92,17 +92,17 @@ struct SyncStatusCard: View {
         Image(systemName: health.symbol)
             .font(Theme.Fonts.icon)
             .foregroundStyle(health.color)
-            .frame(width: 44, height: 44)
+            .frame(width: 36, height: 36)
             .background(Circle().fill(health.color.opacity(0.14)))
     }
 
     private var message: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(health.headline).font(Theme.Fonts.sectionTitle)
-            Text(health.detail).font(Theme.Fonts.body).foregroundStyle(.secondary)
-            if let refreshed { Text(refreshed).font(Theme.Fonts.secondary).foregroundStyle(.secondary) }
+            Text(health.headline).font(Theme.Fonts.bodySemibold)
+            Text([health.detail, refreshed].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                .font(Theme.Fonts.secondary).foregroundStyle(.secondary).lineLimit(1)
             if let note = health.note {
-                Text(note).font(Theme.Fonts.body).foregroundStyle(Theme.cautionText)
+                Text(note).font(Theme.Fonts.secondary).foregroundStyle(Theme.cautionText).lineLimit(2)
             }
             if let feedProblem {
                 Text(feedProblem).font(Theme.Fonts.body).foregroundStyle(Theme.cautionText)
@@ -198,14 +198,14 @@ struct NeedsYouTile: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("\(count)").font(Theme.Fonts.pageTitle).monospacedDigit()
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(count)").font(Theme.Fonts.heading).monospacedDigit()
                     .foregroundStyle(count == 0 ? Color.secondary.opacity(0.7) : highlight ? Theme.accent : Color.primary)
                 Text(title).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                     .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(12)
+            .padding(8)
             .overlay(RoundedRectangle(cornerRadius: Theme.controlRadius, style: .continuous)
                 .strokeBorder(Theme.paneLine, lineWidth: 1))
             .contentShape(Rectangle())

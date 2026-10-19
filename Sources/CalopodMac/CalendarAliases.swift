@@ -8,7 +8,7 @@ import Observation
 @MainActor
 @Observable
 final class CalendarAliases {
-    static let shared = CalendarAliases(defaults: AppDefaults.standard, state: try? LocalState.repository())
+    static let shared = CalendarAliases(defaults: AppDefaults.forSingleton, state: try? LocalState.repository())
 
     private static let expandedKey = "calendarIgnoredExpanded"
 

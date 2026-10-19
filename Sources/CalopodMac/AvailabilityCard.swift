@@ -37,7 +37,65 @@ enum AvailabilityText {
     }
 }
 
-/// Free and busy time for a week in Overview: a dot per day, the totals for the chosen day, and its
+/// The Availability page of Calendar: the week card with the same out of date warnings as the schedule.
+struct AvailabilityPage: View {
+    @Environment(CalendarModel.self) private var schedule
+    @Environment(AvailabilityModel.self) private var availability
+    let openSettings: () -> Void
+
+    var body: some View {
+        let notices = ScheduleLayout.notices(
+            calendars: schedule.calendars, hidden: [], range: availability.range, now: Date(),
+            name: { CalendarAliases.shared.name(for: $0.id, real: $0.name) })
+        ScrollView {
+            AvailabilityCard(model: availability, notices: notices, openSettings: openSettings)
+                .padding(.horizontal, 18).padding(.bottom, Theme.Page.bottom)
+                .frame(maxWidth: 760, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .task { await availability.reload() }
+        .onChange(of: schedule.schedule) { Task { await availability.reload() } }
+    }
+}
+
+/// Today's free and busy time on one row, for Overview. It opens the Availability page.
+struct AvailabilitySummary: View {
+    let model: AvailabilityModel
+    let open: () -> Void
+
+    var body: some View {
+        CardSection(header: OverviewSectionHeader(title: "Availability today", link: "Open Availability", action: open)) {
+            CardRow { content }
+        }
+        .task { await model.goToToday() }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if model.loadFailed {
+            Text("Availability could not be read.").foregroundStyle(.secondary)
+        } else if let report = model.report(for: model.calendar.startOfDay(for: Date())) {
+            HStack(alignment: .firstTextBaseline, spacing: 16) {
+                figure("Free", EventDuration.total(report.summary.freeSeconds))
+                figure("Busy", EventDuration.total(report.summary.busySeconds))
+                Text(AvailabilityText.hours(report)).font(Theme.Fonts.secondary).foregroundStyle(.secondary).lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .accessibilityElement(children: .combine)
+        } else {
+            Text("Reading availability").foregroundStyle(.secondary)
+        }
+    }
+
+    private func figure(_ title: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(value).font(Theme.Fonts.bodySemibold).monospacedDigit()
+            Text(title).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Free and busy time for a week on the Availability page: a dot per day, the totals for the chosen day, and its
 /// free windows and busy blocks. Free time counts only inside working hours.
 struct AvailabilityCard: View {
     let model: AvailabilityModel
@@ -48,7 +106,7 @@ struct AvailabilityCard: View {
     var body: some View {
         CardSection(
             header: HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text("Availability").font(Theme.Fonts.sectionTitle)
+                Text(weekTitle).font(Theme.Fonts.sectionTitle)
                 Spacer(minLength: 8)
                 Button("Today") { Task { await model.goToToday() } }
                     .buttonStyle(.bare).font(Theme.Fonts.secondarySemibold).foregroundStyle(Theme.accent)
@@ -68,6 +126,12 @@ struct AvailabilityCard: View {
                     }
                 }
             })
+    }
+
+    private var weekTitle: String {
+        guard let first = model.days.first, let last = model.days.last else { return "Week" }
+        let day = Date.FormatStyle().day().month(.abbreviated)
+        return "\(first.formatted(day)) to \(last.formatted(day))"
     }
 
     private func weekButton(_ symbol: String, _ label: String, _ weeks: Int) -> some View {
