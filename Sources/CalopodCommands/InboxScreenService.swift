@@ -83,9 +83,10 @@ public struct InboxContextEntry: Identifiable, Equatable, Sendable {
     public let endsAt: Date
     public let isFocused: Bool
     public let overlapsFocused: Bool
+    public let response: EventResponseState
 
     public init(id: String, title: String, calendarID: String, calendarName: String, startsAt: Date, endsAt: Date,
-                isFocused: Bool, overlapsFocused: Bool) {
+                isFocused: Bool, overlapsFocused: Bool, response: EventResponseState = .unknown) {
         self.id = id
         self.title = title
         self.calendarID = calendarID
@@ -94,6 +95,7 @@ public struct InboxContextEntry: Identifiable, Equatable, Sendable {
         self.endsAt = endsAt
         self.isFocused = isFocused
         self.overlapsFocused = overlapsFocused
+        self.response = response
     }
 }
 
@@ -296,7 +298,8 @@ public struct InboxScreenService: Sendable {
                 calendarID: $0.event.event.calendarBindingID,
                 calendarName: $0.source.calendarLabel ?? $0.source.connectionLabel ?? "Calendar",
                 startsAt: $0.visibleInterval.start, endsAt: $0.visibleInterval.end, isFocused: $0.isFocused,
-                overlapsFocused: $0.event.event.sourceKeyHash != focusedKey && overlapping.contains($0.event.event.sourceKeyHash))
+                overlapsFocused: $0.event.event.sourceKeyHash != focusedKey && overlapping.contains($0.event.event.sourceKeyHash),
+                response: $0.event.event.currentUserResponse.state)
         }
     }
 
