@@ -238,6 +238,9 @@ public struct CommandItem: Codable, Equatable, Sendable {
     /// For events with a meeting link: "Teams", "Zoom", "Meet" or "Webex", and the web link.
     public let joinProvider: String?
     public let joinURL: String?
+    /// For a copy Calopod made: "full-details" or "busy", and the current user's answer on the original.
+    public let copyMode: String?
+    public let sourceResponse: String?
     let inbox: InboxItemDetail?
 
     public init(
@@ -267,6 +270,8 @@ public struct CommandItem: Codable, Equatable, Sendable {
         color: String? = nil,
         joinProvider: String? = nil,
         joinURL: String? = nil,
+        copyMode: String? = nil,
+        sourceResponse: String? = nil,
         inbox: InboxItemDetail? = nil
     ) {
         self.id = id
@@ -295,6 +300,8 @@ public struct CommandItem: Codable, Equatable, Sendable {
         self.color = color
         self.joinProvider = joinProvider
         self.joinURL = joinURL
+        self.copyMode = copyMode
+        self.sourceResponse = sourceResponse
         self.inbox = inbox
     }
 }

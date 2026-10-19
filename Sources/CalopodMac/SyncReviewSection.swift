@@ -23,9 +23,8 @@ struct SyncReviewSection: View {
                 CardRow { row(line) }
             }
             if lines.count > Self.collapsedCount {
-                CardRow {
-                    Button(showingAll ? "Show fewer" : "Show all \(lines.count)") { showingAll.toggle() }
-                        .buttonStyle(.plain).foregroundStyle(Theme.accent)
+                CardButtonRow(label: showingAll ? "Show fewer" : "Show all \(lines.count)") { showingAll.toggle() } content: {
+                    Text(showingAll ? "Show fewer" : "Show all \(lines.count)").foregroundStyle(Theme.accent)
                 }
             }
             if preview.removals > 0 {

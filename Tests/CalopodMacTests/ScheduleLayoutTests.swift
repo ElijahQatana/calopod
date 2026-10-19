@@ -68,14 +68,8 @@ final class ScheduleLayoutTests: XCTestCase {
         XCTAssertTrue(ScheduleLayout.placements([late], on: date(16, 0), calendar: calendar).isEmpty)
     }
 
-    func testTreatmentChoice() {
-        XCTAssertEqual(ScheduleLayout.treatment(for: event("a", date(14, 9), date(14, 10))), .tinted)
-        XCTAssertEqual(ScheduleLayout.treatment(for: event("b", date(14, 9), date(14, 10), response: .organizer)), .tinted)
-        XCTAssertEqual(ScheduleLayout.treatment(for: event("c", date(14, 9), date(14, 10), response: .needsResponse)), .needsRSVP)
-        XCTAssertEqual(ScheduleLayout.treatment(for: event("d", date(14, 9), date(14, 10), response: .declined)), .declined)
-        // A copy stays a copy and never shows an overlap ring or change dot.
+    func testCopiesNeverShowOverlapOrChange() {
         let copy = event("e", date(14, 9), date(14, 10), response: .needsResponse, copy: true, overlaps: ["x"], changed: .changed)
-        XCTAssertEqual(ScheduleLayout.treatment(for: copy), .copy)
         XCTAssertFalse(ScheduleLayout.showsOverlap(copy))
         XCTAssertFalse(ScheduleLayout.showsChange(copy))
         let flagged = event("f", date(14, 9), date(14, 10), overlaps: ["x"], changed: .changed)
@@ -136,15 +130,6 @@ final class ScheduleLayoutTests: XCTestCase {
             let e = event("e", date(14, 9), date(14, 10), copy: copy, changed: change)
             XCTAssertEqual(ScheduleLayout.showsChange(e), dot)
             XCTAssertEqual(ScheduleLayout.changeText(e), words)
-        }
-    }
-
-    func testOnlyDeclinedEventsAreHatched() {
-        let responses: [(ScheduleResponse, ScheduleLayout.Treatment)] = [
-            (.declined, .declined), (.tentative, .tinted), (.accepted, .tinted), (.needsResponse, .needsRSVP),
-        ]
-        for (response, treatment) in responses {
-            XCTAssertEqual(ScheduleLayout.treatment(for: event("e", date(14, 9), date(14, 10), response: response)), treatment)
         }
     }
 }

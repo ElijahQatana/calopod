@@ -51,6 +51,44 @@ public enum ScheduleChange: Equatable, Sendable {
 
 public enum ScheduleResponse: String, Equatable, Sendable {
     case accepted, tentative, declined, needsResponse, organizer, none
+
+    public init(_ state: EventResponseState) {
+        switch state {
+        case .accepted: self = .accepted
+        case .tentative: self = .tentative
+        case .declined: self = .declined
+        case .needsResponse: self = .needsResponse
+        case .organizer: self = .organizer
+        case .notApplicable, .unknown: self = .none
+        }
+    }
+}
+
+public enum ScheduleCopyMode: String, Equatable, Sendable {
+    case fullDetails, busy
+}
+
+/// Where a copy Calopod made came from. Worked out once per schedule load.
+public struct ScheduleCopyOrigin: Equatable, Sendable {
+    public let mode: ScheduleCopyMode
+    public let armName: String
+    public let sourceEventID: String
+    public let sourceCalendarID: String
+    public let sourceCalendarName: String
+    /// The current user's answer on the original; `.none` when it is not known.
+    public let sourceResponse: ScheduleResponse
+
+    public init(
+        mode: ScheduleCopyMode, armName: String, sourceEventID: String, sourceCalendarID: String,
+        sourceCalendarName: String, sourceResponse: ScheduleResponse
+    ) {
+        self.mode = mode
+        self.armName = armName
+        self.sourceEventID = sourceEventID
+        self.sourceCalendarID = sourceCalendarID
+        self.sourceCalendarName = sourceCalendarName
+        self.sourceResponse = sourceResponse
+    }
 }
 
 public struct ScheduleCopy: Equatable, Sendable {
@@ -75,8 +113,10 @@ public struct ScheduleEvent: Identifiable, Equatable, Sendable {
     public let location: String?
     public let organizer: String?
     public let response: ScheduleResponse
-    /// A Busy copy Calopod made. It has no reply and no organizer.
+    /// A copy Calopod made, full details or Busy. It has no reply and no organizer.
     public let isCopy: Bool
+    /// What kind of copy this is and where it came from. Nil for events, and for a copy whose origin is not known.
+    public let copyOrigin: ScheduleCopyOrigin?
     /// Titles of events this one overlaps, for the inspector.
     public let overlaps: [String]
     /// Titles of Calopod copies drawn over this event that are not already in `overlaps`.
@@ -92,7 +132,7 @@ public struct ScheduleEvent: Identifiable, Equatable, Sendable {
     public init(
         id: String, calendarID: String, title: String, startsAt: Date, endsAt: Date,
         isAllDay: Bool = false, location: String? = nil, organizer: String? = nil,
-        response: ScheduleResponse = .accepted, isCopy: Bool = false, overlaps: [String] = [], copyOverlaps: [String] = [],
+        response: ScheduleResponse = .accepted, isCopy: Bool = false, copyOrigin: ScheduleCopyOrigin? = nil, overlaps: [String] = [], copyOverlaps: [String] = [],
         change: ScheduleChange = .none, copiedTo: [ScheduleCopy] = [],
         replies: [ConflictChoice] = [], replyUnavailableReason: String? = nil, meeting: MeetingLink? = nil
     ) {
@@ -105,7 +145,8 @@ public struct ScheduleEvent: Identifiable, Equatable, Sendable {
         self.location = location
         self.organizer = organizer
         self.response = response
-        self.isCopy = isCopy
+        self.isCopy = isCopy || copyOrigin != nil
+        self.copyOrigin = copyOrigin
         self.overlaps = overlaps
         self.copyOverlaps = copyOverlaps
         self.change = change
@@ -117,11 +158,14 @@ public struct ScheduleEvent: Identifiable, Equatable, Sendable {
 }
 
 extension ScheduleEvent {
+    /// The answer that decides how the block looks: a copy carries its original's answer.
+    public var carriedResponse: ScheduleResponse { copyOrigin?.sourceResponse ?? response }
+
     fileprivate func withCopyOverlaps(_ titles: [String]) -> ScheduleEvent {
         ScheduleEvent(
             id: id, calendarID: calendarID, title: title, startsAt: startsAt, endsAt: endsAt,
             isAllDay: isAllDay, location: location, organizer: organizer, response: response,
-            isCopy: isCopy, overlaps: overlaps, copyOverlaps: titles, change: change,
+            isCopy: isCopy, copyOrigin: copyOrigin, overlaps: overlaps, copyOverlaps: titles, change: change,
             copiedTo: copiedTo, replies: replies, replyUnavailableReason: replyUnavailableReason, meeting: meeting)
     }
 }
@@ -189,14 +233,8 @@ public struct CalendarScheduleService: Sendable {
         }
 
         // Where each event is copied. The copies themselves are not stored as events.
-        var copies: [String: [(binding: String, fullDetails: Bool)]] = [:]
         let allArms = try repository.arms()
-        for arm in allArms where arm.isEnabled {
-            for mapping in try repository.mirrorMappings(armID: arm.id) {
-                copies[mapping.sourceKeyHash, default: []]
-                    .append((arm.targetBindingID, arm.ruleMode == .fullDetails))
-            }
-        }
+        let copies = try CopyTarget.bySource(repository, arms: allArms)
         func calendarName(_ binding: String) -> String {
             if let known = names[binding] { return known }
             let stored = try? repository.calendarBinding(id: binding)
@@ -217,27 +255,32 @@ public struct CalendarScheduleService: Sendable {
                 }
             }
             let targets = copies[event.sourceKeyHash] ?? []
+            let sourceResponse = Self.response(event.currentUserResponse.state)
             events.append(ScheduleEvent(
                 id: event.sourceKeyHash, calendarID: event.calendarBindingID, title: Self.title(event),
                 startsAt: event.startsAt, endsAt: event.endsAt, isAllDay: event.isAllDay,
                 location: event.location.flatMap { $0.isEmpty ? nil : $0 },
                 organizer: event.organizer.flatMap { $0.name ?? $0.emailAddress },
-                response: Self.response(event.currentUserResponse.state),
+                response: sourceResponse,
                 overlaps: overlapping[event.sourceKeyHash] ?? [],
                 change: changes[event.sourceKeyHash] ?? .none,
-                copiedTo: targets.map { ScheduleCopy(calendarName: calendarName($0.binding), fullDetails: $0.fullDetails, calendarID: $0.binding) },
+                copiedTo: targets.map { ScheduleCopy(calendarName: calendarName($0.bindingID), fullDetails: $0.fullDetails, calendarID: $0.bindingID) },
                 replies: replies,
                 replyUnavailableReason: replies.isEmpty ? ConflictResolutionService.reasonText(choices.unavailableReasons) : nil,
                 meeting: JoinSelector.link(for: event)
             ))
             // The copy is drawn at the source's time on the calendar that holds it.
-            for target in targets where names[target.binding] != nil && target.binding != event.calendarBindingID {
-                copySources["copy:\(target.binding):\(event.sourceKeyHash)"] = event.sourceKeyHash
+            for target in targets where names[target.bindingID] != nil && target.bindingID != event.calendarBindingID {
+                copySources["copy:\(target.bindingID):\(event.sourceKeyHash)"] = event.sourceKeyHash
+                let origin = ScheduleCopyOrigin(
+                    mode: target.fullDetails ? .fullDetails : .busy, armName: target.armName,
+                    sourceEventID: event.sourceKeyHash, sourceCalendarID: event.calendarBindingID,
+                    sourceCalendarName: calendarName(event.calendarBindingID), sourceResponse: sourceResponse)
                 events.append(ScheduleEvent(
-                    id: "copy:\(target.binding):\(event.sourceKeyHash)", calendarID: target.binding,
+                    id: "copy:\(target.bindingID):\(event.sourceKeyHash)", calendarID: target.bindingID,
                     title: target.fullDetails ? Self.title(event) : "Busy",
                     startsAt: event.startsAt, endsAt: event.endsAt, isAllDay: event.isAllDay,
-                    response: .none, isCopy: true,
+                    response: .none, copyOrigin: origin,
                     replyUnavailableReason: ConflictResolutionService.reasonText([.managedMirror])))
             }
         }
@@ -273,15 +316,6 @@ public struct CalendarScheduleService: Sendable {
         return .current
     }
 
-    private static func response(_ state: EventResponseState) -> ScheduleResponse {
-        switch state {
-        case .accepted: .accepted
-        case .tentative: .tentative
-        case .declined: .declined
-        case .needsResponse: .needsResponse
-        case .organizer: .organizer
-        case .notApplicable, .unknown: .none
-        }
-    }
+    private static func response(_ state: EventResponseState) -> ScheduleResponse { ScheduleResponse(state) }
 }
 #endif

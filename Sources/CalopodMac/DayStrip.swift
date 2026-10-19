@@ -144,7 +144,7 @@ struct ContextStrip: View {
             .lineLimit(2).truncationMode(.tail)
             .padding(.horizontal, 6).padding(.vertical, 3)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(shape.fill(color.opacity(item.isFocused ? 0.4 : 0.2)).declinedHatch(item.response == .declined, color: color))
+            .background(shape.fill(color.opacity(item.isFocused ? 0.4 : 0.2)).declinedHatch(EventBlockStyle.of(isCopy: false, copyMode: nil, response: ScheduleResponse(item.response)).hatched, color: color))
             .overlay(shape.strokeBorder(ring, lineWidth: item.isFocused || item.overlapsFocused ? 2 : 1))
             .clipShape(shape)
             .help("\(item.title), \(when), \(name)")

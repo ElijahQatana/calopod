@@ -78,24 +78,6 @@ enum ScheduleLayout {
         return max(1, min(Int((height - 6) / 13), width < 72 ? 2 : 6))
     }
 
-    enum Treatment: Equatable {
-        /// A Busy copy Calopod made.
-        case copy
-        case needsRSVP
-        case declined
-        /// Accepted, tentative, or your own.
-        case tinted
-    }
-
-    static func treatment(for event: ScheduleEvent) -> Treatment {
-        if event.isCopy { return .copy }
-        switch event.response {
-        case .needsResponse: return .needsRSVP
-        case .declined: return .declined
-        default: return .tinted
-        }
-    }
-
     /// Overlap rings and the changed dot sit on top of the base treatment. Copies get neither.
     static func showsOverlap(_ event: ScheduleEvent) -> Bool { !event.isCopy && !event.overlaps.isEmpty }
     static func showsChange(_ event: ScheduleEvent) -> Bool { !event.isCopy && event.change != .none }

@@ -272,19 +272,15 @@ struct OverviewScreen: View {
     }
 
     private func glanceRow(_ title: String, _ value: String, _ screen: Screen, filter: InboxFilter? = nil) -> some View {
-        CardRow {
-            Button {
-                if let filter { navigation.openInbox(filter) } else { navigation.selection = screen }
-            } label: {
-                CardLabeled(title: title) {
-                    HStack(spacing: 6) {
-                        Text(value).monospacedDigit()
-                        Image(systemName: "chevron.right").font(Theme.Fonts.secondary).foregroundStyle(.tertiary)
-                    }
+        CardButtonRow(label: title) {
+            if let filter { navigation.openInbox(filter) } else { navigation.selection = screen }
+        } content: {
+            CardLabeled(title: title) {
+                HStack(spacing: 6) {
+                    Text(value).monospacedDigit()
+                    Image(systemName: "chevron.right").font(Theme.Fonts.secondary).foregroundStyle(.tertiary)
                 }
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
         }
     }
 

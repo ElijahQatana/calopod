@@ -61,7 +61,8 @@ struct CalendarScreen: View {
             if let event = model.selected {
                 EventInspector(
                     event: event, calendar: model.calendars.first { $0.id == event.calendarID },
-                    colors: colors, close: { model.selectedID = nil }, openInbox: { openInbox(event) })
+                    colors: colors, close: { model.selectedID = nil }, openInbox: { openInbox(event) },
+                    showOriginal: model.original(of: event).map { original in { model.show(original) } })
             }
         }
     }
@@ -71,12 +72,14 @@ struct CalendarScreen: View {
             PageHeader(title: title, horizontal: Self.headerInset) {
                 PillPicker(options: [("Day", CalendarModel.Mode.day), ("Week", .week)], selection: Bindable(model).mode, quiet: true)
                     .fixedSize()
-                Button("Today") { model.goToToday() }
-                    .buttonStyle(.plain)
-                    .font(Theme.Fonts.bodyMedium)
-                    .padding(.horizontal, 16).frame(height: Self.controlHeight)
-                    .background(Capsule().fill(.quaternary))
-                    .contentShape(Capsule())
+                Button { model.goToToday() } label: {
+                    Text("Today")
+                        .font(Theme.Fonts.bodyMedium)
+                        .padding(.horizontal, 16).frame(height: Self.controlHeight)
+                        .background(Capsule().fill(.quaternary))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
                 HStack(spacing: 0) {
                     stepButton("chevron.left", label: "Previous", by: -1)
                     stepButton("chevron.right", label: "Next", by: 1)

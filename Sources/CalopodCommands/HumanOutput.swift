@@ -145,7 +145,11 @@ enum HumanOutputRenderer {
                             if localIDs { lines.append("  Connection ID: \(clean(parent))") }
                         }
                     case "events", "inbox", "inbox.activity", "inbox.inspect":
-                        lines.append("\(index + 1). \(label(item.label, fallback: "Untitled event"))")
+                        let marker = item.copyMode.map { $0 == "busy" ? " [busy copy]" : " [full details copy]" } ?? ""
+                        lines.append("\(index + 1). \(label(item.label, fallback: "Untitled event"))\(marker)")
+                        if item.copyMode != nil {
+                            lines.append("  Original: \(item.sourceResponse.map { $0 == "tentative" ? "maybe" : readable($0) } ?? "no answer known")")
+                        }
                         if let parent = item.parentID {
                             let source = payload.sources?.first { $0.id == parent }
                             lines.append("  Calendar: \(label(source?.alias ?? source?.label ?? context.calendarLabels[parent], fallback: "Unknown calendar"))")

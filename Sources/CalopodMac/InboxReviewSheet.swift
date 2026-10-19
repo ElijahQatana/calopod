@@ -250,7 +250,7 @@ struct InboxReviewSheet: View {
                 Button { Task { await model.perform(.goTo(index + 1)) } } label: {
                     Text("G\(index + 1)  \(other.title)").lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.bare)
             }
             if model.isJumped {
                 Button("Back to the queue  B") { Task { await model.perform(.back) } }
@@ -363,7 +363,7 @@ private struct ReviewToast: View {
             Button(action: onDismiss) {
                 Image(systemName: "xmark").font(Theme.Fonts.smallIcon).foregroundStyle(.secondary)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.bare)
             .accessibilityLabel("Dismiss")
             .help("Dismiss")
         }
