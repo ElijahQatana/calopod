@@ -1,3 +1,4 @@
+import CalopodStore
 import XCTest
 
 @testable import CalopodCommands
@@ -92,5 +93,40 @@ final class OpenInCalendarTests: XCTestCase {
         await model.perform(.openCalendar)
         XCTAssertNotNil(model.openedKey)
         XCTAssertTrue(try XCTUnwrap(model.notice).hasPrefix("Calendar is open."))
+    }
+
+    func testOpeningUsesTheSourceEventNotItsManagedCopy() async throws {
+        let f = try MacFixture(count: 1, provider: "eventkit")
+        try f.state.replaceCalendarBindings(connectionID: "c", bindings: [
+            StoredCalendarBinding(id: "cal", connectionID: "c", providerCalendarID: "primary", displayLabel: "Calendar",
+                                  isSelected: true, isReadOnly: false, responseIdentityScope: .authenticatedUser),
+            StoredCalendarBinding(id: "full", connectionID: "c", providerCalendarID: "fullcal", displayLabel: "fullcal",
+                                  isSelected: true, isReadOnly: false, responseIdentityScope: .authenticatedUser),
+        ])
+        // A Busy copy with the same title and time sits on another calendar, with its own id.
+        var copy = event("copy0", start: 10_000, title: "Example key0", response: .accepted)
+        copy = StoredNormalizedInstance(
+            sourceKeyHash: "copy0", connectionID: "c", calendarBindingID: "full", providerEventID: "copy-id",
+            recurrenceID: nil, startsAt: copy.startsAt, endsAt: copy.endsAt, isAllDay: false, availability: "busy",
+            isCancelled: false, isPrivate: false, title: copy.title, contentFingerprint: "copy", providerUpdatedAt: nil,
+            organizer: nil, currentUserResponse: copy.currentUserResponse)
+        try f.state.applyEventRefresh(connectionID: "c", calendarBindingID: "full", windowStart: f.window.start,
+                                      windowEnd: f.window.end, instances: [copy], cancelledSourceKeyHashes: [],
+                                      isFullRefresh: true, cursorUpdates: [])
+        let opener = Opener(.opened)
+        let model = InboxModel(service: f.inbox, calendar: opener)
+        await model.reload()
+        model.selection = "key0"
+        let deadline = ContinuousClock.now + .seconds(10)
+        while model.detail == nil, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+        model.openInCalendar()
+        XCTAssertEqual(opener.opened, ["key0"])
+    }
+
+    func testTheLinkNamesOnlyTheEventID() {
+        XCTAssertEqual(
+            CalendarEventLink.url(eventID: "AB/12:x")?.absoluteString,
+            "ical://ekevent/AB%2F12:x?method=show&options=more")
+        XCTAssertNil(CalendarEventLink.url(eventID: ""))
     }
 }
