@@ -8,6 +8,8 @@ struct Snapshot: Codable, Equatable, Sendable {
     var availability: [AvailabilityDay]
     /// Events of the calendars chosen on the Mac. Empty when none is chosen.
     var days: [CalendarDay] = []
+    /// The Mac's meeting reminder choices. Nil when the Mac has not published them, and then the phone sets no reminders.
+    var reminders: ReminderSettings?
     var calendars: [CalendarEntry]
     var status: SyncStatus
 
@@ -15,18 +17,19 @@ struct Snapshot: Codable, Equatable, Sendable {
 }
 
 extension Snapshot {
-    /// A copy saved before events existed has no `days`.
+    /// A copy saved before events or reminders existed has no `days` or `reminders`.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         publishedAt = try container.decode(Date.self, forKey: .publishedAt)
         inbox = try container.decode([InboxItem].self, forKey: .inbox)
         availability = try container.decode([AvailabilityDay].self, forKey: .availability)
         days = try container.decodeIfPresent([CalendarDay].self, forKey: .days) ?? []
+        reminders = try container.decodeIfPresent(ReminderSettings.self, forKey: .reminders)
         calendars = try container.decode([CalendarEntry].self, forKey: .calendars)
         status = try container.decode(SyncStatus.self, forKey: .status)
     }
 
-    private enum CodingKeys: String, CodingKey { case publishedAt, inbox, availability, days, calendars, status }
+    private enum CodingKeys: String, CodingKey { case publishedAt, inbox, availability, days, reminders, calendars, status }
 }
 
 enum SnapshotResult: Equatable, Sendable {

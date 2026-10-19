@@ -22,7 +22,7 @@ private let calendarDay = CalendarDay(
     events: [
         CalendarEvent(
             id: "e1", calendarID: "cal-1", title: "Planning", startsAt: now, endsAt: now.addingTimeInterval(3600),
-            location: "Room 2", response: .accepted),
+            location: "Room 2", response: .accepted, joinURL: "https://example.zoom.us/j/123456789"),
         CalendarEvent(id: "e2", calendarID: "cal-2", title: nil, startsAt: now, endsAt: now.addingTimeInterval(60), isAllDay: true, response: .unknown),
     ])
 
@@ -33,6 +33,9 @@ private let calendars = CalendarList(calendars: [
     CalendarEntry(id: "cal-1", name: "Work", colorIndex: 0),
     CalendarEntry(id: "cal-2", name: "Home", colorIndex: 11),
 ])
+
+private let reminders = ReminderSettings(
+    enabled: true, firstEnabled: true, firstMinutes: 10, finalEnabled: false, finalMinutes: 1, hideTitles: true)
 
 private func roundTrip<R: SnapshotRecord>(_ record: R) throws -> R {
     let data = try SnapshotCoding.encode(SnapshotEnvelope(generatedAt: now, record: record))
@@ -45,6 +48,7 @@ func recordsSurviveARoundTrip() throws {
     #expect(try roundTrip(day) == day)
     #expect(try roundTrip(calendarDay) == calendarDay)
     #expect(try roundTrip(status) == status)
+    #expect(try roundTrip(reminders) == reminders)
     #expect(try roundTrip(calendars) == calendars)
     #expect(try roundTrip(SyncStatus(lastSyncAt: nil)) == SyncStatus(lastSyncAt: nil))
 }
@@ -56,6 +60,7 @@ func idsAreStable() {
     #expect(calendarDay.id == "calendar-day-2027-01-15")
     #expect(status.id == "sync-status")
     #expect(calendars.id == "calendars")
+    #expect(reminders.id == "reminder-settings")
     let later = AvailabilityDay(day: "2027-01-15", timeZoneIdentifier: "UTC", busy: [])
     #expect(later.id == day.id)
 }
@@ -112,4 +117,21 @@ func payloadsUseTheRecordIDAndReplaceTheRemoteSet() async throws {
     #expect(await remote.records.keys.sorted() == ["sync-status"])
     try await remote.deleteAll()
     #expect(await remote.records.isEmpty)
+}
+
+@Test
+func reminderLeadsFollowTheSwitches() {
+    #expect(reminders.leadMinutes == [10])
+    let both = ReminderSettings(enabled: true, firstEnabled: true, firstMinutes: 15, finalEnabled: true, finalMinutes: 2, hideTitles: false)
+    #expect(both.leadMinutes == [15, 2])
+    let off = ReminderSettings(enabled: false, firstEnabled: true, firstMinutes: 15, finalEnabled: true, finalMinutes: 2, hideTitles: false)
+    #expect(off.leadMinutes.isEmpty)
+}
+
+@Test
+func anEventWithoutAJoinLinkStillDecodes() throws {
+    let json = #"{"id":"e","calendarID":"c","startsAt":"2027-01-15T08:00:00Z","endsAt":"2027-01-15T09:00:00Z","isAllDay":false,"response":"accepted"}"#
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    #expect(try decoder.decode(CalendarEvent.self, from: Data(json.utf8)).joinURL == nil)
 }

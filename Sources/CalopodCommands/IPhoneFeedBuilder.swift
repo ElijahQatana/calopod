@@ -31,6 +31,7 @@ enum IPhoneFeedBuilder {
             records.append(try SnapshotPayload(day, kind: .calendarDay, at: now))
         }
         records.append(try SnapshotPayload(calendars(snapshot, repository: repository), kind: .calendars, at: now))
+        records.append(try SnapshotPayload(reminderSettings(try repository.notificationSettings()), kind: .reminderSettings, at: now))
         records.append(try SnapshotPayload(try syncStatus(snapshot, repository: repository, cutoff: cutoff), kind: .syncStatus, at: now))
         return records
     }
@@ -115,19 +116,27 @@ enum IPhoneFeedBuilder {
         return (0..<availabilityDays).compactMap { offset in
             guard let start = calendar.date(byAdding: .day, value: offset, to: first),
                   let next = calendar.date(byAdding: .day, value: 1, to: start) else { return nil }
-            let today = events.filter { $0.endsAt > start && $0.startsAt < next }.map(calendarEvent)
+            let today = events.filter { $0.endsAt > start && $0.startsAt < next }.map { calendarEvent($0, now: now) }
             return today.isEmpty ? nil : CalendarDay(
                 day: format.string(from: start), timeZoneIdentifier: calendar.timeZone.identifier, events: today)
         }
     }
 
-    private static func calendarEvent(_ event: StoredNormalizedInstance) -> CalendarEvent {
-        // A private event keeps its time but none of its words.
+    private static func calendarEvent(_ event: StoredNormalizedInstance, now: Date) -> CalendarEvent {
+        // A private event keeps its time but none of its words, and its link.
         let shown = !event.isPrivate
+        let remindable = ReminderEligibility.isEligible(isAllDay: event.isAllDay, isDeclined: event.currentUserResponse.state == .declined)
         return CalendarEvent(
             id: event.sourceKeyHash, calendarID: event.calendarBindingID, title: shown ? event.title : nil,
             startsAt: event.startsAt, endsAt: event.endsAt, isAllDay: event.isAllDay,
-            location: shown ? event.location : nil, response: event.currentUserResponse.state)
+            location: shown ? event.location : nil, response: event.currentUserResponse.state,
+            joinURL: shown && remindable && event.endsAt > now ? JoinSelector.link(for: event)?.webURL.absoluteString : nil)
+    }
+
+    static func reminderSettings(_ settings: NotificationSettings) -> ReminderSettings {
+        ReminderSettings(
+            enabled: settings.enabled, firstEnabled: settings.firstEnabled, firstMinutes: settings.firstMinutes,
+            finalEnabled: settings.finalEnabled, finalMinutes: settings.finalMinutes, hideTitles: settings.hideTitles)
     }
 
     // MARK: Calendars and status

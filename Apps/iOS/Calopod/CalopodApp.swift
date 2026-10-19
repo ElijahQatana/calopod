@@ -3,9 +3,10 @@ import SwiftUI
 @main
 struct CalopodApp: App {
     @State private var store = SnapshotStore(reader: Self.reader(), cache: Self.cache())
+    @State private var reminders = Reminders(center: Self.isFixture ? nil : UserNotificationCenter())
 
     var body: some Scene {
-        WindowGroup { RootView(store: store) }
+        WindowGroup { RootView(store: store, reminders: reminders) }
     }
 
     /// `-fixture <scenario>` swaps in synthetic data, for the simulator and screenshots.
@@ -18,8 +19,10 @@ struct CalopodApp: App {
         return CloudKitReader()
     }
 
+    private static var isFixture: Bool { ProcessInfo.processInfo.arguments.contains("-fixture") }
+
     private static func cache() -> SnapshotCache {
-        ProcessInfo.processInfo.arguments.contains("-fixture")
+        isFixture
             ? SnapshotCache(url: FileManager.default.temporaryDirectory.appendingPathComponent("fixture-snapshot.json"))
             : .standard
     }

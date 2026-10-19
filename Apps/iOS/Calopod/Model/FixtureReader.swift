@@ -60,7 +60,8 @@ struct FixtureReader: SnapshotReader {
         }
         let events = [
             event("e1", "work", "Team standup", at(0, 9), at(0, 9, 30)),
-            event("e2", "work", "Quarterly planning", at(0, 13, 30), at(0, 15), location: "Room 4B, 12 Example Street", response: .needsResponse),
+            event("e2", "work", "Quarterly planning", at(0, 13, 30), at(0, 15), location: "Room 4B, 12 Example Street", response: .needsResponse,
+                join: "https://example.zoom.us/j/123456789"),
             event("e3", "family", "School pickup", at(0, 14, 15), at(0, 14, 45)),
             event("e4", "personal", nil, at(0, 14), at(0, 16)),
             event("e5", "work", "Planning offsite", at(0, 0), at(1, 0), allDay: true),
@@ -80,6 +81,8 @@ struct FixtureReader: SnapshotReader {
                 return today.isEmpty ? nil : CalendarDay(
                     day: Self.dayKey(start, calendar: calendar), timeZoneIdentifier: calendar.timeZone.identifier, events: today)
             },
+            reminders: ReminderSettings(
+                enabled: true, firstEnabled: true, firstMinutes: 10, finalEnabled: true, finalMinutes: 1, hideTitles: false),
             calendars: [
                 CalendarEntry(id: "work", name: "Work", colorIndex: 6),
                 CalendarEntry(id: "personal", name: "Personal", colorIndex: 4),
@@ -93,11 +96,11 @@ struct FixtureReader: SnapshotReader {
 
     private static func event(
         _ id: String, _ calendarID: String, _ title: String?, _ start: Date, _ end: Date,
-        allDay: Bool = false, location: String? = nil, response: EventResponseState = .organizer
+        allDay: Bool = false, location: String? = nil, response: EventResponseState = .organizer, join: String? = nil
     ) -> CalendarEvent {
         CalendarEvent(
             id: id, calendarID: calendarID, title: title, startsAt: start, endsAt: end, isAllDay: allDay,
-            location: location, response: response)
+            location: location, response: response, joinURL: join)
     }
 
     private static func dayKey(_ date: Date, calendar: Calendar) -> String {
