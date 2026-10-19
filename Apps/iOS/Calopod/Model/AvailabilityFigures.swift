@@ -1,8 +1,8 @@
 import CalopodSnapshot
 import SwiftUI
 
-/// One day of free and busy time as the Mac published it. Totals only add up the published lists,
-/// and free time is never worked out from busy time here.
+/// One day of free, busy and outside time as the Mac published it. Totals only add up the published
+/// lists, and nothing is worked out from busy time here.
 struct AvailabilityFigures: Equatable {
     struct Worked: Equatable {
         var working: DateInterval?
@@ -11,14 +11,23 @@ struct AvailabilityFigures: Equatable {
         var status: AvailabilityStatus
     }
 
+    struct Outside: Equatable {
+        var range: DateInterval
+        var side: HoursSide
+    }
+
     var day: String
     var timeZone: TimeZone
     var interval: DateInterval
+    /// Busy time inside working hours when the Mac sent working hours.
     var busy: [DateInterval]
+    /// Busy time before or after working hours. Nil for a feed from a Mac that does not send it.
+    var outside: [Outside]?
     /// Nil for a feed from an older Mac, which has the busy time only.
     var worked: Worked?
 
     var busyTime: TimeInterval { busy.reduce(0) { $0 + $1.duration } }
+    var outsideTime: TimeInterval { (outside ?? []).reduce(0) { $0 + $1.range.duration } }
     var freeTime: TimeInterval? { worked.map { $0.free.reduce(0) { $0 + $1.duration } } }
 
     init?(_ record: AvailabilityDay) {
@@ -29,6 +38,10 @@ struct AvailabilityFigures: Equatable {
         self.timeZone = timeZone
         self.interval = interval
         busy = Self.intervals(record.busy)
+        outside = record.outside.map { blocks in
+            blocks.filter { $0.end > $0.start }.sorted { $0.start < $1.start }
+                .map { Outside(range: DateInterval(start: $0.start, end: $0.end), side: $0.side) }
+        }
         if let free = record.free, let status = record.status {
             worked = Worked(
                 working: record.working.flatMap { Self.intervals([$0]).first }, free: Self.intervals(free),
@@ -55,7 +68,10 @@ struct AvailabilityFigures: Equatable {
     func hoursLine(locale: Locale = .current) -> String {
         guard let worked else { return "Working hours need an updated Mac." }
         if let working = worked.working { return "Working hours \(timeRange(working, locale: locale))." }
-        return worked.status == .dayOff ? "Day off. Anything you book counts as busy." : "Working hours are not applied."
+        if worked.status == .dayOff {
+            return outside == nil ? "Day off. Anything you book counts as busy." : "Day off. Anything you book is outside working hours."
+        }
+        return "Working hours are not applied."
     }
 
     /// "Monday is mostly free." Nil when the Mac sent no status.
@@ -68,6 +84,16 @@ struct AvailabilityFigures: Equatable {
     var overlapsLine: String? {
         guard let count = worked?.overlaps else { return nil }
         return count == 1 ? "1 overlap" : "\(count) overlaps"
+    }
+}
+
+extension HoursSide {
+    var words: String {
+        switch self {
+        case .before: "Before hours"
+        case .after: "After hours"
+        case .dayOff: "Day off"
+        }
     }
 }
 

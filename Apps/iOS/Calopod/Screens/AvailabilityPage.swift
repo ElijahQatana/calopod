@@ -25,6 +25,10 @@ struct AvailabilityPage: View {
                     Divider().overlay(Theme.line)
                 }
                 Ranges(title: "Busy", ranges: day.busy, empty: "Nothing busy.", day: day)
+                if let outside = day.outside, !outside.isEmpty {
+                    Divider().overlay(Theme.line)
+                    OutsideRanges(blocks: outside, total: day.outsideTime, day: day)
+                }
             }
             .shadow(color: Theme.text.opacity(0.06), radius: 6, y: 2)
         }
@@ -119,6 +123,31 @@ private struct Tile: View {
         .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .shadow(color: Theme.text.opacity(0.06), radius: 6, y: 2)
         .accessibilityElement(children: .combine)
+    }
+}
+
+private struct OutsideRanges: View {
+    var blocks: [AvailabilityFigures.Outside]
+    var total: TimeInterval
+    var day: AvailabilityFigures
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Outside working hours").font(Theme.Fonts.bodyStrong)
+                Spacer(minLength: 8)
+                Text(DurationText.text(total)).font(Theme.Fonts.secondary).foregroundStyle(Theme.secondary)
+            }
+            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                HStack {
+                    Text(day.timeRange(block.range)).font(Theme.Fonts.body).monospacedDigit()
+                    Spacer(minLength: 8)
+                    Text(block.side.words).font(Theme.Fonts.secondary).foregroundStyle(Theme.secondary)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .padding(14).frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
