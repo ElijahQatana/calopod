@@ -47,11 +47,13 @@ struct AvailabilityPage: View {
         let notices = ScheduleLayout.notices(
             calendars: schedule.calendars, hidden: [], range: availability.range, now: Date(),
             name: { CalendarAliases.shared.name(for: $0.id, real: $0.name) })
-        ScrollView {
-            AvailabilityCard(model: availability, notices: notices, openSettings: openSettings)
-                .padding(.horizontal, 18).padding(.bottom, Theme.Page.bottom)
-                .frame(maxWidth: 760, alignment: .leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        GeometryReader { proxy in
+            ScrollView {
+                AvailabilityCard(model: availability, notices: notices, openSettings: openSettings)
+                    .padding(.horizontal, 18).padding(.bottom, Theme.Page.bottom)
+                    .frame(maxWidth: Theme.Page.maxWidth, minHeight: proxy.size.height, alignment: .top)
+                    .frame(maxWidth: .infinity)
+            }
         }
         .task { await availability.reload() }
         .onChange(of: schedule.schedule) { Task { await availability.reload() } }
@@ -113,6 +115,7 @@ struct AvailabilityCard: View {
                 weekButton("chevron.left", "Previous week", -1)
                 weekButton("chevron.right", "Next week", 1)
             },
+            fills: true,
             content: {
                 ForEach(notices, id: \.self) { notice in CardRow { Banner(kind: .caution, text: notice) } }
                 if model.loadFailed {
@@ -192,8 +195,13 @@ struct AvailabilityCard: View {
                     .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
             }
         }
-        list("Free windows", report.result.free, empty: "No free time inside working hours.")
-        list("Busy", report.result.busy, empty: "Nothing busy.")
+        CardRow {
+            CardColumns(minColumnWidth: 300) {
+                list("Free windows", report.result.free, empty: "No free time inside working hours.")
+                list("Busy", report.result.busy, empty: "Nothing busy.")
+            }
+        }
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     private func tile(_ title: String, _ value: String, note: String, flagged: Bool = false) -> some View {
@@ -210,23 +218,21 @@ struct AvailabilityCard: View {
     }
 
     private func list(_ title: String, _ intervals: [AvailabilityInterval], empty: String) -> some View {
-        CardRow {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title).font(Theme.Fonts.bodySemibold)
-                if intervals.isEmpty {
-                    Text(empty).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(Theme.Fonts.bodySemibold)
+            if intervals.isEmpty {
+                Text(empty).foregroundStyle(.secondary)
+            }
+            ForEach(Array(intervals.prefix(Self.listLimit).enumerated()), id: \.offset) { _, interval in
+                HStack {
+                    Text(AvailabilityText.range(interval.start, interval.end)).monospacedDigit()
+                    Spacer(minLength: 8)
+                    Text(EventDuration.text(interval.end.timeIntervalSince(interval.start)))
+                        .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                 }
-                ForEach(Array(intervals.prefix(Self.listLimit).enumerated()), id: \.offset) { _, interval in
-                    HStack {
-                        Text(AvailabilityText.range(interval.start, interval.end)).monospacedDigit()
-                        Spacer(minLength: 8)
-                        Text(EventDuration.text(interval.end.timeIntervalSince(interval.start)))
-                            .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
-                    }
-                }
-                if intervals.count > Self.listLimit {
-                    Text("and \(intervals.count - Self.listLimit) more").foregroundStyle(.secondary)
-                }
+            }
+            if intervals.count > Self.listLimit {
+                Text("and \(intervals.count - Self.listLimit) more").foregroundStyle(.secondary)
             }
         }
     }
