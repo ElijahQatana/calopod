@@ -74,7 +74,7 @@ struct ScheduleEventBlock: View {
                 .overlay { shape.inset(by: 0.75).strokeBorder(color, style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])) }
         case .tinted, .declined:
             shape.fill(Theme.pane)
-                .overlay { shape.fill(color.opacity(0.22)) }
+                .overlay { shape.fill(color.opacity(0.22)).declinedHatch(treatment == .declined, color: color) }
                 .overlay(alignment: .leading) { Rectangle().fill(color).frame(width: 3) }
         }
     }

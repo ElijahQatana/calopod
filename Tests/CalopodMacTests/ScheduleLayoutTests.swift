@@ -138,4 +138,13 @@ final class ScheduleLayoutTests: XCTestCase {
             XCTAssertEqual(ScheduleLayout.changeText(e), words)
         }
     }
+
+    func testOnlyDeclinedEventsAreHatched() {
+        let responses: [(ScheduleResponse, ScheduleLayout.Treatment)] = [
+            (.declined, .declined), (.tentative, .tinted), (.accepted, .tinted), (.needsResponse, .needsRSVP),
+        ]
+        for (response, treatment) in responses {
+            XCTAssertEqual(ScheduleLayout.treatment(for: event("e", date(14, 9), date(14, 10), response: response)), treatment)
+        }
+    }
 }
