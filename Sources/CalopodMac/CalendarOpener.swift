@@ -35,7 +35,18 @@ enum CalendarOpenText {
     }
 }
 
-/// macOS has no link to one event, so this checks the event still exists and brings Calendar forward.
+/// Calendar handles `ical://ekevent/<id>` and selects that exact event, so the id is the only thing
+/// that picks it. Nothing is matched by title, time or calendar, which could land on a Busy copy.
+enum CalendarEventLink {
+    static func url(eventID: String) -> URL? {
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove(charactersIn: "/?#")
+        guard !eventID.isEmpty, let path = eventID.addingPercentEncoding(withAllowedCharacters: allowed) else { return nil }
+        return URL(string: "ical://ekevent/\(path)?method=show&options=more")
+    }
+}
+
+/// Checks the event still exists, then asks Calendar to show it.
 struct SystemCalendarOpener: CalendarOpening {
     func open(eventID: String, startsAt: Date) -> CalendarOpenResult {
         // Without full access the lookup cannot tell, so Calendar is opened anyway.
@@ -46,7 +57,12 @@ struct SystemCalendarOpener: CalendarOpening {
         guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: Self.bundleID) else {
             return .unavailable
         }
-        NSWorkspace.shared.openApplication(at: app, configuration: NSWorkspace.OpenConfiguration())
+        let configuration = NSWorkspace.OpenConfiguration()
+        if let link = CalendarEventLink.url(eventID: eventID) {
+            NSWorkspace.shared.open([link], withApplicationAt: app, configuration: configuration)
+        } else {
+            NSWorkspace.shared.openApplication(at: app, configuration: configuration)
+        }
         return .opened
     }
 
