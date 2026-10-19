@@ -12,13 +12,14 @@ struct JoinCommandTests {
 
     private func event(
         _ key: String, hours: Double, length: Double = 1, url: String? = nil, notes: String? = nil,
-        allDay: Bool = false, cancelled: Bool = false
+        allDay: Bool = false, cancelled: Bool = false, declined: Bool = false
     ) -> StoredNormalizedInstance {
         StoredNormalizedInstance(
             sourceKeyHash: key, connectionID: "c", calendarBindingID: "cal", providerEventID: key, recurrenceID: nil,
             startsAt: now.addingTimeInterval(hours * 3600), endsAt: now.addingTimeInterval((hours + length) * 3600),
             isAllDay: allDay, availability: "busy", isCancelled: cancelled, isPrivate: false, title: "Event \(key)",
-            contentFingerprint: key, providerUpdatedAt: nil, notes: notes, url: url)
+            contentFingerprint: key, providerUpdatedAt: nil, notes: notes, url: url,
+            currentUserResponse: declined ? EventResponse(state: .declined) : .unavailable)
     }
 
     private struct Recorder: MeetingJoining {
@@ -30,16 +31,30 @@ struct JoinCommandTests {
         if case let .event(event, _) = choice { event.sourceKeyHash } else { nil }
     }
 
-    @Test("Without an id the next event with a link is chosen")
+    @Test("Without an id the event the card shows as next is chosen")
     func nextWithLink() {
         let events = [
             event("past", hours: -3, url: "https://zoom.us/j/111111111"),
-            event("plain", hours: 0.5),
             event("later", hours: 3, notes: "Join <https://meet.google.com/abc-defg-hij>."),
             event("soonest", hours: 1, url: "https://zoom.us/j/222222222"),
             event("far", hours: 13, url: "https://zoom.us/j/333333333"),
         ]
         #expect(key(JoinSelector.choose(id: nil, from: events, now: now)) == "soonest")
+        // The soonest event has no link, and nothing else is on the card.
+        #expect(JoinSelector.choose(id: nil, from: events + [event("plain", hours: 0.5)], now: now) == .noLink)
+    }
+
+    @Test("Late in a running meeting the next one to start is chosen, and a declined one is skipped")
+    func lateJoin() {
+        let zoom = "https://zoom.us/j/111111111"
+        let events = [
+            event("running", hours: -0.25, length: 1, url: zoom),
+            event("next", hours: 0.5, url: "https://zoom.us/j/222222222"),
+        ]
+        #expect(key(JoinSelector.choose(id: nil, from: events, now: now)) == "next")
+        #expect(key(JoinSelector.choose(id: nil, from: events, now: now.addingTimeInterval(-600))) == "running")
+        let skipped = [events[0], event("no", hours: 0.5, url: zoom, declined: true)]
+        #expect(key(JoinSelector.choose(id: nil, from: skipped, now: now)) == "running")
     }
 
     @Test("A running event counts, and all-day and cancelled events are skipped")
@@ -73,7 +88,7 @@ struct JoinCommandTests {
         #expect(await run("b") == "That event has no meeting link.")
         #expect(await run("x") == "No event with that id was found. Ids are listed by `calopod events --ids`.")
         #expect(await JoinCommand.join(id: nil, events: [], now: now, joiner: Recorder(result: .openedApp))
-            == "No event with a meeting link is on now or starts within 12 hours.")
+            == "No event is on now or starts within 12 hours.")
     }
 
     @Test("Events output shows the link and keeps it in one piece")

@@ -146,7 +146,10 @@ struct OverviewScreen: View {
     private var nextUp: some View {
         if let current = schedule.schedule {
             let now = Date()
-            let events = UpNext.today(in: current, now: now)
+            let ignored: (String) -> Bool = { CalendarAliases.shared.isIgnored($0) }
+            let events = UpNext.today(in: current, now: now, ignored: ignored)
+            let chosen = UpNext.next(in: current, now: now, ignored: ignored)
+            let upcomingID = [chosen.primary, chosen.secondary].compactMap { $0 }.first { $0.role == .upcoming }?.event.id
             let stale = UpNext.staleToday(
                 in: current, now: now, ignored: { CalendarAliases.shared.isIgnored($0.id) },
                 name: { CalendarAliases.shared.name(for: $0.id, real: $0.name) })
@@ -164,11 +167,11 @@ struct OverviewScreen: View {
                             }
                         }
                     }
-                    ForEach(Array(events.prefix(4).enumerated()), id: \.element.id) { index, event in
+                    ForEach(events.prefix(4)) { event in
                         NextUpRow(
                             event: event, calendarName: names[event.calendarID] ?? "Calendar",
                             color: CalendarColors.shared.color(for: event.calendarID).color,
-                            tags: UpNextTag.tags(for: event, isNext: index == 0, now: now), now: now,
+                            tags: UpNextTag.tags(for: event, isNext: event.id == upcomingID, now: now), now: now,
                             join: { link in Task { joinNotice = await JoinOffer.join(link, using: joiner) } }
                         ) { navigation.openCalendar(showing: event, in: schedule) }
                     }
