@@ -68,17 +68,17 @@ struct SettingsScreen: View {
             Text("Also send events from these calendars. Their titles are stored in your iCloud.")
                 .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
         }
-        ForEach(feed.calendars, id: \.id) { calendar in
+        ForEach(feed.calendars, id: \.id) { choice in
             CardRow {
                 HStack(spacing: 8) {
-                    Circle().fill(CalendarColors.shared.color(for: calendar.id).color).frame(width: 12, height: 12)
-                    Text(calendar.name).lineLimit(1)
+                    Circle().fill(CalendarColors.shared.color(for: choice.id).color).frame(width: 12, height: 12)
+                    Text(choice.name).lineLimit(1)
                     Spacer()
                     Toggle("", isOn: Binding(
-                        get: { calendar.isChosen }, set: { on in Task { await feed.setCalendar(calendar.id, chosen: on) } }))
+                        get: { choice.isChosen }, set: { on in Task { await feed.setCalendar(choice.id, chosen: on) } }))
                         .labelsHidden()
                         .disabled(feed.isBusy)
-                        .accessibilityLabel("Send events from \(calendar.name)")
+                        .accessibilityLabel("Send events from \(choice.name)")
                 }
             }
         }
