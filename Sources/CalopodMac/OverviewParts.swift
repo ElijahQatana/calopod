@@ -26,16 +26,20 @@ struct OverviewSectionHeader: View {
 /// difference does not rest on color alone.
 struct RunBars: View {
     let marks: [RunMark]
+    /// Taller bars, for a window with room to spare.
+    var tall = false
+
+    private var full: CGFloat { tall ? 32 : 18 }
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 3) {
             ForEach(Array(marks.enumerated()), id: \.offset) { _, mark in
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
                     .fill(mark == .good ? Theme.good : Theme.bad)
-                    .frame(width: 5, height: mark == .good ? 18 : 12)
+                    .frame(width: 5, height: mark == .good ? full : full * 2 / 3)
             }
         }
-        .frame(height: 18, alignment: .bottom)
+        .frame(height: full, alignment: .bottom)
         .accessibilityElement()
         .accessibilityLabel("Last \(marks.count) sync runs, \(marks.filter { $0 == .failed }.count) failed")
     }
@@ -47,6 +51,7 @@ struct SyncStatusCard: View {
     /// "Last refreshed just now", once Refresh calendars has finished.
     var refreshed: String?
     let marks: [RunMark]
+    var tallBars = false
     let busy: String?
     /// Nil when automatic sync is off, so there is nothing to pause.
     let paused: Bool?
@@ -67,7 +72,7 @@ struct SyncStatusCard: View {
                         message
                         Spacer(minLength: 12)
                         if !marks.isEmpty {
-                            RunBars(marks: marks)
+                            RunBars(marks: marks, tall: tallBars)
                             Divider().frame(height: 28)
                         }
                         buttons
@@ -75,7 +80,7 @@ struct SyncStatusCard: View {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack(spacing: 14) { icon; message }
                         HStack(spacing: 16) {
-                            RunBars(marks: marks)
+                            RunBars(marks: marks, tall: tallBars)
                             Spacer(minLength: 12)
                             buttons
                         }
@@ -153,8 +158,9 @@ struct OverviewColumns: Layout {
         guard subviews.count == 2 else { return .zero }
         let width = proposal.width ?? 900
         let layout = plan(width)
-        let first = subviews[0].sizeThatFits(.init(width: layout.main, height: nil))
-        let second = subviews[1].sizeThatFits(.init(width: layout.side, height: nil))
+        let given = proposal.height
+        let first = subviews[0].sizeThatFits(.init(width: layout.main, height: layout.wide ? given : nil))
+        let second = subviews[1].sizeThatFits(.init(width: layout.side, height: layout.wide ? given : nil))
         let height = layout.wide ? max(first.height, second.height) : first.height + rowGap + second.height
         return CGSize(width: width, height: height)
     }
@@ -164,10 +170,10 @@ struct OverviewColumns: Layout {
         let layout = plan(bounds.width)
         let first = subviews[0].sizeThatFits(.init(width: layout.main, height: nil))
         if layout.wide {
-            subviews[0].place(at: bounds.origin, anchor: .topLeading, proposal: .init(width: layout.main, height: nil))
+            subviews[0].place(at: bounds.origin, anchor: .topLeading, proposal: .init(width: layout.main, height: bounds.height))
             subviews[1].place(
                 at: CGPoint(x: bounds.minX + layout.main + gap, y: bounds.minY), anchor: .topLeading,
-                proposal: .init(width: layout.side, height: nil))
+                proposal: .init(width: layout.side, height: bounds.height))
         } else {
             subviews[0].place(at: bounds.origin, anchor: .topLeading, proposal: .init(width: layout.main, height: nil))
             subviews[1].place(

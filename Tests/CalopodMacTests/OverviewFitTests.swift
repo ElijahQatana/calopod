@@ -90,13 +90,23 @@ struct OverviewRig {
 final class OverviewFitTests: XCTestCase {
     private let defaultWindow = CGSize(width: 1140, height: 700)
 
-    /// Everything on Overview at its natural size must fit the panel at the default window size.
-    func testEverythingFitsTheDefaultWindowWithoutScrolling() async throws {
+    private let minimumWindow = CGSize(width: 860, height: 580)
+
+    /// Overview at its natural size must fit the panel without scrolling, and at the default size it uses
+    /// most of the height instead of leaving the bottom empty.
+    func testOverviewFitsAndFillsTheWindow() async throws {
+        // The fixture events start just after now, so they need to still be today.
+        let tomorrow = Calendar.current.startOfDay(for: Date().addingTimeInterval(86_400))
+        try XCTSkipIf(tomorrow.timeIntervalSinceNow < 1_800, "Too close to midnight for today's events")
         setenv("CALOPOD_STATE_PATH", NSTemporaryDirectory() + "calopod-overview-fit-\(UUID().uuidString)", 1)
         let rig = try await OverviewRig.make()
-        let panel = OverviewRig.panel(window: defaultWindow)
-        let host = NSHostingView(rootView: rig.view().frame(width: panel.width))
-        XCTAssertLessThanOrEqual(host.fittingSize.height, panel.height)
+        for (window, fill) in [(defaultWindow, 0.75), (minimumWindow, 0.85)] {
+            let panel = OverviewRig.panel(window: window)
+            let host = NSHostingView(rootView: rig.view().frame(width: panel.width))
+            let height = host.fittingSize.height
+            XCTAssertLessThanOrEqual(height, panel.height, "\(window)")
+            XCTAssertGreaterThanOrEqual(height, panel.height * fill, "\(window)")
+        }
     }
 
     func testAvailabilityOpensInCalendarAndAnEventOpensTheSchedule() async throws {

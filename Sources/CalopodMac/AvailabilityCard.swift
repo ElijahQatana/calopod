@@ -63,13 +63,29 @@ struct AvailabilityPage: View {
 /// Today's free and busy time on one row, for Overview. It opens the Availability page.
 struct AvailabilitySummary: View {
     let model: AvailabilityModel
+    var glance: AvailabilityGlance = .line
     let open: () -> Void
 
     var body: some View {
         CardSection(header: OverviewSectionHeader(title: "Availability today", link: "Open Availability", action: open)) {
             CardRow { content }
+            glanceRow
         }
         .task { await model.goToToday() }
+    }
+
+    /// The bar or the next days under the line, when the window has room for them.
+    @ViewBuilder
+    private var glanceRow: some View {
+        if !model.loadFailed, glance != .line, let report = model.report(for: model.calendar.startOfDay(for: Date())) {
+            CardRow(dense: true) {
+                if glance == .bar {
+                    AvailabilityDayBar(report: report)
+                } else {
+                    AvailabilityDayChips(model: model, days: Array(model.days.filter { $0 >= report.day.start }.prefix(3)), compact: true)
+                }
+            }
+        }
     }
 
     @ViewBuilder
