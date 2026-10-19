@@ -19,6 +19,7 @@ func rootExposesThePlannedCommandGroups() {
         "join",
         "inbox",
         "availability",
+        "iphone",
         "sync",
         "doctor",
         "agent",
