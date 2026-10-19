@@ -175,6 +175,15 @@ final class ServiceModel {
         }
     }
 
+    /// Switches off the old source install only. The app's service is not touched.
+    func turnOffSourceInstall() async {
+        let service = service
+        await perform("Turning off source install…") {
+            try service.disableSourceInstall()
+            return nil
+        }
+    }
+
     func setPaused(_ paused: Bool) async {
         let service = service
         await perform(paused ? "Pausing…" : "Resuming…") {

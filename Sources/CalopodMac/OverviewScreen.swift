@@ -190,6 +190,12 @@ struct OverviewScreen: View {
                                 get: { openReasons.contains(check.name) },
                                 set: { if $0 { openReasons.insert(check.name) } else { openReasons.remove(check.name) } }))
                     }
+                    if check.name == "source-install" {
+                        CardRow {
+                            Button("Turn off") { Task { await model.turnOffSourceInstall() } }
+                                .disabled(model.isBusy)
+                        }
+                    }
                 }
                 if !status.running && status.enabled && model.registration != .enabled {
                     CardRow {

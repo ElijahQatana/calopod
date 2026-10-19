@@ -583,3 +583,57 @@ func withoutABundledAgentTheStatusReflectsTheSourceInstall() throws {
     #expect(!status.enabled)
 }
 #endif
+
+@Test
+func turningOffTheSourceInstallLeavesTheAppsServiceSyncing() throws {
+    let fixture = try LaunchAgentFixture()
+    defer { fixture.remove() }
+    let verbs = Box<[String]>([])
+    let sourceLoaded = Box(true)
+    let sourceDisabled = Box(false)
+    let home = fixture.homeDirectory
+    let state = fixture.stateURL
+    let service = AgentControlService(
+        bundledAgentExecutable: URL(fileURLWithPath: "/Applications/Calopod.app/Contents/MacOS/calopod-agent"),
+        makeController: {
+            try LaunchAgentController(homeDirectory: home, userID: 501) { arguments in
+                verbs.value.append(arguments.joined(separator: " "))
+                switch arguments.first {
+                case "print":
+                    let isApp = (arguments.dropFirst().first ?? "").hasSuffix(bundledLabel)
+                    return LaunchctlResult(exitCode: isApp || sourceLoaded.value ? 0 : 1, output: "")
+                case "print-disabled":
+                    return LaunchctlResult(
+                        exitCode: 0, output: sourceDisabled.value ? #""pro.elijahquintana.calopod.agent" => disabled"# : "")
+                case "bootout": sourceLoaded.value = false
+                case "disable": sourceDisabled.value = true
+                default: break
+                }
+                return LaunchctlResult(exitCode: 0, output: "")
+            }
+        },
+        baseEnvironment: { ["CALOPOD_STATE_PATH": state.path] })
+
+    let before = try service.status()
+    #expect(before.sourceLoaded && before.sourceEnabled)
+
+    try service.disableSourceInstall()
+
+    // Only the old job is touched, and the app's service still reads as on and not paused.
+    #expect(verbs.value.contains { $0.hasPrefix("bootout") && $0.hasSuffix(".agent") })
+    #expect(verbs.value.allSatisfy { !$0.hasSuffix(bundledLabel) || $0.hasPrefix("print") })
+    let after = try service.status()
+    #expect(after.usesBundledService && after.enabled && after.running && !after.paused)
+    #expect(!after.sourceLoaded && !after.sourceEnabled)
+    #expect(try service.doctor().items.contains { $0.id == "source-install" } == false)
+}
+
+@Test
+func plainDisableExplainsWhatIsLiveAndTheCommandHasASourceFlag() throws {
+    #expect(try AgentDisableCommand.parse(["--source"]).source)
+    #expect(try !AgentDisableCommand.parse([]).source)
+    let cli = commandFailure(LaunchAgentControlError.runsFromApp).message
+    #expect(cli.contains("agent pause") && cli.contains("agent disable --source"))
+    let app = appFailureMessage(LaunchAgentControlError.runsFromApp)
+    #expect(app.contains("Pause") && app.contains("Turn off source install"))
+}

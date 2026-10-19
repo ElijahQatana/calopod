@@ -54,6 +54,9 @@ public struct AgentDisableCommand: ParsableCommand {
         abstract: "Stop and disable automatic synchronization."
     )
 
+    @Flag(name: .customLong("source"), help: "Turn off only the old source install. The app's service keeps syncing.")
+    public var source = false
+
     @OptionGroup public var output: OutputOptions
 
     public init() {}
@@ -62,10 +65,17 @@ public struct AgentDisableCommand: ParsableCommand {
         #if os(macOS)
         do {
             let service = AgentControlService.current()
-            try service.setEnabled(false)
+            let message: String
+            if source {
+                try service.disableSourceInstall()
+                message = "The old source install is turned off."
+            } else {
+                try service.setEnabled(false)
+                message = "Automatic synchronization is disabled."
+            }
             try OutputRenderer.write(
                 command: "agent.disable",
-                payload: try service.controlResult(message: "Automatic synchronization is disabled."),
+                payload: try service.controlResult(message: message),
                 format: output.format)
         } catch {
             try failCommand(error)
