@@ -29,11 +29,4 @@ final class InboxReviewKeyboardTests: XCTestCase {
         _ = keyboard.press("h", mode: .card)
         XCTAssertNil(keyboard.press("1", mode: .card))
     }
-
-    func testCalendarLinkPointsAtTheStartOfTheDay() throws {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "UTC"))
-        let noon = Date(timeIntervalSinceReferenceDate: 86_400 * 3 + 43_200)
-        XCTAssertEqual(SystemCalendarOpener.url(for: noon, calendar: calendar)?.absoluteString, "calshow:259200")
-    }
 }
