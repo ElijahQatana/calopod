@@ -16,6 +16,7 @@ public struct CalopodRoot: AsyncParsableCommand {
             InboxCommand.self,
             NotificationsCommand.self,
             AvailabilityCommand.self,
+            IPhoneCommand.self,
             SyncCommand.self,
             DoctorCommand.self,
             AgentCommand.self,

@@ -7,6 +7,7 @@ struct SettingsScreen: View {
     private let settings = AppSettings.shared
     @State private var command: CommandLineModel
     @Environment(PermissionsModel.self) private var permissions
+    @Environment(\.iPhoneFeed) private var iPhoneFeed
     @Environment(NotificationSettingsModel.self) private var reminders
 
     init(command: CommandLineModel = CommandLineModel()) { _command = State(initialValue: command) }
@@ -23,7 +24,40 @@ struct SettingsScreen: View {
         windowStyle
         NotificationsSection(model: reminders)
         permissionsSection
+        iPhoneSection
         commandLine
+    }
+
+    @ViewBuilder
+    private var iPhoneSection: some View {
+        if let feed = iPhoneFeed {
+            CardSection(
+                "iPhone",
+                footnote: feed.availability.isAvailable
+                    ? "Sends a read-only copy of your Inbox, busy time and calendar names to your private iCloud after each sync. Nothing is shared with anyone else, and nothing on the iPhone changes a calendar. Turning this off deletes the copy."
+                    : feed.availability.unavailableMessage
+            ) {
+                CardRow("Show Inbox and busy time on iPhone") {
+                    Toggle("", isOn: Binding(get: { feed.isOn }, set: { on in Task { await feed.setOn(on) } }))
+                        .labelsHidden()
+                        .disabled(!feed.availability.isAvailable || feed.isBusy)
+                }
+                if let problem = feed.problem {
+                    CardRow {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Banner(kind: .error, text: problem)
+                            Button("Try again") { Task { await feed.retry() } }.disabled(feed.isBusy)
+                        }
+                    }
+                } else if let published = feed.feed.publishedAt, feed.isOn {
+                    CardRow {
+                        Text("Last sent \(published.formatted(date: .abbreviated, time: .shortened))")
+                            .font(Theme.Fonts.body).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .task { await feed.tick() }
+        }
     }
 
     private var permissionsSection: some View {

@@ -89,3 +89,16 @@ func recordsCarryNoAddressesOrTokens() throws {
     #expect(!text.contains("@"))
     #expect(!text.lowercased().contains("token"))
 }
+
+@Test
+func payloadsUseTheRecordIDAndReplaceTheRemoteSet() async throws {
+    let first = try SnapshotPayload(day, kind: .availabilityDay, at: now)
+    let second = try SnapshotPayload(status, kind: .syncStatus, at: now)
+    #expect(first.recordName == "availability-2027-01-15" && first.schemaVersion == SnapshotSchema.currentVersion)
+    let remote = InMemorySnapshotPublisher()
+    try await remote.replaceAll(with: [first, second])
+    try await remote.replaceAll(with: [second])
+    #expect(await remote.records.keys.sorted() == ["sync-status"])
+    try await remote.deleteAll()
+    #expect(await remote.records.isEmpty)
+}

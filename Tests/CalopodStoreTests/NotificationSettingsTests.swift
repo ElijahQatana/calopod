@@ -61,7 +61,7 @@ struct NotificationSettingsTests {
 
     @Test("A state from before the table gains it with the defaults")
     func migration() throws {
-        #expect(CalopodDatabase.supportedMigrationIdentifiers.last == "v20_notification_settings")
+        #expect(CalopodDatabase.supportedMigrationIdentifiers.contains("v20_notification_settings"))
         let queue = try DatabaseQueue()
         try CalopodDatabase.migrator.migrate(queue, upTo: "v19_calendar_view_hidden")
         #expect(try queue.read { try $0.tableExists("notification_settings") } == false)
