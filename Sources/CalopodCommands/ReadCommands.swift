@@ -44,27 +44,34 @@ public struct EventsCommand: AsyncParsableCommand {
                 from: resolved.window.start,
                 through: resolved.window.end
             )
+            // Copies Calopod made are listed where the app draws them, marked with their mode.
+            let shown = Set(sources.map(\.calendar.id).filter { !names.isIgnored($0) })
+            let targets = try CopyTarget.bySource(repository)
+            var items: [CommandItem] = []
+            for event in events {
+                items.append(CommandItem(
+                    id: event.sourceKeyHash, kind: "event", label: event.title, parentID: event.calendarBindingID,
+                    startsAt: outputDate(event.startsAt), endsAt: outputDate(event.endsAt), allDay: event.isAllDay,
+                    cancelled: false, availability: event.availability))
+                for target in targets[event.sourceKeyHash] ?? []
+                where shown.contains(target.bindingID) && target.bindingID != event.calendarBindingID {
+                    items.append(CommandItem(
+                        id: "copy:\(target.bindingID):\(event.sourceKeyHash)", kind: "event",
+                        label: target.fullDetails ? event.title : "Busy", parentID: target.bindingID,
+                        startsAt: outputDate(event.startsAt), endsAt: outputDate(event.endsAt), allDay: event.isAllDay,
+                        cancelled: false, availability: event.availability,
+                        copyMode: target.modeName, sourceResponse: copyResponseName(event.currentUserResponse.state)))
+                }
+            }
             try OutputRenderer.write(
                 command: "events",
                 payload: CommandPayload(
                     status: cached || refresh.failedSourceCount != 0 ? "partial" : "ok",
-                    message: events.isEmpty ? "No events were found." : "Events in the requested range.",
-                    count: events.count,
+                    message: items.isEmpty ? "No events were found." : "Events in the requested range.",
+                    count: items.count,
                     range: RangeOutput(range: resolved),
                     sources: commandSources(sources, names: names),
-                    items: events.map {
-                        CommandItem(
-                            id: $0.sourceKeyHash,
-                            kind: "event",
-                            label: $0.title,
-                            parentID: $0.calendarBindingID,
-                            startsAt: outputDate($0.startsAt),
-                            endsAt: outputDate($0.endsAt),
-                            allDay: $0.isAllDay,
-                            cancelled: false,
-                            availability: $0.availability
-                        )
-                    },
+                    items: items,
                     ingestion: refresh.ingestion
                 ),
                 warnings: refresh.warnings,
