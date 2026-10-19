@@ -24,7 +24,8 @@ binary_root=$(swift build \
 
 mkdir -p "$executable_root"
 mkdir -p "$contents_root/Resources"
-cp "$repository_root/Support/EventKitHost/Info.plist" "$contents_root/Info.plist"
+version=$(tr -d '[:space:]' < "$repository_root/VERSION")
+sed "s/__VERSION__/$version/" "$repository_root/Support/EventKitHost/Info.plist" > "$contents_root/Info.plist"
 plutil -lint "$contents_root/Info.plist" >/dev/null
 "$repository_root/Scripts/build-calopod-icon.sh" "$contents_root/Resources"
 cp "$binary_root/calopod-eventkit-host" "$executable_path"

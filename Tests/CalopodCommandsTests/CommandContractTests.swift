@@ -618,3 +618,11 @@ func armCommandsAcceptPrivateNamesAndClearing() throws {
     #expect(rename.name == "Office")
     #expect(clear.name == "")
 }
+
+@Test
+func commandVersionMatchesTheVersionFile() throws {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let text = try String(contentsOf: root.appendingPathComponent("VERSION"), encoding: .utf8)
+    #expect(CalopodRoot.configuration.version == text.trimmingCharacters(in: .whitespacesAndNewlines))
+}
