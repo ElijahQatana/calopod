@@ -87,9 +87,10 @@ private struct InboxRow: View {
         HStack(spacing: 12) {
             VStack(spacing: 1) {
                 Text(item.isAllDay ? "All day" : item.startsAt.formatted(timeFormat)).font(Theme.Fonts.bodyStrong).monospacedDigit()
+                    .lineLimit(1).minimumScaleFactor(0.7)
                 if !item.isAllDay { Text(duration).font(.caption2).foregroundStyle(Theme.secondary) }
             }
-            .frame(width: 54).padding(.vertical, 7)
+            .frame(width: 58).padding(.vertical, 7)
             .background(color.opacity(0.2), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.title ?? "Untitled").font(Theme.Fonts.bodyStrong).lineLimit(1)
