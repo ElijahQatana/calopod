@@ -47,8 +47,15 @@ final class WindowObserverBalanceTests: XCTestCase {
         return window
     }
 
-    /// Lets the queued main-thread blocks (attach, apply, coalesced passes) run.
-    private func drain() async { try? await Task.sleep(for: .milliseconds(30)) }
+    /// Lets the queued main-thread blocks (attach, apply, coalesced passes) run. They land a few hops
+    /// apart, so a fixed sleep can end between two of them. Wait until the count holds still instead.
+    private func drain(_ center: CountingCenter) async {
+        var last = -1, steady = 0
+        while steady < 3 {
+            try? await Task.sleep(for: .milliseconds(10))
+            if center.count == last { steady += 1 } else { last = center.count; steady = 0 }
+        }
+    }
 
     private func post(_ names: [Notification.Name], on center: NotificationCenter, window: NSWindow) {
         names.forEach { center.post(name: $0, object: window) }
@@ -61,14 +68,14 @@ final class WindowObserverBalanceTests: XCTestCase {
         let view = WindowChrome.WindowObserver()
         coordinator.attach(to: view)
         window.contentView = view
-        await drain()
+        await drain(center)
         let single = center.count
         XCTAssertGreaterThan(single, 0, "the coordinator should be observing the window")
 
         for cycle in 1...cycles {
             post([NSWindow.didResizeNotification, NSWindow.didBecomeKeyNotification,
                   NSWindow.didChangeOcclusionStateNotification], on: center, window: window)
-            await drain()
+            await drain(center)
             XCTAssertLessThanOrEqual(center.count, single, "cycle \(cycle) while open")
 
             post([NSWindow.willCloseNotification], on: center, window: window)
@@ -79,12 +86,12 @@ final class WindowObserverBalanceTests: XCTestCase {
             // Opening the window again: it becomes key and visible.
             post([NSWindow.didBecomeKeyNotification, NSWindow.didChangeOcclusionStateNotification],
                  on: center, window: window)
-            await drain()
+            await drain(center)
             XCTAssertEqual(center.count, single, "cycle \(cycle) after reopen")
         }
 
         window.contentView = NSView()
-        await drain()
+        await drain(center)
         XCTAssertEqual(center.count, 0, "everything is removed once the view leaves the window")
     }
 
@@ -97,12 +104,12 @@ final class WindowObserverBalanceTests: XCTestCase {
             let view = WindowChrome.WindowObserver()
             coordinator.attach(to: view)
             window.contentView = view
-            await drain()
+            await drain(center)
             if cycle == 1 { single = center.count }
             XCTAssertEqual(center.count, single, "cycle \(cycle) attached")
             post([NSWindow.willCloseNotification], on: center, window: window)
             window.contentView = NSView()
-            await drain()
+            await drain(center)
             XCTAssertEqual(center.count, 0, "cycle \(cycle) torn down")
         }
         XCTAssertGreaterThan(single, 0)
