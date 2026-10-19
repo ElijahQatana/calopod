@@ -4,12 +4,50 @@ struct RootView: View {
     var store: SnapshotStore
     @Bindable var reminders: Reminders
     var now: () -> Date = { .now }
-    @State private var tab = Tab.inbox
+    @State private var navigation = Navigation()
+    @State private var filter = CalendarFilter()
+    @State private var appearance = Appearance()
     @Environment(\.scenePhase) private var scenePhase
 
-    private enum Tab { case inbox, calendar, status }
-
     var body: some View {
+        ZStack {
+            screens
+            if let page = navigation.page { pageScreen(page) }
+            if navigation.menuOpen {
+                MenuDrawer(navigation: navigation, calendarsSummary: snapshot.map(filter.summary))
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: navigation.menuOpen)
+        .environment(\.openMenu, { navigation.menuOpen = true })
+        .preferredColorScheme(appearance.choice.colorScheme)
+        .tint(Theme.accent)
+        .task { await refresh() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await refresh() } }
+        }
+        .onChange(of: reminders.requestedEvent, initial: true) { _, id in
+            if id != nil { navigation.show(.calendar) }
+        }
+    }
+
+    private var snapshot: Snapshot? {
+        if case .content(let snapshot, _) = store.phase { snapshot } else { nil }
+    }
+
+    @ViewBuilder private func pageScreen(_ page: Navigation.Page) -> some View {
+        switch page {
+        case .settings:
+            SettingsScreen(
+                info: SettingsInfo(phase: store.phase), snapshot: snapshot, reminders: reminders, appearance: appearance,
+                filter: filter, navigation: navigation)
+        case .calendars: CalendarsScreen(snapshot: snapshot, filter: filter, navigation: navigation)
+        case .help: HelpScreen(navigation: navigation)
+        case .about: AboutScreen(navigation: navigation)
+        }
+    }
+
+    private var screens: some View {
         Group {
             switch store.phase {
             case .loading:
@@ -42,22 +80,18 @@ struct RootView: View {
                     systemImage: "arrow.down.app")
             case .content(let snapshot, let offline):
                 let context = SnapshotContext(snapshot: snapshot, offline: offline, now: now())
-                TabView(selection: $tab) {
-                    InboxTab(context: context).tabItem { Label("Inbox", systemImage: "tray") }.tag(Tab.inbox)
-                    CalendarTab(context: context, requested: $reminders.requestedEvent)
-                        .tabItem { Label("Calendar", systemImage: "calendar") }.tag(Tab.calendar)
-                    StatusTab(context: context, reminders: reminders)
-                        .tabItem { Label("Status", systemImage: "waveform.path.ecg") }.tag(Tab.status)
+                @Bindable var navigation = navigation
+                TabView(selection: $navigation.tab) {
+                    HomeTab(context: context, filter: filter, navigation: navigation)
+                        .tabItem { Label("Home", systemImage: "house") }.tag(Navigation.Tab.home)
+                    InboxTab(context: context, filter: $navigation.inboxFilter)
+                        .tabItem { Label("Inbox", systemImage: "tray") }.tag(Navigation.Tab.inbox)
+                    CalendarTab(context: context, filter: filter, requested: $reminders.requestedEvent)
+                        .tabItem { Label("Calendar", systemImage: "calendar") }.tag(Navigation.Tab.calendar)
+                    StatusTab(context: context)
+                        .tabItem { Label("Status", systemImage: "waveform.path.ecg") }.tag(Navigation.Tab.status)
                 }
             }
-        }
-        .tint(Theme.accent)
-        .task { await refresh() }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await refresh() } }
-        }
-        .onChange(of: reminders.requestedEvent, initial: true) { _, id in
-            if id != nil { tab = .calendar }
         }
     }
 

@@ -3,7 +3,7 @@ import SwiftUI
 
 struct InboxTab: View {
     var context: SnapshotContext
-    @State private var filter = InboxFilter.all
+    @Binding var filter: InboxFilter
     @State private var openID: String?
 
     var body: some View {

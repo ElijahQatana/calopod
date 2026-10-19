@@ -1,3 +1,4 @@
+import CalopodSnapshot
 import SwiftUI
 import UIKit
 
@@ -62,4 +63,8 @@ enum Theme {
     static let cardRadius: CGFloat = 18
     static let headerRadius: CGFloat = 30
     static let sidePadding: CGFloat = 16
+}
+
+extension SyncIssueKind {
+    var color: Color { self == .failed ? Theme.bad : Theme.caution }
 }

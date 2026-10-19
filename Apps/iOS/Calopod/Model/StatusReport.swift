@@ -31,3 +31,13 @@ struct StatusReport: Equatable {
         }
     }
 }
+
+extension SyncIssueKind {
+    var label: String {
+        switch self {
+        case .failed: "Failed"
+        case .partial: "Partial"
+        case .stale: "Behind"
+        }
+    }
+}

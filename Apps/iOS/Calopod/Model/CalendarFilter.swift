@@ -29,3 +29,11 @@ final class CalendarFilter {
         return snapshot.calendars.filter { used.contains($0.id) }
     }
 }
+
+extension CalendarFilter {
+    /// "4 of 5 shown" for the calendars the Mac sent events for.
+    func summary(in snapshot: Snapshot) -> String {
+        let listed = Self.listed(in: snapshot)
+        return "\(listed.filter { isShown($0.id) }.count) of \(listed.count) shown"
+    }
+}

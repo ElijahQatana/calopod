@@ -5,11 +5,11 @@ import SwiftUI
 /// without, only the busy time, which carries no titles.
 struct CalendarTab: View {
     var context: SnapshotContext
+    var filter: CalendarFilter
     /// An event a tapped reminder asked to open. It is cleared once the event is shown.
     @Binding var requested: String?
     @State private var selected: String?
     @State private var openEvent: CalendarEvent?
-    @State private var filter = CalendarFilter()
 
     var body: some View {
         Group {

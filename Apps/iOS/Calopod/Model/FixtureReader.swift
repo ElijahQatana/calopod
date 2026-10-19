@@ -108,3 +108,18 @@ struct FixtureReader: SnapshotReader {
         return String(format: "%04d-%02d-%02d", parts.year!, parts.month!, parts.day!)
     }
 }
+
+/// Notifications for a fixture launch: allowed unless `-fixtureNotifications denied` or `notDetermined` says otherwise.
+struct FixtureNotificationCenter: ReminderCenter {
+    func permission() async -> NotificationPermission {
+        switch UserDefaults.standard.string(forKey: "fixtureNotifications") {
+        case "denied": .denied
+        case "notDetermined": .notDetermined
+        default: .allowed
+        }
+    }
+    func requestPermission() async -> Bool { true }
+    func pendingIDs() async -> [String] { [] }
+    func add(_ reminder: PlannedReminder) async {}
+    func remove(ids: [String]) async {}
+}
