@@ -10,7 +10,7 @@ The Calopod app does what the command line does, in windows. Build it with `Scri
 - **Calendars** adds accounts and chooses which calendars Calopod reads. Each calendar has a color from a palette of twelve, a name you can change, and an ignore switch. These live only on this Mac. They never rename, recolor or change a calendar at the provider, and ignoring a calendar does not stop it from syncing.
 - **Arms** lists where events are copied from and to. New arm builds one.
 - **Background sync** registers Calopod's own service with macOS and sets how often it runs. Allow it in System Settings, General, Login Items when asked.
-- **Settings** sets light or dark, how see-through the window is, and the window style.
+- **Settings** sets light or dark, how see-through the window is, and the window style. Its Command line row links `~/.local/bin/calopod` to the command inside the app.
 
 ## First run
 
@@ -34,6 +34,16 @@ open -W -n "/Applications/Calopod.app/Contents/MacOS/eventkit-host/Calopod Event
 ```
 
 A first answer of `{"requestOutcome":"granted",...}` or `"denied"` means macOS asked. `"undecided"` with `"not-determined"` means it did not.
+
+## The command and the app
+
+There are three ways to install Calopod: the command line only, the app only, or the app with its command. See [Install](install.md#three-ways-to-install) for what each gives you.
+
+Move to the app, in Background sync, switches off the source or release install and registers the app's own service. If `~/.local/bin/calopod` still points at the old install, it then asks whether to use the command inside the app as well, so updating the app updates `calopod`. Nothing changes until you confirm. If the link can't be changed, the old one stays. Replace, in the Command line row in Settings, does the same later for any link that points somewhere else.
+
+`calopod-setup` and `calopod-uninstall` stay linked to the old install's scripts and keep working. Uninstalling the old install leaves a `calopod` link that points into an app alone.
+
+To go back, choose Remove in the Command line row, then run `./install` from the release folder to link the old command again. Or run `./install --replace-app-command` and skip Remove.
 
 ## If something looks wrong
 

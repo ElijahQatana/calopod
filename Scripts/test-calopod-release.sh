@@ -195,4 +195,40 @@ env \
   CALOPOD_RELEASE_TEST_HOME="$test_home" \
   "$service_root/release/uninstall" >/dev/null
 
+# A calopod link into an app is not the install's to change unless asked.
+app_command="$test_root/Fake.app/Contents/MacOS/calopod"
+mkdir -p "$(dirname "$app_command")"
+printf '#!/bin/sh\nexit 0\n' > "$app_command"
+chmod 700 "$app_command"
+run_installer >/dev/null
+ln -sfn "$app_command" "$cli_link"
+run_installer > "$test_root/app-link-output"
+[ "$(readlink "$cli_link")" = "$app_command" ]
+[ "$(readlink "$setup_link")" = "$service_root/release/calopod-setup.sh" ]
+[ "$(grep -c 'left alone' "$test_root/app-link-output")" = "1" ]
+env \
+  CALOPOD_RELEASE_TEST_MODE=1 \
+  CALOPOD_RELEASE_TEST_HOME="$test_home" \
+  "$service_root/release/uninstall" >/dev/null
+[ "$(readlink "$cli_link")" = "$app_command" ]
+[ -x "$app_command" ]
+[ ! -e "$setup_link" ]
+[ ! -e "$uninstall_link" ]
+run_installer --replace-app-command >/dev/null
+[ "$(readlink "$cli_link")" = "$service_root/bin/calopod" ]
+[ -x "$app_command" ]
+
+# A link to something else is still refused, as before.
+ln -sfn "$test_root/elsewhere" "$cli_link"
+if run_installer >/dev/null 2>&1; then
+  echo "The release installer replaced an unrelated link." >&2
+  exit 1
+fi
+[ "$(readlink "$cli_link")" = "$test_root/elsewhere" ]
+rm -f "$cli_link"
+env \
+  CALOPOD_RELEASE_TEST_MODE=1 \
+  CALOPOD_RELEASE_TEST_HOME="$test_home" \
+  "$service_root/release/uninstall" >/dev/null
+
 echo "Release installer checks passed."
