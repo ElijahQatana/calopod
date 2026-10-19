@@ -71,6 +71,13 @@ hdiutil verify -quiet "$dmg" > /dev/null
 (cd "$out" && shasum -a 256 -c Calopod-9.8.7.dmg.sha256 > /dev/null)
 grep -q 'Not notarized' "$log"
 
+# Both backgrounds are exactly the window content size, from the shared layout file.
+swift "$repository_root/Scripts/dmg/make-background.swift" "$repository_root/Scripts/dmg/layout.json" "$test_root/art" > /dev/null
+layout_size() { python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d["width"]*int(sys.argv[2]), d["height"]*int(sys.argv[2]))' "$repository_root/Scripts/dmg/layout.json" "$1"; }
+image_size() { sips -g pixelWidth -g pixelHeight "$1" | awk '/pixelWidth/ {w=$2} /pixelHeight/ {h=$2} END {print w, h}'; }
+[ "$(image_size "$test_root/art/background.png")" = "$(layout_size 1)" ]
+[ "$(image_size "$test_root/art/background@2x.png")" = "$(layout_size 2)" ]
+
 mkdir "$mount_point"
 hdiutil attach -nobrowse -readonly -noverify -mountpoint "$mount_point" "$dmg" > /dev/null 2>&1
 [ -d "$mount_point/Calopod.app/Contents/MacOS" ]
@@ -79,8 +86,9 @@ hdiutil attach -nobrowse -readonly -noverify -mountpoint "$mount_point" "$dmg" >
 [ -f "$mount_point/.DS_Store" ]
 [ -d "$mount_point/.background" ] || [ -f "$mount_point/.background.tiff" ]
 [ -f "$mount_point/.VolumeIcon.icns" ]
-[ "$(sed -n '1,2p' "$mount_point/Install the command line.txt" | wc -l | tr -d ' ')" = 2 ]
-grep -q 'Settings, then Command line' "$mount_point/Install the command line.txt"
+# Only the app and the Applications link are visible; ls skips the hidden items.
+[ "$(ls "$mount_point")" = "Applications
+Calopod.app" ]
 hdiutil detach -quiet "$mount_point"
 
 # Nothing private reaches the output.

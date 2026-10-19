@@ -29,7 +29,7 @@ If `calopod` already points into Calopod.app, the installer leaves that link alo
 
 ## Install the app from the disk image
 
-Open `Calopod-<version>.dmg`, drag Calopod onto Applications and eject the image. The window shows the app, an Applications shortcut and a short note about adding the `calopod` command from Settings, Command line. Check the download first with `shasum -a 256 -c Calopod-<version>.dmg.sha256`. The first time you open the app, macOS may ask you to confirm it was downloaded from the internet.
+Open `Calopod-<version>.dmg`, drag Calopod onto Applications and eject the image. The window shows the app, an Applications shortcut and a line about adding the `calopod` command from Settings, Command line. Check the download first with `shasum -a 256 -c Calopod-<version>.dmg.sha256`. The first time you open the app, macOS may ask you to confirm it was downloaded from the internet.
 
 ## Three ways to install
 
