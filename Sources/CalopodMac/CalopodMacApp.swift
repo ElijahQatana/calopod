@@ -3,6 +3,7 @@ import SwiftUI
 
 @main
 struct CalopodMacApp: App {
+    @NSApplicationDelegateAdaptor private var delegate: CalopodAppDelegate
     @State private var service: ServiceModel
     @State private var setup = SetupModel()
     @State private var inbox: InboxModel
@@ -72,6 +73,7 @@ struct CalopodMacApp: App {
                 }
             }
             .opacity(service.menuBarDimmed ? 0.5 : 1)
+            .registersWindowOpener()
             // Reads the local copy only, so the count stays current with the window closed.
             .task {
                 while !Task.isCancelled {
