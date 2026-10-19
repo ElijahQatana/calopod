@@ -84,12 +84,18 @@ struct CalendarScreen: View {
                 }
                 .background(Capsule().fill(.quaternary))
             }
-            if !model.chipCalendars.isEmpty {
-                // One scrolling row, so the chips do not take a second and third line at narrow widths.
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(model.chipCalendars) { calendar in chip(calendar) }
-                        copiesChip
+            if !model.calendars.isEmpty {
+                // One row: the view mode stays put and the chips scroll, so nothing wraps at narrow widths.
+                HStack(spacing: 10) {
+                    PillPicker(
+                        options: CalendarViewMode.allCases.map { ($0.title, $0) }, selection: Bindable(model).viewMode, quiet: true
+                    )
+                    .fixedSize()
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(model.chipCalendars) { calendar in chip(calendar) }
+                            copiesChip
+                        }
                     }
                 }
             }

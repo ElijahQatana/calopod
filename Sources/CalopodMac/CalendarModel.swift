@@ -19,14 +19,31 @@ final class CalendarModel {
     private(set) var hidden: Set<String> = []
     var selectedID: String?
     /// Whether Busy copies Calopod made are drawn. Only this view changes; Inbox and sync do not.
+    /// Each mode remembers its own choice; until it is changed a mode uses its default.
     var showCopies: Bool {
-        didSet {
-            defaults.set(showCopies, forKey: Self.showCopiesKey)
-            if !showCopies, selected?.isCopy == true { selectedID = nil }
+        get { copyChoices[viewMode] ?? viewMode.copiesShownByDefault }
+        set {
+            copyChoices[viewMode] = newValue
+            defaults.set(newValue, forKey: Self.showCopiesKey(viewMode))
+            if !newValue, selected?.isCopy == true { selectedID = nil }
         }
     }
 
-    static let showCopiesKey = "calendarShowCopies"
+    private var copyChoices: [CalendarViewMode: Bool]
+
+    /// Which calendars this view offers by their part in the arms. Hidden state per calendar is kept across modes.
+    var viewMode: CalendarViewMode {
+        didSet {
+            defaults.set(viewMode.rawValue, forKey: Self.viewModeKey)
+            if let selected, !isVisible(selected) { selectedID = nil }
+        }
+    }
+
+    /// All keeps the key the single setting used before modes existed.
+    static func showCopiesKey(_ mode: CalendarViewMode) -> String {
+        mode == .all ? "calendarShowCopies" : "calendarShowCopies.\(mode.rawValue)"
+    }
+    static let viewModeKey = "calendarViewMode"
 
     let calendar: Calendar
     @ObservationIgnored private let load: @Sendable () throws -> CalendarSchedule
@@ -46,7 +63,10 @@ final class CalendarModel {
         self.defaults = defaults
         self.aliases = aliases
         self.load = load
-        showCopies = defaults.object(forKey: Self.showCopiesKey) as? Bool ?? true
+        copyChoices = Dictionary(uniqueKeysWithValues: CalendarViewMode.allCases.compactMap { mode in
+            (defaults.object(forKey: Self.showCopiesKey(mode)) as? Bool).map { (mode, $0) }
+        })
+        viewMode = defaults.string(forKey: Self.viewModeKey).flatMap(CalendarViewMode.init(rawValue:)) ?? .all
         anchor = now()
     }
 
@@ -66,7 +86,16 @@ final class CalendarModel {
     var calendars: [ScheduleCalendar] { schedule?.calendars ?? [] }
 
     /// Calendars offered as chips. Ignored ones are left out and their events are not drawn.
-    var chipCalendars: [ScheduleCalendar] { calendars.filter { !aliases.isIgnored($0.id) } }
+    var chipCalendars: [ScheduleCalendar] {
+        let roles = schedule?.roles ?? CalendarRoles()
+        return calendars.filter { !aliases.isIgnored($0.id) && roles.includes($0.id, in: viewMode) }
+    }
+
+    private func isVisible(_ event: ScheduleEvent) -> Bool {
+        let roles = schedule?.roles ?? CalendarRoles()
+        return roles.includes(event.calendarID, in: viewMode) && !hidden.contains(event.calendarID)
+            && !aliases.isIgnored(event.calendarID) && (showCopies || !event.isCopy)
+    }
 
     /// What one day column draws. Built once per schedule or filter change, not on every redraw.
     struct DayEvents: Equatable {
@@ -79,6 +108,7 @@ final class CalendarModel {
         let hidden: Set<String>
         let ignored: Set<String>
         let showCopies: Bool
+        let viewMode: CalendarViewMode
         let events: [ScheduleEvent]
         var days: [Date: DayEvents] = [:]
     }
@@ -90,14 +120,19 @@ final class CalendarModel {
         // Reading the ignore list here keeps views that call this watching it.
         let ignored = aliases.ignored
         if let cache, cache.version == scheduleVersion, cache.hidden == hidden,
-            cache.ignored == ignored, cache.showCopies == showCopies
+            cache.ignored == ignored, cache.showCopies == showCopies, cache.viewMode == viewMode
         {
             return cache
         }
+        let roles = schedule?.roles ?? CalendarRoles()
+        let drawsCopies = showCopies
         let events = (schedule?.events ?? []).filter {
-            !hidden.contains($0.calendarID) && !ignored.contains($0.calendarID) && (showCopies || !$0.isCopy)
+            !hidden.contains($0.calendarID) && !ignored.contains($0.calendarID) && roles.includes($0.calendarID, in: viewMode)
+                && (drawsCopies || !$0.isCopy)
         }
-        let fresh = Cache(version: scheduleVersion, hidden: hidden, ignored: ignored, showCopies: showCopies, events: events)
+        let fresh = Cache(
+            version: scheduleVersion, hidden: hidden, ignored: ignored, showCopies: showCopies, viewMode: viewMode,
+            events: events)
         cache = fresh
         return fresh
     }
@@ -164,6 +199,8 @@ final class CalendarModel {
     /// Shows the event's day and opens it in the inspector. The anchor is set first because moving it clears the selection.
     func show(_ event: ScheduleEvent) {
         anchor = event.startsAt
+        // An event from Inbox may sit outside this mode; All is the one view that shows every calendar.
+        if !(schedule?.roles ?? CalendarRoles()).includes(event.calendarID, in: viewMode) { viewMode = .all }
         if hidden.contains(event.calendarID) { toggle(event.calendarID) }
         selectedID = event.id
     }

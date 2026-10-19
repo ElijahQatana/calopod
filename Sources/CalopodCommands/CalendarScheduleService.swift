@@ -170,10 +170,13 @@ extension ScheduleEvent {
 public struct CalendarSchedule: Equatable, Sendable {
     public let calendars: [ScheduleCalendar]
     public let events: [ScheduleEvent]
+    /// What each calendar does for the active arms, for the Sources and Destinations views.
+    public let roles: CalendarRoles
 
-    public init(calendars: [ScheduleCalendar], events: [ScheduleEvent]) {
+    public init(calendars: [ScheduleCalendar], events: [ScheduleEvent], roles: CalendarRoles = CalendarRoles()) {
         self.calendars = calendars
         self.events = events
+        self.roles = roles
     }
 }
 
@@ -227,7 +230,8 @@ public struct CalendarScheduleService: Sendable {
         }
 
         // Where each event is copied. The copies themselves are not stored as events.
-        let copies = try CopyTarget.bySource(repository)
+        let allArms = try repository.arms()
+        let copies = try CopyTarget.bySource(repository, arms: allArms)
         func calendarName(_ binding: String) -> String {
             if let known = names[binding] { return known }
             let stored = try? repository.calendarBinding(id: binding)
@@ -288,7 +292,7 @@ public struct CalendarScheduleService: Sendable {
             }
             return hits.isEmpty ? event : event.withCopyOverlaps(hits.map(\.title))
         }
-        return CalendarSchedule(calendars: calendars, events: events)
+        return CalendarSchedule(calendars: calendars, events: events, roles: CalendarRoles(arms: allArms))
     }
 
     private static func title(_ event: StoredNormalizedInstance) -> String {

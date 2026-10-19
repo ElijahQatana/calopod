@@ -23,6 +23,12 @@ public struct EventsCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Limit events to one selected calendar. Uses every selected calendar when omitted.")
     public var calendar: String?
 
+    @Option(name: .long, help: "Show all calendars, only those arms copy from (sources), or only those they write to (destinations).")
+    public var view: CalendarViewMode = .all
+
+    @Flag(name: .long, inversion: .prefixedNo, help: "Include the copies Calopod made. On for --view destinations and off otherwise unless set.")
+    public var copies: Bool?
+
     public init() {}
 
     public func run() async throws {
@@ -39,39 +45,38 @@ public struct EventsCommand: AsyncParsableCommand {
             let refresh = read.refresh
             // Ignored calendars keep syncing, but their events are left out, as in the app's schedule.
             let names = CalendarNames(repository)
+            let arms = try repository.arms()
+            let roles = CalendarRoles(arms: arms)
+            let shown = sources.map(\.calendar.id).filter { !names.isIgnored($0) && roles.includes($0, in: view) }
             let events = try repository.normalizedInstances(
-                calendarBindingIDs: sources.map(\.calendar.id).filter { !names.isIgnored($0) },
+                calendarBindingIDs: shown,
                 from: resolved.window.start,
                 through: resolved.window.end
             )
-            // Copies Calopod made are listed where the app draws them, marked with their mode.
-            let shown = Set(sources.map(\.calendar.id).filter { !names.isIgnored($0) })
-            let targets = try CopyTarget.bySource(repository)
-            var items: [CommandItem] = []
-            for event in events {
-                items.append(CommandItem(
-                    id: event.sourceKeyHash, kind: "event", label: event.title, parentID: event.calendarBindingID,
-                    startsAt: outputDate(event.startsAt), endsAt: outputDate(event.endsAt), allDay: event.isAllDay,
-                    cancelled: false, availability: event.availability))
-                for target in targets[event.sourceKeyHash] ?? []
-                where shown.contains(target.bindingID) && target.bindingID != event.calendarBindingID {
-                    items.append(CommandItem(
-                        id: "copy:\(target.bindingID):\(event.sourceKeyHash)", kind: "event",
-                        label: target.fullDetails ? event.title : "Busy", parentID: target.bindingID,
-                        startsAt: outputDate(event.startsAt), endsAt: outputDate(event.endsAt), allDay: event.isAllDay,
-                        cancelled: false, availability: event.availability,
-                        copyMode: target.modeName, sourceResponse: copyResponseName(event.currentUserResponse.state)))
-                }
-            }
+            let copyItems = copies ?? view.copiesShownByDefault
+                ? try destinationCopies(arms: arms, repository: repository, into: Set(shown), range: resolved)
+                : []
             try OutputRenderer.write(
                 command: "events",
                 payload: CommandPayload(
                     status: cached || refresh.failedSourceCount != 0 ? "partial" : "ok",
-                    message: items.isEmpty ? "No events were found." : "Events in the requested range.",
-                    count: items.count,
+                    message: events.isEmpty ? "No events were found." : "Events in the requested range.",
+                    count: events.count + copyItems.count,
                     range: RangeOutput(range: resolved),
                     sources: commandSources(sources, names: names),
-                    items: items,
+                    items: copyItems + events.map {
+                        CommandItem(
+                            id: $0.sourceKeyHash,
+                            kind: "event",
+                            label: $0.title,
+                            parentID: $0.calendarBindingID,
+                            startsAt: outputDate($0.startsAt),
+                            endsAt: outputDate($0.endsAt),
+                            allDay: $0.isAllDay,
+                            cancelled: false,
+                            availability: $0.availability
+                        )
+                    },
                     ingestion: refresh.ingestion
                 ),
                 warnings: refresh.warnings,
@@ -83,6 +88,32 @@ public struct EventsCommand: AsyncParsableCommand {
             try failCommand(error)
         }
     }
+}
+
+/// The Busy or full-detail copies the arms made on these calendars, drawn at the source's time as in the app.
+func destinationCopies(
+    arms: [StoredArm], repository: LocalStateRepository, into targets: Set<String>, range: ResolvedDateRange
+) throws -> [CommandItem] {
+    let active = arms.filter { $0.isEnabled && targets.contains($0.targetBindingID) }
+    let originals = Dictionary(
+        uniqueKeysWithValues: try repository.normalizedInstances(
+            calendarBindingIDs: Array(Set(active.flatMap(\.sourceBindingIDs))),
+            from: range.window.start, through: range.window.end
+        ).map { ($0.sourceKeyHash, $0) })
+    var items: [CommandItem] = []
+    for arm in active {
+        for mapping in try repository.mirrorMappings(armID: arm.id) {
+            guard let event = originals[mapping.sourceKeyHash], event.calendarBindingID != arm.targetBindingID else { continue }
+            items.append(CommandItem(
+                id: "copy:\(arm.targetBindingID):\(event.sourceKeyHash)", kind: "copy",
+                label: arm.ruleMode == .fullDetails ? event.title : "Busy", parentID: arm.targetBindingID,
+                startsAt: outputDate(event.startsAt), endsAt: outputDate(event.endsAt), allDay: event.isAllDay,
+                cancelled: false, availability: event.availability,
+                copyMode: arm.ruleMode == .fullDetails ? "full-details" : "busy",
+                sourceResponse: copyResponseName(event.currentUserResponse.state)))
+        }
+    }
+    return items.sorted { ($0.startsAt ?? "", $0.id) < ($1.startsAt ?? "", $1.id) }
 }
 
 private func outputDate(_ date: Date?) -> String? {
