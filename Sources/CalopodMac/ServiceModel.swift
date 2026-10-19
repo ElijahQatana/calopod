@@ -8,16 +8,16 @@ import ServiceManagement
 @MainActor
 @Observable
 final class ServiceModel {
-    private(set) var status: AgentControlStatus?
-    private(set) var overview: AgentControlOverview?
+    var status: AgentControlStatus?
+    var overview: AgentControlOverview?
     private(set) var busyAction: String?
     private(set) var notice: String?
     private(set) var lastRun: ManualRun?
     private(set) var statusAt = Date()
     private(set) var pendingPreview: SyncPreview?
-    private(set) var health: HealthReport?
+    var health: HealthReport?
     /// How the last sync runs ended, oldest first.
-    private(set) var recentRuns: [RunMark] = []
+    var recentRuns: [RunMark] = []
     private(set) var registration: ServiceRegistration.State = .unavailable
 
     private typealias AgentState = (status: AgentControlStatus?, overview: AgentControlOverview?, health: HealthReport?)
@@ -25,7 +25,9 @@ final class ServiceModel {
     private let registrar = ServiceRegistration()
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
 
-    init() {
+    /// `refreshing: false` leaves the model as set, so tests and previews show fixed values.
+    init(refreshing: Bool = true) {
+        guard refreshing else { return }
         refreshTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.refresh()

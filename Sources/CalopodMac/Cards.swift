@@ -14,11 +14,14 @@ struct CardPage<Content: View>: View {
     /// Text at the right of the title row, such as a date.
     var trailing: String?
     var maxWidth: CGFloat = 760
+    /// False for a page that fits the window and manages its own overflow.
+    var scrolls = true
     @ViewBuilder var content: Content
     @Environment(\.sidebarCollapsed) private var collapsed
 
+    @ViewBuilder
     var body: some View {
-        ScrollView { page }
+        if scrolls { ScrollView { page } } else { page }
     }
 
     var page: some View {
@@ -35,7 +38,7 @@ struct CardPage<Content: View>: View {
                 .padding(.horizontal, Theme.pagePadding)
                 .padding(.top, title == nil ? Theme.Page.topPadding(collapsed: collapsed, inlineHeader: false) : 0)
                 .padding(.bottom, Theme.Page.bottom)
-                .frame(maxWidth: maxWidth, alignment: .leading)
+                .frame(maxWidth: maxWidth, maxHeight: scrolls ? nil : .infinity, alignment: .topLeading)
                 .frame(maxWidth: .infinity)
         }
     }
@@ -78,14 +81,16 @@ extension CardSection where Header == Text {
 /// One row in a card. A hairline above it separates it from the row before; on the first
 /// row it sits under the card's edge.
 struct CardRow<Content: View>: View {
+    /// A tighter row for short lists.
+    var dense = false
     @ViewBuilder var content: Content
 
     var body: some View {
         content
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
-            .padding(.vertical, 11)
-            .frame(minHeight: 44)
+            .padding(.vertical, dense ? 6 : 11)
+            .frame(minHeight: dense ? 32 : 44)
             .overlay(alignment: .top) { Divider().padding(.leading, 16) }
     }
 }
