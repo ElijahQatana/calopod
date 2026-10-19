@@ -22,6 +22,7 @@ extension CalopodDatabase {
         "v18_calendar_preferences",
         "v19_calendar_view_hidden",
         "v20_notification_settings",
+        "v21_working_hours",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -420,6 +421,19 @@ extension CalopodDatabase {
                     final_enabled INTEGER NOT NULL,
                     final_minutes INTEGER NOT NULL CHECK (final_minutes BETWEEN 1 AND 120),
                     hide_titles INTEGER NOT NULL
+                );
+                """)
+        }
+
+        // Working hours per weekday, 1 is Monday. A day off has no times.
+        migrator.registerMigration("v21_working_hours") { database in
+            try database.execute(sql: """
+                CREATE TABLE working_hours (
+                    weekday INTEGER PRIMARY KEY CHECK (weekday BETWEEN 1 AND 7),
+                    start_minute INTEGER,
+                    end_minute INTEGER,
+                    CHECK ((start_minute IS NULL AND end_minute IS NULL)
+                        OR (start_minute >= 0 AND end_minute <= 1440 AND start_minute < end_minute))
                 );
                 """)
         }
