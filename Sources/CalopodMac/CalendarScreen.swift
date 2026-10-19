@@ -114,8 +114,9 @@ struct CalendarScreen: View {
     @ViewBuilder
     private var notices: some View {
         let lines = model.notices
-        if !lines.isEmpty || model.loadFailed && model.schedule != nil {
+        if !lines.isEmpty || model.openNotice != nil || model.loadFailed && model.schedule != nil {
             VStack(spacing: 6) {
+                if let note = model.openNotice { Banner(kind: .info, text: note, lineLimit: 2) }
                 ForEach(lines, id: \.self) { Banner(kind: .caution, text: $0, lineLimit: 2) }
                 if model.loadFailed && model.schedule != nil {
                     Banner(kind: .caution, text: "Calopod could not refresh this view, so it may be out of date.")

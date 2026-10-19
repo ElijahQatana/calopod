@@ -215,7 +215,7 @@ struct OverviewTag: View {
     }
 }
 
-/// One event in Next up today.
+/// One event in Next up today. The whole row opens the event in Calendar.
 struct NextUpRow: View {
     let event: ScheduleEvent
     let calendarName: String
@@ -224,7 +224,7 @@ struct NextUpRow: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        CardButtonRow(label: Self.label(for: event), action: action) {
             HStack(spacing: 12) {
                 Text(event.startsAt.formatted(date: .omitted, time: .shortened))
                     .font(Theme.Fonts.body).monospacedDigit().foregroundStyle(.secondary)
@@ -243,9 +243,11 @@ struct NextUpRow: View {
                     }
                 }
             }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+    }
+
+    static func label(for event: ScheduleEvent) -> String {
+        "Open \(event.title), \(event.startsAt.formatted(date: .omitted, time: .shortened))"
     }
 }
 

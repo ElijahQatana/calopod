@@ -12,7 +12,9 @@ final class CalendarModel {
     private(set) var schedule: CalendarSchedule? { didSet { scheduleVersion += 1 } }
     private(set) var loadFailed = false
     var mode: Mode = .week { didSet { selectedID = nil } }
-    var anchor: Date { didSet { selectedID = nil } }
+    var anchor: Date { didSet { selectedID = nil; openNotice = nil } }
+    /// Why the last "open this event" request only moved to its day. Cleared when the view moves.
+    private(set) var openNotice: String?
     /// Calendars hidden in this view. Not remembered and not shared with other screens.
     private(set) var hidden: Set<String> = []
     var selectedID: String?
@@ -156,6 +158,22 @@ final class CalendarModel {
         if hidden.contains(event.calendarID) { toggle(event.calendarID) }
         selectedID = event.id
     }
+
+    /// Opens an event from another screen. An event that is a copy, or is not in the schedule any
+    /// more, cannot be selected, so the view moves to its day and says why. Returns whether it was selected.
+    @discardableResult
+    func open(_ event: ScheduleEvent) -> Bool {
+        guard let found = schedule?.events.first(where: { $0.id == event.id }), !found.isCopy else {
+            anchor = event.startsAt
+            openNotice = event.isCopy ? Self.copyNotice : Self.missingNotice
+            return false
+        }
+        show(found)
+        return true
+    }
+
+    static let missingNotice = "That event is no longer in the schedule, so only its day is shown."
+    static let copyNotice = "This is a copy made by Calopod, so only its day is shown."
 
     func isToday(_ day: Date) -> Bool { calendar.isDate(day, inSameDayAs: now()) }
 }

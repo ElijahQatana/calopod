@@ -79,8 +79,8 @@ struct MenuPopover: View {
 
     private func nextCard(_ event: ScheduleEvent) -> some View {
         NextCard(event: event) {
-            schedule.show(event)
-            open(.calendar)
+            navigation.openCalendar(showing: event, in: schedule)
+            show()
         }
     }
 

@@ -90,6 +90,38 @@ struct CardRow<Content: View>: View {
     }
 }
 
+/// A card row that is one button. The whole row lights up under the pointer and dims while pressed.
+struct CardButtonRow<Content: View>: View {
+    let label: String
+    let action: () -> Void
+    @ViewBuilder var content: Content
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            content
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 11)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(CardRowButtonStyle(hovering: hovering))
+        .onHover { hovering = $0 }
+        .overlay(alignment: .top) { Divider().padding(.leading, 16) }
+        .accessibilityLabel(label)
+    }
+}
+
+struct CardRowButtonStyle: ButtonStyle {
+    var hovering: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(Theme.accent.opacity(configuration.isPressed ? 0.22 : hovering ? 0.12 : 0))
+    }
+}
+
 /// A title on the left and a value or control on the right.
 struct CardLabeled<Trailing: View>: View {
     let title: String
