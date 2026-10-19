@@ -91,10 +91,14 @@ enum CommandEnvironmentError: Error, Equatable, CustomStringConvertible {
     }
 }
 
-func failCommand(_ error: Error) throws -> Never {
+func failCommand(_ error: Error, format: OutputFormat = .human) throws -> Never {
     let failure = commandFailure(error)
     if let data = "Error: \(failure.message)\n".data(using: .utf8) {
         try? FileHandle.standardError.write(contentsOf: data)
+    }
+    if format == .json, let denied = error as? CalendarAccessDeniedError {
+        try? OutputRenderer.write(
+            command: "error", payload: errorPayload(denied), format: .json)
     }
     throw ExitCode(failure.exitCode.rawValue)
 }
@@ -160,7 +164,17 @@ func appFailureMessage(_ error: Error) -> String {
     }
 }
 
+func errorPayload(_ error: CalendarAccessDeniedError) -> CommandPayload {
+    CommandPayload(
+        status: "failed", message: error.guidance.message,
+        helperPath: error.guidance.helperPath, accessStatus: error.guidance.accessStatus,
+        fix: error.guidance.fix)
+}
+
 func commandFailure(_ error: Error) -> (message: String, exitCode: CalopodExitCode) {
+    if let denied = error as? CalendarAccessDeniedError {
+        return (denied.guidance.message, .permissionDenied)
+    }
     if error is CalopodDatabaseError {
         return ("Local state needs an upgrade. Run a writable command after sync finishes, then retry the read.", .localStateFailure)
     }
@@ -343,9 +357,10 @@ func refreshCalendars(for connection: StoredConnection) async throws -> [StoredC
         return try await CommandEnvironment.microsoftService().refreshCalendars(connectionID: connection.id)
     case "eventkit":
         #if os(macOS)
-        let response = try EventKitHostRunner().perform(EventKitHostRequest(operation: .calendars))
+        let runner = try EventKitHostRunner()
+        let response = try runner.perform(EventKitHostRequest(operation: .calendars))
         guard response.status == .fullAccess, response.errorCode == nil else {
-            throw ProviderFailure.permissionDenied
+            throw CalendarAccessDeniedError.make(helper: runner.hostURL, status: response.status)
         }
         return try CommandEnvironment.eventKitService().refreshCalendars(
             response.calendars,
@@ -384,7 +399,8 @@ func readEvents(
         )
     case "eventkit":
         #if os(macOS)
-        let response = try EventKitHostRunner().perform(
+        let runner = try EventKitHostRunner()
+        let response = try runner.perform(
             EventKitHostRequest(
                 operation: .events,
                 calendarIDs: [binding.providerCalendarID],
@@ -393,7 +409,7 @@ func readEvents(
             )
         )
         guard response.status == .fullAccess, response.errorCode == nil else {
-            throw ProviderFailure.permissionDenied
+            throw CalendarAccessDeniedError.make(helper: runner.hostURL, status: response.status)
         }
         return ProviderEventPage(events: response.events, nextSyncToken: nil)
         #else

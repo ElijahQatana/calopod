@@ -190,9 +190,10 @@ func doctorReport(
             } else {
                 items.append(doctorItem("calendar-permission", "failed", "permission", label: helper.map(shortPath)))
                 warnings.append("Grant Calendar access, then refresh the Mac Connection.")
+                warnings.append(CalendarAccessGuidance(helperPath: runner.hostURL.path, status: response.status).message)
                 if response.status == .notDetermined || response.status == .denied {
                     warnings.append(
-                        "\(Permissions.calendarListing) If macOS does not ask or the answer stays off, clear Calopod's Calendar decision with: \(Permissions.calendarResetCommand)")
+                        "If macOS does not ask or the answer stays off, clear Calopod's Calendar decision with: \(Permissions.calendarResetCommand)")
                 }
             }
         } catch {
@@ -230,7 +231,7 @@ func livePermissionReadings(
 ) -> [PermissionReading] {
     let calendar: PermissionReading
     do {
-        calendar = Permissions.calendar(status: try access.status())
+        calendar = Permissions.calendar(status: try access.status(), helper: try? access.hostURL().path)
     } catch {
         calendar = Permissions.calendar(status: nil, hostFailure: Permissions.hostFailureReason(error))
     }

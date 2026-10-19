@@ -125,11 +125,11 @@ public struct SetupService: Sendable {
             let runner = try EventKitHostRunner()
             let permission = try runner.requestPermission()
             guard permission.status == .fullAccess, permission.errorCode == nil else {
-                throw ProviderFailure.permissionDenied
+                throw CalendarAccessDeniedError.make(helper: runner.hostURL, status: permission.status)
             }
             let response = try runner.perform(EventKitHostRequest(operation: .calendars))
             guard response.status == .fullAccess, response.errorCode == nil else {
-                throw ProviderFailure.permissionDenied
+                throw CalendarAccessDeniedError.make(helper: runner.hostURL, status: response.status)
             }
             connection = try CommandEnvironment.eventKitService().connect(
                 calendars: response.calendars

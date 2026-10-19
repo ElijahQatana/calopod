@@ -132,7 +132,8 @@ func refreshCalendarSources(
         var failureCode: String?
         if group.connection.provider == "eventkit", readSource == nil {
             do {
-                let response = try EventKitHostRunner().perform(
+                let runner = try EventKitHostRunner()
+                let response = try runner.perform(
                     EventKitHostRequest(
                         operation: .events,
                         calendarIDs: group.sources.map(\.calendar.providerCalendarID),
@@ -141,7 +142,7 @@ func refreshCalendarSources(
                     )
                 )
                 guard response.status == .fullAccess, response.errorCode == nil else {
-                    throw ProviderFailure.permissionDenied
+                    throw CalendarAccessDeniedError.make(helper: runner.hostURL, status: response.status)
                 }
                 for source in group.sources {
                     let page = ProviderEventPage(
@@ -212,6 +213,7 @@ func refreshCalendarSources(
 
 private func refreshFailureCode(_ error: Error) -> String {
     guard let provider = error as? ProviderFailure else {
+        if error is CalendarAccessDeniedError { return "permission" }
         if error is SecretStoreError { return "credential-access" }
         if error is CommandEnvironmentError { return "configuration" }
         return "local-state"

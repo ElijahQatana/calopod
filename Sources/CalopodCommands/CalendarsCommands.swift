@@ -111,7 +111,7 @@ public struct CalendarsListCommand: AsyncParsableCommand {
             try writeList(calendars, message: calendars.isEmpty ? "No calendars were found." : "Selectable calendars.",
                           warnings: warnings, repository: repository)
         } catch {
-            try failCommand(error)
+            try failCommand(error, format: output.format)
         }
     }
 
@@ -330,7 +330,7 @@ private func changeCalendar(
             human: output.localContext(repository: repository)
         )
     } catch {
-        try failCommand(error)
+        try failCommand(error, format: output.format)
     }
 }
 

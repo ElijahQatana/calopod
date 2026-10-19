@@ -97,7 +97,18 @@ public enum Permissions {
     public static let noRecordOfThisCopy =
         "macOS has no record of this copy of the app. Background services need Calopod installed in the Applications folder and signed with a developer identity, not a debug build run from a build folder."
 
-    public static func calendar(status: EventKitAccessStatus?, hostFailure: String? = nil) -> PermissionReading {
+    /// `helper` is the helper app that was asked. With it, a missing permission names that helper
+    /// and the fix for it, in the words `CalendarAccessGuidance` gives the command line too.
+    public static func calendar(
+        status: EventKitAccessStatus?, hostFailure: String? = nil, helper: String? = nil, home: String = NSHomeDirectory()
+    ) -> PermissionReading {
+        let reading = calendarReading(status: status, hostFailure: hostFailure)
+        guard let helper, let status, status != .fullAccess else { return reading }
+        let guidance = CalendarAccessGuidance(helperPath: helper, status: status, home: home)
+        return PermissionReading(id: .calendar, level: reading.level, state: reading.state, detail: guidance.message, reason: reading.reason)
+    }
+
+    private static func calendarReading(status: EventKitAccessStatus?, hostFailure: String?) -> PermissionReading {
         func reading(_ level: PermissionReading.Level, _ state: String, _ detail: String, _ reason: String) -> PermissionReading {
             PermissionReading(id: .calendar, level: level, state: state, detail: detail, reason: reason)
         }
