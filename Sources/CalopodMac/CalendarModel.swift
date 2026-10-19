@@ -156,6 +156,15 @@ final class CalendarModel {
         selectedID.flatMap { id in schedule?.events.first { $0.id == id } }
     }
 
+    /// The event a copy was made from, when it is in the loaded schedule and its calendar is drawn.
+    func original(of event: ScheduleEvent) -> ScheduleEvent? {
+        guard let id = event.copyOrigin?.sourceEventID,
+            let found = schedule?.events.first(where: { $0.id == id && !$0.isCopy }),
+            !aliases.isIgnored(found.calendarID)
+        else { return nil }
+        return found
+    }
+
     var notices: [String] {
         ScheduleLayout.notices(
             calendars: chipCalendars, hidden: hidden, range: range, now: now(),

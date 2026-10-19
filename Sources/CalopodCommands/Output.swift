@@ -235,6 +235,9 @@ public struct CommandItem: Codable, Equatable, Sendable {
     public let alias: String?
     public let ignored: Bool?
     public let color: String?
+    /// For a copy Calopod made: "full-details" or "busy", and the current user's answer on the original.
+    public let copyMode: String?
+    public let sourceResponse: String?
     let inbox: InboxItemDetail?
 
     public init(
@@ -262,6 +265,8 @@ public struct CommandItem: Codable, Equatable, Sendable {
         alias: String? = nil,
         ignored: Bool? = nil,
         color: String? = nil,
+        copyMode: String? = nil,
+        sourceResponse: String? = nil,
         inbox: InboxItemDetail? = nil
     ) {
         self.id = id
@@ -288,6 +293,8 @@ public struct CommandItem: Codable, Equatable, Sendable {
         self.alias = alias
         self.ignored = ignored
         self.color = color
+        self.copyMode = copyMode
+        self.sourceResponse = sourceResponse
         self.inbox = inbox
     }
 }

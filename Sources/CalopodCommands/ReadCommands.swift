@@ -108,7 +108,9 @@ func destinationCopies(
                 id: "copy:\(arm.targetBindingID):\(event.sourceKeyHash)", kind: "copy",
                 label: arm.ruleMode == .fullDetails ? event.title : "Busy", parentID: arm.targetBindingID,
                 startsAt: outputDate(event.startsAt), endsAt: outputDate(event.endsAt), allDay: event.isAllDay,
-                cancelled: false, availability: event.availability))
+                cancelled: false, availability: event.availability,
+                copyMode: arm.ruleMode == .fullDetails ? "full-details" : "busy",
+                sourceResponse: copyResponseName(event.currentUserResponse.state)))
         }
     }
     return items.sorted { ($0.startsAt ?? "", $0.id) < ($1.startsAt ?? "", $1.id) }

@@ -9,6 +9,8 @@ struct EventInspector: View {
     private let aliases = CalendarAliases.shared
     let close: () -> Void
     var openInbox: () -> Void = {}
+    /// Selects a copy's original in the Calendar. Nil when it is not on screen.
+    var showOriginal: (() -> Void)?
 
     var body: some View {
         ScrollView { content }
@@ -26,6 +28,7 @@ struct EventInspector: View {
                     .accessibilityLabel("Close details")
             }
             lead
+            if let origin = event.copyOrigin { provenance(origin) }
             if hasPeopleAndPlace { peopleAndPlace }
             if !event.copiedTo.isEmpty { copies }
             notes
@@ -38,6 +41,16 @@ struct EventInspector: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(event.title).font(Theme.Fonts.sectionTitle).fixedSize(horizontal: false, vertical: true)
             Text(when).font(Theme.Fonts.body).foregroundStyle(.secondary)
+        }
+    }
+
+    private func provenance(_ origin: ScheduleCopyOrigin) -> some View {
+        let name = aliases.name(for: origin.sourceCalendarID, real: origin.sourceCalendarName)
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(CopyWords.provenance(origin, calendarName: name))
+                .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let showOriginal { Button("Show original", action: showOriginal) }
         }
     }
 
@@ -105,23 +118,25 @@ struct EventInspector: View {
     @ViewBuilder
     private var status: some View {
         if event.isCopy {
-            StatusPill(text: "Busy copy", color: .secondary)
-        } else {
-            switch event.response {
-            case .needsResponse: StatusPill(text: "Needs RSVP", color: Theme.caution)
-            case .accepted: StatusPill(text: "Accepted", color: Theme.good)
-            case .tentative: StatusPill(text: "Maybe", color: Theme.caution)
-            case .declined: StatusPill(text: "Declined", color: .secondary)
-            case .organizer: StatusPill(text: "You organize", color: Theme.accent)
-            case .none: EmptyView()
-            }
+            StatusPill(text: CopyWords.chip(event), color: pillColor(event.carriedResponse))
+        } else if let text = CopyWords.response(event.response) {
+            StatusPill(text: text, color: pillColor(event.response))
+        }
+    }
+
+    private func pillColor(_ response: ScheduleResponse) -> Color {
+        switch response {
+        case .needsResponse, .tentative: Theme.caution
+        case .accepted: Theme.good
+        case .organizer: Theme.accent
+        case .declined, .none: .secondary
         }
     }
 
     @ViewBuilder
     private var replies: some View {
         if event.isCopy {
-            Hint { Text("This is a copy Calopod made, so there is nothing to reply to.") }
+            Hint { Text(CopyWords.replyHint(event)) }
         } else if event.replies.isEmpty {
             if let reason = event.replyUnavailableReason { Hint { Text(reason) } }
         } else {

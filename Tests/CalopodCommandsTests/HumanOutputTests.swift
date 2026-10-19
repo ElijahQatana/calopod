@@ -112,6 +112,25 @@ struct HumanOutputTests {
         #expect(availability.contains("busy"))
     }
 
+    @Test("Events mark copies by mode with the answer on the original")
+    func copyMarkers() throws {
+        func item(_ mode: String?, _ response: String?) -> CommandItem {
+            CommandItem(id: "e", kind: "event", label: "Synthetic sync", parentID: "source", copyMode: mode, sourceResponse: response)
+        }
+        func human(_ item: CommandItem) throws -> String {
+            try OutputRenderer.render(command: "events", payload: CommandPayload(status: "ok", message: "Events.", items: [item]), format: .human)
+        }
+        let full = try human(item("full-details", "tentative"))
+        #expect(full.contains("Synthetic sync [full details copy]") && full.contains("Original: maybe"))
+        let busy = try human(item("busy", nil))
+        #expect(busy.contains("[busy copy]") && busy.contains("Original: no answer known"))
+        #expect(!(try human(item(nil, nil))).contains("copy]"))
+
+        let json = try OutputRenderer.render(command: "events", payload: CommandPayload(status: "ok", message: "Events.", items: [item("full-details", "declined")]), format: .json)
+        #expect(json.contains("\"copyMode\":\"full-details\"") && json.contains("\"sourceResponse\":\"declined\""))
+        #expect(!(try OutputRenderer.render(command: "events", payload: CommandPayload(status: "ok", message: "Events.", items: [item(nil, nil)]), format: .json)).contains("copyMode"))
+    }
+
     @Test("Sync previews and results show counts and never source event content")
     func syncCounts() throws {
         let items = ["create", "create", "update", "remove", "repair", "no-op"].map {

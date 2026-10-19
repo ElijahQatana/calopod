@@ -61,7 +61,8 @@ struct CalendarScreen: View {
             if let event = model.selected {
                 EventInspector(
                     event: event, calendar: model.calendars.first { $0.id == event.calendarID },
-                    colors: colors, close: { model.selectedID = nil }, openInbox: { openInbox(event) })
+                    colors: colors, close: { model.selectedID = nil }, openInbox: { openInbox(event) },
+                    showOriginal: model.original(of: event).map { original in { model.show(original) } })
             }
         }
     }
