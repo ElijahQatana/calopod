@@ -95,10 +95,8 @@ struct MenuPopover: View {
 
     /// Opens the window, then closes the popover unless it should stay for watching status.
     private func show(keepMenu: Bool = false) {
-        DockPresence.enter()
         let popover = NSApp.keyWindow.flatMap { $0.title == "Calopod" ? nil : $0 }
-        NSApplication.shared.activate(ignoringOtherApps: true)
-        openWindow(id: "home")
+        MainWindowOpener.shared.show { openWindow(id: "home") }
         guard !keepMenu else { return }
         dismiss()
         // dismiss() is not honored by every popover, so close its window as well.
