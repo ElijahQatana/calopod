@@ -1,0 +1,2 @@
+// Shared build settings. Put your own DEVELOPMENT_TEAM in Local.xcconfig, which is not tracked.
+#include? "Local.xcconfig"
