@@ -153,7 +153,14 @@ struct InboxReviewTerminal {
         guard let totals = session.summary else {
             emit("Progress saved. Run calopod inbox review --resume to reconcile and continue."); return
         }
-        emit("\(totals.queueReviewed ? "Queue reviewed." : "Queue paused.") \(totals.inboxResolved ? "Inbox resolved." : "Inbox still has outstanding items.")\nYes: \(totals.yes)  No: \(totals.no)  Maybe: \(totals.maybe)  Hold: \(totals.hold)\nFailed: \(totals.failed)  Unknown: \(totals.unknown)  Unavailable: \(totals.unavailable)  Changed: \(totals.stale)\nConflicts created: \(totals.createdConflicts)\(totals.attributionIsComplete ? "" : " (attribution incomplete)")\nRemaining conflicts: \(totals.remainingConflicts)\(totals.contextIsComplete ? "" : " (context incomplete)")\nRemaining queue: \(totals.remainingQueueItems)  Inbox items: \(totals.remainingInboxItems)")
+        var text = "\(totals.queueReviewed ? "Queue reviewed." : "Queue paused.") \(totals.inboxResolved ? "Inbox resolved." : "Inbox still has outstanding items.")"
+        for line in totals.lines {
+            text += "\n\(line.label): \(line.value)" + (line.detail.map { " (\($0))" } ?? "") + "\n  \(line.help)"
+        }
+        if !totals.contextIsComplete || !totals.attributionIsComplete {
+            text += "\nSome calendars were out of date or only partly read, so the overlap counts may be low."
+        }
+        emit(text)
         if stopped {
             if totals.queueReviewed && !session.hasUnresolvedActions {
                 emit("Progress saved. This queue is reviewed.\nStart calopod inbox review for remaining items.")

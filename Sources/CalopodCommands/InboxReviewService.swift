@@ -6,14 +6,20 @@ import CalopodStore
 import CalopodSync
 import Foundation
 
+public typealias InboxReviewSummaryLine = CalopodSync.InboxReviewSummaryLine
+
 /// The totals the review summary shows. Reviewed and resolved are different things.
 public struct InboxReviewTotals: Equatable, Sendable {
     public let yes, no, maybe, held, unclear, failed, unavailable, changed: Int
-    public let overlapsResolved, overlapsCreated, overlapsRemaining: Int
+    /// Overlapping pairs, not events. `overlapEvents` is how many events those pairs hold.
+    public let overlapsResolved, overlapsCreated, overlapsRemaining, overlapEvents: Int
     public let remainingQueue, remainingInbox: Int
     public let queueReviewed, inboxResolved: Bool
     /// False when a calendar was stale or partly read, so overlap counts are lower bounds.
     public let overlapsAreComplete: Bool
+
+    /// The summary rows with their help text, shared with the command line.
+    public let lines: [InboxReviewSummaryLine]
 
     public var recorded: Int { yes + no + maybe }
 }
@@ -109,7 +115,7 @@ public struct InboxReviewService: Sendable {
 
     private func controller() throws -> (InboxReviewSessionController, LocalStateRepository) {
         let state = try makeRepository()
-        return (InboxReviewSessionController(state: state, lockURL: try makeLockURL()), state)
+        return (InboxReviewSessionController(state: state, lockURL: try makeLockURL(), now: now), state)
     }
 
     // MARK: Sessions
@@ -125,13 +131,13 @@ public struct InboxReviewService: Sendable {
         let (controller, state) = try controller()
         let cutoff = cutoff
         let snapshot = try state.inboxContextSnapshot()
-        let window = try InboxAttentionQuery.evaluate(snapshot, freshnessCutoff: cutoff).analysisWindow
+        let window = try InboxAttentionQuery.evaluate(snapshot, filter: InboxAttentionFilter(asOf: now()), freshnessCutoff: cutoff).analysisWindow
             ?? SyncWindow(start: now(), end: now().addingTimeInterval(1))
         let filter = InboxAttentionFilter(
             excludeMaybe: skipMaybe, conflictsOnly: overlapsOnly, bindingIDs: Set(snapshot.sources.map(\.bindingID)),
             asOf: now())
         return progress(try controller.start(
-            filter: filter, metricsWindow: window, freshnessCutoff: cutoff,
+            filter: filter, metricsWindow: window, freshnessCutoff: cutoff, now: now(),
             displayTimeZoneIdentifier: TimeZone.current.identifier))
     }
 
@@ -220,19 +226,21 @@ public struct InboxReviewService: Sendable {
     }
 
     private func progress(_ session: InboxReviewSession) -> InboxReviewProgress {
+        // Events that ended since the last save are not counted or offered, whether or not the file caught up.
         var session = session
-        if session.summary == nil { session.updateSummary(freshnessCutoff: cutoff) }
+        session.dropEnded(in: session.lastSnapshot, asOf: now(), freshnessCutoff: cutoff)
+        session.updateSummary(freshnessCutoff: cutoff, asOf: now())
         let queue = session.entries.prefix(session.queueCount)
-        let metrics = session.metrics
         let s = session.summary
         let totals = InboxReviewTotals(
             yes: s?.yes ?? 0, no: s?.no ?? 0, maybe: s?.maybe ?? 0, held: s?.hold ?? 0,
             unclear: s?.unknown ?? 0, failed: s?.failed ?? 0, unavailable: s?.unavailable ?? 0, changed: s?.stale ?? 0,
-            overlapsResolved: metrics.startingPairs.subtracting(metrics.remainingPairs).count,
-            overlapsCreated: metrics.createdPairs.count, overlapsRemaining: metrics.remainingPairs.count,
+            overlapsResolved: s?.resolvedConflicts ?? 0, overlapsCreated: s?.createdConflicts ?? 0,
+            overlapsRemaining: s?.remainingConflicts ?? 0, overlapEvents: s?.remainingConflictEvents ?? 0,
             remainingQueue: s?.remainingQueueItems ?? 0, remainingInbox: s?.remainingInboxItems ?? 0,
             queueReviewed: s?.queueReviewed ?? false, inboxResolved: s?.inboxResolved ?? false,
-            overlapsAreComplete: (s?.contextIsComplete ?? false) && (s?.attributionIsComplete ?? false))
+            overlapsAreComplete: (s?.contextIsComplete ?? false) && (s?.attributionIsComplete ?? false),
+            lines: s?.lines ?? [])
         return InboxReviewProgress(
             sessionID: session.id, total: session.queueCount,
             reviewed: queue.filter { $0.outcome != nil && $0.outcome != .stale }.count,

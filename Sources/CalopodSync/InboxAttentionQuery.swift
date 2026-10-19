@@ -49,18 +49,8 @@ public enum InboxAttentionQuery {
         _ full: InboxContextSnapshot, filter: InboxAttentionFilter = InboxAttentionFilter(),
         freshnessCutoff: Date
     ) -> InboxAttentionResult {
-        var snapshot = full
-        let gone = Set(full.events.filter { Self.isGone($0, in: full, freshnessCutoff: freshnessCutoff) }.map(\.event.sourceKeyHash))
         let ended = filter.window == nil ? filter.asOf : nil
-        if !gone.isEmpty || ended != nil {
-            // Ended events neither need an answer nor overlap anything that is still ahead.
-            snapshot = InboxContextSnapshot(
-                sources: full.sources,
-                events: full.events.filter { item in
-                    !gone.contains(item.event.sourceKeyHash) && (ended.map { item.event.endsAt > $0 } ?? true)
-                },
-                unprovenDuplicateBindingIDs: full.unprovenDuplicateBindingIDs)
-        }
+        let snapshot = current(full, asOf: ended, freshnessCutoff: freshnessCutoff)
         // Analyze complete current intervals before filtering rows. A moved
         // event matching its old date can still conflict at its new date.
         let starts = snapshot.sources.compactMap { $0.coverage?.startsAt }
@@ -121,6 +111,19 @@ public enum InboxAttentionQuery {
         rows.sort { ($0.item.event.startsAt, $0.item.event.sourceKeyHash) < ($1.item.event.startsAt, $1.item.event.sourceKeyHash) }
         return InboxAttentionResult(rows: rows, sources: snapshot.sources.sorted { $0.bindingID < $1.bindingID },
                                     analysisWindow: window, analysis: analysis)
+    }
+
+    /// The events the Inbox still considers: gone events are left out, and with `asOf` so are events
+    /// that ended by then. Ended events neither need an answer nor overlap anything still ahead.
+    public static func current(_ full: InboxContextSnapshot, asOf: Date?, freshnessCutoff: Date) -> InboxContextSnapshot {
+        let gone = Set(full.events.filter { isGone($0, in: full, freshnessCutoff: freshnessCutoff) }.map(\.event.sourceKeyHash))
+        guard !gone.isEmpty || asOf != nil else { return full }
+        return InboxContextSnapshot(
+            sources: full.sources,
+            events: full.events.filter { item in
+                !gone.contains(item.event.sourceKeyHash) && (asOf.map { item.event.endsAt > $0 } ?? true)
+            },
+            unprovenDuplicateBindingIDs: full.unprovenDuplicateBindingIDs)
     }
 
     /// A retained event that a fresh read of its whole time range did not return was cancelled or

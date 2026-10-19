@@ -210,7 +210,7 @@ public struct ConflictResolutionService: Sendable {
             in: snapshot, window: queue.analysisWindow, freshnessCutoff: cutoff
         )
 
-        let controller = InboxReviewSessionController(state: state, lockURL: try makeLockURL())
+        let controller = InboxReviewSessionController(state: state, lockURL: try makeLockURL(), now: now)
         let refresh = makeRefresh(state)
         var session = try controller.start(
             filter: InboxAttentionFilter(conflictsOnly: true, bindingIDs: Set(snapshot.sources.map(\.bindingID)), asOf: now()),
