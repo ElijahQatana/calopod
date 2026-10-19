@@ -16,6 +16,8 @@ public struct CalendarsCommand: ParsableCommand {
             CalendarsNameCommand.self,
             CalendarsIgnoreCommand.self,
             CalendarsUnignoreCommand.self,
+            CalendarsHideCommand.self,
+            CalendarsShowCommand.self,
             CalendarsColorCommand.self,
             CalendarsPrunePreferencesCommand.self,
         ],
@@ -193,6 +195,54 @@ public struct CalendarsUnignoreCommand: ParsableCommand {
     }
 }
 
+public struct CalendarsHideCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "hide",
+        abstract: "Hide a calendar in one view of the Calendar screen and of events --view.",
+        discussion: "Each view (all, sources, destinations) keeps its own hidden calendars; the app shares them. " + localOnly
+    )
+
+    @Argument(help: "Calendar identifier, or its exact current or real name.")
+    public var calendar: String
+
+    @Option(name: .long, help: "The view to hide it in: all, sources or destinations.")
+    public var view: CalendarViewMode
+
+    @OptionGroup public var output: OutputOptions
+
+    public init() {}
+
+    public func run() throws {
+        try changeCalendar(command: "calendars.hide", output: output) {
+            try CalendarsEdit.hide(calendar, true, view: view, repository: $0)
+        }
+    }
+}
+
+public struct CalendarsShowCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "show",
+        abstract: "Show a calendar again in one view.",
+        discussion: localOnly
+    )
+
+    @Argument(help: "Calendar identifier, or its exact current or real name.")
+    public var calendar: String
+
+    @Option(name: .long, help: "The view to show it in: all, sources or destinations.")
+    public var view: CalendarViewMode
+
+    @OptionGroup public var output: OutputOptions
+
+    public init() {}
+
+    public func run() throws {
+        try changeCalendar(command: "calendars.show", output: output) {
+            try CalendarsEdit.hide(calendar, false, view: view, repository: $0)
+        }
+    }
+}
+
 public struct CalendarsColorCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "color",
@@ -284,6 +334,13 @@ enum CalendarsEdit {
         try repository.setCalendarIgnored(ignored, calendarID: binding.id)
         return calendarsPayload([binding], message: (ignored ? "Ignored the calendar. " : "Stopped ignoring the calendar. ") + localOnly,
                                 repository: repository)
+    }
+
+    static func hide(_ reference: String, _ hidden: Bool, view: CalendarViewMode, repository: LocalStateRepository) throws -> CommandPayload {
+        let binding = try resolveCalendar(reference, repository: repository)
+        try repository.setCalendarHidden(hidden, view: view.rawValue, calendarID: binding.id)
+        let message = (hidden ? "Hid the calendar in \(view.title). " : "Showing the calendar in \(view.title) again. ") + localOnly
+        return calendarsPayload([binding], message: message, repository: repository)
     }
 
     static func color(_ reference: String, _ color: String, repository: LocalStateRepository) throws -> CommandPayload {

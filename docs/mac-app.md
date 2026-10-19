@@ -5,7 +5,7 @@ The Calopod app does what the command line does, in windows. Build it with `Scri
 ## Screens
 
 - **Overview** shows whether syncing is healthy, what needs you (waiting invitations, overlaps, changes) and what is next today. Preview sync lists what a sync would create, update or remove. Apply plans again first, and if the list changed since you looked, it shows the new list instead of writing anything.
-- **Calendar** shows the week or a day from Calopod's local copy. A dot marks an event that changed after you answered, a red ring marks an overlap, and hatched blocks are the Busy copies Calopod made. Select an event to see its details.
+- **Calendar** shows the week or a day from Calopod's local copy. A dot marks an event that changed after you answered, a red ring marks an overlap, and hatched blocks are the Busy copies Calopod made. Select an event to see its details. All, Sources and Destinations each remember which calendars are hidden and whether copies are shown.
 - **Inbox** lists what needs attention. The filters (All, Needs RSVP, Maybe, Changed, Conflicts) only choose which rows you see. Review goes through the list one event at a time with a confirm step before any reply, and keeps your place if you stop. Acknowledge marks one change as seen on this Mac and never sends a reply.
 - **Calendars** adds accounts and chooses which calendars Calopod reads. Each calendar has a color from a palette of twelve, a name you can change, and an ignore switch. These live only on this Mac. They never rename, recolor or change a calendar at the provider, and ignoring a calendar does not stop it from syncing.
 - **Arms** lists where events are copied from and to. New arm builds one.

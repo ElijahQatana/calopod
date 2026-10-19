@@ -1,4 +1,5 @@
 import CalopodCommands
+import CalopodStore
 import Foundation
 import Observation
 
@@ -15,7 +16,8 @@ final class CalendarModel {
     var anchor: Date { didSet { selectedID = nil; openNotice = nil } }
     /// Why the last "open this event" request only moved to its day. Cleared when the view moves.
     private(set) var openNotice: String?
-    /// Calendars hidden in this view. Not remembered and not shared with other screens.
+    /// Calendars hidden in the current view mode. Each mode keeps its own set, saved in the local state
+    /// so the command line sees it too; a calendar not in the set is shown.
     private(set) var hidden: Set<String> = []
     var selectedID: String?
     /// Whether Busy copies Calopod made are drawn. Only this view changes; Inbox and sync do not.
@@ -31,10 +33,12 @@ final class CalendarModel {
 
     private var copyChoices: [CalendarViewMode: Bool]
 
-    /// Which calendars this view offers by their part in the arms. Hidden state per calendar is kept across modes.
+    /// Which calendars this view offers by their part in the arms. The hidden calendars and the copies
+    /// choice belong to the mode, so switching loads that mode's own.
     var viewMode: CalendarViewMode {
         didSet {
             defaults.set(viewMode.rawValue, forKey: Self.viewModeKey)
+            hidden = savedHidden(viewMode)
             if let selected, !isVisible(selected) { selectedID = nil }
         }
     }
@@ -50,24 +54,36 @@ final class CalendarModel {
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored let aliases: CalendarAliases
+    @ObservationIgnored private let state: LocalStateRepository?
+    /// Used when there is no local state, so a choice lasts until the app quits.
+    @ObservationIgnored private var memoryHidden: [CalendarViewMode: Set<String>] = [:]
 
     init(
         calendar: Calendar = .current,
         now: @escaping () -> Date = Date.init,
         defaults: UserDefaults = AppDefaults.standard,
         aliases: CalendarAliases,
+        state: LocalStateRepository? = nil,
         load: @escaping @Sendable () throws -> CalendarSchedule = { try CalendarScheduleService().schedule() }
     ) {
         self.calendar = calendar
         self.now = now
         self.defaults = defaults
         self.aliases = aliases
+        self.state = state
         self.load = load
         copyChoices = Dictionary(uniqueKeysWithValues: CalendarViewMode.allCases.compactMap { mode in
             (defaults.object(forKey: Self.showCopiesKey(mode)) as? Bool).map { (mode, $0) }
         })
-        viewMode = defaults.string(forKey: Self.viewModeKey).flatMap(CalendarViewMode.init(rawValue:)) ?? .all
+        let startMode = defaults.string(forKey: Self.viewModeKey).flatMap(CalendarViewMode.init(rawValue:)) ?? .all
+        viewMode = startMode
+        hidden = (try? state?.hiddenCalendars(view: startMode.rawValue)) ?? []
         anchor = now()
+    }
+
+    private func savedHidden(_ mode: CalendarViewMode) -> Set<String> {
+        guard let state else { return memoryHidden[mode] ?? [] }
+        return (try? state.hiddenCalendars(view: mode.rawValue)) ?? hidden
     }
 
     var days: [Date] {
@@ -177,6 +193,9 @@ final class CalendarModel {
             let loaded = try await Task.detached { try load() }.value
             // An unchanged read is not assigned, so views do not redraw for nothing.
             if schedule != loaded { schedule = loaded }
+            // The command line can change the hidden calendars between reloads.
+            let saved = savedHidden(viewMode)
+            if saved != hidden { hidden = saved }
             if loadFailed { loadFailed = false }
             if selectedID != nil, selected == nil { selectedID = nil }
         } catch {
@@ -185,7 +204,13 @@ final class CalendarModel {
     }
 
     func toggle(_ calendarID: String) {
-        if hidden.contains(calendarID) { hidden.remove(calendarID) } else { hidden.insert(calendarID) }
+        let nowHidden = !hidden.contains(calendarID)
+        if nowHidden { hidden.insert(calendarID) } else { hidden.remove(calendarID) }
+        if let state {
+            try? state.setCalendarHidden(nowHidden, view: viewMode.rawValue, calendarID: calendarID)
+        } else {
+            memoryHidden[viewMode] = hidden
+        }
         if let selected, hidden.contains(selected.calendarID) { selectedID = nil }
     }
 

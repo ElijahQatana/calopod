@@ -23,8 +23,8 @@ public struct EventsCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Limit events to one selected calendar. Uses every selected calendar when omitted.")
     public var calendar: String?
 
-    @Option(name: .long, help: "Show all calendars, only those arms copy from (sources), or only those they write to (destinations).")
-    public var view: CalendarViewMode = .all
+    @Option(name: .long, help: "Show all calendars, only those arms copy from (sources), or only those they write to (destinations). Calendars hidden in that view with `calendars hide` are left out unless --calendar names them.")
+    public var view: CalendarViewMode?
 
     @Flag(name: .long, inversion: .prefixedNo, help: "Include the copies Calopod made. On for --view destinations and off otherwise unless set.")
     public var copies: Bool?
@@ -47,7 +47,12 @@ public struct EventsCommand: AsyncParsableCommand {
             let names = CalendarNames(repository)
             let arms = try repository.arms()
             let roles = CalendarRoles(arms: arms)
-            let shown = sources.map(\.calendar.id).filter { !names.isIgnored($0) && roles.includes($0, in: view) }
+            let viewMode = view ?? .all
+            // Hidden calendars only apply when a view is asked for, so plain `events` is unchanged.
+            let hidden = view == nil || calendar != nil ? [] : try repository.hiddenCalendars(view: viewMode.rawValue)
+            let shown = sources.map(\.calendar.id).filter {
+                !names.isIgnored($0) && roles.includes($0, in: viewMode) && !hidden.contains($0)
+            }
             let events = try repository.normalizedInstances(
                 calendarBindingIDs: shown,
                 from: resolved.window.start,
@@ -55,7 +60,7 @@ public struct EventsCommand: AsyncParsableCommand {
             )
             // Copies Calopod made never get a Join link.
             let originals = Set(((try? repository.inboxContextSnapshot()) ?? InboxContextSnapshot(sources: [], events: [])).events.map(\.event.sourceKeyHash))
-            let copyItems = copies ?? view.copiesShownByDefault
+            let copyItems = copies ?? viewMode.copiesShownByDefault
                 ? try destinationCopies(arms: arms, repository: repository, into: Set(shown), range: resolved)
                 : []
             try OutputRenderer.write(

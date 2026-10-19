@@ -22,6 +22,8 @@ calopod-setup [--arms]
 
 `events` lists the Teams, Zoom, Meet or Webex link of each event (`Join:` in text, `joinProvider` and `joinURL` in JSON). `join` opens one: give it an id from `events --ids`, or leave it out for the next event with a link that is on now or starts within 12 hours. It opens the meeting app when there is one, otherwise the link in the browser.
 
+`events --view all|sources|destinations` shows the calendars that view offers and leaves out the ones hidden in it. Each view keeps its own hidden calendars, the same ones the Mac app's Calendar screen remembers. `calendars hide CALENDAR --view VIEW` and `calendars show CALENDAR --view VIEW` change them. Without `--view`, or with `--calendar`, `events` hides nothing.
+
 ## Dates
 
 `events`, `availability`, `inbox` and `sync` accept:
