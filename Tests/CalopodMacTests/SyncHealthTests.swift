@@ -23,20 +23,45 @@ final class SyncHealthTests: XCTestCase {
         SyncHealth.make(status: status, statusAt: now, run: run, now: now)
     }
 
-    func testManualSuccessNeverHidesAFailingAgent() {
-        let result = health(status("failed", message: "Keychain is locked"), run())
-        XCTAssertEqual(result.tone, .bad)
-        XCTAssertEqual(result.symbol, "exclamationmark")
-        XCTAssertEqual(result.headline, "The last sync didn't finish")
-        XCTAssertEqual(result.detail, "Keychain is locked · Last synced just now")
-        XCTAssertEqual(result.lastSyncedAge, 30)
+    private func failing(secondsAgo: Int?) -> AgentControlStatus {
+        AgentControlStatus(
+            state: "failed", message: "Keychain is locked", installed: true, enabled: true, paused: false,
+            running: false, intervalSeconds: 600, lastSuccessAgeSeconds: 960, failureCategory: "source-refresh",
+            failureAgeSeconds: secondsAgo, usesBundledService: true, sourceLoaded: false)
     }
 
-    func testManualSuccessKeepsAStoppedAgentStopped() {
-        let result = health(status("stopped"), run())
+    func testManualSuccessWithAFailingAgentKeepsItsHeadlineButIsNotAllClear() {
+        let result = health(failing(secondsAgo: 3600), run())
+        XCTAssertEqual(result.headline, "Everything is up to date. Nothing to change.")
+        XCTAssertEqual(result.detail, "Last synced just now · every 10 minutes")
+        XCTAssertEqual(result.tone, .caution)
+        XCTAssertNotEqual(result.symbol, "checkmark")
+        XCTAssertEqual(result.note, "Keychain is locked")
+    }
+
+    func testAnAutomaticFailureAfterTheManualRunWinsTheHeadline() {
+        let result = health(failing(secondsAgo: 5), run())
         XCTAssertEqual(result.tone, .bad)
-        XCTAssertEqual(result.headline, "Automatic sync is stopped")
+        XCTAssertEqual(result.headline, "The last sync didn't finish")
+        XCTAssertNil(result.note)
+    }
+
+    func testManualSuccessWithAStoppedAgentIsCautionWithANote() {
+        let result = health(status("stopped"), run())
+        XCTAssertEqual(result.tone, .caution)
+        XCTAssertEqual(result.label, "Stopped")
+        XCTAssertNotNil(result.note)
         XCTAssertFalse(result.offersEnable)
+    }
+
+    func testManualSuccessWithDisabledSyncOffersEnable() {
+        let result = health(status("disabled"), run())
+        XCTAssertEqual(result.headline, "Everything is up to date. Nothing to change.")
+        XCTAssertEqual(result.tone, .caution)
+        XCTAssertEqual(result.symbol, "power")
+        XCTAssertEqual(result.label, "Sync is off")
+        XCTAssertEqual(result.note, "Automatic sync is off, so changes will not sync by themselves.")
+        XCTAssertTrue(result.offersEnable)
     }
 
     func testManualSuccessWithAHealthyAgentIsGreen() {
@@ -62,13 +87,12 @@ final class SyncHealthTests: XCTestCase {
         XCTAssertEqual(result.lastSyncedAge, 5)
     }
 
-    func testPausedAndDisabledKeepTheirOwnMessageEvenWithAManualRun() {
+    func testPausedAndDisabledWithoutAManualRunKeepTheirOwnHeadline() {
         for (state, headline) in [("paused", "Scheduled syncs are paused"), ("disabled", "Automatic sync is off")] {
-            let result = health(status(state), run())
+            let result = health(status(state))
             XCTAssertEqual(result.tone, .caution)
             XCTAssertEqual(result.headline, headline)
             XCTAssertEqual(result.offersEnable, state == "disabled")
-            XCTAssertEqual(result.detail, "Last synced just now · every 10 minutes")
         }
     }
 

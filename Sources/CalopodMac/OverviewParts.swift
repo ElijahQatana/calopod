@@ -95,6 +95,9 @@ struct SyncStatusCard: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(health.headline).font(Theme.Fonts.sectionTitle)
             Text(health.detail).font(Theme.Fonts.body).foregroundStyle(.secondary)
+            if let note = health.note {
+                Text(note).font(Theme.Fonts.body).foregroundStyle(Theme.cautionText)
+            }
         }
     }
 
