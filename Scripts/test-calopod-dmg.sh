@@ -84,7 +84,8 @@ grep -q 'Settings, then Command line' "$mount_point/Install the command line.txt
 hdiutil detach -quiet "$mount_point"
 
 # Nothing private reaches the output.
-if grep -Eq "$HOME|/Users/|Developer ID Application:" "$log"; then
+users_dir=/Users
+if grep -Eq "$HOME|$users_dir/|Developer ID Application:" "$log"; then
   echo "The output named a home path or an identity." >&2; exit 1
 fi
 
