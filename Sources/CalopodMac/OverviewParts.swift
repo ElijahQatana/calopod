@@ -13,7 +13,7 @@ struct OverviewSectionHeader: View {
             Spacer(minLength: 8)
             if let link {
                 Button(link, action: action)
-                    .buttonStyle(.plain)
+                    .buttonStyle(.bare)
                     .font(Theme.Fonts.secondarySemibold)
                     .foregroundStyle(Theme.accent)
             }
@@ -179,7 +179,7 @@ struct RowButtonStyle: ButtonStyle {
             .padding(.horizontal, 12)
             .frame(minHeight: Theme.Control.smallChipHeight)
             .background(Capsule().fill(Color.primary.opacity(configuration.isPressed ? 0.18 : 0.08)))
-            .contentShape(Capsule())
+            .hitTarget(Capsule())
     }
 }
 

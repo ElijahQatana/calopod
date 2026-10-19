@@ -12,7 +12,7 @@ struct CalendarColorDot: View {
             Circle().fill(current.color).frame(width: 12, height: 12)
                 .overlay(Circle().strokeBorder(.primary.opacity(0.15), lineWidth: 1))
                 .padding(4)
-                .contentShape(Circle())
+                .hitTarget(Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Calendar color")

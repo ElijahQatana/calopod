@@ -326,7 +326,7 @@ struct Banner: View {
                 Button(action: onDismiss) {
                     Image(systemName: "xmark").font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.bare)
                 .accessibilityLabel("Dismiss")
                 .help("Dismiss")
             }
@@ -386,6 +386,24 @@ struct BusyLine: View {
     }
 }
 
+/// The smallest area a control answers clicks in. A glyph or a short link is drawn smaller than
+/// that, so the hit area grows around it without moving anything else.
+enum HitTarget {
+    static let minimum: CGFloat = 28
+
+    static func size(of drawn: CGSize) -> CGSize {
+        CGSize(width: max(drawn.width, minimum), height: max(drawn.height, minimum))
+    }
+}
+
+extension View {
+    /// Makes `shape` the click area, and at least `HitTarget.minimum` tall. Apply it last, after the
+    /// padding and the background, so the whole drawn shape answers and not only the label.
+    func hitTarget<S: Shape>(_ shape: S, minWidth: CGFloat? = nil) -> some View {
+        frame(minWidth: minWidth, minHeight: HitTarget.minimum).contentShape(.interaction, shape)
+    }
+}
+
 extension ButtonStyle where Self == AccentButtonStyle {
     static var accentFilled: AccentButtonStyle { AccentButtonStyle() }
 }
@@ -408,7 +426,7 @@ struct SecondaryButtonStyle: ButtonStyle {
             .padding(.horizontal, 18)
             .frame(minHeight: Theme.Control.height)
             .background(Capsule().fill(tint.opacity(fill)))
-            .contentShape(Capsule())
+            .hitTarget(Capsule())
             .onHover { hovering = $0 }
             .opacity(isEnabled ? 1 : 0.4)
     }
@@ -416,6 +434,20 @@ struct SecondaryButtonStyle: ButtonStyle {
 
 extension ButtonStyle where Self == QuietButtonStyle {
     static var quiet: QuietButtonStyle { QuietButtonStyle() }
+}
+
+extension ButtonStyle where Self == BareButtonStyle {
+    static var bare: BareButtonStyle { BareButtonStyle() }
+}
+
+/// A button with no drawn shape: a glyph or a short link. Dims while pressed and answers clicks
+/// in at least a 28 point square around it.
+struct BareButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.6 : 1)
+            .hitTarget(Rectangle(), minWidth: HitTarget.minimum)
+    }
 }
 
 extension ButtonStyle where Self == CircleToolbarButtonStyle {
@@ -434,6 +466,7 @@ struct AccentButtonStyle: ButtonStyle {
             .background(
                 Capsule().fill(Theme.accent.opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.35))
             )
+            .hitTarget(Capsule())
     }
 }
 
@@ -451,7 +484,7 @@ struct QuietButtonStyle: ButtonStyle {
             .padding(.horizontal, 16)
             .frame(minHeight: Theme.Control.height)
             .background(Capsule().fill(tint.opacity(fill)))
-            .contentShape(Capsule())
+            .hitTarget(Capsule())
             .onHover { hovering = $0 }
             .opacity(isEnabled ? 1 : 0.4)
     }
@@ -470,7 +503,7 @@ struct CircleToolbarButtonStyle: ButtonStyle {
             .frame(width: Theme.Control.circle, height: Theme.Control.circle)
             .background(Circle().fill(Color.primary.opacity(fill)))
             .overlay(Circle().strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5))
-            .contentShape(Circle())
+            .hitTarget(Circle())
             .onHover { hovering = $0 }
             .opacity(isEnabled ? 1 : 0.4)
     }

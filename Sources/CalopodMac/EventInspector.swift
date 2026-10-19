@@ -22,7 +22,7 @@ struct EventInspector: View {
                 status
                 Spacer()
                 Button(action: close) { Image(systemName: "xmark") }
-                    .buttonStyle(.plain).foregroundStyle(.secondary)
+                    .buttonStyle(.bare).foregroundStyle(.secondary)
                     .accessibilityLabel("Close details")
             }
             lead
