@@ -28,8 +28,11 @@ struct FixtureReader: SnapshotReader {
         }
         let planning = InboxItem(
             id: "fixture-1", reasons: [.needsRSVP, .conflict], title: "Quarterly planning",
-            startsAt: at(0, 13, 30), endsAt: at(0, 15), calendarID: "work", response: .needsResponse,
-            location: "Room 4B", conflicts: [ConflictingEvent(title: "School pickup", startsAt: at(0, 14, 15), endsAt: at(0, 14, 45))])
+            startsAt: at(0, 13, 30), endsAt: at(0, 15), sourceName: "work@example.com", calendarID: "work",
+            response: .needsResponse, organizerName: "Dana Whitfield",
+            attendees: AttendeeSummary(total: 9, accepted: 5, tentative: 1, declined: 1),
+            location: "Room 4B, 12 Example Street", notes: "Bring the draft roadmap.", url: "https://example.com/planning",
+            conflicts: [ConflictingEvent(title: "School pickup", startsAt: at(0, 14, 15), endsAt: at(0, 14, 45))])
         let pickup = InboxItem(
             id: "fixture-2", reasons: [.conflict], title: "School pickup",
             startsAt: at(0, 14, 15), endsAt: at(0, 14, 45), calendarID: "family", response: .accepted)
@@ -45,7 +48,8 @@ struct FixtureReader: SnapshotReader {
         let busy = (0..<5).map { day in
             AvailabilityDay(
                 day: Self.dayKey(at(day, 0), calendar: calendar), timeZoneIdentifier: calendar.timeZone.identifier,
-                busy: [BusyInterval(start: at(day, 9), end: at(day, 10, 30)), BusyInterval(start: at(day, 13), end: at(day, 15))])
+                busy: [BusyInterval(start: at(day, 9), end: at(day, 10, 30)), BusyInterval(start: at(day, 13), end: at(day, 15))]
+                    + (day == 0 ? [BusyInterval(start: at(0, 22, 30), end: at(1, 0, 30))] : []))
         }
         return Snapshot(
             publishedAt: publishedAt,

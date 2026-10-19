@@ -1,19 +1,34 @@
 import SwiftUI
 
+/// The left side of the header on a screen opened from another one.
+struct BackAction {
+    var label: String
+    var action: () -> Void
+}
+
 /// The header every screen shares: logo, the read-only mark, then a title and one line under it.
 struct SharedHeader: View {
     var title: String
     var subtitle: String
+    var back: BackAction?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                HStack(spacing: 8) {
-                    SquidMarkView(color: Theme.accent)
-                        .frame(width: 28, height: 28)
-                        .padding(5)
-                        .background(Theme.onAccent, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                    Text("Calopod").font(.callout.weight(.semibold))
+                if let back {
+                    Button(action: back.action) {
+                        Label(back.label, systemImage: "chevron.left").font(.callout.weight(.semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .frame(minHeight: 44)
+                } else {
+                    HStack(spacing: 8) {
+                        SquidMarkView(color: Theme.accent)
+                            .frame(width: 28, height: 28)
+                            .padding(5)
+                            .background(Theme.onAccent, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                        Text("Calopod").font(.callout.weight(.semibold))
+                    }
                 }
                 Spacer()
                 Label("Read only", systemImage: "lock")
@@ -58,11 +73,12 @@ struct SharedHeader: View {
 struct Screen<Content: View>: View {
     var title: String
     var subtitle: String
+    var back: BackAction?
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(spacing: 0) {
-            SharedHeader(title: title, subtitle: subtitle)
+            SharedHeader(title: title, subtitle: subtitle, back: back)
                 .zIndex(1)
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) { content }
