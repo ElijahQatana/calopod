@@ -80,6 +80,13 @@ public enum KeychainCheckOutcome: Equatable, Sendable {
 public enum Permissions {
     public static let calendarPrivacyURL = "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars"
 
+    /// The bundle id macOS keeps Calopod's Calendar decision under.
+    public static let calendarHelperBundleID = "pro.elijahquintana.calopod.eventkit-host"
+    /// The command that clears that decision, for people who prefer to run it themselves.
+    public static let calendarResetCommand = "tccutil reset Calendar \(calendarHelperBundleID)"
+    public static let calendarResetConfirmation =
+        "This clears only Calopod's own Calendar decision on this Mac. Your calendars and other apps are not touched, and macOS will ask again."
+
     /// Also shown on the Background sync screen.
     public static let noRecordOfThisCopy =
         "macOS has no record of this copy of the app. Background services need Calopod installed in the Applications folder and signed with a developer identity, not a debug build run from a build folder."

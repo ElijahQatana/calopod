@@ -13,6 +13,7 @@ func hostRunsAsAnAgentAppThatCanShowTheCalendarPrompt() throws {
     let info = try hostInfo()
     #expect(info["LSUIElement"] as? Bool == true)
     #expect(info["LSBackgroundOnly"] == nil)
+    #expect(info["NSPrincipalClass"] as? String == "NSApplication")
     #expect(info["CFBundleIdentifier"] as? String == "pro.elijahquintana.calopod.eventkit-host")
     for key in ["NSCalendarsFullAccessUsageDescription", "NSCalendarsUsageDescription"] {
         let text = try #require(info[key] as? String)

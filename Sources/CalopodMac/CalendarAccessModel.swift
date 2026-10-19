@@ -43,6 +43,30 @@ enum CalendarAccessState: Equatable {
     }
 }
 
+/// What to tell the person after they pressed Allow. The message is never empty.
+struct CalendarAccessResult: Equatable {
+    let message: String
+    /// Undecided or denied: show Calendar privacy settings and the reset button.
+    let offersWaysForward: Bool
+
+    static func after(_ outcome: CalendarAccessOutcome, failure: String? = nil) -> Self {
+        switch outcome {
+        case .granted:
+            Self(message: "Calendar access is allowed.", offersWaysForward: false)
+        case .denied:
+            Self(message: "Calendar access was denied. Turn it on in System Settings, or reset Calopod's Calendar decision so macOS asks again.", offersWaysForward: true)
+        case .undecided:
+            Self(message: "macOS did not show the prompt. Open Calendar privacy settings, or reset Calopod's Calendar decision so macOS asks again.", offersWaysForward: true)
+        case .couldNotStart:
+            Self(message: failure ?? "Calopod could not start its Calendar helper.", offersWaysForward: false)
+        }
+    }
+
+    static let resetFailed = Self(
+        message: "Calopod could not reset its Calendar decision. You can run this in Terminal instead: \(Permissions.calendarResetCommand)",
+        offersWaysForward: true)
+}
+
 /// Asks the helper app for its Calendar access, at launch and whenever the app comes forward.
 @MainActor
 @Observable
@@ -51,21 +75,28 @@ final class CalendarAccessModel {
 
     private(set) var status: EventKitAccessStatus?
     private(set) var asking = false
+    /// The last answer to Allow, kept until access is seen as allowed.
+    private(set) var result: CalendarAccessResult?
+    /// The reset button was pressed and the person has not yet confirmed it.
+    private(set) var confirmingReset = false
     /// Why the helper could not be asked, in plain words. Cleared by the next answer.
     private(set) var hostFailure: String?
     private var checking = false
 
     @ObservationIgnored private let readStatus: @Sendable () throws -> EventKitAccessStatus
-    @ObservationIgnored private let requestAccess: @Sendable () throws -> EventKitAccessStatus
+    @ObservationIgnored private let requestAccess: @Sendable () throws -> CalendarAccessAnswer
+    @ObservationIgnored private let resetDecision: @Sendable () throws -> Void
     @ObservationIgnored private let open: (URL) -> Void
 
     init(
         readStatus: @escaping @Sendable () throws -> EventKitAccessStatus = { try CalendarAccessService().status() },
-        requestAccess: @escaping @Sendable () throws -> EventKitAccessStatus = { try CalendarAccessService().request() },
+        requestAccess: @escaping @Sendable () throws -> CalendarAccessAnswer = { try CalendarAccessService().request() },
+        resetDecision: @escaping @Sendable () throws -> Void = { try CalendarDecisionReset().reset() },
         open: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) }
     ) {
         self.readStatus = readStatus
         self.requestAccess = requestAccess
+        self.resetDecision = resetDecision
         self.open = open
     }
 
@@ -82,23 +113,55 @@ final class CalendarAccessModel {
         do {
             let found = try await Task.detached(operation: { try read() }).value
             if found != status { status = found }
+            if found == .fullAccess { result = nil }
             hostFailure = nil
         } catch {
             hostFailure = Permissions.hostFailureReason(error)
         }
     }
 
+    /// What the busy line says while macOS is being asked.
+    static let askingText = "Waiting for macOS. Answer the Calendar prompt if it appears."
+
     /// Lets the helper trigger the macOS prompt, then keeps whatever it reports afterwards.
     func allow() async {
         guard !asking else { return }
         asking = true
         defer { asking = false }
+        await ask()
+    }
+
+    func askToReset() { confirmingReset = true }
+    func cancelReset() { confirmingReset = false }
+
+    /// Clears Calopod's own Calendar decision after the person confirmed, then asks again.
+    func confirmReset() async {
+        guard !asking else { return }
+        confirmingReset = false
+        asking = true
+        defer { asking = false }
+        let reset = resetDecision
+        do {
+            try await Task.detached(operation: { try reset() }).value
+        } catch {
+            result = .resetFailed
+            return
+        }
+        await ask()
+    }
+
+    private func ask() async {
+        result = nil
         let request = requestAccess
         do {
-            status = try await Task.detached(operation: { try request() }).value
+            let answer = try await Task.detached(operation: { try request() }).value
+            status = answer.status
             hostFailure = nil
+            result = .after(answer.outcome)
         } catch {
-            hostFailure = Permissions.hostFailureReason(error)
+            let reason = Permissions.hostFailureReason(error)
+            hostFailure = reason
+            result = .after(.couldNotStart, failure: reason)
         }
     }
 
