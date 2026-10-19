@@ -1,4 +1,5 @@
 import CalopodCommands
+import CalopodDomain
 import Foundation
 
 /// What Overview and the menu bar show. Counts come straight from the Inbox board, and
@@ -52,4 +53,22 @@ extension InboxModel {
     var waiting: Int { board?.count(.needsRSVP) ?? 0 }
     var overlaps: Int { board?.count(.conflicts) ?? 0 }
     var changes: Int { board?.count(.changed) ?? 0 }
+}
+
+/// Join on the menu bar Next card and the Overview rows. Both read it here so they cannot disagree.
+enum JoinOffer {
+    /// The link to offer: only a real event that has not ended. Copies never carry one.
+    static func link(for event: ScheduleEvent, now: Date = Date()) -> MeetingLink? {
+        guard !event.isCopy, event.endsAt > now else { return nil }
+        return event.meeting
+    }
+
+    static func isProminent(_ event: ScheduleEvent, now: Date = Date()) -> Bool {
+        MeetingLink.isImminent(startsAt: event.startsAt, endsAt: event.endsAt, now: now)
+    }
+
+    /// Opens the meeting. Returns the text for a dismissable banner when it did not open.
+    static func join(_ link: MeetingLink, using joiner: any MeetingJoining) async -> String? {
+        await joiner.join(link) == .failed ? MeetingJoinText.failed : nil
+    }
 }

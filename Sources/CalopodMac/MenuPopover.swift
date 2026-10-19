@@ -1,4 +1,5 @@
 import CalopodCommands
+import CalopodDomain
 import SwiftUI
 
 struct MenuPopover: View {
@@ -6,6 +7,8 @@ struct MenuPopover: View {
     let navigation: AppNavigation
     let inbox: InboxModel
     let schedule: CalendarModel
+    var joiner: any MeetingJoining = MeetingJoiner.system
+    @State private var joinNotice: String?
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismiss) private var dismiss
 
@@ -27,6 +30,7 @@ struct MenuPopover: View {
             if let notice = model.notice { Text(notice).font(Theme.Fonts.secondary).foregroundStyle(Theme.badText) }
 
             if let next = nextEvent { nextCard(next) }
+            if let joinNotice { Banner(kind: .error, text: joinNotice, onDismiss: { self.joinNotice = nil }) }
             if inbox.waiting > 0 { waitingCard }
             if !stale.isEmpty {
                 Label("\(stale.joined(separator: ", ")) is out of date", systemImage: "exclamationmark.triangle.fill")
@@ -69,7 +73,12 @@ struct MenuPopover: View {
         name: { CalendarAliases.shared.name(for: $0.id, real: $0.name) }) }
 
     private func nextCard(_ event: ScheduleEvent) -> some View {
-        NextCard(event: event) {
+        NextCard(event: event, color: CalendarColors.shared.color(for: event.calendarID).color, now: Date(), join: { link in
+            Task {
+                joinNotice = await JoinOffer.join(link, using: joiner)
+                if joinNotice == nil { closePopover() }
+            }
+        }) {
             navigation.openCalendar(showing: event, in: schedule)
             show()
         }
@@ -98,6 +107,10 @@ struct MenuPopover: View {
         let popover = NSApp.keyWindow.flatMap { $0.title == "Calopod" ? nil : $0 }
         MainWindowOpener.shared.show { openWindow(id: "home") }
         guard !keepMenu else { return }
+        closePopover(popover)
+    }
+
+    private func closePopover(_ popover: NSWindow? = NSApp.keyWindow.flatMap { $0.title == "Calopod" ? nil : $0 }) {
         dismiss()
         // dismiss() is not honored by every popover, so close its window as well.
         DispatchQueue.main.async { if popover?.isVisible == true { popover?.close() } }
@@ -137,18 +150,42 @@ struct MenuSyncControls: View {
     }
 }
 
-/// The next event as a button, with the same hover highlight as the rows below it.
-private struct NextCard: View {
+/// The next event. The details open it in Calendar; Join, when there is a link, is its own button
+/// beside them, or under them when the card is too narrow.
+struct NextCard: View {
     let event: ScheduleEvent
+    let color: Color
+    let now: Date
+    let join: (MeetingLink) -> Void
     let action: () -> Void
     @State private var hovering = false
 
     var body: some View {
+        let link = JoinOffer.link(for: event, now: now)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 0) {
+                details
+                if let link { joinButton(link).padding(.trailing, 12) }
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                details
+                if let link { joinButton(link).padding(.leading, 32).padding(.bottom, 12) }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(MenuPopover.card)
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
+                .fill(Theme.accent.opacity(hovering ? 0.14 : 0)).allowsHitTesting(false))
+        .onHover { hovering = $0 }
+    }
+
+    private var details: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Circle().fill(CalendarColors.shared.color(for: event.calendarID).color).frame(width: 10, height: 10)
+                Circle().fill(color).frame(width: 10, height: 10)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(event.startsAt <= Date() ? "Now" : "Next").font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+                    Text(event.startsAt <= now ? "Now" : "Next").font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                     Text(event.title).font(Theme.Fonts.bodyMedium).lineLimit(1)
                     Text(event.startsAt.formatted(date: .omitted, time: .shortened)).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                 }
@@ -156,14 +193,15 @@ private struct NextCard: View {
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(MenuPopover.card)
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
-                    .fill(Theme.accent.opacity(hovering ? 0.14 : 0)))
-            .contentShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
+            .contentShape(Rectangle())
         }
         .buttonStyle(PressedFade())
-        .onHover { hovering = $0 }
+    }
+
+    private func joinButton(_ link: MeetingLink) -> some View {
+        JoinButton(link: link, prominent: JoinOffer.isProminent(event, now: now)) { join(link) }
+            .help(JoinButton.help(for: link))
+            .fixedSize()
     }
 }
 

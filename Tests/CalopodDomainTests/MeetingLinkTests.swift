@@ -142,4 +142,16 @@ struct MeetingLinkTests {
         #expect(!near(13, 14))
         #expect(!near(-5, -4))
     }
+
+    @Test("The Next surfaces fill Join for events on now or within ten minutes")
+    func imminent() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        func imminent(_ start: Double, _ end: Double) -> Bool {
+            MeetingLink.isImminent(startsAt: now.addingTimeInterval(start * 60), endsAt: now.addingTimeInterval(end * 60), now: now)
+        }
+        #expect(imminent(-5, 25))
+        #expect(imminent(10, 40))
+        #expect(!imminent(11, 40))
+        #expect(!imminent(-40, 0))
+    }
 }

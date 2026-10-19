@@ -1,10 +1,12 @@
 import CalopodCommands
+import CalopodDomain
 import SwiftUI
 
 struct OverviewScreen: View {
     let model: ServiceModel
     let navigation: AppNavigation
     let setup: SetupModel
+    var joiner: any MeetingJoining = MeetingJoiner.system
     @Environment(InboxModel.self) private var inbox
     @Environment(CalendarModel.self) private var schedule
     @Environment(CalendarAccessModel.self) private var access
@@ -15,10 +17,12 @@ struct OverviewScreen: View {
     @State private var showingSetup = false
 
     @State private var openReasons: Set<String> = []
+    @State private var joinNotice: String?
 
     var body: some View {
         CardPage(title: "Overview", trailing: Date().formatted(.dateTime.weekday(.wide).day().month(.wide)), maxWidth: 1180) {
             if let notice = model.notice { Banner(kind: .error, text: notice, onDismiss: model.dismissNotice) }
+            if let joinNotice { Banner(kind: .error, text: joinNotice, onDismiss: { self.joinNotice = nil }) }
             ForEach(refresh.messages) { message in
                 Banner(kind: .error, text: message.text, onDismiss: { refresh.dismiss(message.id) })
             }
@@ -164,7 +168,8 @@ struct OverviewScreen: View {
                         NextUpRow(
                             event: event, calendarName: names[event.calendarID] ?? "Calendar",
                             color: CalendarColors.shared.color(for: event.calendarID).color,
-                            tags: UpNextTag.tags(for: event, isNext: index == 0, now: now)
+                            tags: UpNextTag.tags(for: event, isNext: index == 0, now: now), now: now,
+                            join: { link in Task { joinNotice = await JoinOffer.join(link, using: joiner) } }
                         ) { navigation.openCalendar(showing: event, in: schedule) }
                     }
                     if events.count > 4 { CardRow { Text("and \(events.count - 4) more").foregroundStyle(.secondary) } }

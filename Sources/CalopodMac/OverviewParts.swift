@@ -1,4 +1,5 @@
 import CalopodCommands
+import CalopodDomain
 import SwiftUI
 
 /// A section title with an optional link on the right.
@@ -229,6 +230,8 @@ struct NextUpRow: View {
     let calendarName: String
     let color: Color
     let tags: [UpNextTag]
+    var now = Date()
+    var join: ((MeetingLink) -> Void)?
     let action: () -> Void
 
     var body: some View {
@@ -250,9 +253,20 @@ struct NextUpRow: View {
                     case .overlaps: OverviewTag(text: tag.text, tint: Theme.caution, textColor: Theme.cautionText)
                     }
                 }
+                // Room for the Join button drawn over the row, so tags never slide under it.
+                if let link = offer { JoinButton(link: link) {}.hidden().accessibilityHidden(true) }
+            }
+        }
+        .overlay(alignment: .trailing) {
+            if let link = offer, let join {
+                JoinButton(link: link, prominent: JoinOffer.isProminent(event, now: now)) { join(link) }
+                    .help(JoinButton.help(for: link))
+                    .padding(.trailing, 16)
             }
         }
     }
+
+    private var offer: MeetingLink? { join == nil ? nil : JoinOffer.link(for: event, now: now) }
 
     static func label(for event: ScheduleEvent) -> String {
         "Open \(event.title), \(event.startsAt.formatted(date: .omitted, time: .shortened))"
