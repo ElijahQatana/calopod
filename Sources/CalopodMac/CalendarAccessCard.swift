@@ -8,7 +8,7 @@ struct CalendarAccessCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Banner(kind: state == .blocked ? .error : .caution, text: "\(state.title). \(state.message)")
+            Banner(kind: state == .blocked ? .error : .caution, text: "\(state.title). \(access.guidance()?.message ?? state.message)")
             if state == .canAsk {
                 Button("Allow") { Task { await access.allow() } }
                     .buttonStyle(.accentFilled)

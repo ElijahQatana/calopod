@@ -34,7 +34,7 @@ final class PermissionsModel {
     }
 
     var calendar: PermissionReading {
-        Permissions.calendar(status: access.status, hostFailure: access.hostFailure)
+        Permissions.calendar(status: access.status, hostFailure: access.hostFailure, helper: access.helperPath)
     }
     var backgroundService: PermissionReading { Permissions.backgroundService(loginItems) }
     var savedSignIns: PermissionReading { Permissions.keychain(keychain) }

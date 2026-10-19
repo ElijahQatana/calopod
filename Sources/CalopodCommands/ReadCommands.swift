@@ -95,7 +95,7 @@ public struct EventsCommand: AsyncParsableCommand {
                 human: output.localContext(repository: repository)
             )
         } catch {
-            try failCommand(error)
+            try failCommand(error, format: output.format)
         }
     }
 }
@@ -212,7 +212,7 @@ public struct AvailabilityCommand: AsyncParsableCommand {
                 human: output.localContext(repository: repository)
             )
         } catch {
-            try failCommand(error)
+            try failCommand(error, format: output.format)
         }
     }
 }

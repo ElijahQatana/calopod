@@ -81,23 +81,34 @@ final class CalendarAccessModel {
     private(set) var confirmingReset = false
     /// Why the helper could not be asked, in plain words. Cleared by the next answer.
     private(set) var hostFailure: String?
+    /// The helper app that answered, so the card can name it.
+    private(set) var helperPath: String?
     private var checking = false
 
     @ObservationIgnored private let readStatus: @Sendable () throws -> EventKitAccessStatus
     @ObservationIgnored private let requestAccess: @Sendable () throws -> CalendarAccessAnswer
+    @ObservationIgnored private let readHelper: @Sendable () -> String?
     @ObservationIgnored private let resetDecision: @Sendable () throws -> Void
     @ObservationIgnored private let open: (URL) -> Void
 
     init(
         readStatus: @escaping @Sendable () throws -> EventKitAccessStatus = { try CalendarAccessService().status() },
         requestAccess: @escaping @Sendable () throws -> CalendarAccessAnswer = { try CalendarAccessService().request() },
+        readHelper: @escaping @Sendable () -> String? = { try? CalendarAccessService().hostURL().path },
         resetDecision: @escaping @Sendable () throws -> Void = { try CalendarDecisionReset().reset() },
         open: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) }
     ) {
         self.readStatus = readStatus
         self.requestAccess = requestAccess
+        self.readHelper = readHelper
         self.resetDecision = resetDecision
         self.open = open
+    }
+
+    /// The same words the command line and `calopod doctor` use, once the helper has answered.
+    func guidance(home: String = NSHomeDirectory()) -> CalendarAccessGuidance? {
+        guard let helperPath, let status, status != .fullAccess else { return nil }
+        return CalendarAccessGuidance(helperPath: helperPath, status: status, home: home)
     }
 
     func state(lastSyncFailure: String?) -> CalendarAccessState {
@@ -110,8 +121,10 @@ final class CalendarAccessModel {
         checking = true
         defer { checking = false }
         let read = readStatus
+        let readPath = readHelper
         do {
             let found = try await Task.detached(operation: { try read() }).value
+            helperPath = await Task.detached { readPath() }.value
             if found != status { status = found }
             if found == .fullAccess { result = nil }
             hostFailure = nil
@@ -156,6 +169,7 @@ final class CalendarAccessModel {
         do {
             let answer = try await Task.detached(operation: { try request() }).value
             status = answer.status
+            helperPath = await Task.detached { [readHelper] in readHelper() }.value
             hostFailure = nil
             result = .after(answer.outcome)
         } catch {

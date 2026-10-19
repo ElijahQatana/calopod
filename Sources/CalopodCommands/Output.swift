@@ -94,6 +94,10 @@ public struct CommandPayload: Codable, Equatable, Sendable {
     public let colors: [String]?
     /// Ignored calendars left out of a calendar list. Absent when they are listed.
     public let ignoredCount: Int?
+    /// For a Calendar access error: the helper that was asked, its status, and the fix.
+    public let helperPath: String?
+    public let accessStatus: String?
+    public let fix: String?
 
     public init(
         status: String,
@@ -139,7 +143,10 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         ingestion: EventIngestionSummary? = nil,
         review: SyncReviewSummary? = nil,
         colors: [String]? = nil,
-        ignoredCount: Int? = nil
+        ignoredCount: Int? = nil,
+        helperPath: String? = nil,
+        accessStatus: String? = nil,
+        fix: String? = nil
     ) {
         self.status = status
         self.message = message
@@ -185,6 +192,9 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         self.review = review
         self.colors = colors
         self.ignoredCount = ignoredCount
+        self.helperPath = helperPath
+        self.accessStatus = accessStatus
+        self.fix = fix
     }
 }
 

@@ -66,6 +66,7 @@ final class CalendarAccessTests: XCTestCase {
         let model = CalendarAccessModel(
             readStatus: { .notDetermined },
             requestAccess: { gate.wait(); return CalendarAccessAnswer(status: .fullAccess, outcome: .granted) },
+            readHelper: { nil },
             open: { _ in })
         let task = Task { await model.allow() }
         while !model.asking { await Task.yield() }
@@ -89,6 +90,15 @@ final class CalendarAccessTests: XCTestCase {
         XCTAssertFalse(CalendarAccessResult.resetFailed.message.isEmpty)
     }
 
+    func testTheCardNamesTheHelperWithTheCommandLineWords() async {
+        let model = FakeHost(status: .denied, afterRequest: .denied).model()
+        XCTAssertNil(model.guidance())
+        await model.check()
+        let guidance = model.guidance(home: "/Volumes/example-home")
+        XCTAssertEqual(guidance?.helperPath, "/Applications/Calopod.app/Contents/MacOS/eventkit-host/Calopod EventKit Host.app")
+        XCTAssertTrue(guidance?.message.contains("macOS lists it as \"Calopod\"") ?? false)
+    }
+
     func testAStillUndecidedAnswerSaysSoAndOffersTheWaysForward() async {
         let host = FakeHost(status: .notDetermined, afterRequest: .notDetermined)
         let model = host.model()
@@ -101,7 +111,8 @@ final class CalendarAccessTests: XCTestCase {
     func testAnUnreachableHelperDuringAllowStillGivesAMessage() async {
         let host = FakeHost(status: .notDetermined, afterRequest: .fullAccess)
         let model = CalendarAccessModel(
-            readStatus: { .notDetermined }, requestAccess: { throw FakeHost.Unreachable() }, open: { _ in })
+            readStatus: { .notDetermined }, requestAccess: { throw FakeHost.Unreachable() },
+            readHelper: { nil }, open: { _ in })
         await model.allow()
         XCTAssertFalse(model.result?.message.isEmpty ?? true)
         XCTAssertEqual(model.result?.offersWaysForward, false)
@@ -189,6 +200,7 @@ private final class FakeHost: @unchecked Sendable {
                     return CalendarAccessAnswer(status: status, outcome: CalendarAccessOutcome(statusAfterRequest: status))
                 }
             },
+            readHelper: { "/Applications/Calopod.app/Contents/MacOS/eventkit-host/Calopod EventKit Host.app" },
             resetDecision: { [self] in
                 try lock.withLock {
                     if _resetFails { throw Unreachable() }
