@@ -89,10 +89,10 @@ final class ScheduleLayoutTests: XCTestCase {
                 id: "d", name: "Family", account: "Example", provider: "google",
                 coverage: date(1, 0)...date(30, 0)),
         ]
-        let all = ScheduleLayout.notices(calendars: calendars, hidden: [], range: range, now: date(14, 8))
+        let all = ScheduleLayout.notices(calendars: calendars, hidden: [], range: range, now: date(14, 8), name: { $0.name })
         XCTAssertEqual(all.count, 3)
         XCTAssertTrue(all[0].contains("Work") && all[0].contains("2 hr ago"))
-        let some = ScheduleLayout.notices(calendars: calendars, hidden: ["a", "b"], range: range, now: date(14, 8))
+        let some = ScheduleLayout.notices(calendars: calendars, hidden: ["a", "b"], range: range, now: date(14, 8), name: { $0.name })
         XCTAssertEqual(some.count, 1)
         XCTAssertTrue(some[0].contains("Home"))
     }
@@ -102,7 +102,7 @@ final class ScheduleLayoutTests: XCTestCase {
         func notices(_ coverage: ClosedRange<Date>) -> [String] {
             ScheduleLayout.notices(
                 calendars: [ScheduleCalendar(id: "a", name: "Work", account: "Example", provider: "google", coverage: coverage)],
-                hidden: [], range: range, now: date(18, 20), timeZone: calendar.timeZone)
+                hidden: [], range: range, now: date(18, 20), timeZone: calendar.timeZone, name: { $0.name })
         }
         XCTAssertEqual(notices(date(11, 0)...date(30, 0)), [])
         XCTAssertEqual(notices(date(17, 0)...date(23, 0)),

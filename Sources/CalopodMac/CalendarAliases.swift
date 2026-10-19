@@ -8,7 +8,7 @@ import Observation
 @MainActor
 @Observable
 final class CalendarAliases {
-    static let shared = CalendarAliases(defaults: .standard, state: try? LocalState.repository())
+    static let shared = CalendarAliases(defaults: AppDefaults.standard, state: try? LocalState.repository())
 
     private static let expandedKey = "calendarIgnoredExpanded"
 
@@ -25,7 +25,7 @@ final class CalendarAliases {
         self.state = state
         if let state { CalendarPreferenceMigration.run(defaults: defaults, state: state) }
         let saved = (try? state?.calendarPreferences()) ?? [:]
-        aliases = saved.compactMapValues(\.alias)
+        aliases = saved.compactMapValues { CalendarDisplayName.alias($0.alias, real: nil) }
         ignored = Set(saved.filter(\.value.isIgnored).keys)
         expanded = Set(defaults.stringArray(forKey: Self.expandedKey) ?? [])
     }
@@ -33,12 +33,15 @@ final class CalendarAliases {
     func alias(for calendarID: String) -> String? { aliases[calendarID] }
 
     /// The name to show: the alias when there is one, else the name the provider gives.
-    func name(for calendarID: String, real: String) -> String { aliases[calendarID] ?? real }
+    func name(for calendarID: String, real: String) -> String {
+        CalendarDisplayName.shown(alias: aliases[calendarID], real: real) ?? real
+    }
 
     /// Sets the alias. An empty one, or one equal to the real name, clears it.
     func setAlias(_ text: String, for calendarID: String, real: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty || trimmed == real { aliases[calendarID] = nil } else { aliases[calendarID] = trimmed }
+        if aliases[calendarID] == nil { CalendarPreferenceMigration.forgetAlias(calendarID, defaults: defaults) }
         try? state?.setCalendarAlias(aliases[calendarID], calendarID: calendarID)
     }
 
@@ -46,6 +49,7 @@ final class CalendarAliases {
 
     func setIgnored(_ value: Bool, for calendarID: String) {
         if value { ignored.insert(calendarID) } else { ignored.remove(calendarID) }
+        if !value { CalendarPreferenceMigration.forgetIgnored(calendarID, defaults: defaults) }
         try? state?.setCalendarIgnored(value, calendarID: calendarID)
     }
 

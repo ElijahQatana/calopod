@@ -1,4 +1,4 @@
-import CalopodStore
+@testable import CalopodStore
 import XCTest
 
 @testable import CalopodMac
@@ -95,6 +95,34 @@ final class CalendarAliasesTests: XCTestCase {
         let second = CalendarAliases(defaults: defaults, state: state)
         XCTAssertNil(second.alias(for: "a"))
         XCTAssertFalse(second.isIgnored("a"))
+    }
+
+    func testNamesComeBackOnLaunchWhenTheRowHasNoNameYet() throws {
+        let defaults = UserDefaults(suiteName: "aliases-\(UUID().uuidString)")!
+        let state = LocalStateRepository(database: try .inMemory())
+        defaults.set(["a": "Work", "b": "Home"], forKey: "calendarAliases")
+        // The import already ran once, and "a" got a row without a name afterwards.
+        try state.database.write {
+            try $0.execute(sql: "INSERT INTO calendar_preferences (calendar_id, alias) VALUES ('a', '')")
+        }
+        try state.setCalendarColor("red", calendarID: "b")
+        CalendarPreferenceMigration.launch(defaults: defaults, state: state)
+        let aliases = CalendarAliases(defaults: defaults, state: state)
+        XCTAssertEqual(aliases.name(for: "a", real: "Calendar"), "Work")
+        XCTAssertEqual(aliases.name(for: "b", real: "Calendar"), "Home")
+        // The old values stay where they were.
+        XCTAssertEqual(defaults.dictionary(forKey: "calendarAliases") as? [String: String], ["a": "Work", "b": "Home"])
+    }
+
+    func testAnEmptyStoredNameShowsTheRealOne() throws {
+        let (aliases, defaults, state) = try store()
+        try state.database.write {
+            try $0.execute(sql: "INSERT INTO calendar_preferences (calendar_id, alias) VALUES ('a', '  ')")
+        }
+        let again = CalendarAliases(defaults: defaults, state: state)
+        XCTAssertNil(again.alias(for: "a"))
+        XCTAssertEqual(again.name(for: "a", real: "Calendar"), "Calendar")
+        _ = aliases
     }
 
     func testIgnoredCalendarsDoNotUseUpSuggestedColors() {

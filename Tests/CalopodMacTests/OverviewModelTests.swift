@@ -48,10 +48,10 @@ final class OverviewModelTests: XCTestCase {
     func testStaleCalendarsAgreeWithTheLabels() {
         let schedule = CalendarSchedule(
             calendars: [calendar(.current, readAgo: 60), calendar(.stale(since: nil))], events: [])
-        XCTAssertEqual(UpNext.staleCalendars(in: schedule, range: day, now: now), ["Work"])
+        XCTAssertEqual(UpNext.staleCalendars(in: schedule, range: day, now: now, name: { $0.name }), ["Work"])
         let partly = CalendarSchedule(calendars: [calendar(.current, coverage: now...now.addingTimeInterval(60))], events: [])
-        XCTAssertEqual(UpNext.staleCalendars(in: partly, range: day, now: now), ["Work"])
-        XCTAssertEqual(UpNext.staleCalendars(in: partly), [])
+        XCTAssertEqual(UpNext.staleCalendars(in: partly, range: day, now: now, name: { $0.name }), ["Work"])
+        XCTAssertEqual(UpNext.staleCalendars(in: partly, name: { $0.name }), [])
     }
 
     func testUpNextTags() {

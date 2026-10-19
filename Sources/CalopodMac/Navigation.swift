@@ -50,7 +50,7 @@ final class SidebarState {
         didSet { defaults.set(isCollapsed, forKey: Self.key) }
     }
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = AppDefaults.standard) {
         self.defaults = defaults
         isCollapsed = defaults.bool(forKey: Self.key)
     }

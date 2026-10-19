@@ -90,7 +90,7 @@ final class OverviewRefreshTests: XCTestCase {
             calendars: [item("ok", .current), item("old", .stale(since: nil)), item("hidden", .unread),
                         item("partly", .current, coverage: now...now.addingTimeInterval(60))],
             events: [])
-        XCTAssertEqual(UpNext.staleToday(in: schedule, now: now, ignored: { $0.id == "hidden" }), ["old", "partly"])
-        XCTAssertEqual(UpNext.staleToday(in: nil, now: now), [])
+        XCTAssertEqual(UpNext.staleToday(in: schedule, now: now, ignored: { $0.id == "hidden" }, name: { $0.name }), ["old", "partly"])
+        XCTAssertEqual(UpNext.staleToday(in: nil, now: now, name: { $0.name }), [])
     }
 }

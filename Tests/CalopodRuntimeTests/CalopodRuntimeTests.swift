@@ -949,3 +949,8 @@ func serviceLogsLiveBesideTheStateAndAreCreatedOwnerOnly() throws {
         #expect(mode.intValue & 0o077 == 0)
     }
 }
+
+@Test
+func testRunsAreRecognizedSoTheRealStateIsOffLimits() {
+    #expect(RunningUnderTests.isActive)
+}

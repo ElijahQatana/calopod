@@ -13,11 +13,12 @@ struct CalendarNames {
 
     /// The chosen name, unless it is the same as the provider's.
     func alias(_ id: String, real: String?) -> String? {
-        guard let alias = preferences[id]?.alias, alias != real else { return nil }
-        return alias
+        CalendarDisplayName.alias(preferences[id]?.alias, real: real)
     }
 
-    func shown(_ id: String, real: String?) -> String? { alias(id, real: real) ?? real }
+    func shown(_ id: String, real: String?) -> String? {
+        CalendarDisplayName.shown(alias: preferences[id]?.alias, real: real)
+    }
 
     func isIgnored(_ id: String) -> Bool { preferences[id]?.isIgnored == true }
 

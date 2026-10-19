@@ -13,7 +13,7 @@ struct ReplyConfirmation: Equatable {
     let warning: String
 
     /// The account and calendar, with the calendar's local name when there is one.
-    static func account(_ account: String, connection: String, calendarID: String, aliases: CalendarAliases = .shared) -> String {
+    static func account(_ account: String, connection: String, calendarID: String, aliases: CalendarAliases) -> String {
         guard let alias = aliases.alias(for: calendarID) else { return account }
         return "\(connection) / \(alias)"
     }
@@ -24,7 +24,7 @@ struct ReplyConfirmation: Equatable {
     }
 
     /// From the detail pane. The provider's own notification wording is only known during a review.
-    init(detail: InboxDetail, reply: ConflictChoice, aliases: CalendarAliases = .shared) {
+    init(detail: InboxDetail, reply: ConflictChoice, aliases: CalendarAliases) {
         let entry = detail.entry
         self.init(
             event: entry.title, told: entry.organizer ?? "The organizer", answer: InboxReviewModel.name(reply),

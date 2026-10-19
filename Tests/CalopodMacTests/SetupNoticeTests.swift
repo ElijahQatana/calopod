@@ -25,7 +25,7 @@ final class SetupNoticeTests: XCTestCase {
     }
 
     func testMissingClientIDShowsHelpAndCanBeDismissed() async throws {
-        let model = SetupModel()
+        let model = SetupModel(aliases: .isolated(), colors: .isolated())
         await model.connect(.google)
         XCTAssertTrue(try XCTUnwrap(model.notice).contains("Google sign-in has no client ID"))
         model.dismissNotice()
@@ -36,7 +36,7 @@ final class SetupNoticeTests: XCTestCase {
     }
 
     func testStartingAnotherActionClearsThePreviousError() async {
-        let model = SetupModel()
+        let model = SetupModel(aliases: .isolated(), colors: .isolated())
         await model.connect(.google)
         let google = model.notice
         await model.connect(.microsoft)

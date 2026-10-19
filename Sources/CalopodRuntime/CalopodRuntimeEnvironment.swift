@@ -57,6 +57,7 @@ public struct CalopodStateLocation: Equatable, Sendable {
             databaseURL = URL(fileURLWithPath: override).standardizedFileURL
             protectsExistingDirectory = false
         } else {
+            if applicationSupportURL == nil { RunningUnderTests.refuseRealState() }
             guard let base = applicationSupportURL
                 ?? FileManager.default.urls(
                     for: .applicationSupportDirectory,

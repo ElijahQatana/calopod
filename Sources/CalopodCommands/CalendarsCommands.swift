@@ -17,6 +17,7 @@ public struct CalendarsCommand: ParsableCommand {
             CalendarsIgnoreCommand.self,
             CalendarsUnignoreCommand.self,
             CalendarsColorCommand.self,
+            CalendarsPrunePreferencesCommand.self,
         ],
         defaultSubcommand: CalendarsListCommand.self
     )
@@ -216,6 +217,28 @@ public struct CalendarsColorCommand: ParsableCommand {
     }
 }
 
+public struct CalendarsPrunePreferencesCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "prune-preferences",
+        abstract: "Remove saved names, colors and ignores for calendars that no longer exist.",
+        discussion: "Only choices for a calendar with no binding and no connection are removed. "
+            + "Calendars you can still see are never touched. " + localOnly
+    )
+
+    @Flag(name: .long, help: "Only count the choices that would be removed.")
+    public var dryRun = false
+
+    @OptionGroup public var output: OutputOptions
+
+    public init() {}
+
+    public func run() throws {
+        try changeCalendar(command: "calendars.prune-preferences", output: output) {
+            try CalendarsEdit.prune(dryRun: dryRun, repository: $0)
+        }
+    }
+}
+
 private func changeCalendar(
     command: String, output: OutputOptions, change: (LocalStateRepository) throws -> CommandPayload
 ) throws {
@@ -245,6 +268,15 @@ enum CalendarsEdit {
         try repository.setCalendarAlias(alias, calendarID: binding.id)
         let message = alias == nil ? "Cleared the name. The real name is shown again." : "Named the calendar. " + localOnly
         return calendarsPayload([binding], message: message, repository: repository)
+    }
+
+    static func prune(dryRun: Bool, repository: LocalStateRepository) throws -> CommandPayload {
+        let count = try repository.pruneCalendarPreferences(dryRun: dryRun)
+        let things = count == 1 ? "1 saved choice" : "\(count) saved choices"
+        let message = dryRun
+            ? "\(things) would be removed. Nothing was changed."
+            : (count == 0 ? "Nothing to remove." : "Removed \(things) for calendars that no longer exist.")
+        return CommandPayload(status: "ok", message: message, count: count)
     }
 
     static func ignore(_ reference: String, _ ignored: Bool, repository: LocalStateRepository) throws -> CommandPayload {

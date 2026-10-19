@@ -54,8 +54,8 @@ final class CalendarModel {
     init(
         calendar: Calendar = .current,
         now: @escaping () -> Date = Date.init,
-        defaults: UserDefaults = .standard,
-        aliases: CalendarAliases = .shared,
+        defaults: UserDefaults = AppDefaults.standard,
+        aliases: CalendarAliases,
         load: @escaping @Sendable () throws -> CalendarSchedule = { try CalendarScheduleService().schedule() }
     ) {
         self.calendar = calendar

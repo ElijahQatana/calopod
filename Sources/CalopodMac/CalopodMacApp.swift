@@ -1,11 +1,12 @@
 import AppKit
+import CalopodCommands
 import SwiftUI
 
 @main
 struct CalopodMacApp: App {
     @NSApplicationDelegateAdaptor private var delegate: CalopodAppDelegate
     @State private var service: ServiceModel
-    @State private var setup = SetupModel()
+    @State private var setup = SetupModel(aliases: .shared, colors: .shared)
     @State private var inbox: InboxModel
     @State private var schedule: CalendarModel
     @State private var access: CalendarAccessModel
@@ -15,8 +16,11 @@ struct CalopodMacApp: App {
     @State private var sidebar = SidebarState()
 
     init() {
+        if let state = try? LocalState.repository() {
+            CalendarPreferenceMigration.launch(defaults: AppDefaults.standard, state: state)
+        }
         let access = CalendarAccessModel()
-        let service = ServiceModel(), inbox = InboxModel(), schedule = CalendarModel()
+        let service = ServiceModel(), inbox = InboxModel(), schedule = CalendarModel(aliases: .shared)
         _service = State(initialValue: service)
         _inbox = State(initialValue: inbox)
         _schedule = State(initialValue: schedule)
