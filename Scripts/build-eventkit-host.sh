@@ -28,7 +28,14 @@ cp "$repository_root/Support/EventKitHost/Info.plist" "$contents_root/Info.plist
 plutil -lint "$contents_root/Info.plist" >/dev/null
 "$repository_root/Scripts/build-calopod-icon.sh" "$contents_root/Resources"
 cp "$binary_root/calopod-eventkit-host" "$executable_path"
-# CALOPOD_SIGN_IDENTITY signs with a developer identity; the default is ad hoc.
-codesign --force --sign "${CALOPOD_SIGN_IDENTITY:--}" "$bundle_root" >/dev/null 2>&1
+# CALOPOD_SIGN_IDENTITY signs like a release (hardened runtime, Calendar entitlement); the default is ad hoc.
+. "$repository_root/Scripts/calopod-codesign.sh"
+sign_identity=${CALOPOD_SIGN_IDENTITY:--}
+if [ "$sign_identity" = "-" ]; then
+  calopod_sign_item codesign "$sign_identity" "$bundle_root"
+else
+  calopod_sign_item codesign "$sign_identity" "$bundle_root" \
+    --entitlements "$repository_root/Support/EventKitHost/Entitlements.plist"
+fi
 
 echo "Built the EventKit host."

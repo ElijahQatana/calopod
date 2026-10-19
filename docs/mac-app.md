@@ -16,6 +16,25 @@ The Calopod app does what the command line does, in windows. Build it with `Scri
 
 The first time, Overview offers a three step setup: connect an account, choose calendars, then choose where events go. Nothing is copied until you approve the preview at the end, and setup only finishes once that first sync completes. Skipping keeps your place.
 
+## Build a signed test copy
+
+Without a signing identity the app is signed ad hoc, which macOS treats as a new app after every build. To test the Calendar prompt with the same kind of signature as a release, set `CALOPOD_SIGN_IDENTITY` to a Developer ID Application identity (its name or SHA-1 hash from `security find-identity -v -p codesigning`):
+
+```sh
+CALOPOD_SIGN_IDENTITY="<identity>" Scripts/build-calopod-mac-app.sh
+```
+
+Every item is signed with the hardened runtime and a timestamp, and the Calendar helper with its Calendar entitlement. The script verifies the result and prints each item's flags, team and entitlements. A build like this is not notarized, so Gatekeeper still reports it as unnotarized.
+
+To install it, quit Calopod, copy it over the old one and ask the helper for access by hand:
+
+```sh
+ditto .build/mac-app/Calopod.app /Applications/Calopod.app
+open -W -n "/Applications/Calopod.app/Contents/MacOS/eventkit-host/Calopod EventKit Host.app" --args --request-permission
+```
+
+A first answer of `{"requestOutcome":"granted",...}` or `"denied"` means macOS asked. `"undecided"` with `"not-determined"` means it did not.
+
 ## If something looks wrong
 
 If Background sync says macOS has no record of the app, install it in the Applications folder from a signed build. If it says it is waiting for approval, allow Calopod in Login Items and choose Move to the app again. Your existing service keeps running until the app's service is approved.
