@@ -7,6 +7,7 @@ struct InboxScreen: View {
     let navigation: AppNavigation
     let colors: CalendarColors
     @State private var showingReview = false
+    @State private var windowSize = ReviewSheetLayout.fallbackWindow
 
     private var filter: InboxFilter { navigation.inboxFilter }
     private var entries: [InboxEntry] { model.board?.entries(for: filter) ?? [] }
@@ -24,6 +25,7 @@ struct InboxScreen: View {
             }
         }
         .pageEdges(inlineHeader: true)
+        .background(WindowSizeReader { windowSize = $0 })
         .task {
             await model.reload()
             settleSelection()
@@ -32,7 +34,7 @@ struct InboxScreen: View {
         .onChange(of: filter) { settleSelection() }
         .onChange(of: model.board) { settleSelection() }
         .sheet(isPresented: $showingReview, onDismiss: { Task { await model.reload() } }) {
-            InboxReviewSheet(model: model.review, colors: colors) { showingReview = false }
+            InboxReviewSheet(model: model.review, colors: colors, window: windowSize) { showingReview = false }
                 .appTypography()
         }
     }
