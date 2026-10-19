@@ -110,7 +110,9 @@ enum HumanOutputRenderer {
                     lines.append("")
                     if shared {
                         // Shared health reports use only fixed check names, statuses, and reasons.
-                        if command == "doctor" || command == "support.export" {
+                        if command == "doctor", item.id == "iphone-feed", let text = item.label {
+                            lines.append(clean(text))
+                        } else if command == "doctor" || command == "support.export" {
                             lines.append("\(readable(item.id)): \(readable(item.kind))")
                             if let reason = item.reason { lines.append("  Reason: \(readable(reason))") }
                             if command == "doctor", ["calendar-permission", "permission-calendar"].contains(item.id), let helper = item.label { lines.append("  Helper: \(clean(helper))") }

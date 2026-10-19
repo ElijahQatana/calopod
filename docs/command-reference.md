@@ -13,10 +13,13 @@ calopod availability
 calopod sync
 calopod inbox [activity | refresh | inspect | acknowledge | review | config]
 calopod agent enable | disable | pause | resume | interval | run-now | status
+calopod iphone [on | off | status]
 calopod doctor
 calopod support export | backup | verify | restore
 calopod-setup [--arms]
 ```
+
+`iphone on` and `iphone off` choose whether the Mac app uploads the [iPhone feed](iphone-feed.md); `iphone status` shows the choice and how the last upload went. `on` needs the Mac app, and `off` deletes the uploaded copy.
 
 `connection add` takes `mac`, `google` or `microsoft`. `events` and `availability` take `--cached` to read local data without refreshing.
 

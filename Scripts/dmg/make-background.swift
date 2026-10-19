@@ -1,25 +1,44 @@
-// Draws the installer window background: background.png (660x440) and background@2x.png
-// (1320x880, 144 dpi). dmgbuild pairs them by name.
-//   swift Scripts/dmg/make-background.swift <output directory>
+// Draws the installer window background: background.png and background@2x.png (144 dpi), at the
+// content size in Scripts/dmg/layout.json. dmgbuild pairs them by name.
+//   swift Scripts/dmg/make-background.swift Scripts/dmg/layout.json <output directory>
 //
-// Points use a top-left origin so they line up with the icon positions in settings.py. The
+// Points use a top-left origin so they line up with the icon positions in settings.py, which
+// reads the same layout file. The script exits with an error if anything sits closer than
+// 40 points to an edge or if two pieces overlap. The
 // colors are the accent and pane tokens from Sources/CalopodMac/Design.swift, light appearance
 // (Finder does not switch a disk image background for dark mode). The squid is the geometry
 // of Sources/CalopodMac/SquidMark.swift; keep the two in step.
 import AppKit
 
-let width = 660.0, height = 440.0
-guard CommandLine.arguments.count == 2 else {
-    FileHandle.standardError.write(Data("usage: make-background.swift <output directory>\n".utf8))
+guard CommandLine.arguments.count == 3 else {
+    FileHandle.standardError.write(Data("usage: make-background.swift <layout.json> <output directory>\n".utf8))
     exit(64)
 }
-let outDir = URL(fileURLWithPath: CommandLine.arguments[1])
-
+let layout = try! JSONSerialization.jsonObject(
+    with: Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[1]))) as! [String: Double]
+let outDir = URL(fileURLWithPath: CommandLine.arguments[2])
+let width = layout["width"]!, height = layout["height"]!
+let iconHalf = layout["iconSize"]! / 2
+let iconY = layout["iconCenterY"]!
+let appX = layout["appCenterX"]!, applicationsX = layout["applicationsCenterX"]!
+let midX = (appX + applicationsX) / 2
+let arrowGap = 30.0  // space between an icon and the arrow
+let arrowStart = appX + iconHalf + arrowGap, arrowTip = applicationsX - iconHalf - arrowGap
+let squidTop = 44.0, squidScale: CGFloat = 1.15
+let headlineY = 345.0, hintY = 376.0
+let headline = "Drag Calopod to Applications" as NSString
+let hint = "Then add the calopod command from Settings, Command line." as NSString
 func color(_ hex: UInt32, _ alpha: CGFloat = 1) -> NSColor {
     NSColor(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255,
             blue: CGFloat(hex & 0xFF) / 255, alpha: alpha)
 }
 let accent = color(0xB45309)
+let headlineAttrs: [NSAttributedString.Key: Any] = [
+    .font: NSFont.systemFont(ofSize: 17, weight: .semibold), .foregroundColor: accent,
+]
+let hintAttrs: [NSAttributedString.Key: Any] = [
+    .font: NSFont.systemFont(ofSize: 12.5, weight: .regular), .foregroundColor: accent.withAlphaComponent(0.75),
+]
 let paneTop = color(0xFFFFFF), paneBottom = color(0xF6F4F1)
 
 func squid() -> (body: CGPath, limbs: CGPath) {
@@ -74,8 +93,8 @@ func render(scale: Int, to url: URL) {
     // Squid mark, centered near the top.
     let marks = squid()
     cg.saveGState()
-    let s: CGFloat = 1.15
-    cg.translateBy(x: (width - 44 * s) / 2, y: 22)
+    let s = squidScale
+    cg.translateBy(x: midX - 22 * s, y: squidTop)
     cg.scaleBy(x: s, y: s)
     cg.setFillColor(accent.cgColor)
     cg.addPath(marks.body)
@@ -87,34 +106,52 @@ func render(scale: Int, to url: URL) {
     cg.strokePath()
     cg.restoreGState()
 
-    // Dotted arrow from the app icon to the Applications icon, both centered at y = 165.
+    // Dotted arrow from the app icon to the Applications icon.
     accent.setStroke()
     let shaft = NSBezierPath()
-    shaft.move(to: NSPoint(x: 262, y: 165))
-    shaft.line(to: NSPoint(x: 396, y: 165))
+    shaft.move(to: NSPoint(x: arrowStart, y: iconY))
+    shaft.line(to: NSPoint(x: arrowTip - 12, y: iconY))
     shaft.lineWidth = 5
     shaft.lineCapStyle = .round
     shaft.setLineDash([0.1, 12], count: 2, phase: 0)
     shaft.stroke()
     let head = NSBezierPath()
-    head.move(to: NSPoint(x: 388, y: 149))
-    head.line(to: NSPoint(x: 408, y: 165))
-    head.line(to: NSPoint(x: 388, y: 181))
+    head.move(to: NSPoint(x: arrowTip - 20, y: iconY - 16))
+    head.line(to: NSPoint(x: arrowTip, y: iconY))
+    head.line(to: NSPoint(x: arrowTip - 20, y: iconY + 16))
     head.lineWidth = 5
     head.lineCapStyle = .round
     head.lineJoinStyle = .round
     head.stroke()
 
-    // Text stays clear of the bottom edge: the window height includes the title bar.
-    let attrs: [NSAttributedString.Key: Any] = [
-        .font: NSFont.systemFont(ofSize: 17, weight: .semibold), .foregroundColor: accent,
-    ]
-    let line = "Drag Calopod to Applications" as NSString
-    let size = line.size(withAttributes: attrs)
-    line.draw(at: NSPoint(x: (width - size.width) / 2, y: 262), withAttributes: attrs)
+    let headSize = headline.size(withAttributes: headlineAttrs)
+    headline.draw(at: NSPoint(x: midX - headSize.width / 2, y: headlineY), withAttributes: headlineAttrs)
+    let hintSize = hint.size(withAttributes: hintAttrs)
+    hint.draw(at: NSPoint(x: midX - hintSize.width / 2, y: hintY), withAttributes: hintAttrs)
 
     NSGraphicsContext.current = nil
     try! rep.representation(using: .png, properties: [:])!.write(to: url)
+}
+
+// Bounding boxes in points. The icon boxes include Finder's label under each icon.
+let hs = headline.size(withAttributes: headlineAttrs), ht = hint.size(withAttributes: hintAttrs)
+let pieces: [(String, CGRect)] = [
+    ("squid", CGRect(x: midX - 22 * squidScale, y: squidTop, width: 44 * squidScale, height: 56 * squidScale)),
+    ("app icon", CGRect(x: appX - 60, y: iconY - iconHalf, width: 120, height: iconHalf * 2 + 28)),
+    ("Applications icon", CGRect(x: applicationsX - 60, y: iconY - iconHalf, width: 120, height: iconHalf * 2 + 28)),
+    ("arrow", CGRect(x: arrowStart, y: iconY - 16, width: arrowTip - arrowStart, height: 32)),
+    ("headline", CGRect(x: midX - hs.width / 2, y: headlineY, width: hs.width, height: hs.height)),
+    ("hint", CGRect(x: midX - ht.width / 2, y: hintY, width: ht.width, height: ht.height)),
+]
+var problems: [String] = []
+let inside = CGRect(x: 40, y: 40, width: width - 80, height: height - 80)
+for (name, rect) in pieces where !inside.contains(rect) { problems.append("\(name) is within 40 points of an edge") }
+for (i, a) in pieces.enumerated() {
+    for b in pieces[(i + 1)...] where a.1.intersects(b.1) { problems.append("\(a.0) overlaps \(b.0)") }
+}
+if !problems.isEmpty {
+    FileHandle.standardError.write(Data((problems.joined(separator: "\n") + "\n").utf8))
+    exit(65)
 }
 
 try! FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)

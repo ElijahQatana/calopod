@@ -54,6 +54,20 @@ codesign --verify --strict --check-notarization -R=notarized Calopod-*/bin/calop
 xcrun stapler validate -q "Calopod-*/eventkit-host/Calopod EventKit Host.app"
 ```
 
+## iPhone feed signing
+
+The iPhone feed needs the app to use iCloud, which needs a provisioning profile. Create a Developer ID profile for the app's App ID with iCloud (CloudKit) and the container `iCloud.pro.elijahquintana.calopod`, download it, and pass it to the app build:
+
+```sh
+CALOPOD_SIGN_IDENTITY="$signing_identity" \
+CALOPOD_PROVISIONING_PROFILE=/path/to/Calopod.provisionprofile \
+  Scripts/build-calopod-mac-app.sh
+```
+
+The script copies the profile to `Contents/embedded.provisionprofile` and signs the app with the iCloud entitlements, taking the app and team identifiers from the profile. Only the app's main executable can hold these entitlements, so the agent and the command are signed as before. Without `CALOPOD_PROVISIONING_PROFILE` the app is signed with no iCloud keys, and the feed's switch in Settings stays off. A profile needs a real signing identity, not ad hoc.
+
+Deploy the record type to the Production schema before the first release that uses it. The list is in [iPhone feed](iphone-feed.md). A signed, notarized app can't use the Development environment.
+
 ## Disk image
 
 The Mac app ships as a drag-to-install disk image. Build the app signed, then package it:
@@ -64,7 +78,7 @@ CALOPOD_BUILD_CONFIGURATION=release CALOPOD_SIGN_IDENTITY="$signing_identity" Sc
 Scripts/make-calopod-dmg.sh --identity "$signing_identity"
 ```
 
-The script checks the app first and refuses one that is unsigned, ad hoc, missing the Hardened Runtime or missing the Calendar entitlement on the app or the helper. `--allow-adhoc` skips that for a local test and prints a warning. It writes `dist/Calopod-<version>.dmg` and a `.sha256` file, signs the image with `--identity` (default `CALOPOD_SIGN_IDENTITY`) and runs `hdiutil verify`. The window layout is written to the image directly, so no Finder session is opened. The first run installs a pinned copy of dmgbuild into `.build/dmg-venv`, which needs network access once.
+The script checks the app first and refuses one that is unsigned, ad hoc, missing the Hardened Runtime or missing the Calendar entitlement on the app or the helper. `--allow-adhoc` skips that for a local test and prints a warning. It writes `dist/Calopod-<version>.dmg` and a `.sha256` file, signs the image with `--identity` (default `CALOPOD_SIGN_IDENTITY`) and runs `hdiutil verify`. The window layout is written to the image directly, so no Finder session is opened. Window size, background size and icon positions come from `Scripts/dmg/layout.json`. The image holds only the app and the Applications link; the hint about the command line is part of the background. The first run installs a pinned copy of dmgbuild into `.build/dmg-venv`, which needs network access once.
 
 `Scripts/build-calopod-release.sh --dmg` builds the app and the image after the ZIP, with the same signing identity.
 

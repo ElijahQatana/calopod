@@ -132,12 +132,7 @@ if [ ! -x "$venv/bin/dmgbuild" ]; then
 fi
 art_root=$(mktemp -d "$build_root/art.XXXXXX")
 trap 'rm -rf "$art_root"' EXIT HUP INT TERM
-swift "$dmg_support/make-background.swift" "$art_root" || fail "Could not draw the background." 65
-
-hint_file="$art_root/Install the command line.txt"
-printf '%s\n%s\n' \
-  "Calopod can add the calopod command to your Terminal." \
-  "Open Calopod, then Settings, then Command line." > "$hint_file"
+swift "$dmg_support/make-background.swift" "$dmg_support/layout.json" "$art_root" || fail "Could not draw the background." 65
 
 # --- Build the image. ---
 icon_name=$(plutil -extract CFBundleIconFile raw -o - "$info_plist" 2>/dev/null || true)
@@ -160,7 +155,7 @@ dmg_path="$output_directory/$dmg_name"
 rm -f "$dmg_path" "$dmg_path.sha256"
 
 set -- -s "$dmg_support/settings.py" -D "app=$app_path" -D "background=$art_root/background.png" \
-  -D "hint=$hint_file"
+  -D "layout=$dmg_support/layout.json"
 [ -z "$icon_file" ] || set -- "$@" -D "icon=$icon_file"
 # hdiutil prints deprecation notices on every call; show the output only on failure.
 "$venv/bin/dmgbuild" "$@" "$app_name" "$dmg_path" > "$art_root/dmgbuild.log" 2>&1 \

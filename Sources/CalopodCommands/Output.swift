@@ -98,6 +98,8 @@ public struct CommandPayload: Codable, Equatable, Sendable {
     public let helperPath: String?
     public let accessStatus: String?
     public let fix: String?
+    /// For `calopod notifications`.
+    public let notifications: NotificationSettingsOutput?
 
     public init(
         status: String,
@@ -146,7 +148,8 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         ignoredCount: Int? = nil,
         helperPath: String? = nil,
         accessStatus: String? = nil,
-        fix: String? = nil
+        fix: String? = nil,
+        notifications: NotificationSettingsOutput? = nil
     ) {
         self.status = status
         self.message = message
@@ -195,6 +198,7 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         self.helperPath = helperPath
         self.accessStatus = accessStatus
         self.fix = fix
+        self.notifications = notifications
     }
 }
 

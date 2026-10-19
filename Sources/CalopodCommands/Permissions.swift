@@ -11,7 +11,7 @@ import ServiceManagement
 /// What the app and `calopod doctor` say about the three things Calopod needs from macOS.
 public struct PermissionReading: Equatable, Sendable {
     public enum ID: String, Sendable, CaseIterable {
-        case calendar, loginItems, keychain
+        case calendar, loginItems, keychain, notifications
     }
 
     public enum Level: String, Sendable {
@@ -38,6 +38,7 @@ public struct PermissionReading: Equatable, Sendable {
         case .calendar: "Calendar access"
         case .loginItems: "Background service approval"
         case .keychain: "Saved sign-ins"
+        case .notifications: "Notifications"
         }
     }
 }
@@ -66,6 +67,15 @@ public enum BackgroundServiceState: Equatable, Sendable {
         }
     }
     #endif
+}
+
+/// Whether macOS lets the app post notifications. Only the app can read it.
+public enum NotificationPermissionState: Equatable, Sendable {
+    /// Not running as an installed app, so macOS has nothing to say.
+    case unavailable
+    case notDetermined
+    case denied
+    case allowed
 }
 
 /// How reading the saved Google and Microsoft sign-ins went.
@@ -163,6 +173,33 @@ public enum Permissions {
                 .unknown, "Not checked",
                 "Syncing moves into the app once Calopod runs as an installed app, not from a build folder.",
                 "unavailable")
+        }
+    }
+
+    public static let notificationsURL = "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
+
+    public static func notifications(_ state: NotificationPermissionState?) -> PermissionReading {
+        func reading(_ level: PermissionReading.Level, _ text: String, _ detail: String, _ reason: String) -> PermissionReading {
+            PermissionReading(id: .notifications, level: level, state: text, detail: detail, reason: reason)
+        }
+        switch state {
+        case .allowed?:
+            return reading(.allowed, "Allowed", "Calopod can remind you before meetings.", "allowed")
+        case .notDetermined?:
+            return reading(
+                .notAsked, "Not asked yet",
+                "macOS has not asked yet. Choose Allow and macOS will ask once. Until then no reminders are shown.",
+                "not-asked")
+        case .denied?:
+            return reading(
+                .blocked, "Denied",
+                "Notifications are off for Calopod. Turn them on in System Settings, Notifications, Calopod.", "denied")
+        case .unavailable?:
+            return reading(
+                .unknown, "Not checked",
+                "Reminders need Calopod installed as an app, not run from a build folder.", "unavailable")
+        case nil:
+            return reading(.unknown, "Not checked", "Calopod has not asked macOS yet.", "not-checked")
         }
     }
 

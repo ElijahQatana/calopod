@@ -150,6 +150,17 @@ grep -q -- '--entitlements "$outer_entitlements"' "$repository_root/Scripts/buil
 for item in '"$contents_root/MacOS/calopod-agent"' '"$contents_root/MacOS/calopod"' '"$bundle_root"'; do
   grep -qF "sign_outer $item" "$repository_root/Scripts/build-calopod-mac-app.sh"
 done
+# The iCloud entitlements and the profile go on the app only, and only when a profile is given.
+build_script="$repository_root/Scripts/build-calopod-mac-app.sh"
+grep -q 'embedded.provisionprofile' "$build_script"
+grep -q 'if \[ -n "\$profile" \]' "$build_script"
+for key in application-identifier developer.team-identifier developer.icloud-services \
+  developer.icloud-container-identifiers developer.icloud-container-environment; do
+  grep -q "com.apple.$key" "$build_script"
+done
+! grep -q 'icloud' "$repository_root/Support/Mac/Entitlements.plist"
+grep -q 'CALOPOD_PROVISIONING_PROFILE needs CALOPOD_SIGN_IDENTITY' "$build_script"
+
 signed_app="$test_root/Calopod.app"
 mkdir -p "$signed_app"
 shown=$(

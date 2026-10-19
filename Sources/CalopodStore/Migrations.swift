@@ -21,6 +21,8 @@ extension CalopodDatabase {
         "v17_copy_external_id",
         "v18_calendar_preferences",
         "v19_calendar_view_hidden",
+        "v20_notification_settings",
+        "v21_iphone_feed",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -405,6 +407,37 @@ extension CalopodDatabase {
                     calendar_id TEXT NOT NULL,
                     PRIMARY KEY (view, calendar_id)
                 ) WITHOUT ROWID;
+                """)
+        }
+
+        // Meeting reminders. One row, like the Inbox context margins.
+        migrator.registerMigration("v20_notification_settings") { database in
+            try database.execute(sql: """
+                CREATE TABLE notification_settings (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    enabled INTEGER NOT NULL,
+                    first_enabled INTEGER NOT NULL,
+                    first_minutes INTEGER NOT NULL CHECK (first_minutes BETWEEN 1 AND 120),
+                    final_enabled INTEGER NOT NULL,
+                    final_minutes INTEGER NOT NULL CHECK (final_minutes BETWEEN 1 AND 120),
+                    hide_titles INTEGER NOT NULL
+                );
+                """)
+        }
+
+        // Whether this Mac publishes a read-only copy for the iPhone, and how the last upload went.
+        // One row. `published_run_id` is the sync run the last upload was built from.
+        migrator.registerMigration("v21_iphone_feed") { database in
+            try database.execute(sql: """
+                CREATE TABLE iphone_feed (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    is_enabled INTEGER NOT NULL,
+                    remove_pending INTEGER NOT NULL DEFAULT 0,
+                    published_run_id TEXT,
+                    published_at DATETIME,
+                    failed_at DATETIME,
+                    failure TEXT
+                )
                 """)
         }
 
