@@ -51,6 +51,38 @@ struct SnapshotStoreTests {
     }
 }
 
+struct CloudKitAssembleTests {
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    private func payloads(_ snapshot: Snapshot) throws -> [(kind: String, data: Data)] {
+        func wrap<R: SnapshotRecord>(_ record: R) throws -> Data {
+            try SnapshotCoding.encode(SnapshotEnvelope(generatedAt: snapshot.publishedAt, record: record))
+        }
+        return try snapshot.inbox.map { ("inbox-item", try wrap($0)) }
+            + snapshot.availability.map { ("availability-day", try wrap($0)) }
+            + [("calendars", try wrap(CalendarList(calendars: snapshot.calendars))), ("sync-status", try wrap(snapshot.status))]
+    }
+
+    @Test func noRecordsMeansNothingPublished() throws {
+        #expect(try CloudKitReader.assemble([]) == .nothingPublished)
+    }
+
+    @Test func recordsBecomeOneSnapshot() throws {
+        let fixture = FixtureReader.snapshot(publishedAt: now, now: now)
+        guard case .snapshot(let result) = try CloudKitReader.assemble(try payloads(fixture)) else { Issue.record("no snapshot"); return }
+        #expect(result.inbox.count == fixture.inbox.count)
+        #expect(result.availability.count == fixture.availability.count)
+        #expect(result.calendars == fixture.calendars)
+        #expect(result.status == fixture.status)
+    }
+
+    @Test func newerSchemaNeedsANewerApp() throws {
+        let data = try SnapshotCoding.encode(
+            SnapshotEnvelope(generatedAt: now, record: SyncStatus(lastSyncAt: now), schemaVersion: SnapshotSchema.currentVersion + 1))
+        #expect(throws: ReaderError.needsNewerApp) { try CloudKitReader.assemble([("sync-status", data)]) }
+    }
+}
+
 struct SignedOutTests {
     private struct Signed: ICloudAvailability { let isSignedIn: Bool }
 

@@ -13,13 +13,14 @@ struct SystemICloud: ICloudAvailability {
 
 /// Reads the snapshot the Mac publishes to the user's private iCloud database.
 ///
-/// PENDING THE SCHEMA (#243): the zone name, record type and field names below are
-/// placeholders. Only this file should change when the Mac side settles them.
+/// The names below match docs/iphone-feed.md on the Mac publisher's branch: one `Snapshot` record
+/// per Inbox item and per day of busy time, plus one each for the calendar list and sync status,
+/// all in the `Snapshots` zone. They are copied, not shared, so keep them in step with the Mac.
 struct CloudKitReader: SnapshotReader {
     var iCloud: ICloudAvailability = SystemICloud()
 
     static let containerID = "iCloud.pro.elijahquintana.calopod"
-    private static let zoneName = "Snapshot"
+    private static let zoneName = "Snapshots"
     private static let kindField = "kind"
     private static let payloadField = "payload"
 
@@ -45,7 +46,7 @@ struct CloudKitReader: SnapshotReader {
         return (kind, data)
     }
 
-    private static func assemble(_ payloads: [(kind: String, data: Data)]) throws -> SnapshotResult {
+    static func assemble(_ payloads: [(kind: String, data: Data)]) throws -> SnapshotResult {
         guard !payloads.isEmpty else { return .nothingPublished }
         do {
             var inbox: [InboxItem] = []
@@ -55,11 +56,11 @@ struct CloudKitReader: SnapshotReader {
             var publishedAt = Date.distantPast
             for (kind, data) in payloads {
                 switch kind {
-                case "inbox":
+                case "inbox-item":
                     let item = try SnapshotCoding.decode(InboxItem.self, from: data)
                     inbox.append(item.record)
                     publishedAt = max(publishedAt, item.generatedAt)
-                case "availability":
+                case "availability-day":
                     let day = try SnapshotCoding.decode(AvailabilityDay.self, from: data)
                     availability.append(day.record)
                     publishedAt = max(publishedAt, day.generatedAt)
@@ -67,7 +68,7 @@ struct CloudKitReader: SnapshotReader {
                     let list = try SnapshotCoding.decode(CalendarList.self, from: data)
                     calendars = list.record.calendars
                     publishedAt = max(publishedAt, list.generatedAt)
-                case "status":
+                case "sync-status":
                     let current = try SnapshotCoding.decode(SyncStatus.self, from: data)
                     status = current.record
                     publishedAt = max(publishedAt, current.generatedAt)
