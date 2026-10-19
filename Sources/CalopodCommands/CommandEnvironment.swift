@@ -133,7 +133,9 @@ func appFailureMessage(_ error: Error) -> String {
         case .notInstalled: return "Background sync is not installed yet."
         case .rootUnsupported: return "Background sync can only be changed by the signed-in user."
         case .appServiceRunning: return "Calopod's own background service is already running, so the old source install was not started."
-        case .runsFromApp: return "Automatic sync runs from the app. Use Pause, or remove the background service on the Background sync screen."
+        case .runsFromApp:
+            return "The app's own background service is the one syncing. Use Pause to stop it for a while, or Remove on the Background sync screen to take it away. To switch off only an old source install, use Turn off source install there."
+        case .sourceInstallStillOn: return "The old source install could not be turned off. Try again in a moment."
         case .unavailable, .operationFailed:
             return "Background sync could not be changed. Calopod needs to be installed in Applications and signed to run in the background."
         }
@@ -171,7 +173,9 @@ func commandFailure(_ error: Error) -> (message: String, exitCode: CalopodExitCo
         case .appServiceRunning:
             ("The Calopod app's own service is running automatic sync, so the source install was not started. Use the app's Background sync screen to manage it.", .unavailable)
         case .runsFromApp:
-            ("Automatic sync runs from the Calopod app. Use calopod agent pause, or remove the background service in the app.", .unavailable)
+            ("The Calopod app's own service is the one running automatic sync. Use calopod agent pause to stop it for a while, or remove it in the app. To switch off only an old source install, run calopod agent disable --source.", .unavailable)
+        case .sourceInstallStillOn:
+            ("The old source install could not be turned off. Run doctor for details.", .temporaryFailure)
         case .unavailable:
             ("The user service controller is unavailable.", .unavailable)
         case .operationFailed:

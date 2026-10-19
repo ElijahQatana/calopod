@@ -8,6 +8,8 @@ enum LaunchAgentControlError: Error, Equatable {
     case appServiceRunning
     /// The app's service is not switched off with `agent disable`.
     case runsFromApp
+    /// The old source install could not be unloaded and disabled.
+    case sourceInstallStillOn
     case operationFailed(String)
 }
 

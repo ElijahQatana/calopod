@@ -110,7 +110,7 @@ struct ServiceScreen: View {
                         Banner(kind: .info, text: "The old source-installed service is still on next to the app's service. Turn it off so only the app's service syncs.")
                     }
                     CardRow {
-                        Button("Turn off source install") { Task { await model.installBundledService() } }
+                        Button("Turn off source install") { Task { await model.turnOffSourceInstall() } }
                             .disabled(model.isBusy)
                     }
                 }

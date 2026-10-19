@@ -343,6 +343,16 @@ public struct AgentControlService: Sendable {
         }
     }
 
+    /// Unloads and disables only the old source install, leaving the app's service and the shared
+    /// paused and enabled state alone, so the app's service keeps syncing.
+    public func disableSourceInstall() throws {
+        do {
+            try makeController().disable()
+        } catch LaunchAgentControlError.operationFailed {
+            throw LaunchAgentControlError.sourceInstallStillOn
+        }
+    }
+
     /// Turns automatic sync on, like `calopod agent enable`. When the app's service is the live one it
     /// is started again if it is not running, and nothing happens when it already is.
     public func enable() async throws {
