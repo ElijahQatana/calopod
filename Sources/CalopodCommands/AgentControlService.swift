@@ -1,5 +1,6 @@
 #if os(macOS)
 import CalopodDomain
+import CalopodEventKit
 import CalopodRuntime
 import CalopodStore
 import Foundation
@@ -156,6 +157,8 @@ public struct AgentControlService: Sendable {
     public static let bundledLabel = "pro.elijahquintana.calopod.app-agent"
 
     private let bundledAgentExecutable: URL?
+    /// The app's registration when this process can read it. Nil means launchd alone vouches for it.
+    private let bundledRegistration: BackgroundServiceState?
     private let makeController: @Sendable () throws -> LaunchAgentController
     private let baseEnvironment: @Sendable () -> [String: String]
     private let reregisterBundled: @Sendable () async throws -> Void
@@ -175,21 +178,58 @@ public struct AgentControlService: Sendable {
         )
     }
 
-    /// The service for whoever is running: the app's own agent when this copy of Calopod has it
-    /// registered and approved, otherwise the source install. Works from the app and its command.
-    public static func current(registration: BackgroundServiceState = .read()) -> AgentControlService {
-        guard registration == .enabled else { return AgentControlService() }
-        let executable = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/calopod-agent")
-        return AgentControlService(bundledAgentExecutable: executable)
+    /// The service for whoever is running: the app's own agent when it is live, otherwise the source
+    /// install. It is live when launchd has its label loaded, or when the app holding this command has
+    /// it registered. The command's real path is used, so `~/.local/bin/calopod` linked into the app
+    /// finds that app even though the running bundle is not the app.
+    public static func current() -> AgentControlService {
+        current(
+            executableURL: AppServiceLocator.realExecutableURL(),
+            mainBundleURL: Bundle.main.bundleURL,
+            registration: { BackgroundServiceState.read() },
+            makeController: { try LaunchAgentController() },
+            baseEnvironment: { ProcessInfo.processInfo.environment }
+        )
+    }
+
+    static func current(
+        executableURL: URL,
+        mainBundleURL: URL,
+        registration: () -> BackgroundServiceState,
+        makeController: @escaping @Sendable () throws -> LaunchAgentController,
+        baseEnvironment: @escaping @Sendable () -> [String: String],
+        reregisterBundled: @escaping @Sendable () async throws -> Void = {
+            let service = SMAppService.agent(plistName: BackgroundServiceState.agentPlistName)
+            try await service.unregister()
+            try service.register()
+        }
+    ) -> AgentControlService {
+        let resolution = AppServiceLocator.resolve(
+            executableURL: executableURL,
+            mainBundleURL: mainBundleURL,
+            registration: registration,
+            launchd: {
+                (try? makeController())?.service(label: bundledLabel) ?? LaunchdService(loaded: false, program: nil)
+            }
+        )
+        return AgentControlService(
+            bundledAgentExecutable: resolution.agentExecutable,
+            bundledRegistration: resolution.registration,
+            makeController: makeController,
+            baseEnvironment: baseEnvironment,
+            reregisterBundled: reregisterBundled
+        )
     }
 
     init(
         bundledAgentExecutable: URL?,
+        bundledRegistration: BackgroundServiceState? = nil,
         makeController: @escaping @Sendable () throws -> LaunchAgentController,
         baseEnvironment: @escaping @Sendable () -> [String: String],
         reregisterBundled: @escaping @Sendable () async throws -> Void = {}
     ) {
         self.bundledAgentExecutable = bundledAgentExecutable
+        self.bundledRegistration = bundledRegistration
         self.makeController = makeController
         self.baseEnvironment = baseEnvironment
         self.reregisterBundled = reregisterBundled
@@ -237,8 +277,7 @@ public struct AgentControlService: Sendable {
         let configuration = AgentServiceConfiguration(
             programURL: executable,
             stateURL: location.databaseURL,
-            eventKitHostURL: executable.deletingLastPathComponent()
-                .appendingPathComponent("eventkit-host/Calopod EventKit Host.app", isDirectory: true),
+            eventKitHostURL: Self.bundledHost(for: executable),
             intervalSeconds: override?.intervalSeconds ?? AgentScheduleDefaults.intervalSeconds,
             jitterSeconds: AgentScheduleDefaults.jitterSeconds,
             lookbackDays: AgentScheduleDefaults.lookbackDays,
@@ -249,7 +288,7 @@ public struct AgentControlService: Sendable {
             snapshot: LaunchAgentSnapshot(
                 installed: true,
                 loaded: loaded,
-                disabled: false,
+                disabled: bundledRegistration.map { $0 != .enabled && !loaded } ?? false,
                 configuration: configuration
             ),
             environment: {
@@ -265,6 +304,21 @@ public struct AgentControlService: Sendable {
         )
     }
 
+    /// The app's own service is the live one, not the source install.
+    var runsFromApp: Bool { bundledAgentExecutable != nil }
+
+    /// Asks the Calendar helper of the live service, so the command and the app's service agree.
+    var calendarAccess: CalendarAccessService {
+        guard let executable = bundledAgentExecutable else { return CalendarAccessService() }
+        return CalendarAccessService(hostApp: Self.bundledHost(for: executable))
+    }
+
+    private static func bundledHost(for executable: URL) -> URL {
+        (try? EventKitHostLocator.resolve(variables: [:], executableURL: executable))
+            ?? executable.deletingLastPathComponent()
+            .appendingPathComponent("eventkit-host/\(EventKitHostLocator.appName)", isDirectory: true)
+    }
+
     func statusPayload() throws -> CommandPayload {
         let context: Context
         do {
@@ -274,7 +328,9 @@ public struct AgentControlService: Sendable {
                 status: "failed", message: "The automatic-sync configuration is invalid.",
                 installed: true, failureCategory: "configuration")
         }
-        return try agentStatusPayload(snapshot: context.snapshot, environment: context.environment)
+        return try agentStatusPayload(
+            snapshot: context.snapshot, environment: context.environment,
+            usesBundled: context.isBundled, sourceLoaded: context.sourceLoaded)
     }
 
     /// The result printed after a control command, from the service that is live.
@@ -316,7 +372,9 @@ public struct AgentControlService: Sendable {
     private func status(in context: Context) throws -> AgentControlStatus {
         let payload = try agentStatusPayload(
             snapshot: context.snapshot,
-            environment: context.environment
+            environment: context.environment,
+            usesBundled: context.isBundled,
+            sourceLoaded: context.sourceLoaded
         )
         return AgentControlStatus(
             state: payload.status,

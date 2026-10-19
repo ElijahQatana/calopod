@@ -182,6 +182,19 @@ public struct AgentIntervalCommand: ParsableCommand {
     public func run() throws {
         #if os(macOS)
         do {
+            let service = AgentControlService.current()
+            if service.runsFromApp {
+                // The app's service takes only an interval; its window is the app's own default.
+                guard jitterSeconds == nil, lookbackDays == nil, horizonDays == nil else {
+                    throw ValidationError("The Calopod app's service takes only --seconds. Its window is the same as in the app.")
+                }
+                try service.setInterval(seconds: seconds)
+                try OutputRenderer.write(
+                    command: "agent.interval",
+                    payload: try service.controlResult(message: "The automatic-sync interval was updated."),
+                    format: output.format)
+                return
+            }
             let controller = try LaunchAgentController()
             try controller.updateSchedule(
                 intervalSeconds: seconds,
@@ -217,13 +230,19 @@ public struct AgentRunNowCommand: AsyncParsableCommand {
     public func run() async throws {
         #if os(macOS)
         do {
-            let controller = try LaunchAgentController()
-            let environment = try installedAgentEnvironment(controller: controller)
-            let configuration = try requireInstalledConfiguration(controller)
-            let report = await CalopodAgentRunner(
-                environment: environment,
-                schedule: try AgentSchedule(environment: configuration.environment)
-            ).runOnce(ignorePause: true)
+            let service = AgentControlService.current()
+            let report: AgentRunReport
+            if service.runsFromApp {
+                report = try await service.syncNow()
+            } else {
+                let controller = try LaunchAgentController()
+                let environment = try installedAgentEnvironment(controller: controller)
+                let configuration = try requireInstalledConfiguration(controller)
+                report = await CalopodAgentRunner(
+                    environment: environment,
+                    schedule: try AgentSchedule(environment: configuration.environment)
+                ).runOnce(ignorePause: true)
+            }
             try OutputRenderer.write(
                 command: "agent.run-now",
                 payload: CommandPayload(
@@ -323,6 +342,8 @@ func agentStatusPayload(
 func agentStatusPayload(
     snapshot: LaunchAgentSnapshot,
     environment makeEnvironment: () throws -> CalopodRuntimeEnvironment,
+    usesBundled: Bool = false,
+    sourceLoaded: Bool = false,
     now: Date = Date()
 ) throws -> CommandPayload {
     guard let configuration = snapshot.configuration else {
@@ -341,6 +362,7 @@ func agentStatusPayload(
     var paused = false
     var lastSuccessAgeSeconds: Int?
     var failureCategory: String?
+    var lastRun: (status: String, age: Int)?
     if stateReady {
         let repository = try makeEnvironment().repository()
         paused = try repository.agentControl().isPaused
@@ -348,9 +370,11 @@ func agentStatusPayload(
             let reference = success.finishedAt ?? success.startedAt
             lastSuccessAgeSeconds = max(0, Int(now.timeIntervalSince(reference)))
         }
-        if let latest = try repository.latestSyncRun(trigger: "automatic"),
-           latest.status == "failed" || latest.status == "interrupted" {
-            failureCategory = genericFailureCategory(latest.errorCode)
+        if let latest = try repository.latestSyncRun(trigger: "automatic") {
+            lastRun = (latest.status, max(0, Int(now.timeIntervalSince(latest.finishedAt ?? latest.startedAt))))
+            if latest.status == "failed" || latest.status == "interrupted" {
+                failureCategory = genericFailureCategory(latest.errorCode)
+            }
         }
     }
 
@@ -359,13 +383,15 @@ func agentStatusPayload(
     let message: String
     if !enabled {
         status = "disabled"
-        message = "Automatic synchronization is disabled. Run calopod agent enable, or choose Enable automatic sync in the Calopod app."
+        message = usesBundled
+            ? "Automatic synchronization is disabled. Run calopod agent enable, or choose Enable automatic sync in the Calopod app."
+            : "Automatic synchronization is disabled. Run calopod agent enable."
     } else if paused {
         status = "paused"
         message = "Automatic synchronization is paused."
     } else if failureCategory != nil {
         status = "failed"
-        message = "The most recent automatic synchronization failed."
+        message = "The most recent automatic synchronization failed: \(FailureStep.description(for: failureCategory ?? ""))."
     } else if snapshot.loaded {
         status = "ok"
         message = "Automatic synchronization is running."
@@ -387,7 +413,12 @@ func agentStatusPayload(
         lookbackDays: configuration.lookbackDays,
         horizonDays: configuration.horizonDays,
         lastSuccessAgeSeconds: lastSuccessAgeSeconds,
-        failureCategory: failureCategory
+        failureCategory: failureCategory,
+        service: usesBundled ? "the Calopod app's background service" : nil,
+        sourceInstall: usesBundled && sourceLoaded
+            ? "still loaded next to the app's service. Turn it off with: calopod agent disable --source" : nil,
+        lastRunStatus: lastRun?.status,
+        lastRunAgeSeconds: lastRun?.age
     )
 }
 

@@ -23,20 +23,29 @@ public struct CalendarAccessAnswer: Equatable, Sendable {
 /// Asks the EventKit host app about Calendar access. The host is the process macOS lists in
 /// Privacy settings, so the status and the prompt both have to come from it.
 public struct CalendarAccessService: Sendable {
-    public init() {}
+    private let hostApp: URL?
+
+    /// `hostApp` names the helper to ask, such as the one inside the app whose service is live.
+    /// Without it the helper is found from this process, like every other command.
+    public init(hostApp: URL? = nil) { self.hostApp = hostApp }
+
+    private func runner() throws -> EventKitHostRunner {
+        guard let hostApp else { return try EventKitHostRunner() }
+        return try EventKitHostRunner(environment: ["CALOPOD_EVENTKIT_HOST_APP": hostApp.path])
+    }
 
     /// The helper app this process would ask.
     public func hostURL() throws -> URL {
-        try EventKitHostRunner().hostURL
+        try runner().hostURL
     }
 
     public func status() throws -> EventKitAccessStatus {
-        try EventKitHostRunner().perform(EventKitHostRequest(operation: .permissionStatus)).status
+        try runner().perform(EventKitHostRequest(operation: .permissionStatus)).status
     }
 
     /// Shows the macOS prompt only while the status is undecided; the host skips it otherwise.
     public func request() throws -> CalendarAccessAnswer {
-        CalendarAccessAnswer(response: try EventKitHostRunner().requestPermission())
+        CalendarAccessAnswer(response: try runner().requestPermission())
     }
 }
 

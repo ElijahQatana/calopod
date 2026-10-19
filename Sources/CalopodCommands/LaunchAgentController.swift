@@ -206,7 +206,11 @@ struct LaunchAgentController {
     }
 
     func isLoaded(label: String) throws -> Bool {
-        try launchctl(["print", "\(launchDomain)/\(label)"]).exitCode == 0
+        try printService(label: label).exitCode == 0
+    }
+
+    func printService(label: String) throws -> LaunchctlResult {
+        try launchctl(["print", "\(launchDomain)/\(label)"])
     }
 
     private func isLoaded() throws -> Bool {
