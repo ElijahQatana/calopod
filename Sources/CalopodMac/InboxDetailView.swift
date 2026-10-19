@@ -1,4 +1,5 @@
 import CalopodCommands
+import CalopodDomain
 import SwiftUI
 
 struct InboxDetailView: View {
@@ -88,6 +89,12 @@ struct InboxDetailView: View {
                 reply("No", .no)
                 Button("Hold") { model.hold(in: entries) }
                     .help("Skip for now. Nothing is sent or marked.")
+            }
+            if let link = entry.meeting {
+                JoinButton(link: link, prominent: MeetingLink.isNear(startsAt: entry.startsAt, endsAt: entry.endsAt)) {
+                    Task { await model.joinMeeting() }
+                }
+                .help(JoinButton.help(for: link))
             }
             if detail.canOpenInCalendar {
                 HStack(spacing: 8) {

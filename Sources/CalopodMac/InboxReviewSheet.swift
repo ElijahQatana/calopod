@@ -1,4 +1,5 @@
 import CalopodCommands
+import CalopodDomain
 import SwiftUI
 
 /// Goes through the inbox one event at a time. Everything is keyboard driven.
@@ -313,6 +314,12 @@ struct InboxReviewSheet: View {
 
     private func cardButtons(_ card: InboxReviewCardInfo) -> some View {
         HStack(spacing: 8) {
+            if let link = card.entry.meeting {
+                JoinButton(link: link, prominent: MeetingLink.isNear(startsAt: card.entry.startsAt, endsAt: card.entry.endsAt)) {
+                    Task { await model.joinMeeting(link) }
+                }
+                .help(JoinButton.help(for: link))
+            }
             if card.detail.canOpenInCalendar {
                 let opened = model.openedKey == card.entry.id
                 Button { Task { await model.perform(.openCalendar) } } label: { keyed("Open in Calendar", "O") }

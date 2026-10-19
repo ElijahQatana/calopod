@@ -1,4 +1,5 @@
 import CalopodCommands
+import CalopodDomain
 import Foundation
 import Observation
 
@@ -35,13 +36,19 @@ final class InboxReviewModel {
 
     private let service: InboxReviewService
     private let calendar: CalendarOpening
+    private let joiner: any MeetingJoining
     private var keyboard = ReviewKeyboard()
     private var focus: (key: String, origin: String)?
     private var isWorking: Bool { if case .working = phase { true } else { false } }
 
-    init(service: InboxReviewService = InboxReviewService(), calendar: CalendarOpening = SystemCalendarOpener()) {
+    init(
+        service: InboxReviewService = InboxReviewService(),
+        calendar: CalendarOpening = SystemCalendarOpener(),
+        joiner: any MeetingJoining = MeetingJoiner.system
+    ) {
         self.service = service
         self.calendar = calendar
+        self.joiner = joiner
     }
 
     /// True while looking at an overlapping event reached with G.
@@ -68,6 +75,11 @@ final class InboxReviewModel {
     }
 
     func dismissNotice() { notice = nil }
+
+    /// Joins the meeting of the event on the card. It is not a reply and the queue does not move.
+    func joinMeeting(_ link: MeetingLink) async {
+        if await joiner.join(link) == .failed { notice = MeetingJoinText.failed }
+    }
 
     // MARK: Starting and resuming
 
