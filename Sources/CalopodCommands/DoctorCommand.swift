@@ -17,7 +17,8 @@ public struct DoctorCommand: ParsableCommand {
     public func run() throws {
         #if os(macOS)
         do {
-            let report = try doctorReport(controller: LaunchAgentController(), permissions: livePermissionReadings, calendarHelper: liveCalendarHelper)
+            let report = withPermissions(
+                try AgentControlService.current().doctor(), livePermissionReadings(), calendarHelper: liveCalendarHelper())
             try OutputRenderer.write(
                 command: "doctor",
                 payload: CommandPayload(
@@ -81,7 +82,9 @@ private func serviceReport(controller: LaunchAgentController) throws -> DoctorRe
 
 func doctorReport(
     snapshot: LaunchAgentSnapshot,
-    environment makeEnvironment: () throws -> CalopodRuntimeEnvironment
+    environment makeEnvironment: () throws -> CalopodRuntimeEnvironment,
+    usesBundled: Bool = false,
+    sourceLoaded: Bool = false
 ) throws -> DoctorReport {
     guard let configuration = snapshot.configuration else {
         return DoctorReport(
@@ -107,6 +110,10 @@ func doctorReport(
     items.append(serviceCheck.item)
     if let warning = serviceCheck.warning {
         warnings.append(warning)
+    }
+    if usesBundled, sourceLoaded {
+        items.append(doctorItem("source-install", "pending", "also-running"))
+        warnings.append("The old source-installed service is still running next to the app's service. Turn it off with Background sync in the Calopod app.")
     }
 
     guard FileManager.default.fileExists(atPath: configuration.stateURL.path) else {

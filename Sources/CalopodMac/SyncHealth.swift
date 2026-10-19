@@ -80,7 +80,7 @@ struct SyncHealth: Equatable {
             }
             let symbol = status.state == "disabled" ? "power" : status.state == "paused" ? "pause.fill" : "exclamationmark"
             let label = ["disabled": "Sync is off", "paused": "Paused", "failed": "Needs attention"][status.state] ?? "Stopped"
-            return SyncHealth(tone: .caution, symbol: symbol, label: label, headline: fresh.summary, detail: detail(manualAge), lastSyncedAge: manualAge, offersEnable: status.state == "disabled", note: note)
+            return SyncHealth(tone: .caution, symbol: symbol, label: label, headline: fresh.summary, detail: detail(manualAge), lastSyncedAge: manualAge, offersEnable: Self.canEnable(status), note: note)
         }
 
         let age = status.lastSuccessAgeSeconds
@@ -95,8 +95,13 @@ struct SyncHealth: Equatable {
         case "failed":
             return SyncHealth(tone: .bad, symbol: "exclamationmark", label: "Needs attention", headline: "The last sync didn't finish", detail: reason(status.message), lastSyncedAge: age)
         default:
-            return SyncHealth(tone: .bad, symbol: "exclamationmark", label: "Stopped", headline: "Automatic sync is stopped", detail: reason(status.message), lastSyncedAge: age)
+            return SyncHealth(tone: .bad, symbol: "exclamationmark", label: "Stopped", headline: "Automatic sync is stopped", detail: reason(status.message), lastSyncedAge: age, offersEnable: Self.canEnable(status))
         }
+    }
+
+    /// Off, or on but not running. Enable starts whichever service is the live one.
+    static func canEnable(_ status: AgentControlStatus) -> Bool {
+        status.state == "disabled" || status.state == "stopped"
     }
 
     /// An automatic run failed after the manual run finished.

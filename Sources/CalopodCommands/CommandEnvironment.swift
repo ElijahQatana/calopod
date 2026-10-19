@@ -132,6 +132,8 @@ func appFailureMessage(_ error: Error) -> String {
         switch control {
         case .notInstalled: return "Background sync is not installed yet."
         case .rootUnsupported: return "Background sync can only be changed by the signed-in user."
+        case .appServiceRunning: return "Calopod's own background service is already running, so the old source install was not started."
+        case .runsFromApp: return "Automatic sync runs from the app. Use Pause, or remove the background service on the Background sync screen."
         case .unavailable, .operationFailed:
             return "Background sync could not be changed. Calopod needs to be installed in Applications and signed to run in the background."
         }
@@ -166,6 +168,10 @@ func commandFailure(_ error: Error) -> (message: String, exitCode: CalopodExitCo
             ("Install the user service before controlling automatic sync.", .unavailable)
         case .rootUnsupported:
             ("Run this command as the signed-in user, not root.", .permissionDenied)
+        case .appServiceRunning:
+            ("The Calopod app's own service is running automatic sync, so the source install was not started. Use the app's Background sync screen to manage it.", .unavailable)
+        case .runsFromApp:
+            ("Automatic sync runs from the Calopod app. Use calopod agent pause, or remove the background service in the app.", .unavailable)
         case .unavailable:
             ("The user service controller is unavailable.", .unavailable)
         case .operationFailed:

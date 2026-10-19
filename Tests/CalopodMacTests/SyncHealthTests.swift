@@ -46,12 +46,12 @@ final class SyncHealthTests: XCTestCase {
         XCTAssertNil(result.note)
     }
 
-    func testManualSuccessWithAStoppedAgentIsCautionWithANote() {
+    func testManualSuccessWithAStoppedAgentIsCautionWithANoteAndEnable() {
         let result = health(status("stopped"), run())
         XCTAssertEqual(result.tone, .caution)
         XCTAssertEqual(result.label, "Stopped")
         XCTAssertNotNil(result.note)
-        XCTAssertFalse(result.offersEnable)
+        XCTAssertTrue(result.offersEnable)
     }
 
     func testManualSuccessWithDisabledSyncOffersEnable() {

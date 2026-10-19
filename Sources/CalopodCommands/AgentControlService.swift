@@ -3,6 +3,7 @@ import CalopodDomain
 import CalopodRuntime
 import CalopodStore
 import Foundation
+import ServiceManagement
 
 public struct AgentControlStatus: Equatable, Sendable {
     /// One of `ok`, `paused`, `disabled`, `stopped`, `failed`, `not-installed`.
@@ -24,6 +25,8 @@ public struct AgentControlStatus: Equatable, Sendable {
     /// The window each run covers, when the service's schedule is known.
     public var lookbackDays: Int? = nil
     public var horizonDays: Int? = nil
+    /// The source install is switched on in launchd, loaded or not.
+    public var sourceEnabled = false
 }
 
 public struct AgentControlOverview: Equatable, Sendable {
@@ -132,24 +135,41 @@ public struct AgentControlService: Sendable {
     private let bundledAgentExecutable: URL?
     private let makeController: @Sendable () throws -> LaunchAgentController
     private let baseEnvironment: @Sendable () -> [String: String]
+    private let reregisterBundled: @Sendable () async throws -> Void
 
-    /// Pass the bundled agent only while it is registered. An enabled source-installed agent still wins.
+    /// Pass the bundled agent only while it is registered and approved. Then it is the live service,
+    /// and the source install is only reported on.
     public init(bundledAgentExecutable: URL? = nil) {
         self.init(
             bundledAgentExecutable: bundledAgentExecutable,
             makeController: { try LaunchAgentController() },
-            baseEnvironment: { ProcessInfo.processInfo.environment }
+            baseEnvironment: { ProcessInfo.processInfo.environment },
+            reregisterBundled: {
+                let service = SMAppService.agent(plistName: BackgroundServiceState.agentPlistName)
+                try await service.unregister()
+                try service.register()
+            }
         )
+    }
+
+    /// The service for whoever is running: the app's own agent when this copy of Calopod has it
+    /// registered and approved, otherwise the source install. Works from the app and its command.
+    public static func current(registration: BackgroundServiceState = .read()) -> AgentControlService {
+        guard registration == .enabled else { return AgentControlService() }
+        let executable = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/calopod-agent")
+        return AgentControlService(bundledAgentExecutable: executable)
     }
 
     init(
         bundledAgentExecutable: URL?,
         makeController: @escaping @Sendable () throws -> LaunchAgentController,
-        baseEnvironment: @escaping @Sendable () -> [String: String]
+        baseEnvironment: @escaping @Sendable () -> [String: String],
+        reregisterBundled: @escaping @Sendable () async throws -> Void = {}
     ) {
         self.bundledAgentExecutable = bundledAgentExecutable
         self.makeController = makeController
         self.baseEnvironment = baseEnvironment
+        self.reregisterBundled = reregisterBundled
     }
 
     private struct Context {
@@ -159,15 +179,16 @@ public struct AgentControlService: Sendable {
         let isBundled: Bool
         /// The source install is loaded in launchd, even when the bundled agent is the one in use.
         var sourceLoaded: Bool { sourceSnapshot.loaded }
+        var sourceEnabled: Bool { sourceSnapshot.installed && !sourceSnapshot.disabled }
         let sourceSnapshot: LaunchAgentSnapshot
     }
 
     private func context() throws -> Context {
         let controller = try makeController()
         let snapshot = try controller.snapshot()
-        // Moving to the app disables the source install, which is when the bundled agent takes over.
-        if let configuration = snapshot.configuration,
-           bundledAgentExecutable == nil || !snapshot.disabled {
+        // The bundled agent is the live service whenever it is registered. A source install that is
+        // also on is reported, never described as the one in use.
+        if let configuration = snapshot.configuration, bundledAgentExecutable == nil {
             return Context(
                 snapshot: snapshot,
                 environment: { try installedAgentEnvironment(controller: controller) },
@@ -221,6 +242,50 @@ public struct AgentControlService: Sendable {
         )
     }
 
+    func statusPayload() throws -> CommandPayload {
+        let context: Context
+        do {
+            context = try self.context()
+        } catch is AgentServiceConfigurationError {
+            return CommandPayload(
+                status: "failed", message: "The automatic-sync configuration is invalid.",
+                installed: true, failureCategory: "configuration")
+        }
+        return try agentStatusPayload(snapshot: context.snapshot, environment: context.environment)
+    }
+
+    /// The result printed after a control command, from the service that is live.
+    func controlResult(message: String) throws -> CommandPayload {
+        let context = try context()
+        let snapshot = context.snapshot
+        var paused = false
+        if let configuration = snapshot.configuration, FileManager.default.fileExists(atPath: configuration.stateURL.path) {
+            paused = try context.environment().repository().agentControl().isPaused
+        }
+        return CommandPayload(
+            status: "ok", message: message, installed: snapshot.installed,
+            enabled: snapshot.installed && !snapshot.disabled, paused: paused,
+            runState: snapshot.loaded ? "running" : "stopped",
+            stateReady: snapshot.configuration.map { FileManager.default.fileExists(atPath: $0.stateURL.path) },
+            intervalSeconds: snapshot.configuration?.intervalSeconds, jitterSeconds: snapshot.configuration?.jitterSeconds,
+            lookbackDays: snapshot.configuration?.lookbackDays, horizonDays: snapshot.configuration?.horizonDays)
+    }
+
+    func doctor() throws -> DoctorReport {
+        let context: Context
+        do {
+            context = try self.context()
+        } catch is AgentServiceConfigurationError {
+            return DoctorReport(
+                status: "failed", message: "The automatic-sync installation needs attention.",
+                items: [CommandItem(id: "installation", kind: "failed", reason: "configuration")],
+                warnings: ["Reinstall the Calopod user service."])
+        }
+        return try doctorReport(
+            snapshot: context.snapshot, environment: context.environment,
+            usesBundled: context.isBundled, sourceLoaded: context.sourceLoaded)
+    }
+
     public func status() throws -> AgentControlStatus {
         try status(in: try context())
     }
@@ -244,7 +309,8 @@ public struct AgentControlService: Sendable {
             usesBundledService: context.isBundled,
             sourceLoaded: context.sourceLoaded,
             lookbackDays: context.snapshot.configuration?.lookbackDays,
-            horizonDays: context.snapshot.configuration?.horizonDays
+            horizonDays: context.snapshot.configuration?.horizonDays,
+            sourceEnabled: context.sourceEnabled
         )
     }
 
@@ -260,15 +326,30 @@ public struct AgentControlService: Sendable {
         return (try? repository.recentRunMarks(limit: limit)) ?? []
     }
 
-    /// The bundled agent is registered and removed by the app, not here.
+    /// Switches the source install on or off. The app's own service is not switched off this way,
+    /// and the source install is never started while the app's service is the live one.
     public func setEnabled(_ enabled: Bool) throws {
-        guard !(try context().isBundled) else { throw LaunchAgentControlError.unavailable }
+        let context = try context()
+        guard !context.isBundled else { throw LaunchAgentControlError.runsFromApp }
         let controller = try makeController()
         if enabled {
+            // Registered or not, a running app service means a second one must not start.
+            if (try? controller.isLoaded(label: Self.bundledLabel)) == true {
+                throw LaunchAgentControlError.appServiceRunning
+            }
             try controller.enable()
         } else {
             try controller.disable()
         }
+    }
+
+    /// Turns automatic sync on, like `calopod agent enable`. When the app's service is the live one it
+    /// is started again if it is not running, and nothing happens when it already is.
+    public func enable() async throws {
+        let context = try context()
+        guard context.isBundled else { return try setEnabled(true) }
+        let loaded = (try? makeController().isLoaded(label: Self.bundledLabel)) ?? false
+        if !loaded { try await reregisterBundled() }
     }
 
     public func setPaused(_ paused: Bool) throws {
@@ -314,7 +395,9 @@ public struct AgentControlService: Sendable {
 
     private func health(in context: Context) throws -> HealthReport {
         Self.healthReport(
-            try doctorReport(snapshot: context.snapshot, environment: context.environment)
+            try doctorReport(
+                snapshot: context.snapshot, environment: context.environment,
+                usesBundled: context.isBundled, sourceLoaded: context.sourceLoaded)
         )
     }
 

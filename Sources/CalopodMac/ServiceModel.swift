@@ -170,7 +170,7 @@ final class ServiceModel {
     func setEnabled(_ enabled: Bool) async {
         let service = service
         await perform(enabled ? "Enabling…" : "Disabling…") {
-            try service.setEnabled(enabled)
+            if enabled { try await service.enable() } else { try service.setEnabled(false) }
             return nil
         }
     }
@@ -198,23 +198,17 @@ final class ServiceModel {
         }
     }
 
-    /// A source-installed agent is loaded in launchd. A leftover plist, or the app's own service
-    /// reporting as installed, does not count.
-    var legacyServiceActive: Bool { status?.sourceLoaded ?? false }
-
-    /// The source install is what the numbers describe and it is switched on, loaded or not.
-    /// It has to be switched off before the app's service can take over.
-    private var legacyServiceEnabled: Bool {
-        guard let status, !status.usesBundledService, status.installed else { return false }
-        return status.enabled || status.running
-    }
+    /// The source install is still switched on or loaded in launchd. A leftover plist, or the app's
+    /// own service reporting as installed, does not count. It has to be switched off before the
+    /// app's service can be the only one.
+    var legacyServiceActive: Bool { (status?.sourceLoaded ?? false) || (status?.sourceEnabled ?? false) }
 
     /// Stops the source-installed agent first so two never run. It is turned back on if registering
     /// fails or macOS still needs approval, so syncing never stops without the new service taking over.
     func installBundledService() async {
         let service = service
         let registrar = registrar
-        let legacyActive = legacyServiceActive || legacyServiceEnabled
+        let legacyActive = legacyServiceActive
         await perform("Installing background service…") {
             try Self.install(legacyActive: legacyActive, registrar: registrar, setLegacyEnabled: { try service.setEnabled($0) })
             return nil
