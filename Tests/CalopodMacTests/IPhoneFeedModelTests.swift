@@ -32,6 +32,19 @@ struct IPhoneFeedModelTests {
         #expect(await remote.deleteCount == 1)
     }
 
+    @Test("A calendar starts unchosen and the choice is saved and uploaded")
+    func choosingCalendars() async throws {
+        let remote = InMemorySnapshotPublisher()
+        let (model, state) = try model(.available, remote: remote)
+        await model.setOn(true)
+        let calendar = try #require(model.calendars.first)
+        #expect(!calendar.isChosen && model.calendars.allSatisfy { !$0.isChosen })
+        await model.setCalendar(calendar.id, chosen: true)
+        #expect(model.calendars.first { $0.id == calendar.id }?.isChosen == true)
+        #expect(try state.iPhoneCalendarIDs() == [calendar.id])
+        #expect(await remote.replaceCount == 2)
+    }
+
     @Test("Without an iCloud signature the switch stays off and iCloud is never called")
     func unavailable() async throws {
         let remote = InMemorySnapshotPublisher()
