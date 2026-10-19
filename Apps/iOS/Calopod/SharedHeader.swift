@@ -51,8 +51,8 @@ struct SharedHeader: View {
         }
         .foregroundStyle(Theme.onAccent)
         .padding(.horizontal, 20)
-        .frame(maxWidth: .infinity, minHeight: 148, alignment: .topLeading)
-        .padding(.bottom, 16)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .padding(.bottom, 14)
         .background {
             ZStack(alignment: .topTrailing) {
                 Theme.accent
