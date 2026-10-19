@@ -32,6 +32,7 @@ final class CalendarDayEventsTests: XCTestCase {
     func testDayEventsFollowFiltersAndMatchTheLayout() async throws {
         let model = try await model([event("a"), event("b", calendarID: "home"), event("c", copy: true), event("d", allDay: true)])
         let day = calendar.startOfDay(for: start)
+        model.showCopies = true
 
         XCTAssertEqual(model.dayEvents(day).placements, ScheduleLayout.placements(model.events, on: day, calendar: calendar))
         XCTAssertEqual(model.dayEvents(day).allDay.map(\.id), ["d"])
