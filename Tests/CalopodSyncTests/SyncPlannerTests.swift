@@ -441,6 +441,27 @@ struct SyncPlannerTests {
 
         #expect(plan.items.map(\.action) == [.repair])
         #expect(plan.items.map(\.reason) == [.targetSnapshotIncomplete])
+        #expect(plan.items.allSatisfy { $0.isUnchecked })
+    }
+
+    @Test("Every copy of an unread target is unchecked, with no create, update or remove")
+    func unreadTargetMarksEverythingUnchecked() throws {
+        let arm = storedArm(ruleMode: .busy)
+        let sources = ["a", "b", "c"].map { instance(id: $0) }
+        let mappings = sources.dropFirst().map { source in
+            StoredMirrorMapping(
+                mirrorKey: SyncPlanner.mirrorKey(armID: arm.id, sourceKeyHash: source.sourceKeyHash),
+                armID: arm.id, sourceKeyHash: source.sourceKeyHash, providerEventID: "target-\(source.providerEventID)",
+                providerVersion: "v1", desiredFingerprint: "old", ownershipKeyID: "synthetic-key",
+                updatedAt: Date(timeIntervalSince1970: 1)
+            )
+        }
+        let plan = SyncPlanner.plan(
+            arm: arm, sources: sources, mappings: Array(mappings), targetEvents: [], window: try window(),
+            sourceSnapshotComplete: true, targetSnapshotComplete: false
+        )
+        #expect(plan.items.count == 3)
+        #expect(plan.items.allSatisfy { $0.isUnchecked })
     }
 
     @Test("An unverified duplicate blocks a verified target mutation")

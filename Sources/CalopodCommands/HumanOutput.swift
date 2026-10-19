@@ -75,7 +75,7 @@ enum HumanOutputRenderer {
         if command == "sync" {
             let items = payload.items ?? []
             lines.append("Planned operations: \(items.count)")
-            for (kind, label) in [("create", "Create"), ("update", "Update"), ("remove", "Remove"), ("repair", "Repair"), ("no-op", "Already matching")] {
+            for (kind, label) in [("create", "Create"), ("update", "Update"), ("remove", "Remove"), ("repair", "Repair"), ("unchecked", "Could not be checked"), ("no-op", "Already matching")] {
                 lines.append("\(label): \(items.filter { $0.kind == kind }.count)")
             }
             if payload.mode == "dry-run" {

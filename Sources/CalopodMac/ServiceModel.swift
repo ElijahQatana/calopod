@@ -128,7 +128,7 @@ final class ServiceModel {
     /// nothing is written, so only an approved plan is applied. Returns true when the sync completed.
     @discardableResult
     func applyPreview() async -> Bool {
-        guard busyAction == nil, let approved = pendingPreview else { return false }
+        guard busyAction == nil, let approved = pendingPreview, approved.canApply else { return false }
         pendingPreview = nil
         let service = service
         busyAction = "Checking the plan…"
@@ -136,7 +136,7 @@ final class ServiceModel {
         var completed = false
         do {
             let fresh = try await Task.detached { try await service.preview() }.value
-            if !Self.samePlan(Self.planKeys(approved), Self.planKeys(fresh)) {
+            if !fresh.canApply || !Self.samePlan(Self.planKeys(approved), Self.planKeys(fresh)) {
                 if fresh.changeCount == 0 {
                     finishRun("Everything is up to date. Nothing to change.", succeeded: true)
                 } else {
@@ -289,6 +289,8 @@ final class ServiceModel {
         switch report.status {
         case "ok":
             "Synced: \(report.creates) created, \(report.updates) updated, \(report.removals) removed."
+        case "partial":
+            "Some target calendars could not be read, so nothing was changed on them. Elsewhere: \(report.creates) created, \(report.updates) updated, \(report.removals) removed."
         case "busy":
             "Another sync is already running."
         case "interrupted":

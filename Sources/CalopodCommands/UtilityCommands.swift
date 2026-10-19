@@ -33,7 +33,9 @@ public struct SyncCommand: AsyncParsableCommand {
             )
 
             let message: String
-            if mode == .dryRun {
+            if result.items.contains(where: \.isUnchecked) {
+                message = SyncPlanItem.uncheckedExplanation
+            } else if mode == .dryRun {
                 message = result.items.isEmpty
                     ? "The dry run found no planned operations."
                     : "Dry-run synchronization plan."
@@ -58,7 +60,7 @@ public struct SyncCommand: AsyncParsableCommand {
                     ingestion: result.ingestion,
                     review: result.review
                 ),
-                warnings: result.warnings,
+                warnings: result.warnings.filter { $0 != SyncPlanItem.uncheckedExplanation },
                 format: output.format,
                 showIDs: output.ids,
                 human: HumanOutputContext(applied: result.appliedCount, reconciled: result.reconciledCount, noOps: result.noOpCount)
@@ -72,7 +74,7 @@ public struct SyncCommand: AsyncParsableCommand {
 private func planItem(_ item: SyncPlanItem) -> CommandItem {
     CommandItem(
         id: item.id,
-        kind: item.action.rawValue,
+        kind: item.isUnchecked ? "unchecked" : item.action.rawValue,
         label: item.payload?.title,
         parentID: item.sourceKeyHash,
         startsAt: planOutputDate(item.payload?.startsAt),

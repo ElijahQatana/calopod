@@ -421,6 +421,27 @@ struct ManagedEventLifecycleTests {
         #expect(await recorder.mutations.isEmpty)
     }
 
+    @Test("Items from an unread target are refused before any write")
+    func unreadTargetWritesNothing() async throws {
+        let fixture = try LifecycleFixture()
+        let items = [
+            lifecyclePlanItem(id: "one", action: .repair, reason: .targetSnapshotIncomplete),
+            lifecyclePlanItem(id: "two", action: .create),
+        ]
+        #expect(items[0].isUnchecked)
+        let recorder = LifecycleMutationRecorder()
+        await #expect(throws: ManagedEventLifecycleError.ambiguousRepair(.targetSnapshotIncomplete)) {
+            try await ManagedEventLifecycleService(
+                repository: fixture.repository, secretStore: fixture.secrets
+            ).apply(items: items, arm: fixture.arm, observations: []) { mutation in
+                await recorder.record(mutation)
+                return .deleted
+            }
+        }
+        #expect(await recorder.mutations.isEmpty)
+        #expect(try fixture.repository.mirrorMappings(armID: fixture.arm.id).isEmpty)
+    }
+
     @Test("A confirmed missing target is recreated or cleared without guessing")
     func reconcilesMissingTarget() async throws {
         let fixture = try LifecycleFixture()
