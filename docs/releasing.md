@@ -68,6 +68,10 @@ The script copies the profile to `Contents/embedded.provisionprofile` and signs 
 
 Deploy the record type to the Production schema before the first release that uses it. The list is in [iPhone feed](iphone-feed.md). A signed, notarized app can't use the Development environment.
 
+## iPhone app
+
+The iPhone app has its own steps for making a TestFlight build, in [Apps/iOS/RELEASING.md](../Apps/iOS/RELEASING.md). Uploading is done by hand.
+
 ## Disk image
 
 The Mac app ships as a drag-to-install disk image. Build the app signed, then package it:
