@@ -7,7 +7,7 @@ Open `Calopod.xcodeproj` in Xcode 16 or later. The project needs the `Calopod` p
 
 ## Screens
 
-Four tabs: Home, Inbox, Calendar and Status. Home is the small overview: how the last sync went, what needs you (each tile opens the Inbox on that filter), the next events today and the calendars chosen on the Mac. Calendar has a Schedule and Availability switch; Availability is a placeholder until the Mac publishes the day values it needs, and Home's "Availability today" is the same.
+Four tabs: Home, Inbox, Calendar and Status. Home is the small overview: how the last sync went, what needs you (each tile opens the Inbox on that filter), the next events today and the calendars chosen on the Mac. Calendar has a Schedule and Availability switch; Availability shows the week with a status dot per day, the chosen day's free and busy totals, working hours, free windows and busy blocks, all as the Mac worked them out. Both sides share the chosen day. Home's "Availability today" shows today's totals and opens it. A feed from an older Mac has no working hours, so the phone shows busy time only and says the Mac needs an update.
 
 Tapping the logo on a tab opens a menu with Settings, Calendars (show or hide each calendar on this phone), Help and About. Settings holds only what belongs to the phone: the reminders switch and notification permission, Appearance (System, Light or Dark) and the iCloud state. Lead times and hidden titles are shown but set on the Mac. Everything is read only.
 

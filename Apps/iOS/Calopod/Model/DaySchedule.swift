@@ -1,12 +1,6 @@
 import CalopodSnapshot
 import Foundation
 
-/// Where the free time of a day is counted. Working hours are not in the app yet, so this is
-/// the whole day. Replace the body when they arrive.
-enum WorkingHours {
-    static func window(for day: DateInterval) -> DateInterval { day }
-}
-
 /// One busy stretch inside a day. The flags say it carries on past midnight.
 struct BusyBlock: Equatable {
     var interval: DateInterval
@@ -14,18 +8,12 @@ struct BusyBlock: Equatable {
     var continuesTomorrow = false
 }
 
-/// A local day's busy time worked out from the published intervals.
+/// A local day's busy blocks worked out from the published intervals.
 struct DaySchedule: Equatable {
     var day: String
     var timeZone: TimeZone
     var interval: DateInterval
     var busy: [BusyBlock]
-    var window: DateInterval
-
-    var busyTime: TimeInterval {
-        busy.reduce(0) { $0 + (window.intersection(with: $1.interval)?.duration ?? 0) }
-    }
-    var freeTime: TimeInterval { window.duration - busyTime }
 
     /// One schedule per published day. A busy stretch is cut to each day it touches, so it counts
     /// whether or not the Mac cut it, and overlapping intervals are counted once.
@@ -43,13 +31,12 @@ struct DaySchedule: Equatable {
                         interval: block,
                         continuesFromYesterday: block.start == interval.start && all.contains { $0.start < interval.start && $0.end > interval.start },
                         continuesTomorrow: block.end == interval.end && all.contains { $0.start < interval.end && $0.end > interval.end })
-                },
-                window: WorkingHours.window(for: interval))
+                })
         }
         .sorted { $0.interval.start < $1.interval.start }
     }
 
-    private static func localDay(_ key: String, in timeZone: TimeZone) -> DateInterval? {
+    static func localDay(_ key: String, in timeZone: TimeZone) -> DateInterval? {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
         let parts = key.split(separator: "-").compactMap { Int($0) }
