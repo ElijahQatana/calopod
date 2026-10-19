@@ -225,21 +225,29 @@ final class ServiceModel {
         legacyActive: Bool, registrar: some BundledServiceRegistering, setLegacyEnabled: (Bool) throws -> Void
     ) throws {
         if legacyActive { try setLegacyEnabled(false) }
+        // Putting the old service back is the saved previous state. If that fails, say so rather
+        // than leave automatic sync off without a word.
+        func restore() throws {
+            guard legacyActive else { return }
+            do { try setLegacyEnabled(true) } catch { throw InstallError.leftOff }
+        }
         do {
             // Already approved when finishing a move, and registering twice is an error.
             if registrar.state() != .enabled { try registrar.register() }
         } catch {
-            if legacyActive { try? setLegacyEnabled(true) }
+            try restore()
             throw error
         }
         if legacyActive, registrar.state() != .enabled {
-            try? setLegacyEnabled(true)
+            try restore()
             throw InstallError.needsApproval
         }
     }
 
     enum InstallError: Error {
         case needsApproval
+        /// Moving did not finish and the old service could not be turned back on.
+        case leftOff
     }
 
     func removeBundledService() async {
@@ -266,8 +274,13 @@ final class ServiceModel {
             _ = try await Task.detached { try await work() }.value
         } catch {
             let nsError = error as NSError
-            if error is InstallError {
-                notice = "Allow Calopod in System Settings, General, Login Items, then choose Move to the app again. Your current service keeps running until then."
+            if let install = error as? InstallError {
+                notice = switch install {
+                case .needsApproval:
+                    "Allow Calopod in System Settings, General, Login Items, then choose Move to the app again. Your current service keeps running until then."
+                case .leftOff:
+                    "Moving to the app did not finish and automatic sync is off. Choose Enable automatic sync to turn it back on."
+                }
             } else {
                 notice = nsError.domain == "SMAppServiceErrorDomain"
                     ? nsError.localizedDescription

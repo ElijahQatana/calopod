@@ -38,6 +38,11 @@ struct MenuPopover: View {
                     Button("Preview sync") { open(.overview, keepMenu: true); Task { await model.previewSync() } }
                         .buttonStyle(.accentFilled)
                         .disabled(model.isBusy)
+                    if model.syncHealth.offersEnable {
+                        Button("Enable") { Task { await model.setEnabled(true) } }
+                            .buttonStyle(.neutral)
+                            .disabled(model.isBusy)
+                    }
                     if status.enabled {
                         Button(status.paused ? "Resume" : "Pause") {
                             Task { await model.setPaused(!status.paused) }

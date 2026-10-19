@@ -307,13 +307,13 @@ func serviceHealthCheck(
     if snapshot.disabled {
         return (
             doctorItem("service", "pending", "disabled"),
-            "Enable automatic sync when scheduled runs should continue."
+            "Automatic sync is off. Run calopod agent enable, or choose Enable automatic sync in the Calopod app."
         )
     }
     if !snapshot.loaded {
         return (
             doctorItem("service", "failed", "stopped"),
-            "Enable automatic sync to start the installed service."
+            "Automatic sync is enabled but not running. Run calopod agent enable to start it again, or choose Enable automatic sync in the Calopod app."
         )
     }
     return (doctorItem("service", "ok"), nil)

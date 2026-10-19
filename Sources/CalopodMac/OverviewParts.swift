@@ -51,6 +51,7 @@ struct SyncStatusCard: View {
     let pauseDisabled: Bool
     let preview: () -> Void
     let togglePause: () -> Void
+    let enable: () -> Void
 
     var body: some View {
         CardSection {
@@ -99,6 +100,11 @@ struct SyncStatusCard: View {
 
     private var buttons: some View {
         HStack(spacing: 10) {
+            if health.offersEnable {
+                Button("Enable automatic sync", action: enable)
+                    .buttonStyle(.accentFilled)
+                    .disabled(pauseDisabled)
+            }
             Button("Preview sync", action: preview)
                 .buttonStyle(.accentFilled)
                 .disabled(previewDisabled)

@@ -154,6 +154,8 @@ func doctorDistinguishesDisabledAndUnexpectedlyStoppedServices() {
 
     #expect(disabled.item.kind == "pending")
     #expect(disabled.item.reason == "disabled")
+    #expect(disabled.warning?.contains("calopod agent enable") == true)
+    #expect(stopped.warning?.contains("calopod agent enable") == true)
     #expect(stopped.item.kind == "failed")
     #expect(stopped.item.reason == "stopped")
     #expect(running.item.kind == "ok")

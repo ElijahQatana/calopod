@@ -362,7 +362,7 @@ func agentStatusPayload(
     let message: String
     if !enabled {
         status = "disabled"
-        message = "Automatic synchronization is disabled."
+        message = "Automatic synchronization is disabled. Run calopod agent enable, or choose Enable automatic sync in the Calopod app."
     } else if paused {
         status = "paused"
         message = "Automatic synchronization is paused."

@@ -23,13 +23,27 @@ final class SyncHealthTests: XCTestCase {
         SyncHealth.make(status: status, statusAt: now, run: run, now: now)
     }
 
-    func testRecentManualSuccessOverridesFailedAgentConsistently() {
+    func testManualSuccessNeverHidesAFailingAgent() {
         let result = health(status("failed", message: "Keychain is locked"), run())
+        XCTAssertEqual(result.tone, .bad)
+        XCTAssertEqual(result.symbol, "exclamationmark")
+        XCTAssertEqual(result.headline, "The last sync didn't finish")
+        XCTAssertEqual(result.detail, "Keychain is locked · Last synced just now")
+        XCTAssertEqual(result.lastSyncedAge, 30)
+    }
+
+    func testManualSuccessKeepsAStoppedAgentStopped() {
+        let result = health(status("stopped"), run())
+        XCTAssertEqual(result.tone, .bad)
+        XCTAssertEqual(result.headline, "Automatic sync is stopped")
+        XCTAssertFalse(result.offersEnable)
+    }
+
+    func testManualSuccessWithAHealthyAgentIsGreen() {
+        let result = health(status("ok", age: 960), run())
         XCTAssertEqual(result.tone, .good)
-        XCTAssertEqual(result.symbol, "checkmark")
         XCTAssertEqual(result.headline, "Everything is up to date. Nothing to change.")
         XCTAssertEqual(result.detail, "Last synced just now · every 10 minutes")
-        XCTAssertEqual(result.label, "Syncing")
     }
 
     func testMissingCalendarAccessBeatsASuccessfulSync() {
@@ -53,6 +67,8 @@ final class SyncHealthTests: XCTestCase {
             let result = health(status(state), run())
             XCTAssertEqual(result.tone, .caution)
             XCTAssertEqual(result.headline, headline)
+            XCTAssertEqual(result.offersEnable, state == "disabled")
+            XCTAssertEqual(result.detail, "Last synced just now · every 10 minutes")
         }
     }
 
