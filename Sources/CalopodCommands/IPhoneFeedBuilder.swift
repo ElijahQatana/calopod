@@ -27,6 +27,9 @@ enum IPhoneFeedBuilder {
         for day in try availability(repository: repository, now: now, calendar: calendar) {
             records.append(try SnapshotPayload(day, kind: .availabilityDay, at: now))
         }
+        for day in try calendarDays(snapshot, repository: repository, now: now, calendar: calendar) {
+            records.append(try SnapshotPayload(day, kind: .calendarDay, at: now))
+        }
         records.append(try SnapshotPayload(calendars(snapshot, repository: repository), kind: .calendars, at: now))
         records.append(try SnapshotPayload(try syncStatus(snapshot, repository: repository, cutoff: cutoff), kind: .syncStatus, at: now))
         return records
@@ -92,9 +95,44 @@ enum IPhoneFeedBuilder {
         }
     }
 
+    // MARK: Events of the chosen calendars
+
+    /// Events for the same days as the busy time. The snapshot already leaves out cancelled events and
+    /// Calopod's own copies, and `calendars` leaves out ignored calendars, so an event is only as real
+    /// as the Calendar screen shows it. Days without events get no record.
+    static func calendarDays(
+        _ snapshot: InboxContextSnapshot, repository: LocalStateRepository, now: Date, calendar: Calendar
+    ) throws -> [CalendarDay] {
+        let shown = Set(calendars(snapshot, repository: repository).calendars.map(\.id))
+        let chosen = try repository.iPhoneCalendarIDs().intersection(shown)
+        guard !chosen.isEmpty else { return [] }
+        let events = snapshot.events.filter { $0.isPresenceConfirmed && chosen.contains($0.event.calendarBindingID) }.map(\.event)
+        let format = DateFormatter()
+        format.locale = Locale(identifier: "en_US_POSIX")
+        format.timeZone = calendar.timeZone
+        format.dateFormat = "yyyy-MM-dd"
+        let first = calendar.startOfDay(for: now)
+        return (0..<availabilityDays).compactMap { offset in
+            guard let start = calendar.date(byAdding: .day, value: offset, to: first),
+                  let next = calendar.date(byAdding: .day, value: 1, to: start) else { return nil }
+            let today = events.filter { $0.endsAt > start && $0.startsAt < next }.map(calendarEvent)
+            return today.isEmpty ? nil : CalendarDay(
+                day: format.string(from: start), timeZoneIdentifier: calendar.timeZone.identifier, events: today)
+        }
+    }
+
+    private static func calendarEvent(_ event: StoredNormalizedInstance) -> CalendarEvent {
+        // A private event keeps its time but none of its words.
+        let shown = !event.isPrivate
+        return CalendarEvent(
+            id: event.sourceKeyHash, calendarID: event.calendarBindingID, title: shown ? event.title : nil,
+            startsAt: event.startsAt, endsAt: event.endsAt, isAllDay: event.isAllDay,
+            location: shown ? event.location : nil, response: event.currentUserResponse.state)
+    }
+
     // MARK: Calendars and status
 
-    private static func calendars(_ snapshot: InboxContextSnapshot, repository: LocalStateRepository) -> CalendarList {
+    static func calendars(_ snapshot: InboxContextSnapshot, repository: LocalStateRepository) -> CalendarList {
         let names = CalendarNames(repository)
         let palette = CalendarPalette.entries.map(\.id)
         let gray = palette.firstIndex(of: "gray") ?? 0
