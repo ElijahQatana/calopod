@@ -270,7 +270,7 @@ public struct AgentControlService: Sendable {
             )
         }
         // The bundled plist gives no numbers; the agent falls back to the same defaults.
-        var variables = baseEnvironment().merging(AgentScheduleDefaults.environment) { _, defaults in defaults }
+        let variables = baseEnvironment().merging(AgentScheduleDefaults.environment) { _, defaults in defaults }
         let location = try CalopodStateLocation(environment: variables)
         let override = AgentScheduleOverride.load(from: location)
         let loaded = (try? controller.isLoaded(label: Self.bundledLabel)) ?? false

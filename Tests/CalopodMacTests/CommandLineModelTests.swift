@@ -8,7 +8,7 @@ final class CommandLineModelTests: XCTestCase {
     private var link: CommandLink!
     private let fileManager = FileManager.default
 
-    override func setUpWithError() throws {
+    override func setUp() async throws {
         root = fileManager.temporaryDirectory.appendingPathComponent("command-model-\(UUID().uuidString)", isDirectory: true)
         let bundle = root.appendingPathComponent("Applications/Calopod.app", isDirectory: true)
         try fileManager.createDirectory(at: bundle.appendingPathComponent("Contents/MacOS"), withIntermediateDirectories: true)
@@ -16,7 +16,7 @@ final class CommandLineModelTests: XCTestCase {
         try fileManager.createDirectory(at: link.binDirectory, withIntermediateDirectories: true)
     }
 
-    override func tearDownWithError() throws { try? fileManager.removeItem(at: root) }
+    override func tearDown() async throws { try? fileManager.removeItem(at: root) }
 
     private func pointElsewhere() throws -> String {
         let other = root.appendingPathComponent("source/calopod")

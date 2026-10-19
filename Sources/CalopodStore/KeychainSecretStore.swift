@@ -1,4 +1,5 @@
 import Foundation
+import LocalAuthentication
 import Security
 
 /// The Keychain-backed `SecretStore`. Items use `AfterFirstUnlockThisDeviceOnly`: readable after
@@ -41,10 +42,7 @@ public struct KeychainSecretStore: SecretStore, Sendable {
     }
 
     public func value(for reference: SecretReference) throws -> Data? {
-        var query = baseQuery(for: reference)
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
-        if !allowsPrompt { query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail }
+        let query = readQuery(for: reference)
 
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
@@ -68,6 +66,19 @@ public struct KeychainSecretStore: SecretStore, Sendable {
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw SecretStoreError.keychainStatus(status)
         }
+    }
+
+    // A context that may not interact makes the read fail instead of raising a keychain prompt.
+    func readQuery(for reference: SecretReference) -> [String: Any] {
+        var query = baseQuery(for: reference)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        if !allowsPrompt {
+            let context = LAContext()
+            context.interactionNotAllowed = true
+            query[kSecUseAuthenticationContext as String] = context
+        }
+        return query
     }
 
     private func baseQuery(for reference: SecretReference) -> [String: Any] {

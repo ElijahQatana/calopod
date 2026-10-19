@@ -39,6 +39,8 @@ Scripts/check-public-content.sh
 git diff --cached --check
 ```
 
+Keep the build free of compiler warnings. `Scripts/check-build-warnings.sh` builds in a temporary folder and fails on any warning from `Sources` or `Tests`. It is slow, so run it by hand when you touch build-sensitive code and before a release.
+
 Read the staged diff before committing. Automated checks catch common mistakes, but they do not replace a manual review.
 
 ## Continuous integration
