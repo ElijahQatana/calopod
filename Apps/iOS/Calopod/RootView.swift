@@ -25,6 +25,11 @@ struct RootView: View {
                     title: "Offline", subtitle: "Couldn't reach iCloud", heading: "Can't read your snapshot",
                     message: "Check that this phone is online and signed in to iCloud, then open the app again.",
                     systemImage: "icloud.slash")
+            case .signedOut:
+                EmptyState(
+                    title: "iCloud", subtitle: "Not signed in", heading: "Sign in to iCloud to see your calendar",
+                    message: "Calopod reads what your Mac shares through iCloud. Sign in to iCloud in Settings on this phone, then open the app again.",
+                    systemImage: "person.crop.circle.badge.exclamationmark")
             case .needsNewerApp:
                 EmptyState(
                     title: "Update needed", subtitle: "Your Mac is newer", heading: "Update Calopod on this phone",

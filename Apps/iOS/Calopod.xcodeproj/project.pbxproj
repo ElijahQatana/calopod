@@ -24,6 +24,7 @@
 /* Begin PBXFileReference section */
 		A10000000000000000000010 /* Calopod.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Calopod.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000000000000000000011 /* CalopodTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CalopodTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000015 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 		A10000000000000000000012 /* Calopod.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Calopod.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -58,6 +59,7 @@
 				A10000000000000000000013 /* Calopod */,
 				A10000000000000000000014 /* Tests */,
 				A10000000000000000000012 /* Calopod.entitlements */,
+				A10000000000000000000015 /* Config.xcconfig */,
 				A10000000000000000000061 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -197,6 +199,7 @@
 /* Begin XCBuildConfiguration section */
 		A10000000000000000000080 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A10000000000000000000015 /* Config.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;
@@ -213,6 +216,7 @@
 		};
 		A10000000000000000000081 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A10000000000000000000015 /* Config.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;

@@ -23,6 +23,8 @@ enum SnapshotResult: Equatable, Sendable {
 enum ReaderError: Error, Equatable {
     /// The Mac wrote a newer format than this app understands.
     case needsNewerApp
+    /// No iCloud account on this phone, so there is nothing to read from.
+    case signedOut
     case unavailable
 }
 

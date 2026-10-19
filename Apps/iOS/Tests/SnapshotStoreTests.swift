@@ -51,6 +51,23 @@ struct SnapshotStoreTests {
     }
 }
 
+struct SignedOutTests {
+    private struct Signed: ICloudAvailability { let isSignedIn: Bool }
+
+    @Test func readerRefusesWithoutAnIdentity() async {
+        await #expect(throws: ReaderError.signedOut) {
+            try await CloudKitReader(iCloud: Signed(isSignedIn: false)).read()
+        }
+    }
+
+    @MainActor @Test func storeShowsSignedOutWithoutCache() async {
+        let cache = SnapshotCache(url: FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).json"))
+        let store = SnapshotStore(reader: CloudKitReader(iCloud: Signed(isSignedIn: false)), cache: cache)
+        await store.refresh()
+        #expect(store.phase == .signedOut)
+    }
+}
+
 struct AgeTests {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 

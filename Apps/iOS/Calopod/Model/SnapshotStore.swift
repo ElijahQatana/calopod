@@ -12,6 +12,7 @@ final class SnapshotStore {
         case content(Snapshot, offline: Bool)
         case failed
         case needsNewerApp
+        case signedOut
     }
 
     private(set) var phase: Phase = .loading
@@ -40,6 +41,8 @@ final class SnapshotStore {
             }
         } catch ReaderError.needsNewerApp {
             phase = .needsNewerApp
+        } catch ReaderError.signedOut {
+            if case .content(let snapshot, _) = phase { phase = .content(snapshot, offline: true) } else { phase = .signedOut }
         } catch {
             if case .content(let snapshot, _) = phase {
                 phase = .content(snapshot, offline: true)

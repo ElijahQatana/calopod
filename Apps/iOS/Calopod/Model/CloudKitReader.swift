@@ -2,17 +2,30 @@ import CalopodSnapshot
 import CloudKit
 import Foundation
 
+protocol ICloudAvailability: Sendable {
+    var isSignedIn: Bool { get }
+}
+
+struct SystemICloud: ICloudAvailability {
+    /// The identity token is nil with no iCloud account, and also when the build has no iCloud entitlement.
+    var isSignedIn: Bool { FileManager.default.ubiquityIdentityToken != nil }
+}
+
 /// Reads the snapshot the Mac publishes to the user's private iCloud database.
 ///
 /// PENDING THE SCHEMA (#243): the zone name, record type and field names below are
 /// placeholders. Only this file should change when the Mac side settles them.
 struct CloudKitReader: SnapshotReader {
+    var iCloud: ICloudAvailability = SystemICloud()
+
     static let containerID = "iCloud.pro.elijahquintana.calopod"
     private static let zoneName = "Snapshot"
     private static let kindField = "kind"
     private static let payloadField = "payload"
 
     func read() async throws -> SnapshotResult {
+        // CKContainer traps when iCloud can't be used, so check before touching it.
+        guard iCloud.isSignedIn else { throw ReaderError.signedOut }
         let database = CKContainer(identifier: Self.containerID).privateCloudDatabase
         let zone = CKRecordZone.ID(zoneName: Self.zoneName)
         let changes: [CKRecord]
