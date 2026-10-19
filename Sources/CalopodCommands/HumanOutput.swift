@@ -12,12 +12,14 @@ public struct HumanOutputContext: Sendable {
     public var applied: Int?
     public var reconciled: Int?
     public var noOps: Int?
+    /// Plain lines printed last, after any warnings.
+    public var footer: [String]
 
     public init(
         calendarLabels: [String: String] = [:],
         connectionLabels: [String: String] = [:],
         connectionEnabled: [String: Bool] = [:],
-        applied: Int? = nil, reconciled: Int? = nil, noOps: Int? = nil
+        applied: Int? = nil, reconciled: Int? = nil, noOps: Int? = nil, footer: [String] = []
     ) {
         self.calendarLabels = calendarLabels
         self.connectionLabels = connectionLabels
@@ -25,6 +27,7 @@ public struct HumanOutputContext: Sendable {
         self.applied = applied
         self.reconciled = reconciled
         self.noOps = noOps
+        self.footer = footer
     }
 }
 
@@ -274,6 +277,7 @@ enum HumanOutputRenderer {
         if let count = payload.migrationCount { lines.append("Migrations: \(count)") }
         if command == "calendars", let colors = payload.colors { lines.append("Colors: \(colors.joined(separator: ", "))") }
         lines.append(contentsOf: warnings.map { "Warning: \(clean($0))" })
+        lines.append(contentsOf: context.footer.map(clean))
         return lines.flatMap { wrap($0, width: max(10, width)) }.joined(separator: "\n")
     }
 

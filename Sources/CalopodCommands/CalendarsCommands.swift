@@ -33,7 +33,8 @@ public struct CalendarsListCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "list",
         abstract: "List selectable calendars.",
-        discussion: "Colors: " + CalendarPalette.entries.map(\.id).joined(separator: ", ") + "."
+        discussion: "Ignored calendars are left out unless you add --include-ignored; JSON output then has ignoredCount. "
+            + "Colors: " + CalendarPalette.entries.map(\.id).joined(separator: ", ") + "."
     )
 
     @OptionGroup public var output: OutputOptions
@@ -50,12 +51,18 @@ public struct CalendarsListCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Deselect one calendar identifier returned by this command.")
     public var deselect: String?
 
+    @Flag(name: .long, help: "Also list the calendars you ignored, as the Calendars screen does under Ignored.")
+    public var includeIgnored = false
+
     public init() {}
 
     public func run() async throws {
         do {
             if select != nil, deselect != nil {
                 throw ValidationError("Use either --select or --deselect, not both.")
+            }
+            if includeIgnored, select != nil || deselect != nil {
+                throw ValidationError("--include-ignored only changes the list. Leave it out to select or deselect.")
             }
             if cached {
                 guard select == nil, deselect == nil else {
@@ -67,7 +74,7 @@ public struct CalendarsListCommand: AsyncParsableCommand {
                 for stored in try read.repository.connections() where (connection ?? stored.id) == stored.id {
                     bindings += try read.repository.calendarBindings(connectionID: stored.id)
                 }
-                try write(bindings, message: "Calendars from retained local data.", repository: read.repository)
+                try writeList(bindings, message: "Calendars from retained local data.", repository: read.repository)
                 return
             }
             let repository = try CommandEnvironment.repository()
@@ -101,23 +108,40 @@ public struct CalendarsListCommand: AsyncParsableCommand {
                 connection: selected,
                 repository: repository
             )
-            try write(calendars, message: calendars.isEmpty ? "No calendars were found." : "Selectable calendars.",
-                      warnings: warnings, repository: repository)
+            try writeList(calendars, message: calendars.isEmpty ? "No calendars were found." : "Selectable calendars.",
+                          warnings: warnings, repository: repository)
         } catch {
             try failCommand(error)
         }
     }
 
     private func write(
-        _ calendars: [StoredCalendarBinding], message: String, warnings: [String] = [], repository: LocalStateRepository
+        _ calendars: [StoredCalendarBinding], message: String, repository: LocalStateRepository
     ) throws {
         try OutputRenderer.write(
             command: "calendars",
             payload: calendarsPayload(calendars, message: message, repository: repository),
-            warnings: warnings,
             format: output.format,
             showIDs: output.ids,
             human: output.localContext(repository: repository)
+        )
+    }
+
+    /// Like the Calendars screen, the list leaves ignored calendars out unless asked.
+    private func writeList(
+        _ calendars: [StoredCalendarBinding], message: String, warnings: [String] = [], repository: LocalStateRepository
+    ) throws {
+        let listing = CalendarListing(calendars, includeIgnored: includeIgnored, names: CalendarNames(repository))
+        var human = output.localContext(repository: repository)
+        human.footer = listing.footer
+        try OutputRenderer.write(
+            command: "calendars",
+            payload: calendarsPayload(listing.shown, message: listing.shown.isEmpty && listing.ignoredCount > 0
+                ? "No calendars are shown." : message, repository: repository, ignoredCount: listing.omittedCount),
+            warnings: warnings + listing.stillSelectedWarnings,
+            format: output.format,
+            showIDs: output.ids,
+            human: human
         )
     }
 }
@@ -156,8 +180,10 @@ public struct CalendarsNameCommand: ParsableCommand {
 public struct CalendarsIgnoreCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "ignore",
-        abstract: "Leave a calendar out of events output.",
-        discussion: "An ignored calendar keeps syncing and stays in JSON output, marked as ignored. " + localOnly
+        abstract: "Leave a calendar out of the calendar list and events output.",
+        discussion: "Example: calopod calendars ignore \"Holidays\"\n\n"
+            + "An ignored calendar keeps syncing and can still be named by identifier or name. "
+            + "List it with calendars --include-ignored. " + localOnly
     )
 
     @Argument(help: "Calendar identifier, or its exact current or real name.")
@@ -178,7 +204,7 @@ public struct CalendarsUnignoreCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "unignore",
         abstract: "Stop ignoring a calendar.",
-        discussion: localOnly
+        discussion: "Example: calopod calendars unignore \"Holidays\"\n\n" + localOnly
     )
 
     @Argument(help: "Calendar identifier, or its exact current or real name.")
@@ -332,8 +358,12 @@ enum CalendarsEdit {
     static func ignore(_ reference: String, _ ignored: Bool, repository: LocalStateRepository) throws -> CommandPayload {
         let binding = try resolveCalendar(reference, repository: repository)
         try repository.setCalendarIgnored(ignored, calendarID: binding.id)
-        return calendarsPayload([binding], message: (ignored ? "Ignored the calendar. " : "Stopped ignoring the calendar. ") + localOnly,
-                                repository: repository)
+        var message = ignored ? "Ignored the calendar. " : "Stopped ignoring the calendar. "
+        // The app does the same: ignoring hides a calendar but a selected one keeps syncing.
+        if ignored, binding.isSelected { message += "It is still selected and keeps syncing. " }
+        let shown = try CalendarListing.defaultCount(repository: repository)
+        message += "calopod calendars now lists \(shown) \(shown == 1 ? "calendar" : "calendars") by default. " + localOnly
+        return calendarsPayload([binding], message: message, repository: repository)
     }
 
     static func hide(_ reference: String, _ hidden: Bool, view: CalendarViewMode, repository: LocalStateRepository) throws -> CommandPayload {
@@ -371,8 +401,41 @@ func resolveCalendar(_ reference: String, repository: LocalStateRepository) thro
     throw ValidationError("'\(reference)' matches more than one calendar. Use the identifier:\n" + lines.joined(separator: "\n"))
 }
 
+/// What the default calendar list shows: ignored calendars stay out unless asked for.
+struct CalendarListing {
+    let shown: [StoredCalendarBinding]
+    let ignoredCount: Int
+    let omittedCount: Int?
+    let stillSelectedWarnings: [String]
+    let footer: [String]
+
+    init(_ calendars: [StoredCalendarBinding], includeIgnored: Bool, names: CalendarNames) {
+        let ignored = calendars.filter { names.isIgnored($0.id) }
+        ignoredCount = ignored.count
+        shown = includeIgnored ? calendars : calendars.filter { !names.isIgnored($0.id) }
+        omittedCount = includeIgnored ? nil : ignored.count
+        stillSelectedWarnings = ignored.filter(\.isSelected).map {
+            "\(names.shown($0.id, real: $0.displayLabel) ?? "Unnamed calendar") is ignored but still selected, so it keeps syncing. Ignoring only hides it."
+        }
+        var footer: [String] = []
+        if let omitted = omittedCount, omitted > 0 {
+            footer.append("\(omitted) ignored \(omitted == 1 ? "calendar is" : "calendars are") not shown. Use --include-ignored to list them.")
+        }
+        footer.append("Use calopod calendars ignore <calendar> to hide one.")
+        self.footer = footer
+    }
+
+    /// Calendars across every Connection that the list shows without --include-ignored.
+    static func defaultCount(repository: LocalStateRepository) throws -> Int {
+        let names = CalendarNames(repository)
+        return try repository.connections()
+            .flatMap { try repository.calendarBindings(connectionID: $0.id) }
+            .filter { !names.isIgnored($0.id) }.count
+    }
+}
+
 func calendarsPayload(
-    _ calendars: [StoredCalendarBinding], message: String, repository: LocalStateRepository
+    _ calendars: [StoredCalendarBinding], message: String, repository: LocalStateRepository, ignoredCount: Int? = nil
 ) -> CommandPayload {
     let names = CalendarNames(repository)
     return CommandPayload(
@@ -394,6 +457,7 @@ func calendarsPayload(
                 color: names.preferences[binding.id]?.color
             )
         },
-        colors: CalendarPalette.entries.map(\.id)
+        colors: CalendarPalette.entries.map(\.id),
+        ignoredCount: ignoredCount
     )
 }

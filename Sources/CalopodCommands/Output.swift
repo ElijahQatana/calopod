@@ -92,6 +92,8 @@ public struct CommandPayload: Codable, Equatable, Sendable {
     public let review: SyncReviewSummary?
     /// Palette color ids a calendar can be given.
     public let colors: [String]?
+    /// Ignored calendars left out of a calendar list. Absent when they are listed.
+    public let ignoredCount: Int?
 
     public init(
         status: String,
@@ -136,7 +138,8 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         migrationCount: Int? = nil,
         ingestion: EventIngestionSummary? = nil,
         review: SyncReviewSummary? = nil,
-        colors: [String]? = nil
+        colors: [String]? = nil,
+        ignoredCount: Int? = nil
     ) {
         self.status = status
         self.message = message
@@ -181,6 +184,7 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         self.ingestion = ingestion
         self.review = review
         self.colors = colors
+        self.ignoredCount = ignoredCount
     }
 }
 

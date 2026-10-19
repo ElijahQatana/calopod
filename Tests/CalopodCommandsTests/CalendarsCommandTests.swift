@@ -89,6 +89,58 @@ import Testing
         #expect(human.contains("Colors: blue, orange"))
     }
 
+    /// Renders the list the way `calendars` does: ignored calendars out unless asked for.
+    private func list(_ repository: LocalStateRepository, includeIgnored: Bool, format: OutputFormat) throws -> String {
+        let listing = CalendarListing(try repository.calendarBindings(connectionID: "conn"),
+                                      includeIgnored: includeIgnored, names: CalendarNames(repository))
+        let payload = calendarsPayload(listing.shown, message: "Selectable calendars.", repository: repository,
+                                       ignoredCount: listing.omittedCount)
+        return try OutputRenderer.render(command: "calendars", payload: payload, warnings: listing.stillSelectedWarnings,
+                                         format: format, human: HumanOutputContext(footer: listing.footer))
+    }
+
+    @Test func defaultListLeavesIgnoredOutAndSaysSo() throws {
+        let repository = try repository()
+        _ = try CalendarsEdit.ignore("home", true, repository: repository)
+        _ = try CalendarsEdit.ignore("home2", true, repository: repository)
+        let human = try list(repository, includeIgnored: false, format: .human)
+        #expect(human.contains("Count: 1") && human.contains("Work") && !human.contains("Ignored: yes"))
+        #expect(human.contains("2 ignored calendars are not shown. Use --include-ignored to list them."))
+        #expect(human.contains("Use calopod calendars ignore <calendar> to hide one."))
+
+        let all = try list(repository, includeIgnored: true, format: .human)
+        #expect(all.contains("Count: 3") && all.contains("Ignored: yes"))
+        #expect(!all.contains("not shown") && all.contains("calendars ignore <calendar>"))
+    }
+
+    @Test func jsonDefaultOmitsIgnoredWithACount() throws {
+        let repository = try repository()
+        _ = try CalendarsEdit.ignore("home", true, repository: repository)
+        let json = try list(repository, includeIgnored: false, format: .json)
+        #expect(json.contains("\"ignoredCount\":1") && json.contains("\"count\":2") && !json.contains("\"ignored\":true"))
+        let all = try list(repository, includeIgnored: true, format: .json)
+        #expect(all.contains("\"count\":3") && all.contains("\"ignored\":true") && !all.contains("ignoredCount"))
+        #expect(try CalopodRoot.parseAsRoot(["calendars", "--include-ignored"]) is CalendarsListCommand)
+    }
+
+    @Test func ignoredCalendarCanStillBeAddressedAndIgnoreReportsTheNewCount() throws {
+        let repository = try repository()
+        let ignored = try CalendarsEdit.ignore("Work", true, repository: repository)
+        // Work is selected, so it keeps syncing; the app marks it "in use" and does not deselect it.
+        #expect(ignored.message.contains("still selected and keeps syncing"))
+        #expect(ignored.message.contains("now lists 2 calendars by default"))
+        #expect(try repository.calendarBindings(connectionID: "conn").first { $0.id == "work" }?.isSelected == true)
+        #expect(try list(repository, includeIgnored: false, format: .human)
+            .contains("Warning: Work is ignored but still selected"))
+
+        _ = try CalendarsEdit.color("Work", "teal", repository: repository)
+        _ = try CalendarsEdit.name("work", to: "Office", repository: repository)
+        #expect(try repository.calendarPreferences()["work"]?.color == "teal")
+        let back = try CalendarsEdit.ignore("Office", false, repository: repository)
+        #expect(back.message.contains("now lists 3 calendars by default"))
+        #expect(try repository.calendarPreferences()["work"]?.isIgnored == false)
+    }
+
     @Test func inboxShowsTheNameAndJSONKeepsTheRealOne() throws {
         let repository = try repository()
         let event = StoredNormalizedInstance(

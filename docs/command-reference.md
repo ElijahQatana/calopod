@@ -24,6 +24,8 @@ calopod-setup [--arms]
 
 `events --view all|sources|destinations` shows the calendars that view offers and leaves out the ones hidden in it. Each view keeps its own hidden calendars, the same ones the Mac app's Calendar screen remembers. `calendars hide CALENDAR --view VIEW` and `calendars show CALENDAR --view VIEW` change them. Without `--view`, or with `--calendar`, `events` hides nothing.
 
+`calendars` lists the calendars the Mac app's Calendars screen shows. Calendars you ignored are left out, as the app keeps them under a collapsed Ignored section, and the text output ends with a line saying how many were left out. `calendars --include-ignored` lists them too, marked `Ignored: yes`. `Count` counts what is listed. In JSON output the default list now omits ignored calendars as well and adds a top-level `ignoredCount`; with `--include-ignored` it lists everything with the `ignored` flag as before and has no `ignoredCount`. Scripts that need every calendar should pass `--include-ignored`. An ignored calendar can still be named by identifier or exact name in `calendars --select`, `name`, `color`, `hide`, `show` and `unignore`. `calendars ignore CALENDAR` and `calendars unignore CALENDAR` change the same Ignored list the app uses and print how many calendars the default list now shows. Ignoring only hides a calendar: one that is still selected keeps syncing, and the list warns about it.
+
 ## Dates
 
 `events`, `availability`, `inbox` and `sync` accept:
