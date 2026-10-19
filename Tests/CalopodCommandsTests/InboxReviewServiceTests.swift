@@ -117,6 +117,61 @@ struct InboxReviewServiceTests {
         #expect(totals.remainingInbox == 2)
     }
 
+    @Test("A resumed review drops events that ended, keeps what was held, and counts the shorter queue")
+    func resumeSkipsEndedEvents() async throws {
+        let f = try ReviewFixture(count: 4)
+        let progress = try f.service.start(overlapsOnly: false, skipMaybe: false)
+        let card = try #require(try await f.service.card(sessionID: progress.sessionID))
+        _ = await f.service.hold(card: card)
+
+        // Later, key0 (held) and key1 are over. Only key2 and key3 can still be answered.
+        let later = f.service(now: 32_000)
+        let resumed = try await later.resume()
+        #expect(resumed.total == 3 && resumed.totals.held == 1 && resumed.reviewed == 1)
+        #expect(resumed.currentKey == "key2")
+        let next = try #require(try await later.card(sessionID: progress.sessionID))
+        #expect(next.entry.id == "key2" && next.position == 2 && next.total == 3)
+        #expect(try later.progress(sessionID: progress.sessionID).total == 3)
+    }
+
+    @Test("A card is skipped when it is built if its event has ended")
+    func endedEventIsNotOffered() async throws {
+        let f = try ReviewFixture(count: 2)
+        let progress = try f.service.start(overlapsOnly: false, skipMaybe: false)
+        // key0 ended and key1 is still ahead.
+        let card = try #require(try await f.service(now: 20_000).card(sessionID: progress.sessionID))
+        #expect(card.entry.id == "key1" && card.position == 1 && card.total == 1)
+        // Once everything is over there is nothing to offer.
+        #expect(try await f.service(now: 60_000).card(sessionID: progress.sessionID) == nil)
+    }
+
+    @Test("The summary counts the same events and overlapping pairs as the Inbox, without ended events")
+    func summaryMatchesTheInbox() async throws {
+        // One pair that is over, one still ahead.
+        let f = try ReviewFixture(spans: [(1_000, 2_000), (1_500, 2_500), (10_000, 11_000), (10_500, 11_500)])
+        let progress = try f.service.start(overlapsOnly: false, skipMaybe: false)
+        let totals = progress.totals
+        let snapshot = try f.state.inboxContextSnapshot()
+        let inbox = InboxAttentionQuery.evaluate(
+            snapshot, filter: InboxAttentionFilter(asOf: Date(timeIntervalSince1970: 5_000)),
+            freshnessCutoff: Date(timeIntervalSince1970: 1_400))
+        #expect(progress.total == 2 && inbox.rows.count == 2)
+        #expect(totals.remainingInbox == inbox.rows.count)
+        #expect(totals.overlapsRemaining == inbox.analysis.pairs.count && totals.overlapsRemaining == 1)
+        #expect(totals.overlapEvents == inbox.rows.filter { $0.reasons.contains(.conflict) }.count)
+        let events = try #require(totals.lines.first { $0.label == "Events still in your Inbox" })
+        #expect(events.value == inbox.rows.count)
+    }
+
+    @Test("Every summary row says what it means")
+    func summaryRowsHaveHelp() async throws {
+        let f = try ReviewFixture(count: 2)
+        let totals = try f.service.start(overlapsOnly: false, skipMaybe: false).totals
+        #expect(totals.lines.map(\.label).starts(with: ["Replies recorded", "Held", "Outcome unclear"]))
+        #expect(totals.lines.allSatisfy { !$0.help.isEmpty })
+        #expect(totals.lines.first { $0.label == "Held" }?.help.contains("Nothing was sent") == true)
+    }
+
     @Test("The summary counts overlaps resolved separately from replies recorded")
     func summarySeparatesReviewedFromResolved() async throws {
         let f = try ReviewFixture(count: 2, overlapping: true)
@@ -139,7 +194,14 @@ private struct ReviewFixture {
     let window = try! SyncWindow(start: Date(timeIntervalSince1970: 0), end: Date(timeIntervalSince1970: 200_000))
     let lock = FileManager.default.temporaryDirectory.appendingPathComponent("review-\(UUID().uuidString).lock")
 
-    init(count: Int, overlapping: Bool = false, provider: String = "google") throws {
+    let spans: [(Double, Double)]?
+
+    init(spans: [(Double, Double)]) throws {
+        try self.init(count: spans.count, spans: spans)
+    }
+
+    init(count: Int, overlapping: Bool = false, provider: String = "google", spans: [(Double, Double)]? = nil) throws {
+        self.spans = spans
         self.count = count
         self.overlapping = overlapping
         remote = ReviewRemote(state: state, window: window)
@@ -151,20 +213,23 @@ private struct ReviewFixture {
         try apply()
     }
 
-    var service: InboxReviewService {
+    var service: InboxReviewService { service(now: 5_000) }
+
+    func service(now: Double) -> InboxReviewService {
         let state = state, remote = remote, lock = lock
         return InboxReviewService(
             makeRepository: { state }, makeLockURL: { lock },
             makeRefresh: { state in { try state.inboxContextSnapshot() } }, provider: { _ in remote },
-            now: { Date(timeIntervalSince1970: 5_000) })
+            now: { Date(timeIntervalSince1970: now) })
     }
 
     func apply(title: String? = nil) throws {
         let events = (0..<count).map { index in
-            let start = overlapping ? 10_000 : 10_000 + Double(index) * 20_000
+            let start = spans?[index].0 ?? (overlapping ? 10_000 : 10_000 + Double(index) * 20_000)
+            let end = spans?[index].1 ?? start + 1000
             return StoredNormalizedInstance(
                 sourceKeyHash: "key\(index)", connectionID: "c", calendarBindingID: "cal", providerEventID: "key\(index)",
-                recurrenceID: nil, startsAt: Date(timeIntervalSince1970: start), endsAt: Date(timeIntervalSince1970: start + 1000),
+                recurrenceID: nil, startsAt: Date(timeIntervalSince1970: start), endsAt: Date(timeIntervalSince1970: end),
                 isAllDay: false, availability: "busy", isCancelled: false, isPrivate: false, title: title ?? "Example \(index)",
                 contentFingerprint: title ?? "example", providerUpdatedAt: nil,
                 organizer: EventParticipant(name: "Taylor Example", emailAddress: "taylor@example.com"),

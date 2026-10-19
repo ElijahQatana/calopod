@@ -25,30 +25,34 @@ public struct InboxReviewSessionController: Sendable {
     private let state: LocalStateRepository
     private let lockURL: URL
     private let checkpoint: @Sendable (InboxReviewCheckpoint) throws -> Void
+    private let now: @Sendable () -> Date
     public typealias Refresh = @Sendable () async throws -> InboxContextSnapshot
     public typealias Provider = @Sendable (RSVPTarget) throws -> any RSVPActionProvider
 
-    public init(state: LocalStateRepository, lockURL: URL) {
-        self.init(state: state, lockURL: lockURL, checkpoint: { _ in })
+    public init(state: LocalStateRepository, lockURL: URL, now: @escaping @Sendable () -> Date = Date.init) {
+        self.init(state: state, lockURL: lockURL, checkpoint: { _ in }, now: now)
     }
 
-    init(state: LocalStateRepository, lockURL: URL, checkpoint: @escaping @Sendable (InboxReviewCheckpoint) throws -> Void) {
+    init(state: LocalStateRepository, lockURL: URL, checkpoint: @escaping @Sendable (InboxReviewCheckpoint) throws -> Void,
+         now: @escaping @Sendable () -> Date = Date.init) {
         self.state = state
         self.lockURL = lockURL
         self.checkpoint = checkpoint
+        self.now = now
     }
 
     public func session(id: String) throws -> InboxReviewSession { try load(id).0 }
 
     public func start(filter: InboxAttentionFilter = InboxAttentionFilter(), settings: InboxContextSettings? = nil,
-                      metricsWindow: SyncWindow, freshnessCutoff: Date, now: Date = Date(), displayTimeZoneIdentifier: String? = nil) throws -> InboxReviewSession {
+                      metricsWindow: SyncWindow, freshnessCutoff: Date, now: Date? = nil, displayTimeZoneIdentifier: String? = nil) throws -> InboxReviewSession {
+        let now = now ?? self.now()
         let lock = try ProcessLock.acquire(at: lockURL)
         defer { withExtendedLifetime(lock) {} }
         try state.pruneInboxReviewSessions(completedBefore: now.addingTimeInterval(-30 * 86_400))
         let snapshot = try state.inboxContextSnapshot()
         var session = try InboxReviewSession(snapshot: snapshot, filter: filter, settings: settings ?? state.inboxContextSettings(),
             metricsWindow: metricsWindow, freshnessCutoff: freshnessCutoff, now: now, displayTimeZoneIdentifier: displayTimeZoneIdentifier)
-        session.updateSummary(freshnessCutoff: freshnessCutoff)
+        session.updateSummary(freshnessCutoff: freshnessCutoff, asOf: now)
         try state.createInboxReviewSession(update(session, generation: 0, now: now),
             connectionIDs: Set(snapshot.sources.map(\.connectionID)))
         return session
@@ -78,6 +82,7 @@ public struct InboxReviewSessionController: Sendable {
         let snapshot = try await refreshAfterDecision(refresh)
         session.metrics.observeExternalChanges(before: session.lastSnapshot, after: snapshot, freshnessCutoff: freshnessCutoff)
         session.lastSnapshot = snapshot
+        session.dropEnded(in: snapshot, asOf: now(), freshnessCutoff: freshnessCutoff)
         try finish(&session, generation: &generation, freshnessCutoff: freshnessCutoff)
         return session
     }
@@ -87,9 +92,18 @@ public struct InboxReviewSessionController: Sendable {
         let lock = try ProcessLock.acquire(at: lockURL)
         defer { withExtendedLifetime(lock) {} }
         var (session, generation) = try load(sessionID)
-        let key = sourceKeyHash ?? session.entries.prefix(session.queueCount).dropFirst(session.cursor).first?.sourceKeyHash
-        guard let key else { return nil }
         let snapshot = try await refresh()
+        // An event that ended while the review was open is not offered.
+        let dropped = session.dropEnded(in: snapshot, asOf: now(), freshnessCutoff: freshnessCutoff)
+        let key = sourceKeyHash ?? session.entries.prefix(session.queueCount).dropFirst(session.cursor).first?.sourceKeyHash
+        guard let key else {
+            if dropped > 0 {
+                session.metrics.observeExternalChanges(before: session.lastSnapshot, after: snapshot, freshnessCutoff: freshnessCutoff)
+                session.lastSnapshot = snapshot
+                try finish(&session, generation: &generation, freshnessCutoff: freshnessCutoff)
+            }
+            return nil
+        }
         if !session.entries.contains(where: { $0.sourceKeyHash == key }) {
             guard session.originalOccurrenceKeys.contains(key), let origin = conflictFromKey,
                   session.entries.contains(where: { $0.sourceKeyHash == origin }) else { throw InboxReviewSessionError.itemNotQueued }
@@ -111,7 +125,7 @@ public struct InboxReviewSessionController: Sendable {
             let preview: RSVPEventSnapshot
             do { preview = try await provider(target).rsvpSnapshot(target: target) }
             catch {
-                session.updateSummary(freshnessCutoff: freshnessCutoff)
+                session.updateSummary(freshnessCutoff: freshnessCutoff, asOf: now())
                 try save(session, generation: &generation)
                 return InboxReviewCard(sessionID: session.id, generation: generation, context: context, providerSnapshot: nil)
             }
@@ -121,7 +135,7 @@ public struct InboxReviewSessionController: Sendable {
             if preview.capability.isEligible, preview.capability.supportedScopes.contains(.occurrence),
                let version = preview.version, !version.isEmpty { providerSnapshot = preview }
         }
-        session.updateSummary(freshnessCutoff: freshnessCutoff)
+        session.updateSummary(freshnessCutoff: freshnessCutoff, asOf: now())
         try save(session, generation: &generation)
         return InboxReviewCard(sessionID: session.id, generation: generation, context: context, providerSnapshot: providerSnapshot)
     }
@@ -230,7 +244,7 @@ public struct InboxReviewSessionController: Sendable {
         session.advance()
         try save(session, generation: &generation)
         try checkpoint(.beforeSummary)
-        session.updateSummary(freshnessCutoff: freshnessCutoff)
+        session.updateSummary(freshnessCutoff: freshnessCutoff, asOf: now())
         try save(session, generation: &generation)
     }
 

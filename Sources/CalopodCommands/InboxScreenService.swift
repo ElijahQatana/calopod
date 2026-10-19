@@ -245,7 +245,7 @@ public struct InboxScreenService: Sendable {
             let cutoff = freshnessCutoff
             let snapshot = try state.inboxContextSnapshot()
             let queue = InboxAttentionQuery.evaluate(snapshot, freshnessCutoff: cutoff)
-            let controller = InboxReviewSessionController(state: state, lockURL: try makeLockURL())
+            let controller = InboxReviewSessionController(state: state, lockURL: try makeLockURL(), now: now)
             let refresh = makeRefresh(state)
             let session = try controller.start(
                 metricsWindow: queue.analysisWindow ?? SyncWindow(start: now(), end: now().addingTimeInterval(1)),

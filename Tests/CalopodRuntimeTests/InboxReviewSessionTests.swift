@@ -337,7 +337,7 @@ private struct ReviewFixture {
     var lockURL: URL { root.appendingPathComponent("state.sqlite.lock") }
     var cutoff: Date { Date(timeIntervalSince1970: 0) }
     var window: SyncWindow { try! SyncWindow(start: Date(timeIntervalSince1970: 0), end: Date(timeIntervalSince1970: 100_000)) }
-    var controller: InboxReviewSessionController { InboxReviewSessionController(state: state, lockURL: lockURL) }
+    var controller: InboxReviewSessionController { InboxReviewSessionController(state: state, lockURL: lockURL, now: { Date(timeIntervalSince1970: 0) }) }
     var refresh: InboxReviewSessionController.Refresh { { try state.inboxContextSnapshot() } }
     var provider: InboxReviewSessionController.Provider { { _ in remote } }
 
@@ -377,7 +377,7 @@ private struct ReviewFixture {
         try await controller.decide(choice, card: card, freshnessCutoff: cutoff, refresh: refresh, provider: provider)
     }
     func reopen() throws -> InboxReviewSessionController {
-        InboxReviewSessionController(state: LocalStateRepository(database: try CalopodDatabase(path: root.appendingPathComponent("state.sqlite").path)), lockURL: lockURL)
+        InboxReviewSessionController(state: LocalStateRepository(database: try CalopodDatabase(path: root.appendingPathComponent("state.sqlite").path)), lockURL: lockURL, now: { Date(timeIntervalSince1970: 0) })
     }
     func remove() { try? FileManager.default.removeItem(at: root) }
 }

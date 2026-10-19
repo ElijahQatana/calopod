@@ -132,7 +132,7 @@ struct InboxReviewTerminalTests {
         let start = try f.controller.start(filter: InboxAttentionFilter(conflictsOnly: true), settings: settings, metricsWindow: f.window, freshnessCutoff: f.cutoff)
         #expect(start.queueCount == 2)
         let (_, text) = try await f.run(["h", "h"], session: start)
-        for detail in ["Organizer: Taylor Example", "taylor@example.com", "Location: Example room", "Details: Example notes", "https://example.com/meeting", "GMT", "Source: Example / Calendar", "Remaining conflicts: 1"] {
+        for detail in ["Organizer: Taylor Example", "taylor@example.com", "Location: Example room", "Details: Example notes", "https://example.com/meeting", "GMT", "Source: Example / Calendar", "Overlapping pairs left: 1"] {
             #expect(text.contains(detail))
         }
         let command = try InboxReviewCommand.parse(["--exclude-maybe", "--day", "2026-11-05", "--timezone", "UTC", "--connection", "connection", "--calendar", "calendar", "--conflicts", "--context-before-minutes", "15"])
@@ -221,7 +221,7 @@ struct InboxReviewTerminalTests {
         #expect(done.summary?.yes == 1 && done.summary?.no == 1)
         #expect(done.summary?.createdConflicts == 1)
         #expect(done.summary?.remainingConflicts == 0)
-        #expect(text.contains("Conflicts created: 1"))
+        #expect(text.contains("New overlapping pairs: 1"))
     }
 
     @Test func completeSessionsSelectArtFromConfirmedTotals() async throws {
@@ -294,7 +294,7 @@ private struct TranscriptFixture {
     let base: Double
     var cutoff: Date { Date().addingTimeInterval(-3600) }
     var window: SyncWindow { try! SyncWindow(start: Date(timeIntervalSince1970: base), end: Date(timeIntervalSince1970: base + 200_000)) }
-    var controller: InboxReviewSessionController { InboxReviewSessionController(state: state, lockURL: root.appendingPathComponent("review.lock")) }
+    var controller: InboxReviewSessionController { InboxReviewSessionController(state: state, lockURL: root.appendingPathComponent("review.lock"), now: { [base] in Date(timeIntervalSince1970: base) }) }
     var refresh: InboxReviewSessionController.Refresh { { try state.inboxContextSnapshot() } }
     var provider: InboxReviewSessionController.Provider { { _ in remote } }
     init(count: Int, overlapping: Bool = false, backend: String = "google", base: Double = 0) throws {

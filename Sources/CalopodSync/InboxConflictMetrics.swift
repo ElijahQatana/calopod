@@ -11,6 +11,8 @@ public enum InboxConflictMetricsError: Error, Equatable {
 /// bounds when sources are incomplete; a zero never proves no conflicts then.
 public struct InboxConflictMetrics: Codable, Equatable, Sendable {
     public let window: SyncWindow
+    /// Events that ended by this time are left out of every count, as in the Inbox. Nil in older sessions.
+    public let asOf: Date?
     public let startingIsComplete: Bool
     public let startingPairs: Set<InboxConflictPair>
     public private(set) var createdPairs: Set<InboxConflictPair> = []
@@ -20,14 +22,25 @@ public struct InboxConflictMetrics: Codable, Equatable, Sendable {
     public private(set) var isComplete: Bool
     public private(set) var attributionIsComplete: Bool
 
-    public init(starting snapshot: InboxContextSnapshot, window: SyncWindow, freshnessCutoff: Date) {
+    public init(starting snapshot: InboxContextSnapshot, window: SyncWindow, freshnessCutoff: Date, asOf: Date? = nil) {
         self.window = window
-        let analysis = InboxConflictCalculator.analyze(snapshot, window: window, freshnessCutoff: freshnessCutoff)
+        self.asOf = asOf
+        let analysis = Self.analyze(snapshot, window: window, asOf: asOf, freshnessCutoff: freshnessCutoff)
         startingIsComplete = analysis.isComplete
         startingPairs = analysis.pairs
         remainingPairs = analysis.pairs
         isComplete = analysis.isComplete
         attributionIsComplete = analysis.isComplete
+    }
+
+    private static func analyze(_ snapshot: InboxContextSnapshot, window: SyncWindow, asOf: Date?, freshnessCutoff: Date) -> InboxConflictAnalysis {
+        InboxConflictCalculator.analyze(
+            InboxAttentionQuery.current(snapshot, asOf: asOf, freshnessCutoff: freshnessCutoff),
+            window: window, freshnessCutoff: freshnessCutoff)
+    }
+
+    private func upcoming(_ snapshot: InboxContextSnapshot, _ freshnessCutoff: Date) -> InboxContextSnapshot {
+        InboxAttentionQuery.current(snapshot, asOf: asOf, freshnessCutoff: freshnessCutoff)
     }
 
     /// Only the action layer's confirmed response belongs here. Intent, Hold,
@@ -48,9 +61,9 @@ public struct InboxConflictMetrics: Codable, Equatable, Sendable {
         guard updated?.currentUserResponse.state == response || updated == nil && response == .declined else {
             throw InboxConflictMetricsError.responseNotObserved
         }
-        let prior = InboxConflictCalculator.analyze(before, window: window, freshnessCutoff: freshnessCutoff)
-        let current = InboxConflictCalculator.analyze(after, window: window, freshnessCutoff: freshnessCutoff)
-        let projected = InboxConflictCalculator.analyze(before, window: window, freshnessCutoff: freshnessCutoff,
+        let prior = InboxConflictCalculator.analyze(upcoming(before, freshnessCutoff), window: window, freshnessCutoff: freshnessCutoff)
+        let current = InboxConflictCalculator.analyze(upcoming(after, freshnessCutoff), window: window, freshnessCutoff: freshnessCutoff)
+        let projected = InboxConflictCalculator.analyze(upcoming(before, freshnessCutoff), window: window, freshnessCutoff: freshnessCutoff,
                                                        responseOverride: (sourceKeyHash, response))
         let additions = current.pairs.subtracting(prior.pairs)
         let candidates = projected.pairs.subtracting(prior.pairs).intersection(additions)
@@ -78,7 +91,7 @@ public struct InboxConflictMetrics: Codable, Equatable, Sendable {
     }
 
     public mutating func recordUncertainDecision(after: InboxContextSnapshot, freshnessCutoff: Date) {
-        let current = InboxConflictCalculator.analyze(after, window: window, freshnessCutoff: freshnessCutoff)
+        let current = InboxConflictCalculator.analyze(upcoming(after, freshnessCutoff), window: window, freshnessCutoff: freshnessCutoff)
         uncertainPairs.formUnion(current.pairs.subtracting(remainingPairs))
         remainingPairs = current.pairs
         isComplete = false
@@ -89,8 +102,8 @@ public struct InboxConflictMetrics: Codable, Equatable, Sendable {
     public mutating func observeExternalChanges(
         before: InboxContextSnapshot, after: InboxContextSnapshot, freshnessCutoff: Date
     ) {
-        let prior = InboxConflictCalculator.analyze(before, window: window, freshnessCutoff: freshnessCutoff)
-        let current = InboxConflictCalculator.analyze(after, window: window, freshnessCutoff: freshnessCutoff)
+        let prior = InboxConflictCalculator.analyze(upcoming(before, freshnessCutoff), window: window, freshnessCutoff: freshnessCutoff)
+        let current = InboxConflictCalculator.analyze(upcoming(after, freshnessCutoff), window: window, freshnessCutoff: freshnessCutoff)
         let additions = current.pairs.subtracting(prior.pairs)
         if prior.isComplete && current.isComplete { externalPairs.formUnion(additions) }
         else { uncertainPairs.formUnion(additions) }

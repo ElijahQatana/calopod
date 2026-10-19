@@ -379,17 +379,13 @@ struct ReviewSummary: View {
         return VStack(alignment: .leading, spacing: 14) {
             if let totals {
                 Text(heading(progress, totals)).font(Theme.Fonts.sectionTitle)
-                Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 18, verticalSpacing: 6) {
-                    count("Replies recorded", totals.recorded, detail: "Yes \(totals.yes) · Maybe \(totals.maybe) · No \(totals.no)")
-                    count("Held", totals.held, detail: calendarSkips > 0 ? "\(min(calendarSkips, totals.held)) left for the Calendar app" : nil)
-                    count("Outcome unclear", totals.unclear, tint: totals.unclear > 0 ? Theme.cautionText : nil)
-                    if totals.failed + totals.unavailable + totals.changed > 0 {
-                        count("Not sent", totals.failed + totals.unavailable + totals.changed)
+                Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 18, verticalSpacing: 8) {
+                    ForEach(Array(totals.lines.enumerated()), id: \.offset) { index, line in
+                        if index > 0, totals.lines[index - 1].section != line.section {
+                            Divider().gridCellColumns(3).gridCellUnsizedAxes(.horizontal)
+                        }
+                        row(line)
                     }
-                    Divider().gridCellColumns(3).gridCellUnsizedAxes(.horizontal)
-                    count("Overlaps resolved", totals.overlapsResolved)
-                    count("New overlaps created", totals.overlapsCreated, tint: totals.overlapsCreated > 0 ? Theme.badText : nil)
-                    count("Overlaps left", totals.overlapsRemaining)
                 }
                 .font(Theme.Fonts.body)
                 if !totals.overlapsAreComplete {
@@ -398,7 +394,7 @@ struct ReviewSummary: View {
                 if progress?.hasUnclear == true {
                     Banner(kind: .caution, text: "A reply has an unclear outcome. It is never sent again. Choose Resume next time to check what happened.")
                 } else if totals.queueReviewed {
-                    Text(totals.inboxResolved ? "Your inbox is clear." : "Everything in this queue was looked at, but \(totals.remainingInbox) item\(totals.remainingInbox == 1 ? "" : "s") still need\(totals.remainingInbox == 1 ? "s" : "") attention.")
+                    Text(totals.inboxResolved ? "Your inbox is clear." : "Everything in this queue was looked at, but \(totals.remainingInbox) event\(totals.remainingInbox == 1 ? "" : "s") in your Inbox still need\(totals.remainingInbox == 1 ? "s" : "") attention.")
                         .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                 } else {
                     Text("Your progress is saved. Choose Review, then Resume, to carry on.")
@@ -413,10 +409,22 @@ struct ReviewSummary: View {
         return totals.queueReviewed ? "Queue reviewed" : "Review paused"
     }
 
-    private func count(_ label: String, _ value: Int, detail: String? = nil, tint: Color? = nil) -> some View {
-        GridRow {
-            Text(label).foregroundStyle(.secondary).gridColumnAlignment(.leading)
-            Text("\(value)").monospacedDigit().fontWeight(.semibold).foregroundStyle(tint ?? .primary)
+    private func row(_ line: InboxReviewSummaryLine) -> some View {
+        let tint: Color? = switch line.emphasis { case .caution: Theme.cautionText; case .bad: Theme.badText; case nil: nil }
+        var detail = line.detail
+        var help = line.help
+        if line.label == "Held", calendarSkips > 0, let value = progress?.totals.held {
+            detail = "\(min(calendarSkips, value)) left for the Calendar app"
+            help += " Left for the Calendar app: Calopod cannot reply for that calendar, so answer those events there."
+        }
+        return GridRow {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(line.label).foregroundStyle(.secondary)
+                Text(help).font(Theme.Fonts.tiny).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(width: 340, alignment: .leading)
+            .gridColumnAlignment(.leading)
+            Text("\(line.value)").monospacedDigit().fontWeight(.semibold).foregroundStyle(tint ?? .primary)
             if let detail { Text(detail).font(Theme.Fonts.secondary).foregroundStyle(.secondary) } else { Color.clear.frame(width: 0, height: 0) }
         }
     }
