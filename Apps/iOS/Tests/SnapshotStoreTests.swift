@@ -70,6 +70,7 @@ struct CloudKitAssembleTests {
             + snapshot.availability.map { ("availability-day", try wrap($0)) }
             + snapshot.days.map { ("calendar-day", try wrap($0)) }
             + [("calendars", try wrap(CalendarList(calendars: snapshot.calendars))), ("sync-status", try wrap(snapshot.status))]
+            + (snapshot.reminders.map { [("reminder-settings", try wrap($0))] } ?? [])
     }
 
     @Test func noRecordsMeansNothingPublished() throws {
@@ -85,6 +86,14 @@ struct CloudKitAssembleTests {
         #expect(!result.days.isEmpty)
         #expect(result.calendars == fixture.calendars)
         #expect(result.status == fixture.status)
+        #expect(result.reminders == fixture.reminders && result.reminders != nil)
+    }
+
+    @Test func aMacWithoutReminderSettingsLeavesThemNil() throws {
+        var fixture = FixtureReader.snapshot(publishedAt: now, now: now)
+        fixture.reminders = nil
+        guard case .snapshot(let result) = try CloudKitReader.assemble(try payloads(fixture)) else { Issue.record("no snapshot"); return }
+        #expect(result.reminders == nil)
     }
 
     @Test func noCalendarDaysMeansNoEvents() throws {
@@ -100,8 +109,9 @@ struct CloudKitAssembleTests {
         cache.save(FixtureReader.snapshot(publishedAt: now, now: now))
         var json = try JSONSerialization.jsonObject(with: Data(contentsOf: cache.url)) as! [String: Any]
         json["days"] = nil
+        json["reminders"] = nil
         try JSONSerialization.data(withJSONObject: json).write(to: cache.url)
-        #expect(cache.load()?.days == [])
+        #expect(cache.load()?.days == [] && cache.load()?.reminders == nil)
         #expect(cache.load()?.inbox.count == 5)
     }
 
