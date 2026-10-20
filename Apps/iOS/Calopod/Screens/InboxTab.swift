@@ -83,7 +83,7 @@ private struct InboxRow: View {
     var calendar: CalendarEntry?
 
     var body: some View {
-        let color = Theme.calendarColor(calendar?.colorIndex)
+        let color = Theme.calendarColor(calendar)
         HStack(spacing: 12) {
             VStack(spacing: 1) {
                 Text(item.isAllDay ? "All day" : item.startsAt.formatted(timeFormat)).font(Theme.Fonts.bodyStrong).monospacedDigit()

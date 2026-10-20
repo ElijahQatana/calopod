@@ -53,7 +53,7 @@ struct StatusTab: View {
                 ForEach(Array(report.rows.enumerated()), id: \.offset) { index, row in
                     HStack {
                         Label { Text(row.calendar.name) } icon: {
-                            Circle().fill(Theme.calendarColor(row.calendar.colorIndex)).frame(width: 10, height: 10)
+                            Circle().fill(Theme.calendarColor(row.calendar)).frame(width: 10, height: 10)
                         }
                         Spacer()
                         if let issue = row.issue {

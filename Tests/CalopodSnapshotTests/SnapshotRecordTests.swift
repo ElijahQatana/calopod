@@ -113,6 +113,20 @@ func colorIndexOutsideThePaletteIsRejected() {
 }
 
 @Test
+func colorIdIsOptionalAndWinsOverTheIndex() throws {
+    func decode(_ json: String) throws -> CalendarEntry {
+        try JSONDecoder().decode(CalendarEntry.self, from: Data(json.utf8))
+    }
+    let older = try decode(#"{"id":"c","name":"Work","colorIndex":10}"#)
+    #expect(older.color == nil && older.paletteEntry.id == "indigo")
+    let newer = try decode(#"{"id":"c","name":"Work","colorIndex":3,"color":"amber"}"#)
+    #expect(newer.paletteEntry.id == "amber")
+    #expect(try decode(#"{"id":"c","name":"Work","colorIndex":3,"color":"mauve"}"#).paletteEntry.id == "gray")
+    let sent = CalendarEntry(id: "c", name: "Work", colorIndex: 4, color: "red")
+    #expect(try decode(String(decoding: JSONEncoder().encode(sent), as: UTF8.self)) == sent)
+}
+
+@Test
 func recordsCarryNoAddressesOrTokens() throws {
     let text = String(decoding: try SnapshotCoding.encode(SnapshotEnvelope(generatedAt: now, record: item)), as: UTF8.self)
     #expect(!text.contains("@"))
