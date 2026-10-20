@@ -118,9 +118,10 @@ final class SyncHealthTests: XCTestCase {
                 lines.append(("access", SyncHealth.make(status: status("ok", age: age), statusAt: now, run: nil, access: access, now: now)))
             }
         }
+        let limit = MenuPopover.statusTextWidth * 0.95
         for (state, line) in lines {
             let width = (line.menuLine as NSString).size(withAttributes: [.font: font]).width
-            XCTAssertLessThanOrEqual(width, MenuPopover.statusTextWidth * 0.95, "\(state): \(line.menuLine)")
+            XCTAssertLessThanOrEqual(width, limit, "\(state): \(line.menuLine)")
         }
     }
 
