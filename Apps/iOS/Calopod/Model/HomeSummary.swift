@@ -19,17 +19,22 @@ struct HomeSummary: Equatable {
         var timeZone: TimeZone
         var meetingsLeft: Int?
 
+        /// "Next free: 09:45 to 10:00", or nil when no free stretch is known.
+        func freeText(locale: Locale = .current) -> String? {
+            guard let free else { return nil }
+            let style = Date.FormatStyle(locale: locale, timeZone: timeZone).hour().minute()
+            return freeNow ? "Free until \(free.end.formatted(style))"
+                : "Next free: \(free.start.formatted(style)) to \(free.end.formatted(style))"
+        }
+
+        var meetingsText: String? {
+            guard let meetingsLeft else { return nil }
+            return meetingsLeft == 0 ? "No meetings left today"
+                : meetingsLeft == 1 ? "1 meeting left today" : "\(meetingsLeft) meetings left today"
+        }
+
         func text(locale: Locale = .current) -> String? {
-            var parts: [String] = []
-            if let free {
-                let style = Date.FormatStyle(locale: locale, timeZone: timeZone).hour().minute()
-                parts.append(freeNow ? "Free until \(free.end.formatted(style))"
-                    : "Next free: \(free.start.formatted(style)) to \(free.end.formatted(style))")
-            }
-            if let meetingsLeft {
-                parts.append(meetingsLeft == 0 ? "No meetings left today"
-                    : meetingsLeft == 1 ? "1 meeting left today" : "\(meetingsLeft) meetings left today")
-            }
+            let parts = [freeText(locale: locale), meetingsText].compactMap { $0 }
             return parts.isEmpty ? nil : parts.joined(separator: " · ")
         }
     }

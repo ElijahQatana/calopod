@@ -13,7 +13,7 @@ struct StatusReport: Equatable {
     var lastSyncAt: Date?
     var issues: [SyncIssue]
     var rows: [Row]
-    /// Runs of the last day, oldest first. Nil from an older Mac, which gets no history bar.
+    /// The most recent runs, oldest first. Nil from an older Mac, which gets no history bar.
     var runs: [SyncRunMark]?
 
     init(status: SyncStatus, calendars: [CalendarEntry]) {

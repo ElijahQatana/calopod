@@ -12,8 +12,8 @@ enum IPhoneFeedBuilder {
     static let availabilityDays = 14
     /// Long notes are cut, so one record stays well under CloudKit's size limit.
     static let notesLimit = 2_000
-    /// The most sync runs published, which covers a day at one run every 15 minutes.
-    static let runsLimit = 96
+    /// The sync runs published for the history bar, as many as the Mac's own bar shows.
+    static let runsLimit = RunMark.barCount
 
     static func records(
         repository: LocalStateRepository, now: Date = Date(), calendar: Calendar = .current
@@ -34,7 +34,7 @@ enum IPhoneFeedBuilder {
         }
         records.append(try SnapshotPayload(calendars(snapshot, repository: repository), kind: .calendars, at: now))
         records.append(try SnapshotPayload(reminderSettings(try repository.notificationSettings()), kind: .reminderSettings, at: now))
-        records.append(try SnapshotPayload(try syncStatus(snapshot, repository: repository, cutoff: cutoff, now: now), kind: .syncStatus, at: now))
+        records.append(try SnapshotPayload(try syncStatus(snapshot, repository: repository, cutoff: cutoff), kind: .syncStatus, at: now))
         return records
     }
 
@@ -179,7 +179,7 @@ enum IPhoneFeedBuilder {
     }
 
     private static func syncStatus(
-        _ snapshot: InboxContextSnapshot, repository: LocalStateRepository, cutoff: Date, now: Date
+        _ snapshot: InboxContextSnapshot, repository: LocalStateRepository, cutoff: Date
     ) throws -> SyncStatus {
         var issues: [SyncIssue] = []
         for source in snapshot.sources {
@@ -194,10 +194,8 @@ enum IPhoneFeedBuilder {
         if let latest = try repository.latestSyncRun(), ["failed", "interrupted"].contains(latest.status) {
             issues.append(SyncIssue(kind: .failed, since: latest.finishedAt ?? latest.startedAt))
         }
-        let dayAgo = now.addingTimeInterval(-86_400)
-        let runs = try repository.recentSyncRuns(limit: runsLimit).reversed().compactMap { run -> SyncRunMark? in
-            let at = run.finishedAt ?? run.startedAt
-            return at >= dayAgo ? SyncRunMark(at: at, failed: run.status != "succeeded") : nil
+        let runs = try repository.recentSyncRuns(limit: runsLimit).reversed().map {
+            SyncRunMark(at: $0.finishedAt ?? $0.startedAt, failed: $0.status != "succeeded")
         }
         let updates = snapshot.sources.compactMap { source in
             source.coverage.map { CalendarUpdate(calendarID: source.bindingID, at: $0.observedAt) }

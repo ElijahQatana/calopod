@@ -15,7 +15,7 @@ struct HomeTab: View {
                 if context.isStale {
                     OldDataNote(lastUpdate: context.snapshot.publishedAt, now: context.now) { navigation.show(.status) }
                 }
-                if let glance = summary.glance?.text() { GlanceLine(text: glance) }
+                if let glance = summary.glance, glance.text() != nil { GlanceLine(glance: glance) }
                 Group {
                     HomeSection("Needs you", link: "Open Inbox") { navigation.openInbox(.all) } content: {
                         needsYou(summary)
@@ -95,11 +95,24 @@ private struct SyncProblemLine: View {
 }
 
 private struct GlanceLine: View {
-    var text: String
+    var glance: HomeSummary.Glance
 
     var body: some View {
-        Label(text, systemImage: "clock").font(Theme.Fonts.secondary).foregroundStyle(Theme.secondary)
-            .padding(.horizontal, 4)
+        HStack(spacing: 9) {
+            Image(systemName: "clock").foregroundStyle(Theme.good)
+            line.font(Theme.Fonts.secondary).lineLimit(1).minimumScaleFactor(0.85)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 4)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var line: Text {
+        let rest = glance.meetingsText.map { Text($0).foregroundStyle(Theme.secondary) }
+        guard let free = glance.freeText() else { return rest ?? Text("") }
+        let lead = Text(free).fontWeight(.semibold).foregroundStyle(Theme.text)
+        guard let rest else { return lead }
+        return lead + Text(" · ").foregroundStyle(Theme.secondary) + rest
     }
 }
 

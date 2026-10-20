@@ -88,7 +88,7 @@ struct StatusTab: View {
     }
 }
 
-/// One bar for each sync run of the last day, failures in red.
+/// One bar for each of the latest sync runs, failures in red.
 private struct HistoryBar: View {
     var runs: [SyncRunMark]
     var failed: Int
@@ -97,12 +97,12 @@ private struct HistoryBar: View {
         VStack(spacing: 6) {
             HStack(spacing: 2) {
                 ForEach(Array(runs.enumerated()), id: \.offset) { _, run in
-                    RoundedRectangle(cornerRadius: 2).fill(run.failed ? Theme.bad : Theme.good).frame(maxWidth: 14)
+                    RoundedRectangle(cornerRadius: 2).fill(run.failed ? Theme.bad : Theme.good).frame(maxWidth: .infinity)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading).frame(height: 22)
             HStack {
-                Text("Last 24 hours")
+                Text("Last \(runs.count) runs")
                 Spacer()
                 Text(failed == 0 ? "all runs finished" : "\(failed) failed")
             }
@@ -110,6 +110,6 @@ private struct HistoryBar: View {
         }
         .padding(.horizontal, 4)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(failed == 0 ? "Last 24 hours, all runs finished" : "Last 24 hours, \(failed) failed")
+        .accessibilityLabel(failed == 0 ? "Last \(runs.count) runs, all runs finished" : "Last \(runs.count) runs, \(failed) failed")
     }
 }

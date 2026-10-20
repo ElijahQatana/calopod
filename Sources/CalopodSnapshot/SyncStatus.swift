@@ -46,7 +46,7 @@ public struct SyncStatus: SnapshotRecord {
 
     public let lastSyncAt: Date?
     public let issues: [SyncIssue]
-    /// Finished runs of the last day, oldest first. Nil in a feed from an older Mac.
+    /// The most recent finished runs, oldest first. Nil in a feed from an older Mac.
     public let runs: [SyncRunMark]?
     /// Nil in a feed from an older Mac.
     public let calendarUpdates: [CalendarUpdate]?

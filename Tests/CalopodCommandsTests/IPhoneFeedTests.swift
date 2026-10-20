@@ -89,18 +89,20 @@ struct IPhoneFeedTests {
         #expect(try SnapshotCoding.decode(SyncStatus.self, from: status.bytes).record.lastSyncAt == now)
     }
 
-    @Test("Status carries the last day of runs, failures included")
+    @Test("Status carries the latest 12 runs, oldest first, failures included")
     func statusHistory() throws {
         let state = try fixture()
-        for (id, age, result) in [("old", 30.0, "succeeded"), ("a", 5.0, "succeeded"), ("b", 3.0, "failed"), ("c", 1.0, "succeeded")] {
-            let at = now.addingTimeInterval(-age * 3600)
+        for index in 0..<15 {
+            let id = "run\(index)", at = now.addingTimeInterval(Double(index - 20) * 300)
             try state.beginSyncRun(mode: "apply", trigger: "automatic", id: id, now: at)
-            try state.finishSyncRun(id: id, status: result, now: at)
+            try state.finishSyncRun(id: id, status: index == 5 || index == 14 ? "failed" : "succeeded", now: at)
         }
         let records = try IPhoneFeedBuilder.records(repository: state, now: now, calendar: Calendar(identifier: .gregorian))
         let payload = try #require(records.first { $0.kind == .syncStatus })
         let status = try SnapshotCoding.decode(SyncStatus.self, from: payload.bytes).record
-        #expect(status.runs?.map(\.failed) == [false, true, false])
+        let runs = try #require(status.runs)
+        #expect(runs.count == RunMark.barCount && runs.map(\.at) == runs.map(\.at).sorted())
+        #expect(runs.indices.filter { runs[$0].failed } == [2, 11])
         #expect(status.calendarUpdates?.map(\.calendarID) == ["cal"])
     }
 
