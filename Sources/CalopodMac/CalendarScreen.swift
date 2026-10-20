@@ -188,7 +188,7 @@ struct StepControls: View {
     var body: some View {
         Button(action: today) {
             Text("Today")
-                .font(Theme.Fonts.bodyMedium)
+                .font(Theme.Fonts.bodyMedium).fixedSize()
                 .padding(.horizontal, 16).frame(height: Theme.Control.height)
                 .background(Capsule().fill(.quaternary))
                 .contentShape(Capsule())
