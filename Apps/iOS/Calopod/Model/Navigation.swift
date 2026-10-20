@@ -30,6 +30,14 @@ final class Navigation {
         show(.calendar)
     }
 
+    /// From a link or a reminder: the schedule for today, whichever side Calendar was left on. Tapping
+    /// the Calendar tab itself goes through `show` and keeps its side.
+    func openSchedule() {
+        calendarMode = .schedule
+        calendarDay = nil
+        show(.calendar)
+    }
+
     func show(_ tab: Tab) {
         self.tab = tab
         pages = []

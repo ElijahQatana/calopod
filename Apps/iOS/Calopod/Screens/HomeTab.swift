@@ -18,8 +18,8 @@ struct HomeTab: View {
                     HomeSection("Needs you", link: "Open Inbox") { navigation.openInbox(.all) } content: {
                         needsYou(summary)
                     }
-                    HomeSection("Next up today", link: "Open Calendar") { navigation.show(.calendar) } content: {
-                        NextUp(summary: summary) { navigation.show(.calendar) }
+                    HomeSection("Next up today", link: "Open Calendar") { navigation.openSchedule() } content: {
+                        NextUp(summary: summary) { navigation.openSchedule() }
                     }
                     if !context.isStale {
                         HomeSection("Availability today", link: "Open Availability") { navigation.openAvailability() } content: {
