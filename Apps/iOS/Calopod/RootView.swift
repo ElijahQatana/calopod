@@ -27,7 +27,7 @@ struct RootView: View {
             if phase == .active { Task { await refresh() } }
         }
         .onChange(of: reminders.requestedEvent, initial: true) { _, id in
-            if id != nil { navigation.show(.calendar) }
+            if id != nil { navigation.openSchedule() }
         }
     }
 

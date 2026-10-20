@@ -32,6 +32,19 @@ struct NavigationTests {
         #expect(navigation.page == nil)
     }
 
+    @Test func waysIntoCalendarPickTheRightSide() {
+        let navigation = Navigation()
+        navigation.openAvailability()
+        #expect(navigation.tab == .calendar && navigation.calendarMode == .availability)
+        navigation.show(.home)
+        navigation.openSchedule()
+        #expect(navigation.tab == .calendar && navigation.calendarMode == .schedule && navigation.calendarDay == nil)
+        navigation.openAvailability()
+        navigation.show(.home)
+        navigation.show(.calendar)
+        #expect(navigation.calendarMode == .availability, "the Calendar tab keeps the side it was left on")
+    }
+
     @Test func openingATabLeavesTheMenuScreens() {
         let navigation = Navigation()
         navigation.open(.help)
