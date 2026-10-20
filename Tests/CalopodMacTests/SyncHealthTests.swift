@@ -1,4 +1,5 @@
 @testable import CalopodCommands
+import AppKit
 import XCTest
 
 @testable import CalopodMac
@@ -81,16 +82,37 @@ final class SyncHealthTests: XCTestCase {
         XCTAssertEqual(granted.tone, .good)
     }
 
-    func testMenuLineIsOneShortLinePerState() {
-        let ok = health(status("ok", age: 90))
-        XCTAssertEqual(ok.menuLine, "Last synced 1 min ago")
-        XCTAssertEqual(ok.tone, .good)
-        XCTAssertEqual(health(status("paused", age: 90)).menuLine, "Paused, last synced 1 min ago")
-        XCTAssertEqual(health(status("disabled", age: 7200)).menuLine, "Sync is off, last synced 2 hr ago")
+    func testMenuLineWording() {
+        XCTAssertEqual(health(status("ok", age: 90)).menuLine, "Last synced 1 min ago")
+        XCTAssertEqual(health(status("paused", age: 90)).menuLine, "Paused · 1 min ago")
+        XCTAssertEqual(health(status("disabled", age: 7200)).menuLine, "Sync is off · 2 hr ago")
+        XCTAssertEqual(health(status("failed", age: 3000)).menuLine, "Needs attention · 50 min ago")
         XCTAssertEqual(health(status("failed", age: nil)).menuLine, "Needs attention")
         XCTAssertEqual(health(nil).menuLine, "Checking…")
+        XCTAssertEqual(SyncHealth.make(status: status("ok"), statusAt: now, run: nil, access: .blocked, now: now).menuLine, "No Calendar access")
+    }
+
+    @MainActor
+    func testMenuLineFitsTheWindowForEveryStateAndLongTime() {
+        let font = NSFont.systemFont(ofSize: 15, weight: .medium)
+        let ages = [nil, 0, 59, 3000, 3 * 3600, 23 * 3600 + 3599, 86400, 99 * 86400, 365 * 86400]
+        var lines: [(String, SyncHealth)] = []
         for state in ["ok", "paused", "disabled", "failed", "stopped"] {
-            XCTAssertFalse(health(status(state)).menuLine.contains("\n"), state)
+            for age in ages { lines.append((state, health(status(state, age: age)))) }
+        }
+        lines.append(("unchecked", health(nil)))
+        lines.append(("not-installed", health(AgentControlStatus(
+            state: "not-installed", message: "", installed: false, enabled: false, paused: false, running: false,
+            intervalSeconds: nil, lastSuccessAgeSeconds: nil, failureCategory: nil, failureAgeSeconds: nil,
+            usesBundledService: false, sourceLoaded: false))))
+        for access in [CalendarAccessState.blocked, .canAsk] {
+            for age in ages {
+                lines.append(("access", SyncHealth.make(status: status("ok", age: age), statusAt: now, run: nil, access: access, now: now)))
+            }
+        }
+        for (state, line) in lines {
+            let width = (line.menuLine as NSString).size(withAttributes: [.font: font]).width
+            XCTAssertLessThanOrEqual(width, MenuPopover.statusTextWidth * 0.95, "\(state): \(line.menuLine)")
         }
     }
 

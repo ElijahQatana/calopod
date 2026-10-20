@@ -14,6 +14,10 @@ struct MenuPopover: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismiss) private var dismiss
 
+    static let width: CGFloat = 300
+    /// What a row's text can use: the window minus its padding, the row padding, the light and its gap.
+    static let statusTextWidth = width - 16 - 24 - 8 - 8
+
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             statusLine
@@ -52,7 +56,7 @@ struct MenuPopover: View {
             }
         }
         .padding(8)
-        .frame(width: 300)
+        .frame(width: Self.width)
         .appTypography()
         // Sleeps until the next moment the choice can change, and recomputes when the schedule reloads.
         .task(id: schedule.schedule) {

@@ -36,11 +36,12 @@ struct SyncHealth: Equatable {
         }
     }
 
-    /// The one line in the menu bar window.
+    /// The one line in the menu bar window. Short enough to fit without cutting off the time.
     var menuLine: String {
-        let ago = lastSyncedAge.map { "last synced \(Format.ago($0))" }
-        if tone == .good { return ago.map { $0.prefix(1).uppercased() + $0.dropFirst() } ?? label }
-        return [label, ago].compactMap { $0 }.joined(separator: ", ")
+        // Nothing syncs without access, so the time would only crowd the line.
+        if label == "Needs Calendar access" { return "No Calendar access" }
+        guard let age = lastSyncedAge.map(Format.ago) else { return label }
+        return tone == .good ? "Last synced \(age)" : "\(label) · \(age)"
     }
 
     /// A good manual run keeps its own headline, but never reads as an all-clear while automatic sync is
