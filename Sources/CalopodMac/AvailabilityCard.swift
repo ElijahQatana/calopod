@@ -136,14 +136,7 @@ struct AvailabilityCard: View {
 
     var body: some View {
         CardSection(
-            header: HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(weekTitle).font(Theme.Fonts.sectionTitle)
-                Spacer(minLength: 8)
-                Button("Today") { Task { await model.goToToday() } }
-                    .buttonStyle(.bare).font(Theme.Fonts.secondarySemibold).foregroundStyle(Theme.accent)
-                weekButton("chevron.left", "Previous week", -1)
-                weekButton("chevron.right", "Next week", 1)
-            },
+            header: EmptyView(),
             fills: true,
             content: {
                 ForEach(notices, id: \.self) { notice in CardRow { Banner(kind: .caution, text: notice) } }
@@ -158,17 +151,6 @@ struct AvailabilityCard: View {
                     }
                 }
             })
-    }
-
-    private var weekTitle: String {
-        guard let first = model.days.first, let last = model.days.last else { return "Week" }
-        let day = Date.FormatStyle().day().month(.abbreviated)
-        return "\(first.formatted(day)) to \(last.formatted(day))"
-    }
-
-    private func weekButton(_ symbol: String, _ label: String, _ weeks: Int) -> some View {
-        Button { Task { await model.step(weeks) } } label: { Image(systemName: symbol).font(Theme.Fonts.smallIcon) }
-            .buttonStyle(.bare).foregroundStyle(Theme.accent).accessibilityLabel(label)
     }
 
     // MARK: Day strip

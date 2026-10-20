@@ -4,6 +4,7 @@ import SwiftUI
 struct CalendarScreen: View {
     /// The same model the menu bar keeps current, so the schedule is read once for both.
     @Environment(CalendarModel.self) private var model
+    @Environment(AvailabilityModel.self) private var availability
     private let colors = CalendarColors.shared
     @Environment(\.sidebarCollapsed) private var collapsed
     let navigation: AppNavigation
@@ -78,19 +79,11 @@ struct CalendarScreen: View {
                 if navigation.calendarPage == .schedule {
                     PillPicker(options: [("Day", CalendarModel.Mode.day), ("Week", .week)], selection: Bindable(model).mode, quiet: true)
                         .fixedSize()
-                    Button { model.goToToday() } label: {
-                        Text("Today")
-                            .font(Theme.Fonts.bodyMedium)
-                            .padding(.horizontal, 16).frame(height: Self.controlHeight)
-                            .background(Capsule().fill(.quaternary))
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    HStack(spacing: 0) {
-                        stepButton("chevron.left", label: "Previous", by: -1)
-                        stepButton("chevron.right", label: "Next", by: 1)
-                    }
-                    .background(Capsule().fill(.quaternary))
+                    StepControls(today: { model.goToToday() }, step: { model.step($0) })
+                } else {
+                    StepControls(
+                        previous: "Previous week", next: "Next week",
+                        today: { Task { await availability.goToToday() } }, step: { weeks in Task { await availability.step(weeks) } })
                 }
             }
             // One row: the page and view mode stay put and the chips scroll, so nothing wraps at narrow widths.
@@ -119,17 +112,6 @@ struct CalendarScreen: View {
     }
 
     private static let headerInset: CGFloat = 18
-
-    private static let controlHeight = Theme.Control.height
-
-    private func stepButton(_ symbol: String, label: String, by direction: Int) -> some View {
-        Button { model.step(direction) } label: {
-            Image(systemName: symbol).font(Theme.Fonts.smallIcon)
-                .frame(width: 40, height: Self.controlHeight).contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-    }
 
     @ViewBuilder
     private var notices: some View {
@@ -186,7 +168,7 @@ struct CalendarScreen: View {
     }
 
     private var title: String {
-        if navigation.calendarPage == .availability { return "Availability" }
+        if navigation.calendarPage == .availability { return availability.title }
         let days = model.days
         guard let first = days.first, let last = days.last else { return "" }
         if model.mode == .day { return first.formatted(.dateTime.weekday(.wide).month(.wide).day()) }
@@ -194,6 +176,38 @@ struct CalendarScreen: View {
             return first.formatted(.dateTime.month(.wide).year())
         }
         return "\(first.formatted(.dateTime.month(.abbreviated))) – \(last.formatted(.dateTime.month(.abbreviated).year()))"
+    }
+}
+
+/// The Today pill and the previous and next arrows, the same on the Schedule and Availability pages.
+struct StepControls: View {
+    var previous = "Previous", next = "Next"
+    let today: () -> Void
+    let step: (Int) -> Void
+
+    var body: some View {
+        Button(action: today) {
+            Text("Today")
+                .font(Theme.Fonts.bodyMedium).fixedSize()
+                .padding(.horizontal, 16).frame(height: Theme.Control.height)
+                .background(Capsule().fill(.quaternary))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        HStack(spacing: 0) {
+            arrow("chevron.left", label: previous, by: -1)
+            arrow("chevron.right", label: next, by: 1)
+        }
+        .background(Capsule().fill(.quaternary))
+    }
+
+    private func arrow(_ symbol: String, label: String, by direction: Int) -> some View {
+        Button { step(direction) } label: {
+            Image(systemName: symbol).font(Theme.Fonts.smallIcon)
+                .frame(width: 40, height: Theme.Control.height).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 }
 

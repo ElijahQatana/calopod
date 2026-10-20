@@ -34,6 +34,13 @@ final class AvailabilityModel {
         weekStart..<(calendar.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart)
     }
 
+    /// The week as a page title, like "Oct 18 to Oct 24".
+    var title: String {
+        guard let first = days.first, let last = days.last else { return "Week" }
+        let day = Date.FormatStyle().day().month(.abbreviated)
+        return "\(first.formatted(day)) to \(last.formatted(day))"
+    }
+
     var selectedReport: AvailabilityDayReport? { reports.first { $0.day.start == selected } }
 
     func report(for day: Date) -> AvailabilityDayReport? { reports.first { $0.day.start == day } }
