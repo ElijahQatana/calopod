@@ -92,7 +92,15 @@ final class SyncHealthTests: XCTestCase {
         XCTAssertEqual(SyncHealth.make(status: status("ok"), statusAt: now, run: nil, access: .blocked, now: now).menuLine, "No Calendar access")
     }
 
+    /// The widest row of buttons: Preview sync, Enable and Resume, small controls with padding for each.
     @MainActor
+    func testSyncButtonsFitOneRow() {
+        let font = NSFont.systemFont(ofSize: 13, weight: .semibold)
+        let labels = ["Preview sync", "Enable", "Resume"]
+        let width = labels.map { ($0 as NSString).size(withAttributes: [.font: font]).width + 20 }.reduce(0, +) + 12
+        XCTAssertLessThanOrEqual(width, MenuPopover.width - 2 * MenuPopover.inset - 8 - 24)
+    }
+
     func testMenuLineFitsTheWindowForEveryStateAndLongTime() {
         let font = NSFont.systemFont(ofSize: 15, weight: .medium)
         let ages = [nil, 0, 59, 3000, 3 * 3600, 23 * 3600 + 3599, 86400, 99 * 86400, 365 * 86400]

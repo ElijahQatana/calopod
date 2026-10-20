@@ -37,24 +37,12 @@ struct MenuPopover: View {
                     .lineLimit(1).padding(.horizontal, 12)
             }
 
+            if let status = model.status, status.installed { syncControls(status) }
+
             VStack(spacing: 0) {
-                if inbox.waiting > 0 {
-                    row(inbox.waiting == 1 ? "1 invitation waiting" : "\(inbox.waiting) invitations waiting", "envelope.badge") {
-                        openInbox(.needsRSVP)
-                    }
-                }
                 row("Open Calopod", "macwindow") { open(.overview) }
-                if let status = model.status, status.installed {
-                    if model.syncHealth.offersEnable {
-                        row("Turn on sync", "power") { Task { await model.setEnabled(true) } }.disabled(model.isBusy)
-                    }
-                    if status.enabled {
-                        row(status.paused ? "Resume sync" : "Pause sync", status.paused ? "play.fill" : "pause.fill") {
-                            Task { await model.setPaused(!status.paused) }
-                        }
-                        .disabled(model.isBusy)
-                    }
-                }
+                row("Calendar", "calendar.day.timeline.left", count: todayCount) { open(.calendar) }
+                row("Inbox", "tray", count: inbox.count) { openInbox(.all) }
                 row("Quit Calopod", "power", tint: .secondary) { NSApplication.shared.terminate(nil) }
                     .keyboardShortcut("q")
             }
@@ -73,6 +61,19 @@ struct MenuPopover: View {
                 try? await Task.sleep(for: .seconds(max(0.5, wake.timeIntervalSinceNow)))
             }
         }
+    }
+
+    private func syncControls(_ status: AgentControlStatus) -> some View {
+        MenuSyncControls(
+            rule: model.previewRule, busy: model.isBusy, offersEnable: model.syncHealth.offersEnable,
+            pausable: status.enabled ? status.paused : nil,
+            preview: { open(.overview, keepMenu: true); Task { await model.previewSync() } },
+            enable: { Task { await model.setEnabled(true) } },
+            togglePause: { Task { await model.setPaused(!status.paused) } })
+    }
+
+    private var todayCount: Int? {
+        schedule.schedule == nil ? nil : UpNext.today(in: schedule.schedule, now: now, ignored: Self.isIgnored).count
     }
 
     private var statusLine: some View {
@@ -104,9 +105,9 @@ struct MenuPopover: View {
     }
 
     private func row(
-        _ title: String, _ symbol: String, tint: Color = .primary, action: @escaping () -> Void
+        _ title: String, _ symbol: String, count: Int? = nil, tint: Color = .primary, action: @escaping () -> Void
     ) -> some View {
-        MenuRow(title: title, symbol: symbol, tint: tint, action: action)
+        MenuRow(title: title, symbol: symbol, count: count, tint: tint, action: action)
     }
 
     private func openInbox(_ filter: InboxFilter) {
@@ -131,6 +132,58 @@ struct MenuPopover: View {
         dismiss()
         // dismiss() is not honored by every popover, so close its window as well.
         DispatchQueue.main.async { if popover?.isVisible == true { popover?.close() } }
+    }
+}
+
+/// A thin capsule button for the menu bar window, in place of the standard 36 pt controls.
+struct MenuButtonStyle: ButtonStyle {
+    static let font = Font.system(size: 13, weight: .semibold)
+    var prominent = false
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        let fill = prominent ? Theme.accent.opacity(configuration.isPressed ? 0.8 : 1) : Color.primary.opacity(configuration.isPressed ? 0.18 : 0.08)
+        return configuration.label
+            .font(Self.font)
+            .foregroundStyle(prominent ? Theme.onAccent : Color.primary)
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            .background(Capsule().fill(fill))
+            .contentShape(Capsule())
+            .opacity(isEnabled ? 1 : 0.4)
+    }
+}
+
+/// Preview, Enable and Pause on one thin row, with the reason when Preview is unavailable.
+struct MenuSyncControls: View {
+    let rule: PreviewSyncRule
+    let busy: Bool
+    let offersEnable: Bool
+    /// Nil when automatic sync is off, so there is nothing to pause.
+    let pausable: Bool?
+    let preview: () -> Void
+    let enable: () -> Void
+    let togglePause: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Button("Preview sync", action: preview)
+                    .buttonStyle(MenuButtonStyle(prominent: true))
+                    .previewSync(rule)
+                if offersEnable {
+                    Button("Enable", action: enable).buttonStyle(MenuButtonStyle()).disabled(busy)
+                }
+                if let paused = pausable {
+                    Button(paused ? "Resume" : "Pause", action: togglePause).buttonStyle(MenuButtonStyle()).disabled(busy)
+                }
+            }
+            // While a sync runs, the busy line above already says why.
+            if !busy, let reason = rule.disabledReason {
+                Text("Preview sync is unavailable: \(reason.prefix(1).lowercased() + reason.dropFirst()).")
+                    .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 4)
     }
 }
 
@@ -162,7 +215,7 @@ struct NextLine: View {
     @State private var hovering = false
 
     var body: some View {
-        HStack(spacing: 4) {
+        VStack(alignment: .leading, spacing: 2) {
             Button { open(primary.event) } label: {
                 HStack(spacing: 8) {
                     Circle().fill(color).frame(width: 8, height: 8)
@@ -173,15 +226,18 @@ struct NextLine: View {
                     }
                     Spacer(minLength: 0)
                 }
+                .frame(minHeight: Theme.Control.popoverRowHeight)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             if let joinLink {
-                Button { join(joinLink) } label: { Image(systemName: "video") }
-                    .controlSize(.small).help("Join \(joinLink.provider.displayName)").accessibilityLabel(joinLink.buttonTitle)
+                Button { join(joinLink) } label: { Label(joinLink.buttonTitle, systemImage: "video") }
+                    .buttonStyle(MenuButtonStyle(prominent: primary.role == .current))
+                    .help(JoinButton.help(for: joinLink)).fixedSize()
+                    .padding(.leading, 16).padding(.bottom, 2)
             }
         }
-        .padding(.horizontal, 12).frame(minHeight: Theme.Control.popoverRowHeight)
+        .padding(.horizontal, 12)
         .background(
             RoundedRectangle(cornerRadius: Theme.controlRadius, style: .continuous)
                 .fill(hovering ? Theme.accent.opacity(0.14) : .clear))
@@ -215,6 +271,7 @@ enum NextCardText {
 private struct MenuRow: View {
     let title: String
     let symbol: String
+    let count: Int?
     let tint: Color
     let action: () -> Void
     @State private var hovering = false
@@ -225,6 +282,7 @@ private struct MenuRow: View {
                 Image(systemName: symbol).frame(width: 18).foregroundStyle(tint)
                 Text(title).foregroundStyle(tint)
                 Spacer()
+                if let count, count > 0 { Text("\(count)").monospacedDigit().foregroundStyle(.secondary) }
             }
             .padding(.horizontal, 12).frame(minHeight: Theme.Control.popoverRowHeight)
             .background(

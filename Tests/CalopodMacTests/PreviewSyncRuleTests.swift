@@ -34,10 +34,10 @@ final class PreviewSyncRuleTests: XCTestCase {
         XCTAssertNil(rule(status("ok"), access: .unchecked))
     }
 
-    func testOverviewAsksTheServiceRule() throws {
+    func testOverviewAndMenuBarAskTheServiceRule() throws {
         let dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Sources/CalopodMac")
-        for file in ["OverviewScreen.swift"] {
+        for file in ["OverviewScreen.swift", "MenuPopover.swift"] {
             let text = try String(contentsOf: dir.appendingPathComponent(file), encoding: .utf8)
             XCTAssertTrue(text.contains("model.previewRule"), file)
             XCTAssertFalse(text.contains("previewDisabled"), file)

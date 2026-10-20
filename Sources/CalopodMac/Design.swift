@@ -44,7 +44,7 @@ enum Theme {
         static let chipHeight: CGFloat = 32
         static let smallChipHeight: CGFloat = 28
         static let rowHeight: CGFloat = 44
-        static let popoverRowHeight: CGFloat = 36
+        static let popoverRowHeight: CGFloat = 28
         static let circle: CGFloat = 36
     }
 
