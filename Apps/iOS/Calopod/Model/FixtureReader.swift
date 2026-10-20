@@ -54,7 +54,7 @@ struct FixtureReader: SnapshotReader {
             return calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day)!
         }
         let planning = InboxItem(
-            id: "fixture-1", reasons: [.needsRSVP, .conflict], title: "Quarterly planning",
+            id: "e2", reasons: [.needsRSVP, .conflict], title: "Quarterly planning",
             startsAt: at(0, 13, 30), endsAt: at(0, 15), sourceName: "work@example.com", calendarID: "work",
             response: .needsResponse, organizerName: "Dana Whitfield",
             attendees: AttendeeSummary(total: 9, accepted: 5, tentative: 1, declined: 1),

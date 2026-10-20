@@ -195,9 +195,10 @@ private struct NextUp: View {
             }
             Spacer(minLength: 0)
             if let chip = next.chip {
-                Text(chip).font(.caption2.weight(.semibold)).foregroundStyle(Theme.accent)
+                Text(chip).font(.caption2.weight(.semibold)).foregroundStyle(Theme.accent).lineLimit(1).fixedSize()
                     .padding(.horizontal, 9).padding(.vertical, 3).background(Theme.accentSoft, in: Capsule())
             }
+            if let join = next.event.joinLink { JoinPill(url: join) }
         }
         .padding(.horizontal, 14).padding(.vertical, 8)
         .accessibilityElement(children: .combine)

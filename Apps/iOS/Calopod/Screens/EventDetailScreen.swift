@@ -18,6 +18,7 @@ struct EventDetailScreen: View {
             }
             Group {
                 ReasonChips(item: item).padding(.horizontal, 4)
+                if let join = context.snapshot.joinLink(forEvent: item.id) { JoinButton(url: join) }
                 SectionLabel(text: "Details")
                 Card {
                     Rows(rows: [
@@ -100,5 +101,31 @@ private struct Rows: View {
             .accessibilityElement(children: .combine)
             if index < shown.count - 1 { Divider().overlay(Theme.line) }
         }
+    }
+}
+
+struct JoinButton: View {
+    var url: URL
+
+    var body: some View {
+        Link(destination: url) {
+            Label("Join", systemImage: "video.fill")
+                .font(Theme.Fonts.bodyStrong).foregroundStyle(Theme.onAccent)
+                .frame(maxWidth: .infinity).frame(height: 46)
+                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+    }
+}
+
+/// The small Join on a row.
+struct JoinPill: View {
+    var url: URL
+
+    var body: some View {
+        Link(destination: url) {
+            Text("Join").font(.caption2.weight(.semibold)).foregroundStyle(Theme.onAccent)
+                .padding(.horizontal, 10).padding(.vertical, 4).background(Theme.accent, in: Capsule())
+        }
+        .fixedSize()
     }
 }

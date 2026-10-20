@@ -27,7 +27,9 @@ struct RootView: View {
             if phase == .active { Task { await refresh() } }
         }
         .onChange(of: reminders.requestedEvent, initial: true) { _, id in
-            if id != nil { navigation.openSchedule() }
+            guard let id else { return }
+            navigation.openCalendarEvent(id)
+            reminders.requestedEvent = nil
         }
     }
 
@@ -81,12 +83,12 @@ struct RootView: View {
             case .content(let snapshot, let offline):
                 let context = SnapshotContext(snapshot: snapshot, offline: offline, now: now())
                 @Bindable var navigation = navigation
-                TabView(selection: $navigation.tab) {
+                TabView(selection: Binding(get: { navigation.tab }, set: { navigation.select($0) })) {
                     HomeTab(context: context, filter: filter, navigation: navigation)
                         .tabItem { Label("Home", systemImage: "house") }.tag(Navigation.Tab.home)
-                    InboxTab(context: context, filter: $navigation.inboxFilter)
+                    InboxTab(context: context, filter: $navigation.inboxFilter, openID: $navigation.inboxEventID)
                         .tabItem { Label("Inbox", systemImage: "tray") }.tag(Navigation.Tab.inbox)
-                    CalendarTab(context: context, filter: filter, navigation: navigation, requested: $reminders.requestedEvent)
+                    CalendarTab(context: context, filter: filter, navigation: navigation)
                         .tabItem { Label("Calendar", systemImage: "calendar") }.tag(Navigation.Tab.calendar)
                     StatusTab(context: context)
                         .tabItem { Label("Status", systemImage: "waveform.path.ecg") }.tag(Navigation.Tab.status)

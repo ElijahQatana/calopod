@@ -57,6 +57,12 @@ struct ReminderPlanTests {
         #expect(plan(snapshot([event("a", in: 3, join: zoom)])).first?.body.hasSuffix("Work · Join") == true)
     }
 
+    @Test func joinLinkIsTheOneTheReminderUses() {
+        let snap = snapshot([event("a", in: 3, join: zoom), event("b", in: 4, join: "http://example.com/m"), event("c", in: 5)])
+        #expect(snap.joinLink(forEvent: "a") == plan(snap).first?.joinURL && snap.joinLink(forEvent: "a") != nil)
+        #expect(snap.joinLink(forEvent: "b") == nil && snap.joinLink(forEvent: "c") == nil && snap.joinLink(forEvent: "x") == nil)
+    }
+
     @Test func skipsWhatHasStartedOrAlreadyPassed() {
         #expect(plan(snapshot([event("started", in: -0.5)])).isEmpty)
         // Five minutes away: the 10 minute reminder is past, the 1 minute one is still ahead.

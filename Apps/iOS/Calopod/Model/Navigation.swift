@@ -14,6 +14,9 @@ final class Navigation {
     /// Which side of Calendar is open and the day both sides show. Nil is today.
     var calendarMode = CalendarMode.schedule
     var calendarDay: String?
+    /// The event open in Inbox and in Calendar. Nil shows the list.
+    var inboxEventID: String?
+    var calendarEventID: String?
     /// Menu screens on top of the tabs. Back removes the top one.
     private(set) var pages: [Page] = []
 
@@ -21,13 +24,21 @@ final class Navigation {
 
     func openInbox(_ filter: InboxFilter) {
         inboxFilter = filter
+        inboxEventID = nil
         show(.inbox)
     }
 
     func openAvailability() {
         calendarMode = .availability
         calendarDay = nil
+        calendarEventID = nil
         show(.calendar)
+    }
+
+    /// From a reminder that names an event.
+    func openCalendarEvent(_ id: String) {
+        openSchedule()
+        calendarEventID = id
     }
 
     /// From a link or a reminder: the schedule for today, whichever side Calendar was left on. Tapping
@@ -35,7 +46,17 @@ final class Navigation {
     func openSchedule() {
         calendarMode = .schedule
         calendarDay = nil
+        calendarEventID = nil
         show(.calendar)
+    }
+
+    /// From the tab bar. Tapping the tab you are on goes back to its list.
+    func select(_ tab: Tab) {
+        if tab == self.tab {
+            if tab == .inbox { inboxEventID = nil }
+            if tab == .calendar { calendarEventID = nil }
+        }
+        show(tab)
     }
 
     func show(_ tab: Tab) {
