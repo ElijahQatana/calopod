@@ -4,7 +4,7 @@ import SwiftUI
 struct InboxTab: View {
     var context: SnapshotContext
     @Binding var filter: InboxFilter
-    @State private var openID: String?
+    @Binding var openID: String?
 
     var body: some View {
         let inbox = context.snapshot.inbox

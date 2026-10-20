@@ -7,23 +7,14 @@ struct CalendarTab: View {
     var context: SnapshotContext
     var filter: CalendarFilter
     @Bindable var navigation: Navigation
-    /// An event a tapped reminder asked to open. It is cleared once the event is shown.
-    @Binding var requested: String?
-    @State private var openEvent: CalendarEvent?
 
     var body: some View {
-        Group {
-            if let event = openEvent {
-                EventDetailScreen(
-                    item: InboxItem(event), context: context, untitled: "Busy", back: BackAction(label: "Calendar") { openEvent = nil })
-            } else {
-                schedule
-            }
-        }
-        .onChange(of: requested, initial: true) { _, id in
-            guard let id else { return }
-            openEvent = context.snapshot.days.flatMap(\.events).first { $0.id == id }
-            requested = nil
+        if let id = navigation.calendarEventID, let event = context.snapshot.days.flatMap(\.events).first(where: { $0.id == id }) {
+            EventDetailScreen(
+                item: InboxItem(event), context: context, untitled: "Busy",
+                back: BackAction(label: "Calendar") { navigation.calendarEventID = nil })
+        } else {
+            schedule
         }
     }
 
@@ -60,7 +51,7 @@ struct CalendarTab: View {
                     if hasEvents {
                         CalendarChips(calendars: CalendarFilter.listed(in: snapshot), filter: filter)
                         let events = DayEvents.make(from: snapshot.days.first { $0.day == day.day }, hidden: filter.hidden, in: day)
-                        EventDay(events: events, day: day, snapshot: snapshot) { openEvent = $0 }
+                        EventDay(events: events, day: day, snapshot: snapshot) { navigation.calendarEventID = $0.id }
                     } else {
                         NoCalendarsNote()
                         SectionLabel(text: "Busy")

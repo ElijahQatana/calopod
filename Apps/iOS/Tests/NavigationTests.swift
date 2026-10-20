@@ -45,6 +45,41 @@ struct NavigationTests {
         #expect(navigation.calendarMode == .availability, "the Calendar tab keeps the side it was left on")
     }
 
+    @Test func tappingTheTabYouAreOnShowsItsList() {
+        let navigation = Navigation()
+        navigation.inboxEventID = "a"
+        navigation.calendarEventID = "b"
+        navigation.show(.inbox)
+        navigation.show(.home)
+        navigation.select(.inbox)
+        #expect(navigation.inboxEventID == "a", "coming back from another tab keeps the open event")
+        navigation.select(.inbox)
+        #expect(navigation.inboxEventID == nil && navigation.calendarEventID == "b")
+        navigation.select(.calendar)
+        navigation.select(.calendar)
+        #expect(navigation.calendarEventID == nil)
+    }
+
+    @Test func tilesAndLinksShowTheListNotAnOpenEvent() {
+        let navigation = Navigation()
+        navigation.inboxEventID = "a"
+        navigation.calendarEventID = "b"
+        navigation.openInbox(.needsRSVP)
+        #expect(navigation.inboxEventID == nil && navigation.inboxFilter == .needsRSVP)
+        navigation.openSchedule()
+        #expect(navigation.calendarEventID == nil)
+        navigation.calendarEventID = "b"
+        navigation.openAvailability()
+        #expect(navigation.calendarEventID == nil)
+    }
+
+    @Test func aReminderOpensItsEventInTheSchedule() {
+        let navigation = Navigation()
+        navigation.openAvailability()
+        navigation.openCalendarEvent("e2")
+        #expect(navigation.tab == .calendar && navigation.calendarMode == .schedule && navigation.calendarEventID == "e2")
+    }
+
     @Test func openingATabLeavesTheMenuScreens() {
         let navigation = Navigation()
         navigation.open(.help)
