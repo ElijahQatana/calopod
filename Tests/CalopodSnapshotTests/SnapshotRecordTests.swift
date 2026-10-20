@@ -27,7 +27,9 @@ private let calendarDay = CalendarDay(
     ])
 
 private let status = SyncStatus(
-    lastSyncAt: now, issues: [SyncIssue(kind: .stale, calendarID: "cal-1", since: now), SyncIssue(kind: .partial)])
+    lastSyncAt: now, issues: [SyncIssue(kind: .stale, calendarID: "cal-1", since: now), SyncIssue(kind: .partial)],
+    runs: [SyncRunMark(at: now, failed: false), SyncRunMark(at: now.addingTimeInterval(900), failed: true)],
+    calendarUpdates: [CalendarUpdate(calendarID: "cal-1", at: now)])
 
 private let calendars = CalendarList(calendars: [
     CalendarEntry(id: "cal-1", name: "Work", colorIndex: 0),
@@ -51,6 +53,13 @@ func recordsSurviveARoundTrip() throws {
     #expect(try roundTrip(reminders) == reminders)
     #expect(try roundTrip(calendars) == calendars)
     #expect(try roundTrip(SyncStatus(lastSyncAt: nil)) == SyncStatus(lastSyncAt: nil))
+}
+
+@Test
+func statusWithoutHistoryStillDecodes() throws {
+    let old = Data(#"{"generatedAt":"2027-01-15T00:00:00Z","schemaVersion":\#(SnapshotSchema.currentVersion),"record":{"lastSyncAt":null,"issues":[]}}"#.utf8)
+    let decoded = try SnapshotCoding.decode(SyncStatus.self, from: old).record
+    #expect(decoded.runs == nil && decoded.calendarUpdates == nil)
 }
 
 @Test

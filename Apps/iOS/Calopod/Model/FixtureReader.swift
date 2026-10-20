@@ -132,7 +132,11 @@ struct FixtureReader: SnapshotReader {
             ],
             status: SyncStatus(
                 lastSyncAt: publishedAt,
-                issues: [SyncIssue(kind: .stale, calendarID: "client", since: now.addingTimeInterval(-86400))]))
+                issues: [SyncIssue(kind: .stale, calendarID: "client", since: now.addingTimeInterval(-86400))],
+                runs: (0..<24).map { SyncRunMark(at: publishedAt.addingTimeInterval(Double($0 - 23) * 3600), failed: $0 == 6) },
+                calendarUpdates: ["work", "personal", "family", "client", "studio", "travel"].enumerated().map { index, id in
+                    CalendarUpdate(calendarID: id, at: publishedAt.addingTimeInterval(id == "client" ? -86400 : Double(-index) * 300))
+                }))
     }
 
     /// The Sunday is the night the clocks go forward, so the day is 23 hours long and 00:00 to 09:00 is
