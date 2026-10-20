@@ -1,6 +1,6 @@
 # Releasing
 
-For maintainers. A release is a notarized ZIP for Apple Silicon Macs, with an optional disk image for the app.
+For maintainers. A release has two downloads for Apple Silicon Macs, each with a `.sha256` file: the app as a notarized disk image, and a notarized ZIP that installs the command line and background service without the app.
 
 ## Identifiers
 
@@ -100,8 +100,13 @@ The script's tests and the release builds never notarize. Stapling changes the f
 
 ## Publish
 
-Tag the reviewed commit and upload only the ZIP and its `.sha256`. Keep the notes short: supported Macs, a link to [Install](install.md), and where to report problems.
+Tag the reviewed commit and create the release as a pre-release. Upload these four files:
+
+- `Calopod-<version>.dmg` and its `.sha256`, the app.
+- `Calopod-<version>-macos-arm64.zip` and its `.sha256`, the command-line install. It is complete on its own and needs no app.
+
+Check each download against its checksum from the release page before announcing it. Keep the notes short: supported Macs, a link to [Install](install.md), and where to report problems.
 
 ## Clean-Mac check
 
-On a Mac with no Calopod state, install the release ZIP, run `calopod-setup`, sync into two new empty calendars, turn on automatic sync, then reinstall and uninstall. Confirm each step works and `calopod doctor` stays healthy. Share results only as pass or fail with generic counts.
+On a Mac with no Calopod state, install once from the ZIP and once from the disk image. For the ZIP run `calopod-setup`, and for the disk image use the app's first-run setup. Either way, sync into two new empty calendars, turn on automatic sync, then reinstall and uninstall. Confirm each step works and `calopod doctor` stays healthy. Share results only as pass or fail with generic counts.

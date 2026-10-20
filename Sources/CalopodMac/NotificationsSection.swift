@@ -32,8 +32,9 @@ struct NotificationsSection: View {
             + "The command line can change these with calopod notifications."
     }
 
+    // The setters go through plain closures: Xcode 16.4 crashes building a thunk for the isolated function value.
     private func toggle(_ title: String, _ value: Bool, set: @escaping @MainActor @Sendable (Bool) -> Void) -> some View {
-        Toggle(title, isOn: Binding(get: { value }, set: set)).labelsHidden().toggleStyle(.switch)
+        Toggle(title, isOn: Binding(get: { value }, set: { newValue in MainActor.assumeIsolated { set(newValue) } })).labelsHidden().toggleStyle(.switch)
     }
 
     private func reminderRow(
@@ -46,7 +47,7 @@ struct NotificationsSection: View {
                     Text("\(ReminderPlanner.minutesText(minutes)) before").font(Theme.Fonts.body).foregroundStyle(.secondary)
                         .monospacedDigit()
                     Stepper(
-                        "\(title) minutes", value: Binding(get: { minutes }, set: setMinutes),
+                        "\(title) minutes", value: Binding(get: { minutes }, set: { newValue in MainActor.assumeIsolated { setMinutes(newValue) } }),
                         in: range.contains(minutes) ? range : minutes...minutes
                     ).labelsHidden()
                 }
