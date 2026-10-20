@@ -12,8 +12,8 @@ enum IPhoneFeedBuilder {
     static let availabilityDays = 14
     /// Long notes are cut, so one record stays well under CloudKit's size limit.
     static let notesLimit = 2_000
-    /// The most recent sync runs published for the history bar, whatever their age.
-    static let runsLimit = 24
+    /// The most recent sync runs published for the history bar, whatever their age. Same count as the Mac bar.
+    static let runsLimit = RunMark.barCount
 
     static func records(
         repository: LocalStateRepository, now: Date = Date(), calendar: Calendar = .current

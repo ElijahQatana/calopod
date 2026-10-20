@@ -24,12 +24,12 @@ func runMarksAreOldestFirstAndFailuresCount() throws {
 }
 
 @Test
-func runMarksKeepOnlyTheLastTwelveApplyRuns() throws {
+func runMarksKeepOnlyTheLastApplyRuns() throws {
     var outcomes = [(status: "failed", mode: "apply")]
-    outcomes += Array(repeating: (status: "succeeded", mode: "apply"), count: 12)
+    outcomes += Array(repeating: (status: "succeeded", mode: "apply"), count: RunMark.barCount)
     outcomes += [(status: "failed", mode: "dry-run"), (status: "running", mode: "apply")]
     let marks = try repository(outcomes).recentRunMarks()
-    #expect(marks == Array(repeating: .good, count: 12))
+    #expect(marks == Array(repeating: .good, count: RunMark.barCount))
 }
 
 @Test

@@ -30,7 +30,7 @@ struct OverviewRig {
             state: "ok", message: "Automatic sync checks passed.", installed: true, enabled: true, paused: false,
             running: true, intervalSeconds: 600, lastSuccessAgeSeconds: 240, failureCategory: nil, failureAgeSeconds: nil,
             usesBundledService: true, sourceLoaded: false)
-        service.recentRuns = (0..<20).map { $0 % 7 == 3 ? .failed : .good }
+        service.recentRuns = (0..<RunMark.barCount).map { $0 % 7 == 3 ? .failed : .good }
         service.overview = AgentControlOverview(
             connections: [
                 .init(id: "g", provider: "google", label: "alex@example.com", isEnabled: true, selectedCalendarCount: 3),
