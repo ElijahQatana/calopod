@@ -17,27 +17,31 @@ final class AvailabilityTests: XCTestCase {
     /// 1 January 1970 is a Thursday. The fixture's events sit at 02:46 and 06:20 UTC.
     private func day(_ offset: Int = 0) -> Date { Date(timeIntervalSince1970: Double(offset) * 86_400) }
 
-    func testBusyTimeOutsideWorkingHoursIsReportedButNotCountedAsFree() throws {
+    func testBusyTimeOutsideWorkingHoursIsReportedSeparately() throws {
         let fixture = try MacFixture(count: 2)
         let state = fixture.state
         let service = AvailabilityService(makeRepository: { state })
         let report = try service.report(days: [day()], calendar: utc)[0]
 
-        XCTAssertEqual(report.result.busy.count, 2)
+        XCTAssertTrue(report.result.busy.isEmpty)
+        XCTAssertEqual(report.result.outside.map(\.side), [.before, .before])
         XCTAssertEqual(report.result.free.map(\.start), [day().addingTimeInterval(9 * 3600)])
         XCTAssertEqual(report.summary.freeSeconds, 8 * 3600)
-        XCTAssertEqual(report.summary.busySeconds, 2000)
+        XCTAssertEqual(report.summary.busySeconds, 0)
+        XCTAssertEqual(report.summary.outsideSeconds, 2000)
         XCTAssertEqual(report.summary.load, .mostlyFree)
     }
 
-    func testADayOffHasNoFreeTimeAndStillShowsBusy() throws {
+    func testADayOffHasNoFreeTimeAndAllMeetingsAreOutside() throws {
         let fixture = try MacFixture(count: 1)
         let state = fixture.state
         try state.saveWorkingHours(WorkingHours.standard.setting(isoWeekday: 4, to: nil))
         let report = try AvailabilityService(makeRepository: { state }).report(days: [day()], calendar: utc)[0]
         XCTAssertTrue(report.result.free.isEmpty)
         XCTAssertEqual(report.summary.load, .dayOff)
-        XCTAssertEqual(report.summary.busySeconds, 1000)
+        XCTAssertEqual(report.summary.busySeconds, 0)
+        XCTAssertEqual(report.summary.outsideSeconds, 1000)
+        XCTAssertEqual(report.result.outside.map(\.side), [.dayOff])
     }
 
     func testStepKeepsTheWeekdayAndReloads() async throws {

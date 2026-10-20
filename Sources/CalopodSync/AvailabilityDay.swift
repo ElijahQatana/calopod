@@ -11,8 +11,10 @@ public enum AvailabilityLoad: String, Equatable, Sendable {
 /// Free and busy totals for one day of an availability result.
 public struct AvailabilityDay: Equatable, Sendable {
     public let freeSeconds: TimeInterval
-    /// Every busy block, including those outside working hours.
+    /// Busy time inside working hours.
     public let busySeconds: TimeInterval
+    /// Busy time before or after working hours, and all of it on a day off.
+    public let outsideSeconds: TimeInterval
     public let overlaps: Int
     public let load: AvailabilityLoad
 
@@ -23,6 +25,7 @@ public struct AvailabilityDay: Equatable, Sendable {
         let workingSeconds = working.reduce(0) { $0 + $1.duration }
         freeSeconds = result.free.reduce(0) { $0 + $1.end.timeIntervalSince($1.start) }
         busySeconds = result.busy.reduce(0) { $0 + $1.end.timeIntervalSince($1.start) }
+        outsideSeconds = result.outside.reduce(0) { $0 + $1.end.timeIntervalSince($1.start) }
         overlaps = result.overlaps
         if workingSeconds == 0 {
             load = .dayOff

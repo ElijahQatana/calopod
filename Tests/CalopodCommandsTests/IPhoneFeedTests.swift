@@ -265,11 +265,15 @@ struct IPhoneFeedTests {
         let friday = days[0], saturday = days[1], sunday14 = days[2]
         #expect(friday.day == "2027-03-12" && friday.status == .mostlyFree && friday.overlaps == 1)
         #expect(friday.working == BusyInterval(start: zoned(12, 9), end: zoned(12, 17)))
-        // Busy time after 17:00 stays in the list, and an event over midnight is cut at the day's end.
-        #expect(friday.busy.last == BusyInterval(start: zoned(12, 22), end: zoned(13, 0)))
-        #expect(friday.busy.count == 3)
+        // Busy keeps only the working day. Time after 17:00 is listed as outside, and an event over
+        // midnight is cut at the day's end.
+        #expect(friday.busy == [BusyInterval(start: zoned(12, 10), end: zoned(12, 11.5))])
+        #expect(friday.outside == [
+            OutsideBlock(start: zoned(12, 17.5), end: zoned(12, 18.5), side: .after),
+            OutsideBlock(start: zoned(12, 22), end: zoned(13, 0), side: .after),
+        ])
         #expect(saturday.status == .dayOff && saturday.working == nil && saturday.free == [])
-        #expect(saturday.busy == [BusyInterval(start: zoned(13, 0), end: zoned(13, 2))])
+        #expect(saturday.busy == [] && saturday.outside == [OutsideBlock(start: zoned(13, 0), end: zoned(13, 2), side: .dayOff)])
         #expect(sunday14.status == .mostlyFree && sunday14.working == BusyInterval(start: zoned(14, 9), end: zoned(14, 17)))
         #expect(sunday14.free == [BusyInterval(start: zoned(14, 10), end: zoned(14, 17))])
 
@@ -278,9 +282,13 @@ struct IPhoneFeedTests {
             days: (0..<IPhoneFeedBuilder.availabilityDays).map { calendar.date(byAdding: .day, value: $0, to: zoned(12, 0))! },
             calendar: calendar)
         func seconds(_ list: [BusyInterval]) -> TimeInterval { list.reduce(0) { $0 + $1.end.timeIntervalSince($1.start) } }
+        func outside(_ list: [OutsideBlock]?) -> TimeInterval {
+            seconds((list ?? []).map { BusyInterval(start: $0.start, end: $0.end) })
+        }
         for (published, report) in zip(days, reports) {
             #expect(seconds(published.free ?? []) == report.summary.freeSeconds)
             #expect(seconds(published.busy) == report.summary.busySeconds)
+            #expect(outside(published.outside) == report.summary.outsideSeconds)
             #expect(published.overlaps == report.summary.overlaps)
         }
         #expect(seconds(sunday14.free ?? []) == 7 * 3600)

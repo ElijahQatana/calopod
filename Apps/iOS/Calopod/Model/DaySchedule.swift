@@ -16,9 +16,11 @@ struct DaySchedule: Equatable {
     var busy: [BusyBlock]
 
     /// One schedule per published day. A busy stretch is cut to each day it touches, so it counts
-    /// whether or not the Mac cut it, and overlapping intervals are counted once.
+    /// whether or not the Mac cut it, and overlapping intervals are counted once. Time outside working
+    /// hours is busy here too, because this is the whole day.
     static func schedules(from records: [AvailabilityDay]) -> [DaySchedule] {
-        let all = records.flatMap(\.busy).filter { $0.end > $0.start }
+        let all = records.flatMap { $0.busy + ($0.outside ?? []).map { BusyInterval(start: $0.start, end: $0.end) } }
+            .filter { $0.end > $0.start }
         return records.compactMap { record in
             guard let timeZone = TimeZone(identifier: record.timeZoneIdentifier),
                 let interval = localDay(record.day, in: timeZone)

@@ -204,7 +204,7 @@ private struct NextUp: View {
     }
 }
 
-/// Today's free and busy time as the Mac published it. An older Mac has the busy time only.
+/// Today's free, busy and outside time as the Mac published it. An older Mac has the busy time only.
 struct AvailabilityTodayTile: View {
     var figures: AvailabilityFigures?
     var open: () -> Void
@@ -220,6 +220,10 @@ struct AvailabilityTodayTile: View {
                             Spacer(minLength: 0)
                         }
                         Text(figures.hoursLine()).font(Theme.Fonts.secondary).foregroundStyle(Theme.secondary)
+                        if figures.outsideTime > 0 {
+                            Text("Outside working hours \(DurationText.text(figures.outsideTime))")
+                                .font(Theme.Fonts.secondary).foregroundStyle(Theme.secondary)
+                        }
                     }
                     .padding(14).frame(maxWidth: .infinity, alignment: .leading)
                 } else {

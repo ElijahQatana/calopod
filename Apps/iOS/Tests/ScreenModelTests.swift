@@ -47,6 +47,14 @@ struct DayScheduleTests {
         #expect(day.busy.map(\.interval) == [DateInterval(start: date(1, 9), end: date(1, 13))])
     }
 
+    @Test func theScheduleKeepsTimeOutsideWorkingHours() {
+        let record = AvailabilityDay(
+            day: "2027-01-01", timeZoneIdentifier: utc, busy: [BusyInterval(start: date(1, 10), end: date(1, 11))],
+            working: BusyInterval(start: date(1, 9), end: date(1, 17)), free: [], overlaps: 0, status: .tight,
+            outside: [OutsideBlock(start: date(1, 19), end: date(1, 20), side: .after)])
+        #expect(DaySchedule.schedules(from: [record])[0].busy.count == 2)
+    }
+
     @Test func busyTimeAcrossMidnightSplitsBetweenDays() {
         // Only the first day's record holds the whole stretch.
         let days = DaySchedule.schedules(from: [record(1, [(date(1, 22), date(2, 1))]), record(2, [])])

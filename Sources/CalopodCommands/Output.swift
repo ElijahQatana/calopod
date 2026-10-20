@@ -105,6 +105,8 @@ public struct CommandPayload: Codable, Equatable, Sendable {
     /// For `calopod availability`: the working windows free time was limited to. Absent when
     /// working hours were ignored.
     public let workingWindows: [WorkingWindowOutput]?
+    /// For `calopod availability`: seconds free, busy and outside working hours across the range.
+    public let totals: AvailabilityTotalsOutput?
 
     public init(
         status: String,
@@ -156,7 +158,8 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         fix: String? = nil,
         notifications: NotificationSettingsOutput? = nil,
         workingHours: WorkingHoursOutput? = nil,
-        workingWindows: [WorkingWindowOutput]? = nil
+        workingWindows: [WorkingWindowOutput]? = nil,
+        totals: AvailabilityTotalsOutput? = nil
     ) {
         self.status = status
         self.message = message
@@ -208,6 +211,7 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         self.notifications = notifications
         self.workingHours = workingHours
         self.workingWindows = workingWindows
+        self.totals = totals
     }
 }
 
