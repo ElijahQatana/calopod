@@ -134,6 +134,12 @@ struct StatusHistoryTests {
         #expect(report.failedRuns == 1 && report.rows[0].updatedAt == now)
     }
 
+    @Test func drawsAtMostTheLatest24Runs() {
+        let runs = (0..<30).map { SyncRunMark(at: now.addingTimeInterval(Double($0)), failed: $0 < 6) }
+        let report = StatusReport(status: SyncStatus(lastSyncAt: now, runs: runs), calendars: calendars)
+        #expect(report.runs?.count == 24 && report.runs?.first?.at == runs[6].at && report.failedRuns == 0)
+    }
+
     @Test func anOlderMacHasNoHistory() {
         let report = StatusReport(status: SyncStatus(lastSyncAt: now), calendars: calendars)
         #expect(report.runs == nil && report.failedRuns == 0 && report.rows[0].updatedAt == nil)

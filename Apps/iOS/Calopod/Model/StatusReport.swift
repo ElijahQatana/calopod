@@ -10,6 +10,9 @@ struct StatusReport: Equatable {
         var updatedAt: Date?
     }
 
+    /// The most runs the history bar draws.
+    static let barCount = 24
+
     var lastSyncAt: Date?
     var issues: [SyncIssue]
     var rows: [Row]
@@ -19,7 +22,7 @@ struct StatusReport: Equatable {
     init(status: SyncStatus, calendars: [CalendarEntry]) {
         lastSyncAt = status.lastSyncAt
         issues = status.issues
-        runs = status.runs
+        runs = status.runs.map { Array($0.suffix(Self.barCount)) }
         rows = calendars.map { calendar in
             Row(
                 calendar: calendar, issue: status.issues.first { $0.calendarID == calendar.id },
