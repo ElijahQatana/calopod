@@ -81,6 +81,7 @@ private struct FilterChips: View {
 private struct InboxRow: View {
     var item: InboxItem
     var calendar: CalendarEntry?
+    @ScaledMetric(relativeTo: .subheadline) private var tileWidth: CGFloat = 84
 
     var body: some View {
         let color = Theme.calendarColor(calendar)
@@ -90,7 +91,8 @@ private struct InboxRow: View {
                     .lineLimit(1).minimumScaleFactor(0.7)
                 if !item.isAllDay { Text(duration).font(.caption2).foregroundStyle(Theme.secondary) }
             }
-            .frame(width: 58).padding(.vertical, 7)
+            .padding(.horizontal, 8).padding(.vertical, 8)
+            .frame(width: min(tileWidth, 96))
             .background(color.opacity(0.2), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.title ?? "Untitled").font(Theme.Fonts.bodyStrong).lineLimit(1)
