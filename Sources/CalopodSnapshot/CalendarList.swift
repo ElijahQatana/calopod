@@ -3,6 +3,7 @@ import Foundation
 
 /// A calendar's name and the color chosen for it on the Mac. `color` is the palette id; `colorIndex` is
 /// the same color's position, kept for a phone that reads a feed from before ids were sent.
+/// `destination` is true when an active arm writes into the calendar; nil from a Mac that does not say.
 public struct CalendarEntry: Codable, Equatable, Sendable {
     public static let paletteSize = 12
 
@@ -10,12 +11,14 @@ public struct CalendarEntry: Codable, Equatable, Sendable {
     public let name: String
     public let colorIndex: Int
     public let color: String?
+    public let destination: Bool?
 
-    public init(id: String, name: String, colorIndex: Int, color: String? = nil) {
+    public init(id: String, name: String, colorIndex: Int, color: String? = nil, destination: Bool? = nil) {
         self.id = id
         self.name = name
         self.colorIndex = colorIndex
         self.color = color
+        self.destination = destination
     }
 
     public var paletteEntry: CalendarPaletteEntry { CalendarPalette.entry(id: color, position: colorIndex) }
@@ -31,9 +34,10 @@ public struct CalendarEntry: Codable, Equatable, Sendable {
         }
         colorIndex = index
         color = try container.decodeIfPresent(String.self, forKey: .color)
+        destination = try container.decodeIfPresent(Bool.self, forKey: .destination)
     }
 
-    private enum CodingKeys: String, CodingKey { case id, name, colorIndex, color }
+    private enum CodingKeys: String, CodingKey { case id, name, colorIndex, color, destination }
 }
 
 public struct CalendarList: SnapshotRecord {

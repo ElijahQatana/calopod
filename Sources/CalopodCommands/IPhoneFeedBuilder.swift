@@ -169,12 +169,14 @@ enum IPhoneFeedBuilder {
 
     static func calendars(_ snapshot: InboxContextSnapshot, repository: LocalStateRepository) -> CalendarList {
         let names = CalendarNames(repository)
+        let destinations = (try? repository.arms()).map { CalendarRoles(arms: $0).destinations }
         return CalendarList(calendars: snapshot.sources.filter { !names.isIgnored($0.bindingID) }.map { source in
             let color = names.preferences[source.bindingID]?.color.flatMap(CalendarPalette.entry(id:)) ?? CalendarPalette.neutral
             return CalendarEntry(
                 id: source.bindingID,
                 name: names.shown(source.bindingID, real: source.calendarLabel) ?? source.connectionLabel ?? "Calendar",
-                colorIndex: CalendarPalette.entries.firstIndex(of: color) ?? 0, color: color.id)
+                colorIndex: CalendarPalette.entries.firstIndex(of: color) ?? 0, color: color.id,
+                destination: destinations?.contains(source.bindingID))
         })
     }
 

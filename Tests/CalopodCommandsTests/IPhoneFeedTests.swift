@@ -84,9 +84,24 @@ struct IPhoneFeedTests {
 
         let list = try #require(records.first { $0.kind == .calendars })
         #expect(try SnapshotCoding.decode(CalendarList.self, from: list.bytes).record.calendars
-            == [CalendarEntry(id: "cal", name: "Work", colorIndex: 11, color: "gray")])
+            == [CalendarEntry(id: "cal", name: "Work", colorIndex: 11, color: "gray", destination: false)])
         let status = try #require(records.first { $0.kind == .syncStatus })
         #expect(try SnapshotCoding.decode(SyncStatus.self, from: status.bytes).record.lastSyncAt == now)
+    }
+
+    @Test("Calendars say whether an active arm writes into them")
+    func destinationFlag() throws {
+        let state = try fixture()
+        func flags() throws -> [Bool?] {
+            let records = try IPhoneFeedBuilder.records(repository: state, now: now, calendar: Calendar(identifier: .gregorian))
+            let list = try #require(records.first { $0.kind == .calendars })
+            return try SnapshotCoding.decode(CalendarList.self, from: list.bytes).record.calendars.map(\.destination)
+        }
+        let arm = StoredArm(id: "arm", configurationID: "config", sourceBindingIDs: ["cal"], targetBindingID: "cal", ruleMode: .busy)
+        try state.saveArm(arm)
+        #expect(try flags() == [true])
+        _ = try state.setArmEnabled(id: "arm", isEnabled: false)
+        #expect(try flags() == [false])
     }
 
     @Test("Status carries the latest 24 runs, oldest first, failures included")
