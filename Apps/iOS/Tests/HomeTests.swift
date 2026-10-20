@@ -28,10 +28,11 @@ struct HomeSummaryTests {
     }
 
     private func summary(
-        events: [CalendarEvent] = [], inbox: [InboxItem] = [], issues: [SyncIssue] = [], age: TimeInterval = 300, hidden: Set<String> = []
+        events: [CalendarEvent] = [], inbox: [InboxItem] = [], issues: [SyncIssue] = [], age: TimeInterval = 300, hidden: Set<String> = [],
+        availability: [AvailabilityDay] = []
     ) -> HomeSummary {
         let snapshot = Snapshot(
-            publishedAt: now.addingTimeInterval(-age), inbox: inbox, availability: [],
+            publishedAt: now.addingTimeInterval(-age), inbox: inbox, availability: availability,
             days: events.isEmpty ? [] : [CalendarDay(day: "2027-01-01", timeZoneIdentifier: "UTC", events: events)],
             calendars: (1...4).map { CalendarEntry(id: "c\($0)", name: "Cal \($0)", colorIndex: $0) } + [CalendarEntry(id: "work", name: "Work", colorIndex: 0)],
             status: SyncStatus(lastSyncAt: now.addingTimeInterval(-age), issues: issues))
@@ -48,9 +49,9 @@ struct HomeSummaryTests {
             event("done", 8, 9), event("now", 9.5, 10.5), event("soon", 10.0 + 1.0 / 60, 11), event("lunch", 12, 13), event("late", 22, 23),
             event("tomorrow", 26, 27), event("all-day", 0, 24, allDay: true), event("no", 14, 15, response: .declined),
         ])
-        #expect(found.next.map(\.event.id) == ["now", "soon"])
-        #expect(found.next.map(\.chip) == ["Now", "In 1 min"])
-        #expect(found.moreToday == 2)
+        #expect(found.next.map(\.event.id) == ["now", "soon", "lunch"])
+        #expect(found.next.map(\.chip) == ["Now", "In 1 min", "In 2 hr"])
+        #expect(found.moreToday == 1)
         #expect(found.hasCalendars)
     }
 
@@ -82,8 +83,30 @@ struct HomeSummaryTests {
         #expect(found.next.map(\.event.id) == ["a"] && found.next[0].chip == nil)
     }
 
-    @Test func listsAFewCalendarsAndCountsTheRest() {
-        let found = summary()
-        #expect(found.calendars.count == 2 && found.moreCalendars == 3)
+    private func day(free: [(Double, Double)]?) -> AvailabilityDay {
+        func span(_ from: Double, _ to: Double) -> BusyInterval { BusyInterval(start: at(from), end: at(to)) }
+        return AvailabilityDay(
+            day: "2027-01-01", timeZoneIdentifier: "UTC", busy: [], working: span(9, 17),
+            free: free.map { $0.map(span) }, overlaps: 0, status: free == nil ? nil : .mostlyFree)
+    }
+
+    private func glance(_ found: HomeSummary) -> String? { found.glance?.text(locale: Locale(identifier: "en_GB")) }
+
+    @Test func glanceNamesTheNextFreeStretchAndMeetingsLeft() {
+        let events = [event("a", 11, 12), event("b", 14, 15), event("done", 8, 9)]
+        #expect(glance(summary(events: events, availability: [day(free: [(9, 10), (12, 14), (15, 17)])]))
+            == "Next free: 12:00 to 14:00 · 2 meetings left today")
+        #expect(glance(summary(events: events, availability: [day(free: [(9, 10.5), (12, 14)])])) == "Free until 10:30 · 2 meetings left today")
+        #expect(glance(summary(events: [], availability: [day(free: [(9, 10.1), (10.2, 17)])])) == "Next free: 10:12 to 17:00")
+    }
+
+    @Test func glanceSaysNothingItCannotKnow() {
+        let events = [event("a", 11, 12)]
+        #expect(glance(summary(events: events)) == "1 meeting left today")
+        #expect(glance(summary(events: events, availability: [day(free: nil)])) == "1 meeting left today")
+        #expect(glance(summary(events: events, age: 3 * 3600, availability: [day(free: [(12, 14)])])) == nil)
+        #expect(glance(summary(availability: [day(free: [(12, 14)])])) == "Next free: 12:00 to 14:00")
+        #expect(glance(summary()) == nil)
+        #expect(glance(summary(events: [event("done", 8, 9)], availability: [day(free: [])])) == "No meetings left today")
     }
 }

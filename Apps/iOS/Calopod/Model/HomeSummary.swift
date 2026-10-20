@@ -11,22 +11,44 @@ struct HomeSummary: Equatable {
         var chip: String?
     }
 
-    static let nextShown = 2
-    static let calendarsShown = 2
+    /// One line above Needs you. Each part is nil when the data cannot say it.
+    struct Glance: Equatable {
+        /// The free stretch that is under way or comes next, cut at now.
+        var free: DateInterval?
+        var freeNow: Bool
+        var timeZone: TimeZone
+        var meetingsLeft: Int?
+
+        func text(locale: Locale = .current) -> String? {
+            var parts: [String] = []
+            if let free {
+                let style = Date.FormatStyle(locale: locale, timeZone: timeZone).hour().minute()
+                parts.append(freeNow ? "Free until \(free.end.formatted(style))"
+                    : "Next free: \(free.start.formatted(style)) to \(free.end.formatted(style))")
+            }
+            if let meetingsLeft {
+                parts.append(meetingsLeft == 0 ? "No meetings left today"
+                    : meetingsLeft == 1 ? "1 meeting left today" : "\(meetingsLeft) meetings left today")
+            }
+            return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        }
+    }
+
+    static let nextShown = 3
+    /// Shorter gaps are not worth pointing out.
+    static let shortestFree: TimeInterval = 15 * 60
 
     var invitations: Int
     var overlaps: Int
     var changes: Int
     var sync: Sync
-    var lastSync: Date?
     /// False when the Mac shares no calendar events, so Next up has nothing to say but how to start.
     var hasCalendars: Bool
     var next: [Next]
     var moreToday: Int
     /// Today as the Mac published it. Nil when it sent nothing for today.
     var availability: AvailabilityFigures?
-    var calendars: [StatusReport.Row]
-    var moreCalendars: Int
+    var glance: Glance?
 
     /// `hidden` holds calendars the person hid on this phone. They stay out of Next up.
     init(context: SnapshotContext, hidden: Set<String>, calendar: Calendar = .current) {
@@ -37,9 +59,6 @@ struct HomeSummary: Equatable {
 
         let report = StatusReport(status: snapshot.status, calendars: snapshot.calendars)
         sync = report.hasFailure ? .didNotFinish : context.isStale ? .behind : .inSync
-        lastSync = report.lastSyncAt
-        calendars = Array(report.rows.prefix(Self.calendarsShown))
-        moreCalendars = max(0, report.rows.count - Self.calendarsShown)
 
         availability = AvailabilityFigures.week(from: snapshot.availability).first { $0.interval.contains(now) }
         hasCalendars = !snapshot.days.isEmpty
@@ -52,6 +71,18 @@ struct HomeSummary: Equatable {
             .sorted { ($0.startsAt, $0.id) < ($1.startsAt, $1.id) }
         next = coming.prefix(Self.nextShown).map { Next(event: $0, chip: context.isStale ? nil : Self.chip(for: $0, now: now)) }
         moreToday = max(0, coming.count - Self.nextShown)
+
+        if context.isStale {
+            glance = nil
+        } else {
+            let free = availability?.worked?.free
+                .filter { $0.end > now }
+                .map { DateInterval(start: max($0.start, now), end: $0.end) }
+                .first { $0.duration >= Self.shortestFree }
+            let meetings = hasCalendars ? coming.count : nil
+            glance = free == nil && meetings == nil ? nil : Glance(
+                free: free, freeNow: free?.start == now, timeZone: availability?.timeZone ?? calendar.timeZone, meetingsLeft: meetings)
+        }
     }
 
     static func chip(for event: CalendarEvent, now: Date) -> String {
