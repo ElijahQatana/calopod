@@ -8,6 +8,8 @@ struct FixtureReader: SnapshotReader {
         case fresh, stale, noCalendars, sharingOff, nothingPublished, offline
         /// A week around a spring clock change in London, and a feed from a Mac that sends busy time only.
         case clockChange, oldMac
+        /// The last sync did not finish.
+        case syncFailed
     }
 
     var scenario: Scenario = .fresh
@@ -39,6 +41,15 @@ struct FixtureReader: SnapshotReader {
                         busy: ($0.busy + ($0.outside ?? []).map { BusyInterval(start: $0.start, end: $0.end) })
                             .sorted { $0.start < $1.start })
                 }
+                return snapshot
+            }())
+        case .syncFailed:
+            .snapshot({
+                var snapshot = Self.snapshot(publishedAt: now.addingTimeInterval(-420), now: now)
+                snapshot.status = SyncStatus(
+                    lastSyncAt: now.addingTimeInterval(-3 * 3600), issues: [SyncIssue(kind: .failed, since: now.addingTimeInterval(-2 * 3600))],
+                    runs: (0..<24).map { SyncRunMark(at: now.addingTimeInterval(Double($0 - 23) * 900), failed: $0 >= 22) },
+                    calendarUpdates: snapshot.status.calendarUpdates)
                 return snapshot
             }())
         case .sharingOff: .sharingOff
@@ -132,7 +143,11 @@ struct FixtureReader: SnapshotReader {
             ],
             status: SyncStatus(
                 lastSyncAt: publishedAt,
-                issues: [SyncIssue(kind: .stale, calendarID: "client", since: now.addingTimeInterval(-86400))]))
+                issues: [SyncIssue(kind: .stale, calendarID: "client", since: now.addingTimeInterval(-86400))],
+                runs: (0..<24).map { SyncRunMark(at: publishedAt.addingTimeInterval(Double($0 - 23) * 900), failed: $0 == 17) },
+                calendarUpdates: ["work", "personal", "family", "client", "studio", "travel"].enumerated().map { index, id in
+                    CalendarUpdate(calendarID: id, at: publishedAt.addingTimeInterval(id == "client" ? -86400 : Double(-index) * 300))
+                }))
     }
 
     /// The Sunday is the night the clocks go forward, so the day is 23 hours long and 00:00 to 09:00 is

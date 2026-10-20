@@ -5,8 +5,8 @@ import Foundation
 public enum RunMark: Equatable, Sendable {
     case good, failed
 
-    /// How many runs the strip shows.
-    public static let barCount = 12
+    /// How many runs the strip shows, here and on the iPhone.
+    public static let barCount = 24
 }
 
 extension LocalStateRepository {

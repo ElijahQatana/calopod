@@ -25,6 +25,7 @@ struct StatusTab: View {
                 .accessibilityElement(children: .combine)
             }
             .shadow(color: Theme.text.opacity(0.06), radius: 6, y: 2)
+            if let runs = report.runs, !runs.isEmpty { HistoryBar(runs: runs, failed: report.failedRuns) }
             if !report.issues.isEmpty {
                 SectionLabel(text: "Needs attention")
                 Card {
@@ -58,6 +59,8 @@ struct StatusTab: View {
                         Spacer()
                         if let issue = row.issue {
                             Text(issue.kind.label).font(Theme.Fonts.secondary).foregroundStyle(issue.kind.color)
+                        } else if let updated = row.updatedAt {
+                            Text(updatedText(updated)).font(Theme.Fonts.secondary).foregroundStyle(Theme.secondary)
                         }
                     }
                     .font(Theme.Fonts.body).padding(14)
@@ -77,5 +80,36 @@ struct StatusTab: View {
             .shadow(color: Theme.text.opacity(0.06), radius: 6, y: 2)
             ReadOnlyFoot(text: "Synced through your private iCloud.")
         }
+    }
+
+    private func updatedText(_ date: Date) -> String {
+        if Calendar.current.isDate(date, inSameDayAs: context.now) { return date.formatted(timeFormat) }
+        return date.formatted(.dateTime.weekday(.abbreviated).hour().minute())
+    }
+}
+
+/// One bar for each of the latest sync runs, failures in red.
+private struct HistoryBar: View {
+    var runs: [SyncRunMark]
+    var failed: Int
+
+    var body: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 2) {
+                ForEach(Array(runs.enumerated()), id: \.offset) { _, run in
+                    RoundedRectangle(cornerRadius: 2).fill(run.failed ? Theme.bad : Theme.good).frame(maxWidth: .infinity)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading).frame(height: 22)
+            HStack {
+                Text("Last \(runs.count) runs")
+                Spacer()
+                Text(failed == 0 ? "all runs finished" : "\(failed) failed")
+            }
+            .font(Theme.Fonts.secondary).foregroundStyle(Theme.secondary)
+        }
+        .padding(.horizontal, 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(failed == 0 ? "Last \(runs.count) runs, all runs finished" : "Last \(runs.count) runs, \(failed) failed")
     }
 }

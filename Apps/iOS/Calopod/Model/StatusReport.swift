@@ -6,19 +6,31 @@ struct StatusReport: Equatable {
     struct Row: Equatable {
         var calendar: CalendarEntry
         var issue: SyncIssue?
+        /// When the Mac last looked at this calendar. Nil from an older Mac.
+        var updatedAt: Date?
     }
+
+    /// The most runs the history bar draws.
+    static let barCount = 24
 
     var lastSyncAt: Date?
     var issues: [SyncIssue]
     var rows: [Row]
+    /// The most recent runs, oldest first. Nil from an older Mac, which gets no history bar.
+    var runs: [SyncRunMark]?
 
     init(status: SyncStatus, calendars: [CalendarEntry]) {
         lastSyncAt = status.lastSyncAt
         issues = status.issues
+        runs = status.runs.map { Array($0.suffix(Self.barCount)) }
         rows = calendars.map { calendar in
-            Row(calendar: calendar, issue: status.issues.first { $0.calendarID == calendar.id })
+            Row(
+                calendar: calendar, issue: status.issues.first { $0.calendarID == calendar.id },
+                updatedAt: status.calendarUpdates?.first { $0.calendarID == calendar.id }?.at)
         }
     }
+
+    var failedRuns: Int { runs?.filter(\.failed).count ?? 0 }
 
     var hasFailure: Bool { issues.contains { $0.kind == .failed } }
 

@@ -122,6 +122,30 @@ struct StatusReportTests {
     }
 }
 
+struct StatusHistoryTests {
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+    private let calendars = [CalendarEntry(id: "a", name: "Work", colorIndex: 0)]
+
+    @Test func countsFailedRunsAndReadsUpdateTimes() {
+        let status = SyncStatus(
+            lastSyncAt: now, runs: [SyncRunMark(at: now, failed: false), SyncRunMark(at: now, failed: true)],
+            calendarUpdates: [CalendarUpdate(calendarID: "a", at: now)])
+        let report = StatusReport(status: status, calendars: calendars)
+        #expect(report.failedRuns == 1 && report.rows[0].updatedAt == now)
+    }
+
+    @Test func drawsAtMostTheLatest24Runs() {
+        let runs = (0..<30).map { SyncRunMark(at: now.addingTimeInterval(Double($0)), failed: $0 < 6) }
+        let report = StatusReport(status: SyncStatus(lastSyncAt: now, runs: runs), calendars: calendars)
+        #expect(report.runs?.count == 24 && report.runs?.first?.at == runs[6].at && report.failedRuns == 0)
+    }
+
+    @Test func anOlderMacHasNoHistory() {
+        let report = StatusReport(status: SyncStatus(lastSyncAt: now), calendars: calendars)
+        #expect(report.runs == nil && report.failedRuns == 0 && report.rows[0].updatedAt == nil)
+    }
+}
+
 struct DayEventsTests {
     private func date(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
         Date(timeIntervalSince1970: 1_798_761_600 + Double((day - 1) * 86400 + hour * 3600 + minute * 60))

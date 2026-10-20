@@ -1,8 +1,7 @@
 import CalopodSnapshot
 import SwiftUI
 
-/// The phone's overview: sync health, what needs you, what is next today and the calendars
-/// from the Mac. It only opens other tabs. Nothing here changes anything.
+/// The phone's overview: what needs you, what is next today and how much time is free, from the Mac. It only opens other tabs. Nothing here changes anything.
 struct HomeTab: View {
     var context: SnapshotContext
     var filter: CalendarFilter
@@ -12,8 +11,11 @@ struct HomeTab: View {
         let summary = HomeSummary(context: context, hidden: filter.hidden)
         Screen(title: "Home", subtitle: "\(context.now.formatted(.dateTime.weekday(.wide).day().month(.wide))) · \(context.fromMac)") {
             VStack(alignment: .leading, spacing: 12) {
-                SyncCard(summary: summary) { navigation.show(.status) }
-                if context.isStale { OldDataNote(lastUpdate: context.snapshot.publishedAt, now: context.now) }
+                if summary.sync == .didNotFinish { SyncProblemLine { navigation.show(.status) } }
+                if context.isStale {
+                    OldDataNote(lastUpdate: context.snapshot.publishedAt, now: context.now) { navigation.show(.status) }
+                }
+                if let glance = summary.glance, glance.text() != nil { GlanceLine(glance: glance) }
                 Group {
                     HomeSection("Needs you", link: "Open Inbox") { navigation.openInbox(.all) } content: {
                         needsYou(summary)
@@ -25,9 +27,6 @@ struct HomeTab: View {
                         HomeSection("Availability today", link: "Open Availability") { navigation.openAvailability() } content: {
                             AvailabilityTodayTile(figures: summary.availability) { navigation.openAvailability() }
                         }
-                    }
-                    HomeSection("Calendars", link: "Open Status") { navigation.show(.status) } content: {
-                        CalendarsCard(summary: summary) { navigation.show(.status) }
                     }
                 }
                 .opacity(context.isStale ? 0.6 : 1)
@@ -73,56 +72,71 @@ private struct HomeSection<Content: View>: View {
     }
 }
 
-private struct SyncCard: View {
-    var summary: HomeSummary
+private struct SyncProblemLine: View {
     var open: () -> Void
 
     var body: some View {
         Button(action: open) {
-            Card {
-                HStack(spacing: 12) {
-                    Image(systemName: summary.sync == .inSync ? "checkmark.circle" : "exclamationmark.triangle")
-                        .font(.title3).foregroundStyle(summary.sync == .inSync ? Theme.good : Theme.caution)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(title).font(Theme.Fonts.bodyStrong)
-                        Text(summary.lastSync.map { "Last synced \($0.formatted(timeFormat))" } ?? "No sync yet")
-                            .font(Theme.Fonts.secondary).foregroundStyle(Theme.secondary)
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Theme.faint)
-                }
-                .padding(.horizontal, 14).padding(.vertical, 10)
-                .contentShape(Rectangle())
+            HStack(spacing: 10) {
+                Image(systemName: "exclamationmark.triangle").foregroundStyle(Theme.caution)
+                Text("**Last sync didn't finish.** Open Status for details.").font(Theme.Fonts.secondary).foregroundStyle(Theme.text)
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Theme.faint)
             }
+            .padding(.horizontal, 14).padding(.vertical, 8)
+            .background(Theme.cautionSoft, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .shadow(color: Theme.text.opacity(0.06), radius: 6, y: 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens Status")
+    }
+}
+
+private struct GlanceLine: View {
+    var glance: HomeSummary.Glance
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "clock").foregroundStyle(Theme.good)
+            line.font(Theme.Fonts.secondary).lineLimit(1).minimumScaleFactor(0.85)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 4)
         .accessibilityElement(children: .combine)
     }
 
-    private var title: String {
-        switch summary.sync {
-        case .inSync: "Everything is in sync"
-        case .didNotFinish: "Last sync didn't finish"
-        case .behind: "Not up to date"
-        }
+    private var line: Text {
+        let rest = glance.meetingsText.map { Text($0).foregroundStyle(Theme.secondary) }
+        guard let free = glance.freeText() else { return rest ?? Text("") }
+        let lead = Text(free).fontWeight(.semibold).foregroundStyle(Theme.text)
+        guard let rest else { return lead }
+        return lead + Text(" · ").foregroundStyle(Theme.secondary) + rest
     }
 }
 
 private struct OldDataNote: View {
     var lastUpdate: Date
     var now: Date
+    var open: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "moon.zzz").foregroundStyle(Theme.caution)
-            Text("\(Age.lastUpdated(lastUpdate, now: now)). Your Mac may be asleep or offline.")
-                .font(Theme.Fonts.secondary)
-            Spacer(minLength: 0)
+        Button(action: open) {
+            HStack(spacing: 10) {
+                Image(systemName: "moon.zzz").foregroundStyle(Theme.caution)
+                Text("\(Age.lastUpdated(lastUpdate, now: now)). Your Mac may be asleep or offline.")
+                    .font(Theme.Fonts.secondary).foregroundStyle(Theme.text).multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Theme.faint)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 8)
+            .background(Theme.cautionSoft, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 14).padding(.vertical, 8)
-        .background(Theme.cautionSoft, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens Status")
     }
 }
 
@@ -245,39 +259,5 @@ struct AvailabilityTodayTile: View {
             Text(value).font(Theme.Fonts.heading).monospacedDigit().foregroundStyle(color)
             Text(label).font(Theme.Fonts.secondary).foregroundStyle(Theme.secondary)
         }
-    }
-}
-
-private struct CalendarsCard: View {
-    var summary: HomeSummary
-    var openStatus: () -> Void
-
-    var body: some View {
-        Card {
-            if summary.calendars.isEmpty {
-                Text("No calendars shared yet.").font(Theme.Fonts.secondary).foregroundStyle(Theme.secondary).padding(14)
-            }
-            ForEach(Array(summary.calendars.enumerated()), id: \.offset) { index, row in
-                HStack {
-                    Label { Text(row.calendar.name) } icon: {
-                        Circle().fill(Theme.calendarColor(row.calendar)).frame(width: 10, height: 10)
-                    }
-                    Spacer()
-                    Text(row.issue?.kind.label ?? "Up to date").font(Theme.Fonts.secondary)
-                        .foregroundStyle(row.issue?.kind.color ?? Theme.secondary)
-                }
-                .font(Theme.Fonts.body).padding(.horizontal, 14).padding(.vertical, 8)
-                .accessibilityElement(children: .combine)
-                if index < summary.calendars.count - 1 || summary.moreCalendars > 0 { Divider().overlay(Theme.line) }
-            }
-            if summary.moreCalendars > 0 {
-                Button(action: openStatus) {
-                    Text("and \(summary.moreCalendars) more").font(Theme.Fonts.secondary).foregroundStyle(Theme.secondary)
-                        .frame(maxWidth: .infinity).padding(.vertical, 8)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .shadow(color: Theme.text.opacity(0.06), radius: 6, y: 2)
     }
 }
