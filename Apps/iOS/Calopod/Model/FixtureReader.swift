@@ -8,6 +8,8 @@ struct FixtureReader: SnapshotReader {
         case fresh, stale, noCalendars, sharingOff, nothingPublished, offline
         /// A week around a spring clock change in London, and a feed from a Mac that sends busy time only.
         case clockChange, oldMac
+        /// The last sync did not finish.
+        case syncFailed
     }
 
     var scenario: Scenario = .fresh
@@ -39,6 +41,15 @@ struct FixtureReader: SnapshotReader {
                         busy: ($0.busy + ($0.outside ?? []).map { BusyInterval(start: $0.start, end: $0.end) })
                             .sorted { $0.start < $1.start })
                 }
+                return snapshot
+            }())
+        case .syncFailed:
+            .snapshot({
+                var snapshot = Self.snapshot(publishedAt: now.addingTimeInterval(-420), now: now)
+                snapshot.status = SyncStatus(
+                    lastSyncAt: now.addingTimeInterval(-3 * 3600), issues: [SyncIssue(kind: .failed, since: now.addingTimeInterval(-2 * 3600))],
+                    runs: (0..<24).map { SyncRunMark(at: now.addingTimeInterval(Double($0 - 23) * 3600), failed: $0 >= 21) },
+                    calendarUpdates: snapshot.status.calendarUpdates)
                 return snapshot
             }())
         case .sharingOff: .sharingOff

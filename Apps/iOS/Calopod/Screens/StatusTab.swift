@@ -97,10 +97,10 @@ private struct HistoryBar: View {
         VStack(spacing: 6) {
             HStack(spacing: 2) {
                 ForEach(Array(runs.enumerated()), id: \.offset) { _, run in
-                    RoundedRectangle(cornerRadius: 2).fill(run.failed ? Theme.bad : Theme.good).frame(maxWidth: 10)
+                    RoundedRectangle(cornerRadius: 2).fill(run.failed ? Theme.bad : Theme.good).frame(maxWidth: 14)
                 }
             }
-            .frame(height: 22)
+            .frame(maxWidth: .infinity, alignment: .leading).frame(height: 22)
             HStack {
                 Text("Last 24 hours")
                 Spacer()
