@@ -27,15 +27,12 @@ struct CalendarTab: View {
         let week = AvailabilityFigures.week(from: snapshot.availability)
         let figures = week.first { $0.day == selected } ?? week.first { $0.interval.contains(context.now) } ?? week.first
         return Screen(
-            title: "Calendar", subtitle: "\(hasEvents ? "Events" : "Busy time") \(context.fromMac)",
-            pinned: {
-                Picker("View", selection: $navigation.calendarMode) {
-                    ForEach(Navigation.CalendarMode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, Theme.sidePadding).padding(.top, 14)
-            }
+            title: "Calendar", subtitle: "\(hasEvents ? "Events" : "Busy time") \(context.fromMac)"
         ) {
+            Picker("View", selection: $navigation.calendarMode) {
+                ForEach(Navigation.CalendarMode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
             if context.isStale {
                 StaleBanner(lastUpdate: snapshot.publishedAt, now: context.now, offline: context.offline)
             }
@@ -49,9 +46,12 @@ struct CalendarTab: View {
                 } else if let day {
                     DayStrip(days: days, selected: day.day) { navigation.calendarDay = $0 }
                     if hasEvents {
-                        CalendarChips(calendars: CalendarFilter.listed(in: snapshot), filter: filter)
-                        let events = DayEvents.make(from: snapshot.days.first { $0.day == day.day }, hidden: filter.hidden, in: day)
-                        EventDay(events: events, day: day, snapshot: snapshot) { navigation.calendarEventID = $0.id }
+                        FilterRow(snapshot: snapshot, filter: filter)
+                        let events = DayEvents.make(from: snapshot.days.first { $0.day == day.day }, hidden: filter.hiding(in: snapshot), in: day)
+                        EventDay(
+                            events: events, day: day, snapshot: snapshot,
+                            empty: filter.scope(in: snapshot) == .destinations ? "No events on destination calendars this day." : "No events on this day."
+                        ) { navigation.calendarEventID = $0.id }
                     } else {
                         NoCalendarsNote()
                         SectionLabel(text: "Busy")
@@ -149,40 +149,138 @@ private struct NoCalendarsNote: View {
     }
 }
 
-/// One chip per calendar the Mac sent events for. Tapping shows or hides it on this phone.
-private struct CalendarChips: View {
-    var calendars: [CalendarEntry]
+/// Two chips: which kind of calendar to show, then one for the calendars on or off, which opens a list.
+/// The row is the same size for any number of calendars.
+private struct FilterRow: View {
+    var snapshot: Snapshot
     var filter: CalendarFilter
+    @State private var listOpen = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            SectionLabel(text: "Calendars")
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(calendars, id: \.id) { calendar in
-                        let on = filter.isShown(calendar.id)
-                        Button { filter.setShown(!on, for: calendar.id) } label: {
-                            HStack(spacing: 6) {
-                                Circle().strokeBorder(Theme.calendarColor(calendar), lineWidth: 2)
-                                    .background(Circle().fill(on ? Theme.calendarColor(calendar) : .clear))
-                                    .frame(width: 10, height: 10)
-                                Text(calendar.name)
-                            }
-                            .font(Theme.Fonts.caption)
-                            .padding(.horizontal, 12).frame(height: 34)
-                            .foregroundStyle(on ? Theme.text : Theme.secondary)
-                            .background(on ? Theme.card : Theme.fill, in: Capsule())
-                            .shadow(color: Theme.text.opacity(on ? 0.06 : 0), radius: 3, y: 1)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(calendar.name)
-                        .accessibilityValue(on ? "Shown" : "Hidden")
+        let listed = CalendarFilter.listed(in: snapshot).filter { filter.inScope($0, in: snapshot) }
+        let count = filter.count(in: snapshot)
+        HStack(spacing: 8) {
+            if CalendarFilter.knowsRoles(in: snapshot) { scopeChip }
+            ViewThatFits(in: .horizontal) {
+                calendarsChip(listed: listed, count: count, word: true)
+                calendarsChip(listed: listed, count: count, word: false)
+            }
+            Spacer(minLength: 0)
+        }
+        .sheet(isPresented: $listOpen) {
+            CalendarList(snapshot: snapshot, filter: filter) { listOpen = false }
+                .presentationDetents([.large])
+        }
+    }
+
+    private var scopeChip: some View {
+        Menu {
+            Picker("Show", selection: Binding(get: { filter.scope }, set: { filter.setScope($0) })) {
+                ForEach(CalendarFilter.Scope.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Text(filter.scope.rawValue)
+                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
+            }
+            .chipStyle(on: true)
+        }
+        .accessibilityLabel("Show")
+        .accessibilityValue(filter.scope.rawValue)
+    }
+
+    private func calendarsChip(listed: [CalendarEntry], count: (shown: Int, total: Int), word: Bool) -> some View {
+        Button { listOpen = true } label: {
+            HStack(spacing: 7) {
+                StackedDots(colors: listed.filter { filter.isShown($0.id) }.prefix(4).map(Theme.calendarColor))
+                if word { Text("Calendars") }
+                Text("\(count.shown) of \(count.total)").foregroundStyle(Theme.secondary)
+            }
+            .chipStyle(on: false)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Calendars")
+        .accessibilityValue("\(count.shown) of \(count.total) shown")
+    }
+}
+
+private extension View {
+    func chipStyle(on: Bool) -> some View {
+        font(Theme.Fonts.caption)
+            .lineLimit(1)
+            .padding(.horizontal, 12).frame(height: 34)
+            .foregroundStyle(Theme.text)
+            .background(on ? Theme.card : Theme.fill, in: Capsule())
+            .shadow(color: Theme.text.opacity(on ? 0.06 : 0), radius: 3, y: 1)
+    }
+}
+
+private struct StackedDots: View {
+    var colors: [Color]
+
+    var body: some View {
+        HStack(spacing: -4) {
+            ForEach(Array(colors.enumerated()), id: \.offset) { index, color in
+                Circle().fill(color).frame(width: 12, height: 12)
+                    .overlay(Circle().strokeBorder(Theme.screen, lineWidth: 1.5))
+                    .zIndex(Double(-index))
+            }
+            if colors.isEmpty { Circle().strokeBorder(Theme.faint, lineWidth: 1.5).frame(width: 12, height: 12) }
+        }
+    }
+}
+
+/// Every calendar the Mac sent events for with a switch, sources first and then destinations.
+private struct CalendarList: View {
+    var snapshot: Snapshot
+    var filter: CalendarFilter
+    var done: () -> Void
+
+    var body: some View {
+        let listed = CalendarFilter.listed(in: snapshot)
+        let split = CalendarFilter.knowsRoles(in: snapshot)
+        let sources = listed.filter { $0.destination != true }
+        let destinations = listed.filter { $0.destination == true }
+        VStack(spacing: 0) {
+            Text("Show calendars").font(Theme.Fonts.heading).padding(.top, 22).padding(.bottom, 8)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 6) {
+                    if split { SectionLabel(text: "Sources") }
+                    group(sources)
+                    if split && !destinations.isEmpty {
+                        SectionLabel(text: "Destinations").padding(.top, 8)
+                        group(destinations)
+                    }
+                    Text("Hiding a calendar only changes this screen. The free and busy totals count all of them.")
+                        .font(Theme.Fonts.secondary).foregroundStyle(Theme.faint).padding(.horizontal, 4).padding(.top, 8)
+                }
+                .padding(.horizontal, Theme.sidePadding)
+            }
+            HStack {
+                Button("Reset") { filter.reset() }
+                    .foregroundStyle(Theme.secondary)
+                Spacer()
+                Button("Done", action: done).fontWeight(.semibold).foregroundStyle(Theme.accent)
+            }
+            .font(Theme.Fonts.bodyStrong)
+            .padding(.horizontal, Theme.sidePadding + 4).padding(.vertical, 14)
+        }
+        .background(Theme.screen.ignoresSafeArea())
+    }
+
+    private func group(_ calendars: [CalendarEntry]) -> some View {
+        Card {
+            ForEach(calendars, id: \.id) { calendar in
+                Toggle(isOn: Binding(get: { filter.isShown(calendar.id) }, set: { filter.setShown($0, for: calendar.id) })) {
+                    HStack(spacing: 10) {
+                        Circle().fill(Theme.calendarColor(calendar)).frame(width: 12, height: 12)
+                        Text(calendar.name).font(Theme.Fonts.body)
                     }
                 }
-                .padding(.vertical, 4).padding(.horizontal, 2)
+                .tint(Theme.accent)
+                .padding(.horizontal, 14).padding(.vertical, 9)
+                if calendar.id != calendars.last?.id { Divider().overlay(Theme.line) }
             }
-            Text("Hiding a calendar only changes this screen. The free and busy totals count all of them.")
-                .font(Theme.Fonts.secondary).foregroundStyle(Theme.faint).padding(.horizontal, 4)
         }
     }
 }
@@ -192,6 +290,7 @@ private struct EventDay: View {
     var events: DayEvents
     var day: DaySchedule
     var snapshot: Snapshot
+    var empty: String
     var open: (CalendarEvent) -> Void
 
     private let hourHeight: CGFloat = 52
@@ -199,7 +298,7 @@ private struct EventDay: View {
 
     var body: some View {
         if events.allDay.isEmpty && events.blocks.isEmpty {
-            Card { Text("No events on this day.").font(Theme.Fonts.body).padding(16) }
+            Card { Text(empty).font(Theme.Fonts.body).padding(16) }
         }
         if !events.allDay.isEmpty {
             SectionLabel(text: "All day")
