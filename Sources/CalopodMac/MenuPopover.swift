@@ -15,8 +15,12 @@ struct MenuPopover: View {
     @Environment(\.dismiss) private var dismiss
 
     static let width: CGFloat = 300
-    /// What a row's text can use: the window minus its padding, the row padding, the light and its gap.
-    static let statusTextWidth = width - 16 - 24 - 8 - 8
+    /// The even gap between the window edge and the panel on all four sides. The panel's corner
+    /// radius less its own 4 pt padding is the rows' highlight radius, so the corners nest.
+    static let inset: CGFloat = 6
+    private static var panel: RoundedRectangle { RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous) }
+    /// What a row's text can use: the window minus the insets, the row padding, the light and its gap.
+    static let statusTextWidth = width - 2 * inset - 8 - 24 - 8 - 8
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -55,7 +59,10 @@ struct MenuPopover: View {
                     .keyboardShortcut("q")
             }
         }
-        .padding(8)
+        .padding(4)
+        .background(Self.panel.fill(Theme.innerFill))
+        .overlay(Self.panel.strokeBorder(Theme.paneLine, lineWidth: 1))
+        .padding(Self.inset)
         .frame(width: Self.width)
         .appTypography()
         // Sleeps until the next moment the choice can change, and recomputes when the schedule reloads.
