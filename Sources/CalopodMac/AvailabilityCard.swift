@@ -103,15 +103,14 @@ struct AvailabilitySummary: View {
         if model.loadFailed {
             Text("Availability could not be read.").foregroundStyle(.secondary)
         } else if let report = model.report(for: model.calendar.startOfDay(for: Date())) {
-            HStack(alignment: .firstTextBaseline, spacing: 16) {
+            FlowLayout(spacing: 8) {
                 figure("Free", EventDuration.total(report.summary.freeSeconds))
                 figure("Busy", EventDuration.total(report.summary.busySeconds))
                 if report.summary.outsideSeconds >= 30 {
                     Text("plus \(EventDuration.text(report.summary.outsideSeconds)) outside hours")
-                        .font(Theme.Fonts.secondary).foregroundStyle(.secondary).lineLimit(1)
+                        .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                 }
-                Text(AvailabilityText.hours(report)).font(Theme.Fonts.secondary).foregroundStyle(.secondary).lineLimit(1)
-                Spacer(minLength: 0)
+                if glance != .tight { Text(AvailabilityText.hours(report)).font(Theme.Fonts.secondary).foregroundStyle(.secondary) }
             }
             .accessibilityElement(children: .combine)
         } else {
@@ -249,23 +248,21 @@ struct AvailabilityCard: View {
     }
 
     private func outsideList(_ blocks: [OutsideInterval], total: TimeInterval) -> some View {
-        CardRow {
-            VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Outside working hours").font(Theme.Fonts.bodySemibold)
+                Spacer(minLength: 8)
+                Text(EventDuration.total(total)).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+            }
+            ForEach(Array(blocks.prefix(Self.listLimit).enumerated()), id: \.offset) { _, block in
                 HStack {
-                    Text("Outside working hours").font(Theme.Fonts.bodySemibold)
+                    Text(AvailabilityText.range(block.start, block.end)).monospacedDigit()
                     Spacer(minLength: 8)
-                    Text(EventDuration.total(total)).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+                    Text(block.side.words).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                 }
-                ForEach(Array(blocks.prefix(Self.listLimit).enumerated()), id: \.offset) { _, block in
-                    HStack {
-                        Text(AvailabilityText.range(block.start, block.end)).monospacedDigit()
-                        Spacer(minLength: 8)
-                        Text(block.side.words).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
-                    }
-                }
-                if blocks.count > Self.listLimit {
-                    Text("and \(blocks.count - Self.listLimit) more").foregroundStyle(.secondary)
-                }
+            }
+            if blocks.count > Self.listLimit {
+                Text("and \(blocks.count - Self.listLimit) more").foregroundStyle(.secondary)
             }
         }
     }

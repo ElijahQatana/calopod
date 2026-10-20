@@ -10,6 +10,8 @@ enum AvailabilityGlance {
     case bar
     /// The line and today with the next two days as small chips.
     case chips
+    /// The chips, and the line without the working hours, for the smallest window.
+    case tight
 }
 
 /// A status dot for one day's load, an empty ring for a day off or one not read yet.
