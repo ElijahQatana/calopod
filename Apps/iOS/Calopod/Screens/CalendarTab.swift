@@ -47,7 +47,7 @@ struct CalendarTab: View {
                     DayStrip(days: days, selected: day.day) { navigation.calendarDay = $0 }
                     if hasEvents {
                         FilterRow(snapshot: snapshot, filter: filter)
-                        let events = DayEvents.make(from: snapshot.days.first { $0.day == day.day }, hidden: filter.hiding(in: snapshot), in: day)
+                        let events = DayEvents.make(from: snapshot.days.first { $0.day == day.day }, hidden: filter.hiding(in: snapshot), copies: filter.drawsCopies(in: snapshot), in: day)
                         EventDay(
                             events: events, day: day, snapshot: snapshot,
                             empty: filter.scope(in: snapshot) == .destinations ? "No events on destination calendars this day." : "No events on this day."
@@ -161,6 +161,7 @@ private struct FilterRow: View {
         let count = filter.count(in: snapshot)
         HStack(spacing: 8) {
             if CalendarFilter.knowsRoles(in: snapshot) { scopeChip }
+            if filter.scope(in: snapshot) != .destinations && CalendarFilter.hasCopies(in: snapshot) { copiesChip }
             ViewThatFits(in: .horizontal) {
                 calendarsChip(listed: listed, count: count, word: true)
                 calendarsChip(listed: listed, count: count, word: false)
@@ -187,6 +188,17 @@ private struct FilterRow: View {
         }
         .accessibilityLabel("Show")
         .accessibilityValue(filter.scope.rawValue)
+    }
+
+    private var copiesChip: some View {
+        Button { filter.setShowCopies(!filter.showCopies) } label: {
+            Image(systemName: filter.showCopies ? "eye" : "eye.slash")
+                .frame(width: 22)
+                .chipStyle(on: filter.showCopies)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Calopod copies")
+        .accessibilityValue(filter.showCopies ? "Shown" : "Hidden")
     }
 
     private func calendarsChip(listed: [CalendarEntry], count: (shown: Int, total: Int), word: Bool) -> some View {
@@ -304,7 +316,7 @@ private struct EventDay: View {
             SectionLabel(text: "All day")
             Card {
                 ForEach(events.allDay, id: \.id) { event in
-                    Button { open(event) } label: {
+                    Button { if !event.isCopy { open(event) } } label: {
                         HStack(spacing: 10) {
                             RoundedRectangle(cornerRadius: 2).fill(color(event)).frame(width: 4, height: 22)
                             Text(event.displayTitle).font(Theme.Fonts.bodyStrong).lineLimit(1)
@@ -357,7 +369,7 @@ private struct EventDay: View {
                         let slot = width / CGFloat(block.columns)
                         let y = CGFloat(block.interval.start.timeIntervalSince(top) / 3600) * hourHeight
                         let height = max(CGFloat(block.interval.duration / 3600) * hourHeight - 2, 22)
-                        Button { open(block.event) } label: { blockView(block, height: height) }
+                        Button { if !block.event.isCopy { open(block.event) } } label: { blockView(block, height: height) }
                             .buttonStyle(.plain)
                             .frame(width: slot - 3, height: height)
                             .offset(x: labelWidth + slot * CGFloat(block.column), y: y + 1)
@@ -385,6 +397,12 @@ private struct EventDay: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(color.opacity(untitled ? 0.12 : 0.25), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay {
+            if block.event.isCopy {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .strokeBorder(color, style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)

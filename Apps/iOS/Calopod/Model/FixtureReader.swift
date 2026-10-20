@@ -155,7 +155,7 @@ struct FixtureReader: SnapshotReader {
     }
 
     /// The usual day plus Studio and Travel events, and two destinations: Main, which holds
-    /// some events of its own, and Busy.
+    /// an event of its own, and Busy, plus Calopod's copies on both.
     static func manyCalendars(publishedAt: Date, now: Date, roles: Bool) -> Snapshot {
         var snapshot = Self.snapshot(publishedAt: publishedAt, now: now)
         let calendar = Calendar.current
@@ -166,7 +166,11 @@ struct FixtureReader: SnapshotReader {
             event("m1", "studio", "Studio time", at(10), at(11, 30)),
             event("m2", "travel", "Train to Leeds", at(7, 30), at(9)),
             event("m4", "main", "Dentist", at(11, 30), at(12, 15)),
-            event("m5", "busy", "Busy", at(15, 30), at(16, 30)),
+            copy("m5", "busy", nil, at(7, 30), at(9)),
+            copy("m6", "busy", nil, at(9), at(9, 30)),
+            copy("m7", "busy", nil, at(13, 30), at(15)),
+            copy("m8", "main", "Studio time", at(10), at(11, 30)),
+            copy("m9", "main", "Team standup", at(9), at(9, 30)),
         ]
         let today = calendar.dateComponents([.year, .month, .day], from: now)
         let key = String(format: "%04d-%02d-%02d", today.year!, today.month!, today.day!)
@@ -210,6 +214,10 @@ struct FixtureReader: SnapshotReader {
                 free: [span(29, 8, 9), span(29, 12, 16)], overlaps: 0, status: .tight),
         ]
     }()
+
+    private static func copy(_ id: String, _ calendarID: String, _ title: String?, _ start: Date, _ end: Date) -> CalendarEvent {
+        CalendarEvent(id: "copy:\(calendarID):\(id)", calendarID: calendarID, title: title, startsAt: start, endsAt: end, response: .unknown, copy: true)
+    }
 
     private static func event(
         _ id: String, _ calendarID: String, _ title: String?, _ start: Date, _ end: Date,

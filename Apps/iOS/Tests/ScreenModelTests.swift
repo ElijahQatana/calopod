@@ -276,4 +276,35 @@ struct CalendarFilterTests {
         #expect(CalendarFilter(defaults: store).hidden.isEmpty)
         #expect(CalendarFilter(defaults: store).scope == .destinations)
     }
+
+    @Test func copiesShowOnDestinationsOrByChoice() {
+        let snapshot = manyCalendars(roles: true)
+        #expect(CalendarFilter.hasCopies(in: snapshot))
+        let filter = CalendarFilter(defaults: defaults())
+        #expect(!filter.drawsCopies(in: snapshot))
+        filter.setShowCopies(true)
+        #expect(filter.drawsCopies(in: snapshot))
+        filter.setShowCopies(false)
+        filter.setScope(.destinations)
+        #expect(filter.drawsCopies(in: snapshot))
+        #expect(!CalendarFilter.hasCopies(in: manyCalendars(roles: true).withoutCopies))
+    }
+
+    @Test func copiesAreDroppedFromTheDayWhenNotDrawn() {
+        let key = FixtureReader.manyCalendars(publishedAt: .now, now: .now, roles: true).days[0].day
+        let schedule = DaySchedule.schedules(from: [AvailabilityDay(day: key, timeZoneIdentifier: TimeZone.current.identifier, busy: [])])[0]
+        let record = FixtureReader.manyCalendars(publishedAt: .now, now: .now, roles: true).days[0]
+        let all = DayEvents.make(from: record, hidden: [], in: schedule).blocks
+        let plain = DayEvents.make(from: record, hidden: [], copies: false, in: schedule).blocks
+        #expect(all.count - plain.count == record.events.filter { $0.isCopy && !$0.isAllDay }.count)
+        #expect(plain.allSatisfy { !$0.event.isCopy })
+    }
+}
+
+private extension Snapshot {
+    var withoutCopies: Snapshot {
+        var copy = self
+        copy.days = days.map { CalendarDay(day: $0.day, timeZoneIdentifier: $0.timeZoneIdentifier, events: $0.events.filter { !$0.isCopy }) }
+        return copy
+    }
 }

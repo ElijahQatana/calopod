@@ -71,7 +71,7 @@ struct HomeSummary: Equatable {
         var seen = Set<String>()
         let coming = snapshot.days.flatMap(\.events)
             .filter { seen.insert($0.id).inserted }
-            .filter { !$0.isAllDay && $0.response != .declined && !hidden.contains($0.calendarID) }
+            .filter { !$0.isCopy && !$0.isAllDay && $0.response != .declined && !hidden.contains($0.calendarID) }
             .filter { $0.endsAt > now && $0.startsAt < endOfToday }
             .sorted { ($0.startsAt, $0.id) < ($1.startsAt, $1.id) }
         next = coming.prefix(Self.nextShown).map { Next(event: $0, chip: context.isStale ? nil : Self.chip(for: $0, now: now)) }

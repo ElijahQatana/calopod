@@ -110,3 +110,18 @@ struct HomeSummaryTests {
         #expect(glance(summary(events: [event("done", 8, 9)], availability: [day(free: [])])) == "No meetings left today")
     }
 }
+
+struct CopyExclusionTests {
+    @Test func copiesNeverReachNextUpOrReminders() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        var snapshot = FixtureReader.snapshot(publishedAt: now, now: now)
+        let start = now.addingTimeInterval(1800)
+        let copy = CalendarEvent(
+            id: "copy:busy:x", calendarID: "work", title: nil, startsAt: start, endsAt: start.addingTimeInterval(1800),
+            response: .unknown, copy: true)
+        snapshot.days = [CalendarDay(day: "2027-01-15", timeZoneIdentifier: "UTC", events: [copy])]
+        let home = HomeSummary(context: SnapshotContext(snapshot: snapshot, offline: false, now: now), hidden: [])
+        #expect(home.next.isEmpty && home.moreToday == 0)
+        #expect(ReminderPlan.plan(snapshot: snapshot, now: now).isEmpty)
+    }
+}

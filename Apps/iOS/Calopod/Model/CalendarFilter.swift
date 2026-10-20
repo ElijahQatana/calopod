@@ -12,15 +12,24 @@ final class CalendarFilter {
 
     private(set) var hidden: Set<String>
     private(set) var scope: Scope
+    /// Whether Calopod's copies show on All and Sources. Destinations always shows them.
+    private(set) var showCopies: Bool
 
     private let defaults: UserDefaults
     private static let key = "hiddenCalendars"
     private static let scopeKey = "calendarScope"
+    private static let copiesKey = "calendarShowCopies"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         hidden = Set(defaults.stringArray(forKey: Self.key) ?? [])
         scope = defaults.string(forKey: Self.scopeKey).flatMap(Scope.init(rawValue:)) ?? .all
+        showCopies = defaults.bool(forKey: Self.copiesKey)
+    }
+
+    func setShowCopies(_ shown: Bool) {
+        showCopies = shown
+        defaults.set(shown, forKey: Self.copiesKey)
     }
 
     func setScope(_ scope: Scope) {
@@ -56,6 +65,12 @@ extension CalendarFilter {
 
     /// The scope in use: what was picked, or All when the Mac does not send roles.
     func scope(in snapshot: Snapshot) -> Scope { Self.knowsRoles(in: snapshot) ? scope : .all }
+
+    static func hasCopies(in snapshot: Snapshot) -> Bool {
+        snapshot.days.contains { $0.events.contains(where: \.isCopy) }
+    }
+
+    func drawsCopies(in snapshot: Snapshot) -> Bool { scope(in: snapshot) == .destinations || showCopies }
 
     func inScope(_ calendar: CalendarEntry, in snapshot: Snapshot) -> Bool {
         switch scope(in: snapshot) {
