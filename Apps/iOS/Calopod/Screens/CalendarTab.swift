@@ -172,8 +172,8 @@ private struct CalendarChips: View {
                         let on = filter.isShown(calendar.id)
                         Button { filter.setShown(!on, for: calendar.id) } label: {
                             HStack(spacing: 6) {
-                                Circle().strokeBorder(Theme.calendarColor(calendar.colorIndex), lineWidth: 2)
-                                    .background(Circle().fill(on ? Theme.calendarColor(calendar.colorIndex) : .clear))
+                                Circle().strokeBorder(Theme.calendarColor(calendar), lineWidth: 2)
+                                    .background(Circle().fill(on ? Theme.calendarColor(calendar) : .clear))
                                     .frame(width: 10, height: 10)
                                 Text(calendar.name)
                             }
@@ -302,7 +302,7 @@ private struct EventDay: View {
     }
 
     private func color(_ event: CalendarEvent) -> Color {
-        Theme.calendarColor(snapshot.calendar(for: event.calendarID)?.colorIndex)
+        Theme.calendarColor(snapshot.calendar(for: event.calendarID))
     }
 
     private func hourLabel(_ hour: Int) -> String {

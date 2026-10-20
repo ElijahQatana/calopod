@@ -22,6 +22,16 @@ extension AvailabilityLoad {
     }
 }
 
+extension OutsideSide {
+    var words: String {
+        switch self {
+        case .before: "Before hours"
+        case .after: "After hours"
+        case .dayOff: "Day off"
+        }
+    }
+}
+
 enum AvailabilityText {
     static func range(_ start: Date, _ end: Date) -> String {
         "\(start.formatted(date: .omitted, time: .shortened)) to \(end.formatted(date: .omitted, time: .shortened))"
@@ -32,7 +42,7 @@ enum AvailabilityText {
     /// The working window of the day, or why there is none.
     static func hours(_ report: AvailabilityDayReport) -> String {
         guard let windows = report.result.workingWindows else { return "Working hours are not applied." }
-        guard let first = windows.first, let last = windows.last else { return "Day off. Anything you book counts as busy." }
+        guard let first = windows.first, let last = windows.last else { return "Day off. Anything you book is outside working hours." }
         return "Working hours \(range(first.start, last.end))."
     }
 }
@@ -96,6 +106,10 @@ struct AvailabilitySummary: View {
             HStack(alignment: .firstTextBaseline, spacing: 16) {
                 figure("Free", EventDuration.total(report.summary.freeSeconds))
                 figure("Busy", EventDuration.total(report.summary.busySeconds))
+                if report.summary.outsideSeconds >= 30 {
+                    Text("plus \(EventDuration.text(report.summary.outsideSeconds)) outside hours")
+                        .font(Theme.Fonts.secondary).foregroundStyle(.secondary).lineLimit(1)
+                }
                 Text(AvailabilityText.hours(report)).font(Theme.Fonts.secondary).foregroundStyle(.secondary).lineLimit(1)
                 Spacer(minLength: 0)
             }
@@ -114,7 +128,7 @@ struct AvailabilitySummary: View {
 }
 
 /// Free and busy time for a week on the Availability page: a dot per day, the totals for the chosen day, and its
-/// free windows and busy blocks. Free time counts only inside working hours.
+/// free windows, busy blocks and busy time outside working hours. Free and busy count only inside working hours.
 struct AvailabilityCard: View {
     let model: AvailabilityModel
     let notices: [String]
@@ -215,6 +229,7 @@ struct AvailabilityCard: View {
             CardColumns(minColumnWidth: 300) {
                 list("Free windows", report.result.free, empty: "No free time inside working hours.")
                 list("Busy", report.result.busy, empty: "Nothing busy.")
+                if !report.result.outside.isEmpty { outsideList(report.result.outside, total: summary.outsideSeconds) }
             }
         }
         .frame(maxHeight: .infinity, alignment: .top)
@@ -231,6 +246,28 @@ struct AvailabilityCard: View {
         .padding(12)
         .overlay(RoundedRectangle(cornerRadius: Theme.controlRadius, style: .continuous).strokeBorder(Theme.paneLine, lineWidth: 1))
         .accessibilityElement(children: .combine)
+    }
+
+    private func outsideList(_ blocks: [OutsideInterval], total: TimeInterval) -> some View {
+        CardRow {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Outside working hours").font(Theme.Fonts.bodySemibold)
+                    Spacer(minLength: 8)
+                    Text(EventDuration.total(total)).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+                }
+                ForEach(Array(blocks.prefix(Self.listLimit).enumerated()), id: \.offset) { _, block in
+                    HStack {
+                        Text(AvailabilityText.range(block.start, block.end)).monospacedDigit()
+                        Spacer(minLength: 8)
+                        Text(block.side.words).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+                    }
+                }
+                if blocks.count > Self.listLimit {
+                    Text("and \(blocks.count - Self.listLimit) more").foregroundStyle(.secondary)
+                }
+            }
+        }
     }
 
     private func list(_ title: String, _ intervals: [AvailabilityInterval], empty: String) -> some View {

@@ -183,40 +183,34 @@ public struct AvailabilityCommand: AsyncParsableCommand {
                 workingHours: ignoreWorkingHours ? nil : try repository.workingHours(),
                 timeZone: TimeZone(identifier: resolved.timeZoneIdentifier) ?? .current
             )
-            let intervals = (availability.busy + availability.free).sorted {
-                if $0.start == $1.start {
-                    return $0.kind.rawValue < $1.kind.rawValue
-                }
-                return $0.start < $1.start
-            }
+            let items = Self.items(availability)
+            let day = AvailabilityDay(
+                availability, day: DateInterval(start: resolved.window.start, end: resolved.window.end))
             var human = output.localContext(repository: repository)
             if availability.workingWindows != nil {
-                human.footer = ["Free time counts only inside working hours (see calopod hours). Use --ignore-working-hours to count the whole day."]
+                human.footer = [
+                    "Free \(Self.duration(day.freeSeconds)), busy \(Self.duration(day.busySeconds)), outside working hours \(Self.duration(day.outsideSeconds)).",
+                    "Free and busy time count only inside working hours (see calopod hours). Use --ignore-working-hours to count the whole day.",
+                ]
             }
             try OutputRenderer.write(
                 command: "availability",
                 payload: CommandPayload(
                     status: cached || refresh.failedSourceCount != 0 ? "partial" : "ok",
-                    message: intervals.isEmpty
+                    message: items.isEmpty
                         ? "No Availability intervals were found."
                         : "Availability in the requested range.",
-                    count: intervals.count,
+                    count: items.count,
                     range: RangeOutput(range: resolved),
                     sources: commandSources(sources, names: CalendarNames(repository)),
-                    items: intervals.enumerated().map { index, interval in
-                        CommandItem(
-                            id: "availability-\(interval.kind.rawValue)-\(index + 1)",
-                            kind: "availability",
-                            label: interval.kind == .busy ? "Busy" : "Free",
-                            startsAt: outputDate(interval.start),
-                            endsAt: outputDate(interval.end),
-                            availability: interval.kind.rawValue
-                        )
-                    },
+                    items: items,
                     ingestion: refresh.ingestion,
                     workingWindows: availability.workingWindows?.map {
                         WorkingWindowOutput(startsAt: outputDate($0.start)!, endsAt: outputDate($0.end)!)
-                    }
+                    },
+                    totals: AvailabilityTotalsOutput(
+                        freeSeconds: Int(day.freeSeconds), busySeconds: Int(day.busySeconds),
+                        outsideSeconds: Int(day.outsideSeconds))
                 ),
                 warnings: refresh.warnings,
                 format: output.format,
@@ -225,6 +219,56 @@ public struct AvailabilityCommand: AsyncParsableCommand {
             )
         } catch {
             try failCommand(error, format: output.format)
+        }
+    }
+}
+
+extension AvailabilityCommand {
+    /// Busy time outside working hours is its own kind: before-hours, after-hours or day-off. The
+    /// busy kind is only time inside working hours.
+    static func items(_ result: AvailabilityResult) -> [CommandItem] {
+        var intervals: [(kind: String, start: Date, end: Date)] = []
+        for interval in result.busy + result.free {
+            intervals.append((interval.kind.rawValue, interval.start, interval.end))
+        }
+        for interval in result.outside {
+            intervals.append((outsideKind(interval.side), interval.start, interval.end))
+        }
+        intervals.sort { $0.start == $1.start ? $0.kind < $1.kind : $0.start < $1.start }
+        return intervals.enumerated().map { index, interval in
+            CommandItem(
+                id: "availability-\(interval.kind)-\(index + 1)", kind: "availability",
+                label: label(interval.kind), startsAt: outputDate(interval.start),
+                endsAt: outputDate(interval.end), availability: interval.kind)
+        }
+    }
+
+    static func outsideKind(_ side: OutsideSide) -> String {
+        switch side {
+        case .before: "before-hours"
+        case .after: "after-hours"
+        case .dayOff: "day-off"
+        }
+    }
+
+    static func label(_ kind: String) -> String {
+        switch kind {
+        case "busy": "Busy"
+        case "free": "Free"
+        case "before-hours": "Before hours"
+        case "after-hours": "After hours"
+        default: "Day off"
+        }
+    }
+
+    /// "30 min", "1 hr", "1 hr 30 min".
+    static func duration(_ seconds: TimeInterval) -> String {
+        let minutes = Int((seconds / 60).rounded())
+        let (hours, rest) = (minutes / 60, minutes % 60)
+        switch (hours, rest) {
+        case (0, _): return "\(rest) min"
+        case (_, 0): return "\(hours) hr"
+        default: return "\(hours) hr \(rest) min"
         }
     }
 }

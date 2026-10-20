@@ -32,7 +32,7 @@ struct EventDetailScreen: View {
                         Text("Calendar").foregroundStyle(Theme.secondary)
                         Spacer()
                         Label { Text(calendar?.name ?? "Unknown") } icon: {
-                            Circle().fill(Theme.calendarColor(calendar?.colorIndex)).frame(width: 9, height: 9)
+                            Circle().fill(Theme.calendarColor(calendar)).frame(width: 9, height: 9)
                         }
                         .fontWeight(.semibold)
                     }

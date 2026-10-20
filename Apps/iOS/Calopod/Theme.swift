@@ -1,3 +1,4 @@
+import CalopodDomain
 import CalopodSnapshot
 import SwiftUI
 import UIKit
@@ -35,19 +36,12 @@ enum Theme {
     static let bad = Color(light: 0xc43d3d, dark: 0xf07a7a)
     static let badSoft = Color(light: 0xc43d3d, dark: 0xf07a7a, lightAlpha: 0.12, darkAlpha: 0.17)
 
-    /// The 12 calendar colors the Mac offers. A calendar stores its position in this list.
-    static let palette: [Color] = [
-        Color(light: 0xe5604d, dark: 0xff8a78), Color(light: 0xe07a1f, dark: 0xffa552),
-        Color(light: 0xd4a017, dark: 0xf5c542), Color(light: 0x7aa62e, dark: 0xb5e062),
-        Color(light: 0x25a06a, dark: 0x7ee0b0), Color(light: 0x1e9aa0, dark: 0x6fd6da),
-        Color(light: 0x2b7fd6, dark: 0x8ec5f5), Color(light: 0x5a5fd6, dark: 0xa0a6ff),
-        Color(light: 0x8a55d6, dark: 0xc4a0ff), Color(light: 0xd4478c, dark: 0xf5a0c8),
-        Color(light: 0x6b6b73, dark: 0xb4b0ab), Color(light: 0xa8794f, dark: 0xd8b48c),
-    ]
+    /// Built once per palette entry; the Mac's palette, so both apps show the same colors.
+    private static let calendarColors: [String: Color] = Dictionary(
+        uniqueKeysWithValues: CalendarPalette.entries.map { ($0.id, Color(light: $0.light, dark: $0.dark)) })
 
-    static func calendarColor(_ index: Int?) -> Color {
-        guard let index, palette.indices.contains(index) else { return faint }
-        return palette[index]
+    static func calendarColor(_ calendar: CalendarEntry?) -> Color {
+        calendarColors[(calendar?.paletteEntry ?? CalendarPalette.neutral).id] ?? faint
     }
 
     enum Fonts {

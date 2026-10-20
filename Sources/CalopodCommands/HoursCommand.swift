@@ -31,6 +31,13 @@ public struct WorkingWindowOutput: Codable, Equatable, Sendable {
     public let endsAt: String
 }
 
+/// The time `calopod availability` found, in seconds. Busy is inside working hours only.
+public struct AvailabilityTotalsOutput: Codable, Equatable, Sendable {
+    public let freeSeconds: Int
+    public let busySeconds: Int
+    public let outsideSeconds: Int
+}
+
 enum HoursText {
     static let names = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 

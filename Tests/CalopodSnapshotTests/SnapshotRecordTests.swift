@@ -69,13 +69,15 @@ func idsAreStable() {
 func workedOutDayRoundTripsAndAnOlderDayStillDecodes() throws {
     let hours = BusyInterval(start: now, end: now.addingTimeInterval(8 * 3600))
     let full = AvailabilityDay(
-        day: "2027-01-15", timeZoneIdentifier: "UTC", busy: [], working: hours, free: [hours], overlaps: 1, status: .tight)
+        day: "2027-01-15", timeZoneIdentifier: "UTC", busy: [], working: hours, free: [hours], overlaps: 1, status: .tight,
+        outside: [OutsideBlock(start: now, end: now.addingTimeInterval(1800), side: .before)])
     let data = try SnapshotCoding.encode(SnapshotEnvelope(generatedAt: now, record: full))
     #expect(try SnapshotCoding.decode(AvailabilityDay.self, from: data).record == full)
 
     let old = #"{"schemaVersion":1,"generatedAt":"2027-01-15T08:00:00Z","record":{"day":"2027-01-15","timeZoneIdentifier":"UTC","busy":[]}}"#
     let decoded = try SnapshotCoding.decode(AvailabilityDay.self, from: Data(old.utf8)).record
-    #expect(decoded.working == nil && decoded.free == nil && decoded.overlaps == nil && decoded.status == nil)
+    #expect(decoded.working == nil && decoded.free == nil && decoded.overlaps == nil && decoded.status == nil
+        && decoded.outside == nil)
 }
 
 @Test
@@ -110,6 +112,20 @@ func colorIndexOutsideThePaletteIsRejected() {
             try JSONDecoder().decode(CalendarEntry.self, from: Data(json.utf8))
         }
     }
+}
+
+@Test
+func colorIdIsOptionalAndWinsOverTheIndex() throws {
+    func decode(_ json: String) throws -> CalendarEntry {
+        try JSONDecoder().decode(CalendarEntry.self, from: Data(json.utf8))
+    }
+    let older = try decode(#"{"id":"c","name":"Work","colorIndex":10}"#)
+    #expect(older.color == nil && older.paletteEntry.id == "indigo")
+    let newer = try decode(#"{"id":"c","name":"Work","colorIndex":3,"color":"amber"}"#)
+    #expect(newer.paletteEntry.id == "amber")
+    #expect(try decode(#"{"id":"c","name":"Work","colorIndex":3,"color":"mauve"}"#).paletteEntry.id == "gray")
+    let sent = CalendarEntry(id: "c", name: "Work", colorIndex: 4, color: "red")
+    #expect(try decode(String(decoding: JSONEncoder().encode(sent), as: UTF8.self)) == sent)
 }
 
 @Test

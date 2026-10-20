@@ -33,7 +33,11 @@ struct FixtureReader: SnapshotReader {
             .snapshot({
                 var snapshot = Self.snapshot(publishedAt: now.addingTimeInterval(-420), now: now)
                 snapshot.availability = snapshot.availability.map {
-                    AvailabilityDay(day: $0.day, timeZoneIdentifier: $0.timeZoneIdentifier, busy: $0.busy)
+                    // An older Mac counted everything busy and sent no outside list.
+                    AvailabilityDay(
+                        day: $0.day, timeZoneIdentifier: $0.timeZoneIdentifier,
+                        busy: ($0.busy + ($0.outside ?? []).map { BusyInterval(start: $0.start, end: $0.end) })
+                            .sorted { $0.start < $1.start })
                 }
                 return snapshot
             }())
@@ -72,20 +76,26 @@ struct FixtureReader: SnapshotReader {
         func span(_ day: Int, _ from: Double, _ to: Double) -> BusyInterval {
             BusyInterval(start: at(day, 0).addingTimeInterval(from * 3600), end: at(day, 0).addingTimeInterval(to * 3600))
         }
-        func worked(_ day: Int, busy: [(Double, Double)], free: [(Double, Double)], overlaps: Int = 0, status: AvailabilityStatus, off: Bool = false) -> AvailabilityDay {
+        func worked(
+            _ day: Int, busy: [(Double, Double)], free: [(Double, Double)], overlaps: Int = 0, status: AvailabilityStatus,
+            off: Bool = false, outside: [(Double, Double, HoursSide)] = []
+        ) -> AvailabilityDay {
             AvailabilityDay(
                 day: Self.dayKey(at(day, 0), calendar: calendar), timeZoneIdentifier: calendar.timeZone.identifier,
                 busy: busy.map { span(day, $0, $1) }, working: off ? nil : span(day, 9, 17), free: free.map { span(day, $0, $1) },
-                overlaps: overlaps, status: status)
+                overlaps: overlaps, status: status,
+                outside: outside.map { OutsideBlock(start: span(day, $0, $1).start, end: span(day, $0, $1).end, side: $2) })
         }
         let busy = [
-            worked(0, busy: [(9, 9.75), (10, 12.75), (13.5, 15), (16.5, 17)], free: [(9.75, 10), (12.75, 13.5), (15, 16.5)], overlaps: 1, status: .overbooked),
+            worked(0, busy: [(9, 9.75), (10, 12.75), (13.5, 15), (16.5, 17)], free: [(9.75, 10), (12.75, 13.5), (15, 16.5)], overlaps: 1, status: .overbooked,
+                   outside: [(7, 8, .before), (22.5, 24, .after)]),
             worked(1, busy: [(9.5, 12), (13, 15.5), (16, 17)], free: [(9, 9.5), (12, 13), (15.5, 16)], status: .tight),
-            worked(2, busy: [(10, 11)], free: [(9, 10), (11, 17)], status: .mostlyFree),
+            // A meeting from 8:30 to 9:30 is split at the start of the day.
+            worked(2, busy: [(9, 9.5), (10, 11)], free: [(9.5, 10), (11, 17)], status: .mostlyFree, outside: [(8.5, 9, .before)]),
             worked(3, busy: [], free: [], status: .dayOff, off: true),
             worked(4, busy: [(13, 14)], free: [(9, 13), (14, 17)], status: .mostlyFree),
             worked(5, busy: [], free: [(9, 17)], status: .mostlyFree),
-            worked(6, busy: [(10, 11)], free: [], status: .dayOff, off: true),
+            worked(6, busy: [], free: [], status: .dayOff, off: true, outside: [(10, 11, .dayOff)]),
         ]
         let events = [
             event("e1", "work", "Team standup", at(0, 9), at(0, 9, 30)),
@@ -113,10 +123,12 @@ struct FixtureReader: SnapshotReader {
             reminders: ReminderSettings(
                 enabled: true, firstEnabled: true, firstMinutes: 10, finalEnabled: true, finalMinutes: 1, hideTitles: false),
             calendars: [
-                CalendarEntry(id: "work", name: "Work", colorIndex: 6),
-                CalendarEntry(id: "personal", name: "Personal", colorIndex: 4),
-                CalendarEntry(id: "family", name: "Family", colorIndex: 8),
-                CalendarEntry(id: "client", name: "Client", colorIndex: 9),
+                coloredCalendar("work", "Work", "blue"),
+                coloredCalendar("personal", "Personal", "green"),
+                coloredCalendar("family", "Family", "orange"),
+                coloredCalendar("client", "Client", "indigo"),
+                coloredCalendar("studio", "Studio", "amber"),
+                coloredCalendar("travel", "Travel", "red"),
             ],
             status: SyncStatus(
                 lastSyncAt: publishedAt,
@@ -153,6 +165,11 @@ struct FixtureReader: SnapshotReader {
         CalendarEvent(
             id: id, calendarID: calendarID, title: title, startsAt: start, endsAt: end, isAllDay: allDay,
             location: location, response: response, joinURL: join)
+    }
+
+    /// A calendar colored by Mac palette id, with the position an older feed would carry.
+    private static func coloredCalendar(_ id: String, _ name: String, _ color: String) -> CalendarEntry {
+        CalendarEntry(id: id, name: name, colorIndex: CalendarPalette.entries.firstIndex { $0.id == color } ?? 0, color: color)
     }
 
     private static func dayKey(_ date: Date, calendar: Calendar) -> String {

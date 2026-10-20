@@ -98,7 +98,16 @@ enum IPhoneFeedBuilder {
             return CalopodSnapshot.AvailabilityDay(
                 day: format.string(from: start), timeZoneIdentifier: calendar.timeZone.identifier,
                 busy: ranges(result.busy), working: result.workingWindows?.first.map { BusyInterval(start: $0.start, end: $0.end) },
-                free: ranges(result.free), overlaps: result.overlaps, status: status(summary.load))
+                free: ranges(result.free), overlaps: result.overlaps, status: status(summary.load),
+                outside: result.outside.map { OutsideBlock(start: $0.start, end: $0.end, side: side($0.side)) })
+        }
+    }
+
+    private static func side(_ side: OutsideSide) -> HoursSide {
+        switch side {
+        case .before: .before
+        case .after: .after
+        case .dayOff: .dayOff
         }
     }
 
@@ -158,13 +167,12 @@ enum IPhoneFeedBuilder {
 
     static func calendars(_ snapshot: InboxContextSnapshot, repository: LocalStateRepository) -> CalendarList {
         let names = CalendarNames(repository)
-        let palette = CalendarPalette.entries.map(\.id)
-        let gray = palette.firstIndex(of: "gray") ?? 0
         return CalendarList(calendars: snapshot.sources.filter { !names.isIgnored($0.bindingID) }.map { source in
-            CalendarEntry(
+            let color = names.preferences[source.bindingID]?.color.flatMap(CalendarPalette.entry(id:)) ?? CalendarPalette.neutral
+            return CalendarEntry(
                 id: source.bindingID,
                 name: names.shown(source.bindingID, real: source.calendarLabel) ?? source.connectionLabel ?? "Calendar",
-                colorIndex: names.preferences[source.bindingID]?.color.flatMap(palette.firstIndex(of:)) ?? gray)
+                colorIndex: CalendarPalette.entries.firstIndex(of: color) ?? 0, color: color.id)
         })
     }
 
