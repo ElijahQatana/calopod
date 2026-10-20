@@ -14,7 +14,7 @@ func walReadersSeeCommittedStateDuringAWrite() async throws {
     #expect(try writer.read { try Int.fetchOne($0, sql: "PRAGMA busy_timeout") } == 2000)
     let entered = DispatchSemaphore(value: 0)
     let release = DispatchSemaphore(value: 0)
-    let task = startOnThread {
+    let task = BackgroundWork {
         try writer.write { db in
             try db.execute(sql: "INSERT INTO configurations VALUES (?, ?, ?)", arguments: ["pending", Date(), Date()])
             entered.signal()
@@ -22,14 +22,14 @@ func walReadersSeeCommittedStateDuringAWrite() async throws {
         }
     }
     defer { release.signal() }
-    try #require(waitForWriter(entered))
+    try #require(waitForWriter(entered), "The writer did not start: \(String(describing: task.earlyError))")
     let reader = try CalopodDatabase(path: path, readonly: true)
     #expect(try reader.read { try String.fetchAll($0, sql: "SELECT id FROM configurations") }.isEmpty)
     #expect(throws: (any Error).self) {
         try reader.write { try $0.execute(sql: "DELETE FROM configurations") }
     }
     release.signal()
-    try await task()
+    try await task.value()
     #expect(try reader.read { try String.fetchAll($0, sql: "SELECT id FROM configurations") } == ["pending"])
 }
 
@@ -61,7 +61,7 @@ func busyTimeoutWaitsForAWriterAndRemainsBounded() async throws {
     let second = try CalopodDatabase(path: path)
     let entered = DispatchSemaphore(value: 0)
     let release = DispatchSemaphore(value: 0)
-    let writer = startOnThread {
+    let writer = BackgroundWork {
         try first.write { db in
             try db.execute(sql: "INSERT INTO configurations VALUES (?, ?, ?)", arguments: ["first", Date(), Date()])
             entered.signal()
@@ -69,7 +69,7 @@ func busyTimeoutWaitsForAWriterAndRemainsBounded() async throws {
         }
     }
     defer { release.signal() }
-    try #require(waitForWriter(entered))
+    try #require(waitForWriter(entered), "The writer did not start: \(String(describing: writer.earlyError))")
     let start = Date()
     #expect(throws: (any Error).self) {
         try second.write { db in
@@ -79,7 +79,7 @@ func busyTimeoutWaitsForAWriterAndRemainsBounded() async throws {
     #expect(Date().timeIntervalSince(start) >= 1.8)
     #expect(Date().timeIntervalSince(start) < 10)
     release.signal()
-    try await writer()
+    try await writer.value()
     try second.write { db in
         try db.execute(sql: "INSERT INTO configurations VALUES (?, ?, ?)", arguments: ["second", Date(), Date()])
     }
@@ -87,26 +87,34 @@ func busyTimeoutWaitsForAWriterAndRemainsBounded() async throws {
 }
 
 private func waitForWriter(_ semaphore: DispatchSemaphore) -> Bool {
-    semaphore.wait(timeout: .now() + 5) == .success
+    semaphore.wait(timeout: .now() + 30) == .success
 }
 
-/// Runs blocking work on its own thread. A detached task that waits on a semaphore holds a thread from the
-/// small task pool, and on a runner with few cores the other tests can leave it no thread to start on.
-private func startOnThread(_ work: @escaping @Sendable () throws -> Void) -> @Sendable () async throws -> Void {
-    final class Outcome: @unchecked Sendable { var result: Result<Void, any Error>? }
-    let outcome = Outcome()
-    let finished = DispatchSemaphore(value: 0)
-    DispatchQueue.global().async {
-        outcome.result = Result { try work() }
-        finished.signal()
+/// Blocking work on a thread of its own. Detached tasks and dispatch blocks both wait for a free slot, and
+/// when hundreds of tests start at once on a runner with few cores the writer can sit unstarted past the wait.
+private final class BackgroundWork: @unchecked Sendable {
+    private let finished = DispatchSemaphore(value: 0)
+    private var result: Result<Void, any Error>?
+
+    init(_ work: @escaping @Sendable () throws -> Void) {
+        Thread.detachNewThread { [self] in
+            result = Result { try work() }
+            finished.signal()
+        }
     }
-    return {
+
+    /// The error the work already ended with, for a failure message.
+    var earlyError: (any Error)? {
+        if case .failure(let error) = result { error } else { nil }
+    }
+
+    func value() async throws {
         await withCheckedContinuation { continuation in
-            DispatchQueue.global().async {
-                finished.wait()
+            Thread.detachNewThread {
+                self.finished.wait()
                 continuation.resume()
             }
         }
-        try outcome.result?.get()
+        try result?.get()
     }
 }
