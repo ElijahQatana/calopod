@@ -8,7 +8,7 @@ struct FixtureReader: SnapshotReader {
         case fresh, stale, noCalendars, sharingOff, nothingPublished, offline
         /// A week around a spring clock change in London, and a feed from a Mac that sends busy time only.
         case clockChange, oldMac
-        /// Eight calendars, two of them destinations, and the same feed from a Mac that does not say which.
+        /// Eight calendars with roles (one both, one neither), and the same feed from a Mac that does not say which.
         case manyCalendars, manyOldMac
         /// The last sync did not finish.
         case syncFailed
@@ -154,8 +154,8 @@ struct FixtureReader: SnapshotReader {
                 }))
     }
 
-    /// The usual day plus Studio and Travel events, and two destinations: Main, which holds
-    /// an event of its own, and Busy, plus Calopod's copies on both.
+    /// The usual day plus Studio and Travel events. Main is a source and a destination and holds an event of
+    /// its own, Busy is a destination, Travel is used by no rule, and Calopod's copies sit on Main and Busy.
     static func manyCalendars(publishedAt: Date, now: Date, roles: Bool) -> Snapshot {
         var snapshot = Self.snapshot(publishedAt: publishedAt, now: now)
         let calendar = Calendar.current
@@ -179,6 +179,7 @@ struct FixtureReader: SnapshotReader {
             snapshot.days[index] = CalendarDay(day: day.day, timeZoneIdentifier: day.timeZoneIdentifier, events: day.events + extra)
         }
         let destinations: Set<String> = ["main", "busy"]
+        let sources: Set<String> = ["work", "personal", "family", "client", "studio", "main"]
         let all = [
             ("work", "Work", "blue"), ("personal", "Personal", "green"), ("family", "Family", "orange"),
             ("client", "Client", "indigo"), ("studio", "Studio", "amber"), ("travel", "Travel", "red"),
@@ -187,7 +188,7 @@ struct FixtureReader: SnapshotReader {
         snapshot.calendars = all.map { id, name, color in
             CalendarEntry(
                 id: id, name: name, colorIndex: CalendarPalette.entries.firstIndex { $0.id == color } ?? 0, color: color,
-                destination: roles ? destinations.contains(id) : nil)
+                destination: roles ? destinations.contains(id) : nil, source: roles ? sources.contains(id) : nil)
         }
         return snapshot
     }

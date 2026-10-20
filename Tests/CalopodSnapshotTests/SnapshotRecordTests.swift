@@ -133,9 +133,9 @@ func colorIdIsOptionalAndWinsOverTheIndex() throws {
     let newer = try decode(#"{"id":"c","name":"Work","colorIndex":3,"color":"amber"}"#)
     #expect(newer.paletteEntry.id == "amber")
     #expect(try decode(#"{"id":"c","name":"Work","colorIndex":3,"color":"mauve"}"#).paletteEntry.id == "gray")
-    let sent = CalendarEntry(id: "c", name: "Work", colorIndex: 4, color: "red", destination: true)
+    let sent = CalendarEntry(id: "c", name: "Work", colorIndex: 4, color: "red", destination: true, source: false)
     #expect(try decode(String(decoding: JSONEncoder().encode(sent), as: UTF8.self)) == sent)
-    #expect(older.destination == nil)
+    #expect(older.destination == nil && older.source == nil)
 }
 
 @Test
