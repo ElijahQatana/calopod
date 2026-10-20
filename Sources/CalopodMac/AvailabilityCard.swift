@@ -57,11 +57,13 @@ struct AvailabilityPage: View {
         let notices = ScheduleLayout.notices(
             calendars: schedule.calendars, hidden: [], range: availability.range, now: Date(),
             name: { CalendarAliases.shared.name(for: $0.id, real: $0.name) })
-        ScrollView {
-            AvailabilityCard(model: availability, notices: notices, openSettings: openSettings)
-                .padding(.horizontal, 18).padding(.bottom, Theme.Page.bottom)
-                .frame(maxWidth: 760, alignment: .leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        GeometryReader { proxy in
+            ScrollView {
+                AvailabilityCard(model: availability, notices: notices, openSettings: openSettings)
+                    .padding(.horizontal, 18).padding(.bottom, Theme.Page.bottom)
+                    .frame(maxWidth: Theme.Page.maxWidth, minHeight: proxy.size.height, alignment: .top)
+                    .frame(maxWidth: .infinity)
+            }
         }
         .task { await availability.reload() }
         .onChange(of: schedule.schedule) { Task { await availability.reload() } }
@@ -71,13 +73,29 @@ struct AvailabilityPage: View {
 /// Today's free and busy time on one row, for Overview. It opens the Availability page.
 struct AvailabilitySummary: View {
     let model: AvailabilityModel
+    var glance: AvailabilityGlance = .line
     let open: () -> Void
 
     var body: some View {
         CardSection(header: OverviewSectionHeader(title: "Availability today", link: "Open Availability", action: open)) {
             CardRow { content }
+            glanceRow
         }
         .task { await model.goToToday() }
+    }
+
+    /// The bar or the next days under the line, when the window has room for them.
+    @ViewBuilder
+    private var glanceRow: some View {
+        if !model.loadFailed, glance != .line, let report = model.report(for: model.calendar.startOfDay(for: Date())) {
+            CardRow(dense: true) {
+                if glance == .bar {
+                    AvailabilityDayBar(report: report)
+                } else {
+                    AvailabilityDayChips(model: model, days: Array(model.days.filter { $0 >= report.day.start }.prefix(3)), compact: true)
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -85,15 +103,14 @@ struct AvailabilitySummary: View {
         if model.loadFailed {
             Text("Availability could not be read.").foregroundStyle(.secondary)
         } else if let report = model.report(for: model.calendar.startOfDay(for: Date())) {
-            HStack(alignment: .firstTextBaseline, spacing: 16) {
+            FlowLayout(spacing: 8) {
                 figure("Free", EventDuration.total(report.summary.freeSeconds))
                 figure("Busy", EventDuration.total(report.summary.busySeconds))
                 if report.summary.outsideSeconds >= 30 {
                     Text("plus \(EventDuration.text(report.summary.outsideSeconds)) outside hours")
-                        .font(Theme.Fonts.secondary).foregroundStyle(.secondary).lineLimit(1)
+                        .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                 }
-                Text(AvailabilityText.hours(report)).font(Theme.Fonts.secondary).foregroundStyle(.secondary).lineLimit(1)
-                Spacer(minLength: 0)
+                if glance != .tight { Text(AvailabilityText.hours(report)).font(Theme.Fonts.secondary).foregroundStyle(.secondary) }
             }
             .accessibilityElement(children: .combine)
         } else {
@@ -127,6 +144,7 @@ struct AvailabilityCard: View {
                 weekButton("chevron.left", "Previous week", -1)
                 weekButton("chevron.right", "Next week", 1)
             },
+            fills: true,
             content: {
                 ForEach(notices, id: \.self) { notice in CardRow { Banner(kind: .caution, text: notice) } }
                 if model.loadFailed {
@@ -206,9 +224,14 @@ struct AvailabilityCard: View {
                     .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
             }
         }
-        list("Free windows", report.result.free, empty: "No free time inside working hours.")
-        list("Busy", report.result.busy, empty: "Nothing busy.")
-        if !report.result.outside.isEmpty { outsideList(report.result.outside, total: summary.outsideSeconds) }
+        CardRow {
+            CardColumns(minColumnWidth: 300) {
+                list("Free windows", report.result.free, empty: "No free time inside working hours.")
+                list("Busy", report.result.busy, empty: "Nothing busy.")
+                if !report.result.outside.isEmpty { outsideList(report.result.outside, total: summary.outsideSeconds) }
+            }
+        }
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     private func tile(_ title: String, _ value: String, note: String, flagged: Bool = false) -> some View {
@@ -225,45 +248,41 @@ struct AvailabilityCard: View {
     }
 
     private func outsideList(_ blocks: [OutsideInterval], total: TimeInterval) -> some View {
-        CardRow {
-            VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Outside working hours").font(Theme.Fonts.bodySemibold)
+                Spacer(minLength: 8)
+                Text(EventDuration.total(total)).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+            }
+            ForEach(Array(blocks.prefix(Self.listLimit).enumerated()), id: \.offset) { _, block in
                 HStack {
-                    Text("Outside working hours").font(Theme.Fonts.bodySemibold)
+                    Text(AvailabilityText.range(block.start, block.end)).monospacedDigit()
                     Spacer(minLength: 8)
-                    Text(EventDuration.total(total)).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+                    Text(block.side.words).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                 }
-                ForEach(Array(blocks.prefix(Self.listLimit).enumerated()), id: \.offset) { _, block in
-                    HStack {
-                        Text(AvailabilityText.range(block.start, block.end)).monospacedDigit()
-                        Spacer(minLength: 8)
-                        Text(block.side.words).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
-                    }
-                }
-                if blocks.count > Self.listLimit {
-                    Text("and \(blocks.count - Self.listLimit) more").foregroundStyle(.secondary)
-                }
+            }
+            if blocks.count > Self.listLimit {
+                Text("and \(blocks.count - Self.listLimit) more").foregroundStyle(.secondary)
             }
         }
     }
 
     private func list(_ title: String, _ intervals: [AvailabilityInterval], empty: String) -> some View {
-        CardRow {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title).font(Theme.Fonts.bodySemibold)
-                if intervals.isEmpty {
-                    Text(empty).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(Theme.Fonts.bodySemibold)
+            if intervals.isEmpty {
+                Text(empty).foregroundStyle(.secondary)
+            }
+            ForEach(Array(intervals.prefix(Self.listLimit).enumerated()), id: \.offset) { _, interval in
+                HStack {
+                    Text(AvailabilityText.range(interval.start, interval.end)).monospacedDigit()
+                    Spacer(minLength: 8)
+                    Text(EventDuration.text(interval.end.timeIntervalSince(interval.start)))
+                        .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                 }
-                ForEach(Array(intervals.prefix(Self.listLimit).enumerated()), id: \.offset) { _, interval in
-                    HStack {
-                        Text(AvailabilityText.range(interval.start, interval.end)).monospacedDigit()
-                        Spacer(minLength: 8)
-                        Text(EventDuration.text(interval.end.timeIntervalSince(interval.start)))
-                            .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
-                    }
-                }
-                if intervals.count > Self.listLimit {
-                    Text("and \(intervals.count - Self.listLimit) more").foregroundStyle(.secondary)
-                }
+            }
+            if intervals.count > Self.listLimit {
+                Text("and \(intervals.count - Self.listLimit) more").foregroundStyle(.secondary)
             }
         }
     }

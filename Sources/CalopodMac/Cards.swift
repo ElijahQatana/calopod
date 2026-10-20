@@ -48,13 +48,15 @@ struct CardPage<Content: View>: View {
 struct CardSection<Header: View, Content: View>: View {
     let header: Header
     var footnote: String?
+    /// Stretches the card to the height it is offered.
+    var fills = false
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             header.padding(.horizontal, 4)
             VStack(alignment: .leading, spacing: 0) { content }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, maxHeight: fills ? .infinity : nil, alignment: .topLeading)
                 .clipShape(armCardShape)
                 .cardSurface()
             if let footnote {
@@ -63,6 +65,7 @@ struct CardSection<Header: View, Content: View>: View {
                     .padding(.horizontal, 4)
             }
         }
+        .frame(maxHeight: fills ? .infinity : nil, alignment: .top)
     }
 }
 

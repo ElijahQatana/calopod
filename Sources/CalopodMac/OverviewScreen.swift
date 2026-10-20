@@ -7,6 +7,8 @@ struct OverviewScreen: View {
     let navigation: AppNavigation
     let setup: SetupModel
     var joiner: any MeetingJoining = MeetingJoiner.system
+    /// The clock, so tests can fix the time of day.
+    var now: () -> Date = Date.init
     @Environment(InboxModel.self) private var inbox
     @Environment(CalendarModel.self) private var schedule
     @Environment(CalendarAccessModel.self) private var access
@@ -21,19 +23,40 @@ struct OverviewScreen: View {
     @State private var openReasons: Set<String> = []
     @State private var joinNotice: String?
 
-    /// What Overview shows. A window too short for everything drops the lists, least important first.
+    /// What Overview shows. A tall window shows everything, with longer lists and the week. A shorter one
+    /// drops the lists and then the sections, least important first.
     private enum Detail {
-        case full, withoutGlance, essential, minimal
+        case roomy, full, withoutGlance, essential, minimal
 
-        var events: Int { self == .minimal ? 1 : self == .essential ? 2 : 3 }
-        var listsMore: Bool { self == .full || self == .withoutGlance }
+        var events: Int {
+            switch self {
+            case .roomy: 5
+            case .full, .withoutGlance: 3
+            case .essential: 2
+            case .minimal: 1
+            }
+        }
+        var listsMore: Bool { self != .essential && self != .minimal }
+        var showsAllCalendars: Bool { self == .roomy }
+        var showsCalendars: Bool { self == .roomy || self == .full }
+        var showsGlance: Bool { self == .full || self == .withoutGlance }
+        /// Availability moves to the right column, which has the room when the left holds longer lists.
+        var availabilityOnSide: Bool { self == .roomy }
+        var availability: AvailabilityGlance {
+            switch self {
+            case .roomy: .bar
+            case .minimal: .tight
+            default: .chips
+            }
+        }
     }
 
     var body: some View {
         CardPage(
-            title: "Overview", trailing: Date().formatted(.dateTime.weekday(.wide).day().month(.wide)), maxWidth: 1180, scrolls: false
+            title: "Overview", trailing: now().formatted(.dateTime.weekday(.wide).day().month(.wide)), maxWidth: Theme.Page.maxWidth, scrolls: false
         ) {
             ViewThatFits(in: .vertical) {
+                page(.roomy)
                 page(.full)
                 page(.withoutGlance)
                 page(.essential)
@@ -73,18 +96,22 @@ struct OverviewScreen: View {
             if progress.canResume && !showingSetup { CardSection { CardRow { resumeBanner } } }
 
             if let status = model.status, status.installed {
-                statusCard(status)
+                statusCard(status, tall: detail == .roomy)
                 if let preview = model.pendingPreview { previewSection(preview) }
                 OverviewColumns(sidebarCollapsed: collapsed) {
-                    VStack(alignment: .leading, spacing: 12) {
+                    SpreadStack {
                         needsYou
                         nextUp(detail)
-                        availabilitySummary
+                        if !detail.availabilityOnSide { availabilitySummary(detail) }
                     }
-                    VStack(alignment: .leading, spacing: 12) {
+                    SpreadStack {
                         attention(status)
-                        if detail == .full { calendarsCard }
-                        if detail == .full || detail == .withoutGlance { glance }
+                        if detail.availabilityOnSide {
+                            availabilitySummary(detail)
+                            AvailabilityWeekSection(model: availability) { navigation.openAvailability() }
+                        }
+                        if detail.showsCalendars { calendarsCard(all: detail.showsAllCalendars) }
+                        if detail.showsGlance { glance }
                     }
                 }
             } else if model.status != nil {
@@ -99,9 +126,9 @@ struct OverviewScreen: View {
 
     private var accessState: CalendarAccessState { model.calendarAccess }
 
-    private func statusCard(_ status: AgentControlStatus) -> some View {
+    private func statusCard(_ status: AgentControlStatus, tall: Bool) -> some View {
         SyncStatusCard(
-            health: model.syncHealth, refreshed: refresh.refreshedText(), marks: model.recentRuns, busy: model.busyAction,
+            health: model.syncHealth, refreshed: refresh.refreshedText(), marks: model.recentRuns, tallBars: tall, busy: model.busyAction,
             paused: status.enabled ? status.paused : nil,
             previewRule: model.previewRule,
             pauseDisabled: model.isBusy,
@@ -164,14 +191,14 @@ struct OverviewScreen: View {
     private var refreshButton: some View { RefreshCalendarsButton() }
 
     private var today: Range<Date> {
-        let calendar = Calendar.current, start = calendar.startOfDay(for: Date())
+        let calendar = Calendar.current, start = calendar.startOfDay(for: now())
         return start..<(calendar.date(byAdding: .day, value: 1, to: start) ?? start)
     }
 
     @ViewBuilder
     private func nextUp(_ detail: Detail) -> some View {
         if let current = schedule.schedule {
-            let now = Date()
+            let now = self.now()
             let ignored: (String) -> Bool = { CalendarAliases.shared.isIgnored($0) }
             let events = UpNext.today(in: current, now: now, ignored: ignored)
             let chosen = UpNext.next(in: current, now: now, ignored: ignored)
@@ -207,8 +234,8 @@ struct OverviewScreen: View {
         }
     }
 
-    private var availabilitySummary: some View {
-        AvailabilitySummary(model: availability) { navigation.openAvailability() }
+    private func availabilitySummary(_ detail: Detail) -> some View {
+        AvailabilitySummary(model: availability, glance: detail.availability) { navigation.openAvailability() }
             .onChange(of: schedule.schedule) { Task { await availability.reload() } }
     }
 
@@ -270,12 +297,12 @@ struct OverviewScreen: View {
     // MARK: Calendars
 
     @ViewBuilder
-    private var calendarsCard: some View {
+    private func calendarsCard(all: Bool) -> some View {
         let calendars = (schedule.schedule?.calendars ?? []).filter { !CalendarAliases.shared.isIgnored($0.id) }
         if !calendars.isEmpty {
-            let now = Date()
+            let now = self.now()
             let labels = calendars.map { CalendarFreshnessLabel.make($0, range: today, now: now) }
-            let shown = 4
+            let shown = all ? calendars.count : 4
             CardSection(
                 header: OverviewSectionHeader(title: "Calendars", link: "Manage") { navigation.selection = .calendars },
                 content: {

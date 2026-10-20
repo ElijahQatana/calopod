@@ -139,6 +139,8 @@ enum Theme {
     /// Page edges inside the detail panel. The top depends on whether the collapse button sits above the page.
     enum Page {
         static let top: CGFloat = 16
+        /// The widest a page's content gets, so lines stay readable on a very wide window.
+        static let maxWidth: CGFloat = 1040
         static let bottom: CGFloat = 20
         /// Below the collapse button row, which already has its own top gap.
         static let belowToggle: CGFloat = 8
