@@ -46,7 +46,7 @@ enum ReminderPlan {
                     id: "\(idPrefix)\(event.id).\(minutes).\(Int(event.startsAt.timeIntervalSince1970))", fireDate: fire,
                     title: title(event, minutes: minutes, hide: settings.hideTitles),
                     body: body(event, calendar: names[event.calendarID], hide: settings.hideTitles, timeZone: timeZone, locale: locale),
-                    eventID: event.id, joinURL: event.joinURL.flatMap(webLink)))
+                    eventID: event.id, joinURL: event.joinLink))
             }
         }
         return Array(planned.sorted { ($0.fireDate, $0.id) < ($1.fireDate, $1.id) }.prefix(limit))
@@ -66,7 +66,7 @@ enum ReminderPlan {
         if !hide, let calendar, !calendar.isEmpty { parts.append(calendar) }
         if !hide, let place = locationText(event.location) {
             parts.append(place)
-        } else if event.joinURL.flatMap(webLink) != nil {
+        } else if event.joinLink != nil {
             parts.append("Join")
         }
         return parts.joined(separator: " · ")
@@ -95,5 +95,17 @@ extension ReminderPlan {
         guard !leads.isEmpty else { return "Both reminders are off on your Mac, so none are set here." }
         let times = leads.map { minutesText($0) }.formatted(.list(type: .and))
         return "Set on your Mac: \(times) before a meeting, with titles \(settings.hideTitles ? "hidden" : "shown")."
+    }
+}
+
+extension CalendarEvent {
+    /// The meeting link Join opens, the same one a reminder offers.
+    var joinLink: URL? { joinURL.flatMap(ReminderPlan.webLink) }
+}
+
+extension Snapshot {
+    /// The Join link for an event, found by id because an Inbox item carries none of its own.
+    func joinLink(forEvent id: String) -> URL? {
+        days.lazy.flatMap(\.events).first { $0.id == id }?.joinLink
     }
 }
