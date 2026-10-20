@@ -2,7 +2,7 @@ import AppKit
 import CalopodCommands
 import SwiftUI
 
-/// Appearance, window style and how see-through the panels are.
+/// Appearance, menu bar, window style and how see-through the panels are.
 struct SettingsScreen: View {
     private let settings = AppSettings.shared
     @State private var command: CommandLineModel
@@ -21,6 +21,7 @@ struct SettingsScreen: View {
     @ViewBuilder
     private var sections: some View {
         appearance
+        menuBar
         transparency
         windowStyle
         WorkingHoursSection(model: workingHours)
@@ -235,6 +236,20 @@ struct SettingsScreen: View {
                 PillPicker(
                     options: [("System", AppearanceChoice.system), ("Light", .light), ("Dark", .dark)],
                     selection: Binding(get: { settings.appearance }, set: { settings.setAppearance($0) }))
+            }
+        }
+    }
+
+    private var menuBar: some View {
+        CardSection(
+            "Menu bar",
+            footnote: settings.showsMenuBarItem
+                ? "Syncing and reminders do not depend on it."
+                : "Calopod stays in the Dock when its window is closed, so it can always be reopened. Syncing and reminders keep running."
+        ) {
+            CardRow("Show Calopod in the menu bar") {
+                Toggle("", isOn: Binding(get: { settings.showsMenuBarItem }, set: { settings.setShowsMenuBarItem($0) }))
+                    .labelsHidden()
             }
         }
     }

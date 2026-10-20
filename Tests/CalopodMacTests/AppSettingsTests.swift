@@ -30,6 +30,21 @@ final class AppSettingsTests: XCTestCase {
         for key in AppSettings.scaleKeys.values { XCTAssertNil(suite.object(forKey: key)) }
     }
 
+    func testMenuBarItemIsOnUntilTurnedOffAndTheChoiceIsKept() {
+        XCTAssertTrue(make().showsMenuBarItem)
+        let suite = UserDefaults(suiteName: "calopod.tests.\(UUID().uuidString)")!
+        let settings = AppSettings(defaults: suite)
+        settings.setShowsMenuBarItem(false)
+        XCTAssertFalse(settings.showsMenuBarItem)
+        XCTAssertFalse(AppSettings(defaults: suite).showsMenuBarItem)
+        XCTAssertTrue(make([AppSettings.menuBarItemKey: "junk"]).showsMenuBarItem)
+    }
+
+    func testClosingTheWindowKeepsTheDockIconWhenTheMenuBarItemIsHidden() {
+        XCTAssertEqual(DockPresence.closedPolicy(menuBarItemShown: true), .accessory)
+        XCTAssertEqual(DockPresence.closedPolicy(menuBarItemShown: false), .regular)
+    }
+
     func testDefaultsSitAtTheChosenLook() throws {
         let settings = make()
         XCTAssertEqual(settings.position(.frame), 1, accuracy: 1e-9)

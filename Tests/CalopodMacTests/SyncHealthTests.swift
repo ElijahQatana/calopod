@@ -81,6 +81,19 @@ final class SyncHealthTests: XCTestCase {
         XCTAssertEqual(granted.tone, .good)
     }
 
+    func testMenuLineIsOneShortLinePerState() {
+        let ok = health(status("ok", age: 90))
+        XCTAssertEqual(ok.menuLine, "Last synced 1 min ago")
+        XCTAssertEqual(ok.tone, .good)
+        XCTAssertEqual(health(status("paused", age: 90)).menuLine, "Paused, last synced 1 min ago")
+        XCTAssertEqual(health(status("disabled", age: 7200)).menuLine, "Sync is off, last synced 2 hr ago")
+        XCTAssertEqual(health(status("failed", age: nil)).menuLine, "Needs attention")
+        XCTAssertEqual(health(nil).menuLine, "Checking…")
+        for state in ["ok", "paused", "disabled", "failed", "stopped"] {
+            XCTAssertFalse(health(status(state)).menuLine.contains("\n"), state)
+        }
+    }
+
     func testAgentSuccessNewerThanManualRunWins() {
         let result = health(status("ok", age: 5), run(secondsAgo: 300))
         XCTAssertEqual(result.headline, "Everything is in sync")

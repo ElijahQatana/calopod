@@ -16,8 +16,8 @@ struct CalopodMacApp: App {
     @State private var availability: AvailabilityModel
     @State private var reminders: ReminderScheduler
     @State private var refresh: OverviewRefresh
-    @State private var iPhoneFeed = IPhoneFeedModel()
-    @State private var navigation = AppNavigation()
+    @State private var iPhoneFeed: IPhoneFeedModel
+    @State private var navigation: AppNavigation
     @State private var sidebar = SidebarState()
 
     init() {
@@ -46,6 +46,13 @@ struct CalopodMacApp: App {
         _reminderSettings = State(initialValue: reminderSettings)
         _reminders = State(initialValue: reminders)
         _refresh = State(initialValue: OverviewRefresh(inbox: inbox, schedule: schedule, service: service, access: access))
+        let iPhoneFeed = IPhoneFeedModel()
+        _iPhoneFeed = State(initialValue: iPhoneFeed)
+        let navigation = AppNavigation()
+        _navigation = State(initialValue: navigation)
+        BackgroundRefresh.start(
+            inbox: inbox, schedule: schedule, iPhoneFeed: iPhoneFeed, permissions: permissions, reminders: reminders,
+            navigation: navigation)
         DockPresence.enter()
         AppConfiguration.apply()
         AppSettings.shared.applyAppearance()
@@ -55,6 +62,16 @@ struct CalopodMacApp: App {
     private func refreshAccess() {
         service.calendarAccess = setup.hasMacConnection
             ? access.state(lastSyncFailure: service.status?.failureCategory) : .unchecked
+    }
+
+    /// Hiding the item from Settings or by dragging it out of the menu bar both land here.
+    private var menuBarItemShown: Binding<Bool> {
+        Binding(
+            get: { AppSettings.shared.showsMenuBarItem },
+            set: { shown in
+                AppSettings.shared.setShowsMenuBarItem(shown)
+                if !shown { DockPresence.enter() }
+            })
     }
 
     var body: some Scene {
@@ -80,6 +97,7 @@ struct CalopodMacApp: App {
                 }
                 .onChange(of: permissions.notifications) { Task { await reminders.reconcile() } }
                 .dockPresence()
+                .registersWindowOpener()
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1140, height: 700)
@@ -91,7 +109,7 @@ struct CalopodMacApp: App {
             }
         }
 
-        MenuBarExtra {
+        MenuBarExtra(isInserted: menuBarItemShown) {
             MenuPopover(model: service, navigation: navigation, inbox: inbox, schedule: schedule)
         } label: {
             HStack(spacing: 3) {
@@ -102,28 +120,6 @@ struct CalopodMacApp: App {
             }
             .opacity(service.menuBarDimmed ? 0.5 : 1)
             .registersWindowOpener()
-            // Reads the local copy only, so the count stays current with the window closed.
-            .task {
-                var first = true
-                while !Task.isCancelled {
-                    await inbox.reload()
-                    await schedule.reload()
-                    await iPhoneFeed.tick()
-                    if first {
-                        first = false
-                        // A click on a reminder that launched the app waits for this first read.
-                        ReminderRouter.shared.attach { ReminderNavigation.open($0, schedule: schedule, navigation: navigation) }
-                    }
-                    try? await Task.sleep(for: .seconds(30))
-                }
-            }
-            // Reminders are checked again whenever the app comes forward.
-            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-                Task {
-                    await permissions.refreshNotifications()
-                    await reminders.reconcile()
-                }
-            }
         }
         .menuBarExtraStyle(.window)
     }

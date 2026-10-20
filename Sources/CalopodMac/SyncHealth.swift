@@ -36,6 +36,13 @@ struct SyncHealth: Equatable {
         }
     }
 
+    /// The one line in the menu bar window.
+    var menuLine: String {
+        let ago = lastSyncedAge.map { "last synced \(Format.ago($0))" }
+        if tone == .good { return ago.map { $0.prefix(1).uppercased() + $0.dropFirst() } ?? label }
+        return [label, ago].compactMap { $0 }.joined(separator: ", ")
+    }
+
     /// A good manual run keeps its own headline, but never reads as an all-clear while automatic sync is
     /// off, stopped, paused or failing: the icon turns to caution and a note says what is wrong. An
     /// automatic failure after the manual run still wins the headline.

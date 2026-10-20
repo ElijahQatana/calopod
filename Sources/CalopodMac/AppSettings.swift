@@ -71,6 +71,7 @@ final class AppSettings {
 
     static let appearanceKey = "calopod.appearance"
     static let windowStyleKey = "calopod.windowStyle"
+    static let menuBarItemKey = "calopod.showMenuBarItem"
     static let scaleKeys: [GlassLayer: String] = [
         .frame: "calopod.frameScale", .sidebar: "calopod.sidebarScale", .content: "calopod.contentScale",
     ]
@@ -80,6 +81,8 @@ final class AppSettings {
     private(set) var contentScale = GlassBase.defaultScale(.content)
     private(set) var appearance: AppearanceChoice
     private(set) var windowStyle: WindowStyle
+    /// On unless turned off. With it off the Dock icon stays, so the window can always be reopened.
+    private(set) var showsMenuBarItem: Bool
     /// The style the window was set up with. Changing it applies at the next launch.
     let launchWindowStyle: WindowStyle
 
@@ -91,6 +94,7 @@ final class AppSettings {
         let style = WindowStyle.parse(defaults.string(forKey: Self.windowStyleKey))
         windowStyle = style
         launchWindowStyle = style
+        showsMenuBarItem = defaults.object(forKey: Self.menuBarItemKey) as? Bool ?? true
         // Nothing is saved here, so an untouched default stays a default and can change later.
         for layer in [GlassLayer.frame, .sidebar, .content] { set(layer, Self.stored(defaults, layer), persist: false) }
     }
@@ -153,6 +157,11 @@ final class AppSettings {
     func setWindowStyle(_ style: WindowStyle) {
         windowStyle = WindowStyle.parse(style.rawValue)
         defaults.set(windowStyle.rawValue, forKey: Self.windowStyleKey)
+    }
+
+    func setShowsMenuBarItem(_ shown: Bool) {
+        showsMenuBarItem = shown
+        defaults.set(shown, forKey: Self.menuBarItemKey)
     }
 
     /// Solid fills when the system asks for less transparency or the style is Solid.
