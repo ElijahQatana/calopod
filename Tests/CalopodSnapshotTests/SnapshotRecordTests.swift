@@ -174,3 +174,15 @@ func anEventWithoutAJoinLinkStillDecodes() throws {
     decoder.dateDecodingStrategy = .iso8601
     #expect(try decoder.decode(CalendarEvent.self, from: Data(json.utf8)).joinURL == nil)
 }
+
+@Test
+func copyFlagIsOptional() throws {
+    func decode(_ json: String) throws -> CalendarEvent {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .secondsSince1970
+        return try decoder.decode(CalendarEvent.self, from: Data(json.utf8))
+    }
+    let older = try decode(#"{"id":"e","calendarID":"c","startsAt":0,"endsAt":60,"isAllDay":false,"response":"accepted"}"#)
+    #expect(!older.isCopy)
+    #expect(try decode(#"{"id":"e","calendarID":"c","startsAt":0,"endsAt":60,"isAllDay":false,"response":"accepted","copy":true}"#).isCopy)
+}
