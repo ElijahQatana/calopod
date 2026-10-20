@@ -140,10 +140,18 @@ final class ReminderDelegate: NSObject, UNUserNotificationCenterDelegate, @unche
         [.banner, .sound]
     }
 
-    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+    /// The completion handler form, finished on the main thread. UIKit asserts when an action that opens the
+    /// app completes anywhere else, which the async form did.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping @Sendable () -> Void
+    ) {
         let info = (response.notification.request.content.userInfo as? [String: String]) ?? [:]
-        guard let parsed = ReminderResponse.parse(actionIdentifier: response.actionIdentifier, info: info) else { return }
-        await MainActor.run { reminders?.receive(parsed) }
+        let parsed = ReminderResponse.parse(actionIdentifier: response.actionIdentifier, info: info)
+        DispatchQueue.main.async { [weak reminders] in
+            if let parsed { MainActor.assumeIsolated { reminders?.receive(parsed) } }
+            completionHandler()
+        }
     }
 }
 
