@@ -144,13 +144,20 @@ final class ReminderDelegate: NSObject, UNUserNotificationCenterDelegate, @unche
     /// app completes anywhere else, which the async form did.
     func userNotificationCenter(
         _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
-        withCompletionHandler completionHandler: @escaping @Sendable () -> Void
+        withCompletionHandler completionHandler: @escaping () -> Void
     ) {
+        receive(response, finishing: completionHandler)
+    }
+
+    private struct Completion: @unchecked Sendable { let finish: () -> Void }
+
+    private func receive(_ response: UNNotificationResponse, finishing handler: @escaping () -> Void) {
         let info = (response.notification.request.content.userInfo as? [String: String]) ?? [:]
         let parsed = ReminderResponse.parse(actionIdentifier: response.actionIdentifier, info: info)
+        let completion = Completion(finish: handler)
         DispatchQueue.main.async { [weak reminders] in
             if let parsed { MainActor.assumeIsolated { reminders?.receive(parsed) } }
-            completionHandler()
+            completion.finish()
         }
     }
 }
