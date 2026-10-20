@@ -14,7 +14,7 @@ func walReadersSeeCommittedStateDuringAWrite() async throws {
     #expect(try writer.read { try Int.fetchOne($0, sql: "PRAGMA busy_timeout") } == 2000)
     let entered = DispatchSemaphore(value: 0)
     let release = DispatchSemaphore(value: 0)
-    let task = Task.detached {
+    let task = startOnThread {
         try writer.write { db in
             try db.execute(sql: "INSERT INTO configurations VALUES (?, ?, ?)", arguments: ["pending", Date(), Date()])
             entered.signal()
@@ -29,7 +29,7 @@ func walReadersSeeCommittedStateDuringAWrite() async throws {
         try reader.write { try $0.execute(sql: "DELETE FROM configurations") }
     }
     release.signal()
-    try await task.value
+    try await task()
     #expect(try reader.read { try String.fetchAll($0, sql: "SELECT id FROM configurations") } == ["pending"])
 }
 
@@ -61,7 +61,7 @@ func busyTimeoutWaitsForAWriterAndRemainsBounded() async throws {
     let second = try CalopodDatabase(path: path)
     let entered = DispatchSemaphore(value: 0)
     let release = DispatchSemaphore(value: 0)
-    let writer = Task.detached {
+    let writer = startOnThread {
         try first.write { db in
             try db.execute(sql: "INSERT INTO configurations VALUES (?, ?, ?)", arguments: ["first", Date(), Date()])
             entered.signal()
@@ -79,7 +79,7 @@ func busyTimeoutWaitsForAWriterAndRemainsBounded() async throws {
     #expect(Date().timeIntervalSince(start) >= 1.8)
     #expect(Date().timeIntervalSince(start) < 10)
     release.signal()
-    try await writer.value
+    try await writer()
     try second.write { db in
         try db.execute(sql: "INSERT INTO configurations VALUES (?, ?, ?)", arguments: ["second", Date(), Date()])
     }
@@ -88,4 +88,25 @@ func busyTimeoutWaitsForAWriterAndRemainsBounded() async throws {
 
 private func waitForWriter(_ semaphore: DispatchSemaphore) -> Bool {
     semaphore.wait(timeout: .now() + 5) == .success
+}
+
+/// Runs blocking work on its own thread. A detached task that waits on a semaphore holds a thread from the
+/// small task pool, and on a runner with few cores the other tests can leave it no thread to start on.
+private func startOnThread(_ work: @escaping @Sendable () throws -> Void) -> @Sendable () async throws -> Void {
+    final class Outcome: @unchecked Sendable { var result: Result<Void, any Error>? }
+    let outcome = Outcome()
+    let finished = DispatchSemaphore(value: 0)
+    DispatchQueue.global().async {
+        outcome.result = Result { try work() }
+        finished.signal()
+    }
+    return {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global().async {
+                finished.wait()
+                continuation.resume()
+            }
+        }
+        try outcome.result?.get()
+    }
 }
