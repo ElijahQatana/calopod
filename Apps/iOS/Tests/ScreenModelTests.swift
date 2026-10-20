@@ -250,17 +250,30 @@ struct CalendarFilterTests {
 
     private func manyCalendars(roles: Bool) -> Snapshot { FixtureReader.manyCalendars(publishedAt: .now, now: .now, roles: roles) }
 
-    @Test func scopeSplitsSourcesAndDestinations() {
+    @Test func scopeFollowsTheMacRolesWithBothAndNeither() {
         let snapshot = manyCalendars(roles: true)
         let filter = CalendarFilter(defaults: defaults())
         #expect(filter.hiding(in: snapshot).isEmpty)
+        #expect(filter.count(in: snapshot) == (8, 8))
         filter.setScope(.destinations)
         #expect(filter.hiding(in: snapshot) == ["work", "personal", "family", "client", "studio", "travel"])
         #expect(filter.count(in: snapshot) == (2, 2))
         filter.setScope(.sources)
         filter.setShown(false, for: "work")
-        #expect(filter.hiding(in: snapshot) == ["main", "busy", "work"])
+        #expect(filter.hiding(in: snapshot) == ["busy", "travel", "work"])
         #expect(filter.count(in: snapshot) == (5, 6))
+    }
+
+    @Test func aFeedWithOnlyDestinationKeepsNonDestinationsAsSources() {
+        var snapshot = manyCalendars(roles: true)
+        snapshot.calendars = snapshot.calendars.map {
+            CalendarEntry(id: $0.id, name: $0.name, colorIndex: $0.colorIndex, color: $0.color, destination: $0.destination)
+        }
+        let filter = CalendarFilter(defaults: defaults())
+        filter.setScope(.sources)
+        #expect(filter.hiding(in: snapshot) == ["main", "busy"])
+        filter.setScope(.destinations)
+        #expect(filter.count(in: snapshot) == (2, 2))
     }
 
     @Test func olderMacSendsNoRolesSoEverythingStaysAndTheHideListWorks() {

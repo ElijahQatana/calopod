@@ -57,11 +57,16 @@ final class CalendarFilter {
 }
 
 extension CalendarFilter {
-    /// Whether the Mac said which calendars are destinations. A feed from an older Mac does not,
-    /// and then every calendar counts as a source and there is nothing to pick between.
+    /// Whether the Mac said which calendars play which part. A feed from an older Mac does not,
+    /// and then there is nothing to pick between.
     static func knowsRoles(in snapshot: Snapshot) -> Bool {
-        snapshot.calendars.contains { $0.destination != nil }
+        snapshot.calendars.contains { $0.destination != nil || $0.source != nil }
     }
+
+    /// As on the Mac, a calendar can be a source, a destination, both or neither. A Mac that sends only
+    /// `destination` counts every other calendar as a source.
+    static func isSource(_ calendar: CalendarEntry) -> Bool { calendar.source ?? (calendar.destination != true) }
+    static func isDestination(_ calendar: CalendarEntry) -> Bool { calendar.destination == true }
 
     /// The scope in use: what was picked, or All when the Mac does not send roles.
     func scope(in snapshot: Snapshot) -> Scope { Self.knowsRoles(in: snapshot) ? scope : .all }
@@ -75,8 +80,8 @@ extension CalendarFilter {
     func inScope(_ calendar: CalendarEntry, in snapshot: Snapshot) -> Bool {
         switch scope(in: snapshot) {
         case .all: true
-        case .sources: calendar.destination != true
-        case .destinations: calendar.destination == true
+        case .sources: Self.isSource(calendar)
+        case .destinations: Self.isDestination(calendar)
         }
     }
 

@@ -242,7 +242,8 @@ private struct StackedDots: View {
     }
 }
 
-/// Every calendar the Mac sent events for with a switch, sources first and then destinations.
+/// Every calendar the Mac sent events for with a switch: sources, destinations, then any no rule uses.
+/// One that is both is in both groups.
 private struct CalendarList: View {
     var snapshot: Snapshot
     var filter: CalendarFilter
@@ -251,17 +252,22 @@ private struct CalendarList: View {
     var body: some View {
         let listed = CalendarFilter.listed(in: snapshot)
         let split = CalendarFilter.knowsRoles(in: snapshot)
-        let sources = listed.filter { $0.destination != true }
-        let destinations = listed.filter { $0.destination == true }
+        let sources = listed.filter(CalendarFilter.isSource)
+        let destinations = listed.filter(CalendarFilter.isDestination)
+        let others = listed.filter { !CalendarFilter.isSource($0) && !CalendarFilter.isDestination($0) }
         VStack(spacing: 0) {
             Text("Show calendars").font(Theme.Fonts.heading).padding(.top, 22).padding(.bottom, 8)
             ScrollView {
                 VStack(alignment: .leading, spacing: 6) {
                     if split { SectionLabel(text: "Sources") }
-                    group(sources)
+                    if !sources.isEmpty { group(sources) }
                     if split && !destinations.isEmpty {
                         SectionLabel(text: "Destinations").padding(.top, 8)
                         group(destinations)
+                    }
+                    if split && !others.isEmpty {
+                        SectionLabel(text: "Not used by a rule").padding(.top, 8)
+                        group(others)
                     }
                     Text("Hiding a calendar only changes this screen. The free and busy totals count all of them.")
                         .font(Theme.Fonts.secondary).foregroundStyle(Theme.faint).padding(.horizontal, 4).padding(.top, 8)
