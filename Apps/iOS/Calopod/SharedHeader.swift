@@ -95,19 +95,17 @@ struct SharedHeader: View {
     }
 }
 
-/// A screen: the shared header, an optional row pinned under it, then a scrolling body on the page color.
-struct Screen<Pinned: View, Content: View>: View {
+/// A screen: the shared header, then a scrolling body on the page color.
+struct Screen<Content: View>: View {
     var title: String
     var subtitle: String
     var back: BackAction?
-    @ViewBuilder var pinned: Pinned
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(spacing: 0) {
             SharedHeader(title: title, subtitle: subtitle, back: back)
                 .zIndex(1)
-            pinned
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) { content }
                     .padding(.horizontal, Theme.sidePadding)
@@ -115,12 +113,6 @@ struct Screen<Pinned: View, Content: View>: View {
             }
         }
         .background(Theme.screen.ignoresSafeArea())
-    }
-}
-
-extension Screen where Pinned == EmptyView {
-    init(title: String, subtitle: String, back: BackAction? = nil, @ViewBuilder content: () -> Content) {
-        self.init(title: title, subtitle: subtitle, back: back, pinned: { EmptyView() }, content: content)
     }
 }
 

@@ -2,7 +2,8 @@ import CalopodDomain
 import Foundation
 
 /// One event on a chosen calendar. A private event arrives without its title and location. There are
-/// no notes or people. The meeting link is only sent for an event that can get a reminder.
+/// no notes or people. The meeting link is only sent for an event that can get a reminder. A copy keeps
+/// the original's time, carries its title only when the arm copies full details, and has no link.
 public struct CalendarEvent: Codable, Equatable, Sendable {
     /// The event's source key hash, stable across publishes.
     public let id: String
@@ -15,11 +16,15 @@ public struct CalendarEvent: Codable, Equatable, Sendable {
     public let response: EventResponseState
     /// The Teams, Zoom, Meet or Webex link, for the Join button on a reminder.
     public let joinURL: String?
+    /// True for a copy Calopod wrote into a destination calendar. Absent from a Mac that does not send copies.
+    public let copy: Bool?
+
+    public var isCopy: Bool { copy == true }
 
     public init(
         id: String, calendarID: String, title: String?, startsAt: Date, endsAt: Date,
         isAllDay: Bool = false, location: String? = nil, response: EventResponseState,
-        joinURL: String? = nil
+        joinURL: String? = nil, copy: Bool? = nil
     ) {
         self.id = id
         self.calendarID = calendarID
@@ -30,6 +35,7 @@ public struct CalendarEvent: Codable, Equatable, Sendable {
         self.location = location
         self.response = response
         self.joinURL = joinURL
+        self.copy = copy
     }
 }
 

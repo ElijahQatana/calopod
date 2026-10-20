@@ -84,9 +84,24 @@ struct IPhoneFeedTests {
 
         let list = try #require(records.first { $0.kind == .calendars })
         #expect(try SnapshotCoding.decode(CalendarList.self, from: list.bytes).record.calendars
-            == [CalendarEntry(id: "cal", name: "Work", colorIndex: 11, color: "gray")])
+            == [CalendarEntry(id: "cal", name: "Work", colorIndex: 11, color: "gray", destination: false)])
         let status = try #require(records.first { $0.kind == .syncStatus })
         #expect(try SnapshotCoding.decode(SyncStatus.self, from: status.bytes).record.lastSyncAt == now)
+    }
+
+    @Test("Calendars say whether an active arm writes into them")
+    func destinationFlag() throws {
+        let state = try fixture()
+        func flags() throws -> [Bool?] {
+            let records = try IPhoneFeedBuilder.records(repository: state, now: now, calendar: Calendar(identifier: .gregorian))
+            let list = try #require(records.first { $0.kind == .calendars })
+            return try SnapshotCoding.decode(CalendarList.self, from: list.bytes).record.calendars.map(\.destination)
+        }
+        let arm = StoredArm(id: "arm", configurationID: "config", sourceBindingIDs: ["cal"], targetBindingID: "cal", ruleMode: .busy)
+        try state.saveArm(arm)
+        #expect(try flags() == [true])
+        _ = try state.setArmEnabled(id: "arm", isEnabled: false)
+        #expect(try flags() == [false])
     }
 
     @Test("Status carries the latest 24 runs, oldest first, failures included")
@@ -189,6 +204,41 @@ struct IPhoneFeedTests {
 
         try state.setCalendarIgnored(true, calendarID: "cal")
         #expect(!(try kinds()).contains(.calendarDay))
+    }
+
+    @Test("Copies go out on chosen destinations only, titled only for full details and never for a private original")
+    func publishesCopies() throws {
+        let zoom = "https://example.zoom.us/j/123456789"
+        let state = try fixture(extra: [event("j", hour: 3, isPrivate: false, url: zoom)])
+        try state.replaceCalendarBindings(connectionID: "c", bindings: ["cal", "busy", "main"].map {
+            StoredCalendarBinding(
+                id: $0, connectionID: "c", providerCalendarID: $0, displayLabel: $0, isSelected: true, isReadOnly: false,
+                responseIdentityScope: .authenticatedUser)
+        })
+        for (arm, target, mode) in [("a1", "busy", ArmRuleMode.busy), ("a2", "main", .fullDetails)] {
+            try state.saveArm(StoredArm(id: arm, configurationID: "config", sourceBindingIDs: ["cal"], targetBindingID: target, ruleMode: mode))
+            for key in ["a", "b", "j"] {
+                try state.saveMirrorMapping(StoredMirrorMapping(
+                    mirrorKey: "\(arm)\(key)", armID: arm, sourceKeyHash: key, providerEventID: "\(arm)\(key)", providerVersion: nil,
+                    desiredFingerprint: "f", ownershipKeyID: "k", updatedAt: now))
+            }
+        }
+        func copies() throws -> [String: CalendarEvent] {
+            try IPhoneFeedBuilder.records(repository: state, now: now, calendar: Calendar(identifier: .gregorian))
+                .filter { $0.kind == .calendarDay }
+                .flatMap { try SnapshotCoding.decode(CalendarDay.self, from: $0.bytes).record.events }
+                .filter(\.isCopy).reduce(into: [:]) { $0[$1.id] = $1 }
+        }
+        try state.setIPhoneCalendar("cal", chosen: true)
+        #expect(try copies().isEmpty)
+        try state.setIPhoneCalendar("main", chosen: true)
+        var found = try copies()
+        #expect(Set(found.keys) == ["copy:main:a", "copy:main:b", "copy:main:j"])
+        #expect(found["copy:main:a"]?.title == "Title a" && found["copy:main:a"]?.calendarID == "main")
+        #expect(found["copy:main:b"]?.title == nil && found["copy:main:j"]?.joinURL == nil)
+        try state.setIPhoneCalendar("busy", chosen: true)
+        found = try copies()
+        #expect(found.count == 6 && found["copy:busy:a"]?.title == nil)
     }
 
     @Test("Only events that can get a reminder carry a join link, and the Mac's reminder settings go along")

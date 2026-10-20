@@ -8,6 +8,8 @@ struct FixtureReader: SnapshotReader {
         case fresh, stale, noCalendars, sharingOff, nothingPublished, offline
         /// A week around a spring clock change in London, and a feed from a Mac that sends busy time only.
         case clockChange, oldMac
+        /// Eight calendars, two of them destinations, and the same feed from a Mac that does not say which.
+        case manyCalendars, manyOldMac
         /// The last sync did not finish.
         case syncFailed
     }
@@ -43,6 +45,8 @@ struct FixtureReader: SnapshotReader {
                 }
                 return snapshot
             }())
+        case .manyCalendars: .snapshot(Self.manyCalendars(publishedAt: now.addingTimeInterval(-420), now: now, roles: true))
+        case .manyOldMac: .snapshot(Self.manyCalendars(publishedAt: now.addingTimeInterval(-420), now: now, roles: false))
         case .syncFailed:
             .snapshot({
                 var snapshot = Self.snapshot(publishedAt: now.addingTimeInterval(-420), now: now)
@@ -150,6 +154,44 @@ struct FixtureReader: SnapshotReader {
                 }))
     }
 
+    /// The usual day plus Studio and Travel events, and two destinations: Main, which holds
+    /// an event of its own, and Busy, plus Calopod's copies on both.
+    static func manyCalendars(publishedAt: Date, now: Date, roles: Bool) -> Snapshot {
+        var snapshot = Self.snapshot(publishedAt: publishedAt, now: now)
+        let calendar = Calendar.current
+        func at(_ hour: Int, _ minute: Int = 0) -> Date {
+            calendar.date(bySettingHour: hour, minute: minute, second: 0, of: calendar.startOfDay(for: now))!
+        }
+        let extra = [
+            event("m1", "studio", "Studio time", at(10), at(11, 30)),
+            event("m2", "travel", "Train to Leeds", at(7, 30), at(9)),
+            event("m4", "main", "Dentist", at(11, 30), at(12, 15)),
+            copy("m5", "busy", nil, at(7, 30), at(9)),
+            copy("m6", "busy", nil, at(9), at(9, 30)),
+            copy("m7", "busy", nil, at(13, 30), at(15)),
+            copy("m8", "main", "Studio time", at(10), at(11, 30)),
+            copy("m9", "main", "Team standup", at(9), at(9, 30)),
+        ]
+        let today = calendar.dateComponents([.year, .month, .day], from: now)
+        let key = String(format: "%04d-%02d-%02d", today.year!, today.month!, today.day!)
+        if let index = snapshot.days.firstIndex(where: { $0.day == key }) {
+            let day = snapshot.days[index]
+            snapshot.days[index] = CalendarDay(day: day.day, timeZoneIdentifier: day.timeZoneIdentifier, events: day.events + extra)
+        }
+        let destinations: Set<String> = ["main", "busy"]
+        let all = [
+            ("work", "Work", "blue"), ("personal", "Personal", "green"), ("family", "Family", "orange"),
+            ("client", "Client", "indigo"), ("studio", "Studio", "amber"), ("travel", "Travel", "red"),
+            ("main", "Main", "pink"), ("busy", "Busy", "gray"),
+        ]
+        snapshot.calendars = all.map { id, name, color in
+            CalendarEntry(
+                id: id, name: name, colorIndex: CalendarPalette.entries.firstIndex { $0.id == color } ?? 0, color: color,
+                destination: roles ? destinations.contains(id) : nil)
+        }
+        return snapshot
+    }
+
     /// The Sunday is the night the clocks go forward, so the day is 23 hours long and 00:00 to 09:00 is
     /// 8 real hours. The ranges are real dates, as the Mac sends them.
     private static let clockChangeWeek: [AvailabilityDay] = {
@@ -172,6 +214,10 @@ struct FixtureReader: SnapshotReader {
                 free: [span(29, 8, 9), span(29, 12, 16)], overlaps: 0, status: .tight),
         ]
     }()
+
+    private static func copy(_ id: String, _ calendarID: String, _ title: String?, _ start: Date, _ end: Date) -> CalendarEvent {
+        CalendarEvent(id: "copy:\(calendarID):\(id)", calendarID: calendarID, title: title, startsAt: start, endsAt: end, response: .unknown, copy: true)
+    }
 
     private static func event(
         _ id: String, _ calendarID: String, _ title: String?, _ start: Date, _ end: Date,

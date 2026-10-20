@@ -22,9 +22,10 @@ struct DayEvents: Equatable {
     /// Shortest stretch a block takes, so a zero-length event is still there to tap.
     static let shortest: TimeInterval = 15 * 60
 
-    /// Events of calendars in `hidden` are left out. An event that crosses midnight is cut to the day.
-    static func make(from record: CalendarDay?, hidden: Set<String>, in day: DaySchedule) -> DayEvents {
-        let events = (record?.events ?? []).filter { !hidden.contains($0.calendarID) }
+    /// Events of calendars in `hidden` are left out, and Calopod's copies unless `copies` is set. An event
+    /// that crosses midnight is cut to the day.
+    static func make(from record: CalendarDay?, hidden: Set<String>, copies: Bool = true, in day: DaySchedule) -> DayEvents {
+        let events = (record?.events ?? []).filter { !hidden.contains($0.calendarID) && (copies || !$0.isCopy) }
         let timed: [EventBlock] = events.filter { !$0.isAllDay }.compactMap { event in
             let end = max(event.endsAt, event.startsAt.addingTimeInterval(shortest))
             guard let part = DateInterval(start: event.startsAt, end: end).intersection(with: day.interval) else { return nil }

@@ -34,7 +34,7 @@ The app icon is `Support/EventKitHost/Calopod.icon`, the same file the Mac app u
 
 ## Fixture data
 
-Launch with `-fixture fresh`, `stale`, `noCalendars` (busy time but no calendar chosen), `sharingOff`, `nothingPublished` or `offline` to use synthetic data with no iCloud. Add `-fixtureNotifications denied` or `notDetermined` to see the other notification states, and `-appearance dark` to start in dark.
+Launch with `-fixture fresh`, `stale`, `noCalendars` (busy time but no calendar chosen), `sharingOff`, `nothingPublished`, `offline`, `manyCalendars` (eight calendars, two of them destinations) or `manyOldMac` (the same from a Mac that does not say which are destinations) to use synthetic data with no iCloud. Add `-fixtureNotifications denied` or `notDetermined` to see the other notification states, and `-appearance dark` to start in dark.
 
 ## Tests
 

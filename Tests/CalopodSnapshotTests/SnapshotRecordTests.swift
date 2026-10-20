@@ -133,8 +133,9 @@ func colorIdIsOptionalAndWinsOverTheIndex() throws {
     let newer = try decode(#"{"id":"c","name":"Work","colorIndex":3,"color":"amber"}"#)
     #expect(newer.paletteEntry.id == "amber")
     #expect(try decode(#"{"id":"c","name":"Work","colorIndex":3,"color":"mauve"}"#).paletteEntry.id == "gray")
-    let sent = CalendarEntry(id: "c", name: "Work", colorIndex: 4, color: "red")
+    let sent = CalendarEntry(id: "c", name: "Work", colorIndex: 4, color: "red", destination: true)
     #expect(try decode(String(decoding: JSONEncoder().encode(sent), as: UTF8.self)) == sent)
+    #expect(older.destination == nil)
 }
 
 @Test
@@ -172,4 +173,16 @@ func anEventWithoutAJoinLinkStillDecodes() throws {
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
     #expect(try decoder.decode(CalendarEvent.self, from: Data(json.utf8)).joinURL == nil)
+}
+
+@Test
+func copyFlagIsOptional() throws {
+    func decode(_ json: String) throws -> CalendarEvent {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .secondsSince1970
+        return try decoder.decode(CalendarEvent.self, from: Data(json.utf8))
+    }
+    let older = try decode(#"{"id":"e","calendarID":"c","startsAt":0,"endsAt":60,"isAllDay":false,"response":"accepted"}"#)
+    #expect(!older.isCopy)
+    #expect(try decode(#"{"id":"e","calendarID":"c","startsAt":0,"endsAt":60,"isAllDay":false,"response":"accepted","copy":true}"#).isCopy)
 }

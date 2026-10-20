@@ -35,7 +35,7 @@ enum ReminderPlan {
         let names = Dictionary(snapshot.calendars.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
         // An event that runs past midnight is listed on each day it touches.
         var seen = Set<String>()
-        let events = snapshot.days.flatMap(\.events).filter { seen.insert($0.id).inserted }
+        let events = snapshot.days.flatMap(\.events).filter { !$0.isCopy && seen.insert($0.id).inserted }
         var planned: [PlannedReminder] = []
         for event in events where event.startsAt > now
             && ReminderEligibility.isEligible(isAllDay: event.isAllDay, isDeclined: event.response == .declined) {

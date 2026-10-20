@@ -134,6 +134,7 @@ enum IPhoneFeedBuilder {
         let chosen = try repository.iPhoneCalendarIDs().intersection(shown)
         guard !chosen.isEmpty else { return [] }
         let events = snapshot.events.filter { $0.isPresenceConfirmed && chosen.contains($0.event.calendarBindingID) }.map(\.event)
+        let copies = copies(snapshot, repository: repository, chosen: chosen)
         let format = DateFormatter()
         format.locale = Locale(identifier: "en_US_POSIX")
         format.timeZone = calendar.timeZone
@@ -143,8 +144,29 @@ enum IPhoneFeedBuilder {
             guard let start = calendar.date(byAdding: .day, value: offset, to: first),
                   let next = calendar.date(byAdding: .day, value: 1, to: start) else { return nil }
             let today = events.filter { $0.endsAt > start && $0.startsAt < next }.map { calendarEvent($0, now: now) }
+                + copies.filter { $0.endsAt > start && $0.startsAt < next }
             return today.isEmpty ? nil : CalendarDay(
                 day: format.string(from: start), timeZoneIdentifier: calendar.timeZone.identifier, events: today)
+        }
+    }
+
+    /// Calopod's copies on the chosen destination calendars, drawn at the original's time as the Mac does. The
+    /// original does not have to be on a shared calendar. A private original gives a copy with no title.
+    private static func copies(
+        _ snapshot: InboxContextSnapshot, repository: LocalStateRepository, chosen: Set<String>
+    ) -> [CalendarEvent] {
+        guard let targets = try? CopyTarget.bySource(repository, arms: repository.arms()) else { return [] }
+        var seen = Set<String>()
+        return snapshot.events.filter(\.isPresenceConfirmed).flatMap { item -> [CalendarEvent] in
+            let event = item.event
+            return (targets[event.sourceKeyHash] ?? []).compactMap { target in
+                let id = "copy:\(target.bindingID):\(event.sourceKeyHash)"
+                guard chosen.contains(target.bindingID), target.bindingID != event.calendarBindingID, seen.insert(id).inserted
+                else { return nil }
+                return CalendarEvent(
+                    id: id, calendarID: target.bindingID, title: target.fullDetails && !event.isPrivate ? event.title : nil,
+                    startsAt: event.startsAt, endsAt: event.endsAt, isAllDay: event.isAllDay, response: .unknown, copy: true)
+            }
         }
     }
 
@@ -169,12 +191,14 @@ enum IPhoneFeedBuilder {
 
     static func calendars(_ snapshot: InboxContextSnapshot, repository: LocalStateRepository) -> CalendarList {
         let names = CalendarNames(repository)
+        let destinations = (try? repository.arms()).map { CalendarRoles(arms: $0).destinations }
         return CalendarList(calendars: snapshot.sources.filter { !names.isIgnored($0.bindingID) }.map { source in
             let color = names.preferences[source.bindingID]?.color.flatMap(CalendarPalette.entry(id:)) ?? CalendarPalette.neutral
             return CalendarEntry(
                 id: source.bindingID,
                 name: names.shown(source.bindingID, real: source.calendarLabel) ?? source.connectionLabel ?? "Calendar",
-                colorIndex: CalendarPalette.entries.firstIndex(of: color) ?? 0, color: color.id)
+                colorIndex: CalendarPalette.entries.firstIndex(of: color) ?? 0, color: color.id,
+                destination: destinations?.contains(source.bindingID))
         })
     }
 
