@@ -2,6 +2,7 @@ import CalopodDomain
 import CalopodSnapshot
 import Foundation
 import Testing
+import UserNotifications
 
 @testable import Calopod
 
@@ -178,5 +179,47 @@ struct RemindersTests {
         let model = reminders(center)
         await model.update(for: .content(snapshot([event("a", in: 3)]), offline: false))
         #expect(await center.pending.isEmpty && model.permission == .denied)
+    }
+}
+
+/// UserNotifications won't build these, so make empty ones the way Objective-C would.
+private func made<T: NSObject>(_ type: T.Type) -> T {
+    unsafeDowncast(type.perform(NSSelectorFromString("new")).takeUnretainedValue(), to: type)
+}
+
+private final class OpenResponse: UNNotificationResponse {
+    override var actionIdentifier: String { ReminderResponse.openAction }
+    override var notification: UNNotification { OpenNotification.new() }
+}
+
+private final class OpenNotification: UNNotification {
+    static func new() -> UNNotification {
+        made(OpenNotification.self)
+    }
+    override var request: UNNotificationRequest {
+        let content = UNMutableNotificationContent()
+        content.userInfo = [ReminderResponse.eventKey: "a"]
+        return UNNotificationRequest(identifier: "x", content: content, trigger: nil)
+    }
+}
+
+@MainActor
+struct ReminderDelegateTests {
+    /// Finishing an Open action anywhere but the main thread makes UIKit assert and the app crash.
+    @Test func finishesAnActionOnTheMainThread() async {
+        let reminders = Reminders(center: nil, defaults: UserDefaults(suiteName: "ReminderDelegateTests")!)
+        let delegate = ReminderDelegate(reminders)
+        nonisolated(unsafe) let response = made(OpenResponse.self)
+        let onMain = await withCheckedContinuation { continuation in
+            DispatchQueue.global().async {
+                let finish: @convention(block) () -> Void = { continuation.resume(returning: Thread.isMainThread) }
+                typealias Entry = @convention(c) (AnyObject, Selector, AnyObject, AnyObject, Any) -> Void
+                let selector = NSSelectorFromString("userNotificationCenter:didReceiveNotificationResponse:withCompletionHandler:")
+                let entry = unsafeBitCast(delegate.method(for: selector), to: Entry.self)
+                entry(delegate, selector, UNUserNotificationCenter.current(), response, finish)
+            }
+        }
+        #expect(onMain)
+        #expect(reminders.requestedEvent == "a")
     }
 }
