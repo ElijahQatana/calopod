@@ -36,6 +36,14 @@ struct SyncHealth: Equatable {
         }
     }
 
+    /// The one line in the menu bar window. Short enough to fit without cutting off the time.
+    var menuLine: String {
+        // Nothing syncs without access, so the time would only crowd the line.
+        if label == "Needs Calendar access" { return "No Calendar access" }
+        guard let age = lastSyncedAge.map(Format.ago) else { return label }
+        return tone == .good ? "Last synced \(age)" : "\(label) · \(age)"
+    }
+
     /// A good manual run keeps its own headline, but never reads as an all-clear while automatic sync is
     /// off, stopped, paused or failing: the icon turns to caution and a note says what is wrong. An
     /// automatic failure after the manual run still wins the headline.

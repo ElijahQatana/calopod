@@ -1,4 +1,5 @@
 @testable import CalopodCommands
+import AppKit
 import XCTest
 
 @testable import CalopodMac
@@ -79,6 +80,49 @@ final class SyncHealthTests: XCTestCase {
         }
         let granted = SyncHealth.make(status: status("ok"), statusAt: now, run: nil, access: .granted, now: now)
         XCTAssertEqual(granted.tone, .good)
+    }
+
+    func testMenuLineWording() {
+        XCTAssertEqual(health(status("ok", age: 90)).menuLine, "Last synced 1 min ago")
+        XCTAssertEqual(health(status("paused", age: 90)).menuLine, "Paused · 1 min ago")
+        XCTAssertEqual(health(status("disabled", age: 7200)).menuLine, "Sync is off · 2 hr ago")
+        XCTAssertEqual(health(status("failed", age: 3000)).menuLine, "Needs attention · 50 min ago")
+        XCTAssertEqual(health(status("failed", age: nil)).menuLine, "Needs attention")
+        XCTAssertEqual(health(nil).menuLine, "Checking…")
+        XCTAssertEqual(SyncHealth.make(status: status("ok"), statusAt: now, run: nil, access: .blocked, now: now).menuLine, "No Calendar access")
+    }
+
+    /// The widest row of buttons: Preview sync, Enable and Resume, small controls with padding for each.
+    @MainActor
+    func testSyncButtonsFitOneRow() {
+        let font = NSFont.systemFont(ofSize: 13, weight: .semibold)
+        let labels = ["Preview sync", "Enable", "Resume"]
+        let width = labels.map { ($0 as NSString).size(withAttributes: [.font: font]).width + 20 }.reduce(0, +) + 12
+        XCTAssertLessThanOrEqual(width, MenuPopover.width - 2 * MenuPopover.inset - 8 - 24)
+    }
+
+    func testMenuLineFitsTheWindowForEveryStateAndLongTime() {
+        let font = NSFont.systemFont(ofSize: 15, weight: .medium)
+        let ages = [nil, 0, 59, 3000, 3 * 3600, 23 * 3600 + 3599, 86400, 99 * 86400, 365 * 86400]
+        var lines: [(String, SyncHealth)] = []
+        for state in ["ok", "paused", "disabled", "failed", "stopped"] {
+            for age in ages { lines.append((state, health(status(state, age: age)))) }
+        }
+        lines.append(("unchecked", health(nil)))
+        lines.append(("not-installed", health(AgentControlStatus(
+            state: "not-installed", message: "", installed: false, enabled: false, paused: false, running: false,
+            intervalSeconds: nil, lastSuccessAgeSeconds: nil, failureCategory: nil, failureAgeSeconds: nil,
+            usesBundledService: false, sourceLoaded: false))))
+        for access in [CalendarAccessState.blocked, .canAsk] {
+            for age in ages {
+                lines.append(("access", SyncHealth.make(status: status("ok", age: age), statusAt: now, run: nil, access: access, now: now)))
+            }
+        }
+        let limit = MenuPopover.statusTextWidth * 0.95
+        for (state, line) in lines {
+            let width = (line.menuLine as NSString).size(withAttributes: [.font: font]).width
+            XCTAssertLessThanOrEqual(width, limit, "\(state): \(line.menuLine)")
+        }
     }
 
     func testAgentSuccessNewerThanManualRunWins() {

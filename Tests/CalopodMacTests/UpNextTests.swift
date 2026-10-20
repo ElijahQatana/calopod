@@ -50,10 +50,10 @@ final class UpNextTests: XCTestCase {
         let schedule = CalendarSchedule(calendars: [], events: [answered("run", at: -6, .accepted), answered("next", at: 40, .accepted)])
         let early = UpNext.next(in: schedule, now: noon.addingTimeInterval(-60))
         XCTAssertEqual(NextCardText.label(for: early.primary!, now: noon), "Now, 6 min in")
-        XCTAssertTrue(NextCardText.secondary(early.secondary!, also: []).hasPrefix("Next: next at "))
+        XCTAssertEqual(NextCardText.line(for: early.primary!, now: noon), "Now: run")
         let late = UpNext.next(in: schedule, now: noon.addingTimeInterval(5 * 60))
         XCTAssertEqual(NextCardText.label(for: late.primary!, now: noon.addingTimeInterval(5 * 60)), "Next, in 35 min")
-        XCTAssertTrue(NextCardText.secondary(late.secondary!, also: []).hasPrefix("In run until "))
+        XCTAssertEqual(NextCardText.line(for: late.primary!, now: noon.addingTimeInterval(5 * 60)), "Next, in 35 min: next")
     }
 
     func testTodayStopsAtMidnight() {

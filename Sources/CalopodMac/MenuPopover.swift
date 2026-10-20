@@ -14,50 +14,44 @@ struct MenuPopover: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismiss) private var dismiss
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
-                Circle().fill(model.syncHealth.color).frame(width: 10, height: 10)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(model.syncHealth.label).font(Theme.Fonts.bodySemibold)
-                    if let age = model.syncHealth.lastSyncedAge {
-                        Text("Last synced \(Format.ago(age))").font(Theme.Fonts.secondary).foregroundStyle(.secondary)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(12)
-            .background(Self.card)
-            if let busy = model.busyAction { BusyLine(text: busy) }
-            if let notice = model.notice { Text(notice).font(Theme.Fonts.secondary).foregroundStyle(Theme.badText) }
+    nonisolated static let width: CGFloat = 300
+    /// The even gap between the window edge and the panel on all four sides. The panel's corner
+    /// radius less its own 4 pt padding is the rows' highlight radius, so the corners nest.
+    nonisolated static let inset: CGFloat = 6
+    private static var panel: RoundedRectangle { RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous) }
+    /// What a row's text can use: the window minus the insets, the row padding, the light and its gap.
+    nonisolated static let statusTextWidth = width - 2 * inset - 8 - 24 - 8 - 8
 
-            if let next = nextChoice.primary { nextCard(next, secondary: nextChoice.secondary, also: nextChoice.alsoRunning) }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            statusLine
+            if let busy = model.busyAction { BusyLine(text: busy).padding(.horizontal, 12) }
+            if let notice = model.notice {
+                Text(notice).font(Theme.Fonts.secondary).foregroundStyle(Theme.badText).padding(.horizontal, 12)
+            }
+            if let next = nextChoice.primary { nextLine(next) }
             if let joinNotice { Banner(kind: .error, text: joinNotice, onDismiss: { self.joinNotice = nil }) }
-            if inbox.waiting > 0 { waitingCard }
             if !stale.isEmpty {
                 Label("\(stale.joined(separator: ", ")) is out of date", systemImage: "exclamationmark.triangle.fill")
                     .font(Theme.Fonts.secondary).foregroundStyle(Theme.cautionText, .secondary)
+                    .lineLimit(1).padding(.horizontal, 12)
             }
 
-            if let status = model.status, status.installed {
-                MenuSyncControls(
-                    rule: model.previewRule, busy: model.isBusy, offersEnable: model.syncHealth.offersEnable,
-                    pausable: status.enabled ? status.paused : nil,
-                    preview: { open(.overview, keepMenu: true); Task { await model.previewSync() } },
-                    enable: { Task { await model.setEnabled(true) } },
-                    togglePause: { Task { await model.setPaused(!status.paused) } })
-            }
+            if let status = model.status, status.installed { syncControls(status) }
 
-            VStack(spacing: 2) {
-                row("Open Calopod", "macwindow", count: nil) { open(.overview) }
+            VStack(spacing: 0) {
+                row("Open Calopod", "macwindow") { open(.overview) }
                 row("Calendar", "calendar.day.timeline.left", count: todayCount) { open(.calendar) }
                 row("Inbox", "tray", count: inbox.count) { openInbox(.all) }
-                row("Quit Calopod", "power", count: nil, tint: .secondary) { NSApplication.shared.terminate(nil) }
+                row("Quit Calopod", "power", tint: .secondary) { NSApplication.shared.terminate(nil) }
                     .keyboardShortcut("q")
             }
         }
-        .padding(14)
-        .frame(width: 320)
+        .padding(4)
+        .background(Self.panel.fill(Theme.innerFill))
+        .overlay(Self.panel.strokeBorder(Theme.paneLine, lineWidth: 1))
+        .padding(Self.inset)
+        .frame(width: Self.width)
         .appTypography()
         // Sleeps until the next moment the choice can change, and recomputes when the schedule reloads.
         .task(id: schedule.schedule) {
@@ -69,41 +63,49 @@ struct MenuPopover: View {
         }
     }
 
-    private static let isIgnored: (String) -> Bool = { CalendarAliases.shared.isIgnored($0) }
-
-    fileprivate static var card: some View {
-        RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous).fill(Theme.innerFill)
-            .overlay(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous).strokeBorder(Theme.paneLine, lineWidth: 1))
+    private func syncControls(_ status: AgentControlStatus) -> some View {
+        MenuSyncControls(
+            rule: model.previewRule, busy: model.isBusy, offersEnable: model.syncHealth.offersEnable,
+            pausable: status.enabled ? status.paused : nil,
+            preview: { open(.overview, keepMenu: true); Task { await model.previewSync() } },
+            enable: { Task { await model.setEnabled(true) } },
+            togglePause: { Task { await model.setPaused(!status.paused) } })
     }
 
-    private var nextChoice: UpNext.Next { UpNext.next(in: schedule.schedule, now: now, ignored: Self.isIgnored) }
     private var todayCount: Int? {
         schedule.schedule == nil ? nil : UpNext.today(in: schedule.schedule, now: now, ignored: Self.isIgnored).count
     }
+
+    private var statusLine: some View {
+        StatusLine(color: model.syncHealth.color, text: model.syncHealth.menuLine)
+    }
+
+    private static let isIgnored: (String) -> Bool = { CalendarAliases.shared.isIgnored($0) }
+
+    private var nextChoice: UpNext.Next { UpNext.next(in: schedule.schedule, now: now, ignored: Self.isIgnored) }
     private var stale: [String] { UpNext.staleToday(
         in: schedule.schedule, ignored: { CalendarAliases.shared.isIgnored($0.id) },
         name: { CalendarAliases.shared.name(for: $0.id, real: $0.name) }) }
 
-    private func nextCard(_ primary: UpNext.Next.Line, secondary: UpNext.Next.Line?, also: [ScheduleEvent]) -> some View {
-        let join: (MeetingLink) -> Void = { link in
-            Task {
-                joinNotice = await JoinOffer.join(link, using: joiner)
-                if joinNotice == nil { closePopover() }
-            }
-        }
-        return NextCard(
-            primary: primary, secondary: secondary, alsoRunning: also, now: now,
-            color: CalendarColors.shared.color(for: primary.event.calendarID).color, join: join,
+    private func nextLine(_ primary: UpNext.Next.Line) -> some View {
+        let link = JoinOffer.link(for: primary.event, now: now)
+        return NextLine(
+            primary: primary, now: now, color: CalendarColors.shared.color(for: primary.event.calendarID).color,
+            joinLink: link,
+            join: { link in
+                Task {
+                    joinNotice = await JoinOffer.join(link, using: joiner)
+                    if joinNotice == nil { closePopover() }
+                }
+            },
             open: { event in
                 navigation.openCalendar(showing: event, in: schedule)
                 show()
             })
     }
 
-    private var waitingCard: some View { WaitingCard(count: inbox.waiting) { openInbox(.needsRSVP) } }
-
     private func row(
-        _ title: String, _ symbol: String, count: Int?, tint: Color = .primary, action: @escaping () -> Void
+        _ title: String, _ symbol: String, count: Int? = nil, tint: Color = .primary, action: @escaping () -> Void
     ) -> some View {
         MenuRow(title: title, symbol: symbol, count: count, tint: tint, action: action)
     }
@@ -133,7 +135,25 @@ struct MenuPopover: View {
     }
 }
 
-/// Preview, Enable and Pause under the status card, with the reason when Preview is unavailable.
+/// A thin capsule button for the menu bar window, in place of the standard 36 pt controls.
+struct MenuButtonStyle: ButtonStyle {
+    static let font = Font.system(size: 13, weight: .semibold)
+    var prominent = false
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        let fill = prominent ? Theme.accent.opacity(configuration.isPressed ? 0.8 : 1) : Color.primary.opacity(configuration.isPressed ? 0.18 : 0.08)
+        return configuration.label
+            .font(Self.font)
+            .foregroundStyle(prominent ? Theme.onAccent : Color.primary)
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            .background(Capsule().fill(fill))
+            .contentShape(Capsule())
+            .opacity(isEnabled ? 1 : 0.4)
+    }
+}
+
+/// Preview, Enable and Pause on one thin row, with the reason when Preview is unavailable.
 struct MenuSyncControls: View {
     let rule: PreviewSyncRule
     let busy: Bool
@@ -145,16 +165,16 @@ struct MenuSyncControls: View {
     let togglePause: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
                 Button("Preview sync", action: preview)
-                    .buttonStyle(.accentFilled)
+                    .buttonStyle(MenuButtonStyle(prominent: true))
                     .previewSync(rule)
                 if offersEnable {
-                    Button("Enable", action: enable).buttonStyle(.neutral).disabled(busy)
+                    Button("Enable", action: enable).buttonStyle(MenuButtonStyle()).disabled(busy)
                 }
                 if let paused = pausable {
-                    Button(paused ? "Resume" : "Pause", action: togglePause).buttonStyle(.neutral).disabled(busy)
+                    Button(paused ? "Resume" : "Pause", action: togglePause).buttonStyle(MenuButtonStyle()).disabled(busy)
                 }
             }
             // While a sync runs, the busy line above already says why.
@@ -163,94 +183,65 @@ struct MenuSyncControls: View {
                     .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
             }
         }
+        .padding(.horizontal, 12).padding(.vertical, 4)
     }
 }
 
-/// The primary event, with the second one as a small line under it. The details open the event in
-/// Calendar; Join, when there is a link, is its own button beside them, or under them when the card is
-/// too narrow.
-struct NextCard: View {
+/// The status light and its one line.
+struct StatusLine: View {
+    let color: Color
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle().fill(color).frame(width: 8, height: 8)
+            Text(text).font(Theme.Fonts.bodyMedium).lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12).frame(minHeight: Theme.Control.popoverRowHeight)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// The meeting now or next on one line. The line opens the event in Calendar, and a small button
+/// joins when there is a link.
+struct NextLine: View {
     let primary: UpNext.Next.Line
-    var secondary: UpNext.Next.Line?
-    var alsoRunning: [ScheduleEvent] = []
     let now: Date
     let color: Color
+    let joinLink: MeetingLink?
     let join: (MeetingLink) -> Void
     let open: (ScheduleEvent) -> Void
     @State private var hovering = false
 
-    private var event: ScheduleEvent { primary.event }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            card
-            if let secondary { secondaryLine(secondary) }
-        }
-    }
-
-    private var card: some View {
-        let link = JoinOffer.link(for: event, now: now)
-        return ViewThatFits(in: .horizontal) {
-            HStack(spacing: 0) {
-                details
-                if let link { joinButton(link).padding(.trailing, 12) }
-            }
-            VStack(alignment: .leading, spacing: 0) {
-                details
-                if let link { joinButton(link).padding(.leading, 32).padding(.bottom, 12) }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(MenuPopover.card)
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
-                .fill(Theme.accent.opacity(hovering ? 0.14 : 0)).allowsHitTesting(false))
-        .onHover { hovering = $0 }
-    }
-
-    private var details: some View {
-        Button { open(event) } label: {
-            HStack(spacing: 10) {
-                Circle().fill(color).frame(width: 10, height: 10)
-                VStack(alignment: .leading, spacing: 1) {
+        VStack(alignment: .leading, spacing: 2) {
+            Button { open(primary.event) } label: {
+                HStack(spacing: 8) {
+                    Circle().fill(color).frame(width: 8, height: 8)
                     // The minute count only needs to be right to the minute, so a minute clock drives it.
                     TimelineView(.everyMinute) { context in
-                        Text(NextCardText.label(for: primary, now: max(now, context.date)))
-                            .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+                        Text(NextCardText.line(for: primary, now: max(now, context.date)))
+                            .font(Theme.Fonts.body).lineLimit(1).truncationMode(.tail)
                     }
-                    Text(event.title).font(Theme.Fonts.bodyMedium).lineLimit(1)
-                    Text(event.startsAt.formatted(date: .omitted, time: .shortened)).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
+                .frame(minHeight: Theme.Control.popoverRowHeight)
+                .contentShape(Rectangle())
             }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PressedFade())
-    }
-
-    private func joinButton(_ link: MeetingLink) -> some View {
-        JoinButton(link: link, prominent: primary.role == .current) { join(link) }
-            .help(JoinButton.help(for: link))
-            .fixedSize()
-    }
-
-    private func secondaryLine(_ line: UpNext.Next.Line) -> some View {
-        let link = JoinOffer.link(for: line.event, now: now)
-        return HStack(spacing: 8) {
-            Button { open(line.event) } label: {
-                Text(NextCardText.secondary(line, also: alsoRunning))
-                    .font(Theme.Fonts.secondary).foregroundStyle(.secondary).lineLimit(2).multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-            }
-            .buttonStyle(PressedFade())
-            if line.role == .inProgress, let link {
-                Button { join(link) } label: { Image(systemName: "video") }
-                    .controlSize(.small).help("Join \(link.provider.displayName)").accessibilityLabel(link.buttonTitle)
+            .buttonStyle(.plain)
+            if let joinLink {
+                Button { join(joinLink) } label: { Label(joinLink.buttonTitle, systemImage: "video") }
+                    .buttonStyle(MenuButtonStyle(prominent: primary.role == .current))
+                    .help(JoinButton.help(for: joinLink)).fixedSize()
+                    .padding(.leading, 16).padding(.bottom, 2)
             }
         }
         .padding(.horizontal, 12)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.controlRadius, style: .continuous)
+                .fill(hovering ? Theme.accent.opacity(0.14) : .clear))
+        .onHover { hovering = $0 }
     }
 }
 
@@ -267,42 +258,12 @@ enum NextCardText {
         }
     }
 
-    static func secondary(_ line: UpNext.Next.Line, also: [ScheduleEvent]) -> String {
-        var text: String
+    /// The one line in the menu bar window: "Now: Title", or the countdown then the title.
+    static func line(for line: UpNext.Next.Line, now: Date) -> String {
         switch line.role {
-        case .upcoming:
-            text = "Next: \(line.event.title) at \(line.event.startsAt.formatted(date: .omitted, time: .shortened))"
-        default:
-            text = "In \(line.event.title) until \(line.event.endsAt.formatted(date: .omitted, time: .shortened))"
+        case .current, .inProgress: "Now: \(line.event.title)"
+        case .upcoming: "\(label(for: line, now: now)): \(line.event.title)"
         }
-        if let other = also.first {
-            text += also.count == 1 ? ", also \(other.title)" : ", also \(also.count) more"
-        }
-        return text
-    }
-}
-
-private struct PressedFade: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label.opacity(configuration.isPressed ? 0.7 : 1)
-    }
-}
-
-struct WaitingCard: View {
-    let count: Int
-    let review: () -> Void
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "envelope.badge").foregroundStyle(Theme.accent)
-            Text(count == 1 ? "1 invitation waiting" : "\(count) invitations waiting")
-                .font(Theme.Fonts.bodyMedium)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-            Button("Review", action: review).buttonStyle(.accentFilled).fixedSize()
-        }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous).fill(Theme.accent.opacity(0.12)))
     }
 }
 
@@ -318,7 +279,7 @@ private struct MenuRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                Image(systemName: symbol).frame(width: 22).foregroundStyle(tint)
+                Image(systemName: symbol).frame(width: 18).foregroundStyle(tint)
                 Text(title).foregroundStyle(tint)
                 Spacer()
                 if let count, count > 0 { Text("\(count)").monospacedDigit().foregroundStyle(.secondary) }

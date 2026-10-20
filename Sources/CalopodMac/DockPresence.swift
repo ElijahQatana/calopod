@@ -2,14 +2,19 @@ import AppKit
 import SwiftUI
 
 /// A normal app (Dock, Cmd-Tab, Stage Manager) while the main window is open,
-/// and a menu bar app with no Dock icon once it closes.
+/// and a menu bar app with no Dock icon once it closes. With the menu bar item hidden the
+/// Dock icon stays, so there is always a way back to the window.
 enum DockPresence {
+    static func closedPolicy(menuBarItemShown: Bool) -> NSApplication.ActivationPolicy {
+        menuBarItemShown ? .accessory : .regular
+    }
+
     @MainActor static func enter() {
         NSApplication.shared.setActivationPolicy(.regular)
     }
 
     @MainActor static func leave() {
-        NSApplication.shared.setActivationPolicy(.accessory)
+        NSApplication.shared.setActivationPolicy(closedPolicy(menuBarItemShown: AppSettings.shared.showsMenuBarItem))
     }
 }
 
