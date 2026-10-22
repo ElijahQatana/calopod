@@ -10,9 +10,9 @@ You need an Apple Silicon Mac on macOS 14 or newer.
 2. Check and unpack it:
 
 ```sh
-shasum -a 256 -c Calopod-1.0.0-macos-arm64.zip.sha256
-ditto -x -k Calopod-1.0.0-macos-arm64.zip extracted
-cd extracted/Calopod-1.0.0-macos-arm64
+shasum -a 256 -c Calopod-1.0.1-macos-arm64.zip.sha256
+ditto -x -k Calopod-1.0.1-macos-arm64.zip extracted
+cd extracted/Calopod-1.0.1-macos-arm64
 ```
 
 3. Run the installer:

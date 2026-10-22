@@ -5,7 +5,7 @@ public struct CalopodRoot: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "calopod",
         abstract: "One schedule. Many calendars.",
-        version: "1.0.0",
+        version: "1.0.1",
         subcommands: [
             ConnectionCommand.self,
             CalendarsCommand.self,
