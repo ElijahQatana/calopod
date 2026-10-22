@@ -3,6 +3,14 @@ import CalopodDomain
 import Foundation
 import Observation
 
+extension SetupProvider {
+    /// Google sign-in stays off until Google finishes approving the app.
+    var isAvailable: Bool { self != .google }
+
+    static let setupNote =
+        "Google sign-in isn't available yet. If Google or Microsoft sign-in doesn't work, add the account to your Mac's Calendar and connect This Mac."
+}
+
 @MainActor
 @Observable
 final class SetupModel {

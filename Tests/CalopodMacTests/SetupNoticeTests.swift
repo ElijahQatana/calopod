@@ -1,3 +1,4 @@
+import CalopodCommands
 import Foundation
 import XCTest
 
@@ -42,5 +43,9 @@ final class SetupNoticeTests: XCTestCase {
         await model.connect(.microsoft)
         XCTAssertNotNil(model.notice)
         XCTAssertNotEqual(model.notice, google)
+    }
+
+    func testOnlyGoogleIsTurnedOff() {
+        XCTAssertEqual(SetupProvider.allCases.filter { !$0.isAvailable }, [.google])
     }
 }

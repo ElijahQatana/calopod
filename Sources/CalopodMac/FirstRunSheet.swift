@@ -114,6 +114,7 @@ struct FirstRunSheet: View {
             providerButton("Google", "g.circle", .google)
             providerButton("Microsoft", "m.circle", .microsoft)
         }
+        Hint { Text(SetupProvider.setupNote) }
         if setup.hasMacConnection {
             let state = service.calendarAccess
             if state.isMissing { card { CalendarAccessCard(access: access, state: state) } }
@@ -143,7 +144,7 @@ struct FirstRunSheet: View {
             Label(title, systemImage: symbol).frame(maxWidth: .infinity)
         }
         .controlSize(.large)
-        .disabled(isWorking)
+        .disabled(isWorking || !provider.isAvailable)
     }
 
     // MARK: 2 Calendars and colors

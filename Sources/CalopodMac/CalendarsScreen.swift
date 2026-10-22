@@ -22,6 +22,7 @@ struct CalendarsScreen: View {
                         addButton("Microsoft", "m.circle", .microsoft)
                     }
                 }
+                CardRow { Hint { Text(SetupProvider.setupNote) } }
             }
 
             ForEach(model.snapshot?.connections ?? []) { connection in
@@ -70,7 +71,7 @@ struct CalendarsScreen: View {
             Label(title, systemImage: symbol).frame(maxWidth: .infinity)
         }
         .controlSize(.large)
-        .disabled(model.isBusy)
+        .disabled(model.isBusy || !provider.isAvailable)
     }
 
     private static func symbol(_ provider: String) -> String {
