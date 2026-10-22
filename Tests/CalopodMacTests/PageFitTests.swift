@@ -28,4 +28,26 @@ final class PageFitTests: XCTestCase {
         let stack = SpreadStack(spacing: 10, maxSpacing: 20) { card(50); card(50); card(50) }
         XCTAssertEqual(height(stack, width: 300), 170)
     }
+
+    func testCardsLayOutWhenTheProposedWidthIsNotFinite() {
+        for width in [CGFloat.infinity, .nan] {
+            let pair = CardColumns(minColumnWidth: 300, spacing: 16) { card(40); card(100) }
+            let host = NSHostingView(rootView: AnyView(WidthProbe(width: width) { pair }))
+            XCTAssertEqual(host.fittingSize.width, 300)
+            XCTAssertEqual(host.fittingSize.height, 40 + 16 + 100)
+        }
+    }
+}
+
+/// Asks its child for a size at the given width, the way a parent probing for the maximum does.
+private struct WidthProbe: Layout {
+    var width: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        subviews[0].sizeThatFits(ProposedViewSize(width: width, height: nil))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews[0].place(at: bounds.origin, proposal: ProposedViewSize(width: 300, height: nil))
+    }
 }

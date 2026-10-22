@@ -40,7 +40,10 @@ struct CardColumns: Layout {
     var spacing: CGFloat = 16
 
     private func count(_ width: CGFloat, _ subviews: Subviews) -> Int {
-        max(1, min(subviews.count, Int((width + spacing) / (minColumnWidth + spacing))))
+        // An unbounded proposal is infinite and a collapsed one can be NaN; neither converts to Int.
+        let fits = (width + spacing) / (minColumnWidth + spacing)
+        guard fits.isFinite else { return 1 }
+        return max(1, min(subviews.count, Int(min(fits, CGFloat(subviews.count)))))
     }
 
     /// The rows of subview indexes and each row's height.
@@ -56,7 +59,7 @@ struct CardColumns: Layout {
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.width ?? minColumnWidth
+        let width = proposal.width.flatMap { $0.isFinite ? $0 : nil } ?? minColumnWidth
         let layout = rows(width, subviews)
         return CGSize(width: width, height: layout.heights.reduce(0, +) + spacing * CGFloat(max(layout.rows.count - 1, 0)))
     }
