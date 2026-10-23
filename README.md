@@ -18,7 +18,7 @@ If your calendars live in different places (work, personal, a side project), eac
 
 
 
-It never edits or deletes events it didn't create. Sign-in tokens go in your Keychain, and everything else stays on your Mac. The one exception is the optional [iPhone feed](docs/iphone-feed.md), which is off until you turn it on and goes only to your own private iCloud. It sends no events until you choose calendars, and for those the event titles are stored in your iCloud.
+It never edits or deletes events it didn't create. Sign-in tokens go in your Keychain, and everything else stays on your Mac. There are two exceptions. The optional [iPhone feed](docs/iphone-feed.md) is off until you turn it on and goes only to your own private iCloud. It sends no events until you choose calendars, and for those the event titles are stored in your iCloud. Checking for updates asks GitHub for the newest release, only when you click Check for updates or run `calopod update check`, or once a day if you turn that on in Settings. It sends no calendar data.
 
 ## Words you'll see
 

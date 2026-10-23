@@ -16,6 +16,7 @@ struct OverviewScreen: View {
     @Environment(OverviewRefresh.self) private var refresh
     @Environment(\.sidebarCollapsed) private var collapsed
     @Environment(\.iPhoneFeed) private var iPhoneFeed
+    @Environment(\.updates) private var updates
 
     @State private var progress = FirstRunProgress()
     @State private var showingSetup = false
@@ -83,6 +84,9 @@ struct OverviewScreen: View {
 
     private func page(_ detail: Detail) -> some View {
         VStack(alignment: .leading, spacing: 12) {
+            if let updates, let offered = updates.offered {
+                Banner(kind: .info, text: "Calopod \(offered.version) is out. Open Settings to see it.", onDismiss: updates.dismiss)
+            }
             if let notice = model.notice { Banner(kind: .error, text: notice, onDismiss: model.dismissNotice) }
             if let joinNotice { Banner(kind: .error, text: joinNotice, onDismiss: { self.joinNotice = nil }) }
             ForEach(refresh.messages) { message in

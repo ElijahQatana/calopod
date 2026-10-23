@@ -18,6 +18,7 @@ struct CalopodMacApp: App {
     @State private var refresh: OverviewRefresh
     @State private var iPhoneFeed: IPhoneFeedModel
     @State private var navigation: AppNavigation
+    @State private var updates = UpdateModel()
     @State private var sidebar = SidebarState()
 
     init() {
@@ -87,13 +88,16 @@ struct CalopodMacApp: App {
                 .environment(availability)
                 .environment(refresh)
                 .environment(\.iPhoneFeed, iPhoneFeed)
+                .environment(\.updates, updates)
                 .task { await inbox.reload() }
                 .task { await access.check() }
+                .task { await updates.checkIfDue() }
                 .onChange(of: access.status, initial: true) { refreshAccess() }
                 .onChange(of: setup.hasMacConnection, initial: true) { refreshAccess() }
                 .onChange(of: service.status?.failureCategory, initial: true) { refreshAccess() }
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
                     Task { await access.check() }
+                    Task { await updates.checkIfDue() }
                 }
                 .onChange(of: permissions.notifications) { Task { await reminders.reconcile() } }
                 .dockPresence()
