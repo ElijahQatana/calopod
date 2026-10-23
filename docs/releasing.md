@@ -82,18 +82,18 @@ CALOPOD_BUILD_CONFIGURATION=release CALOPOD_SIGN_IDENTITY="$signing_identity" Sc
 Scripts/make-calopod-dmg.sh --identity "$signing_identity"
 ```
 
-The script checks the app first and refuses one that is unsigned, ad hoc, missing the Hardened Runtime or missing the Calendar entitlement on the app or the helper. `--allow-adhoc` skips that for a local test and prints a warning. It writes `dist/Calopod-<version>.dmg` and a `.sha256` file, signs the image with `--identity` (default `CALOPOD_SIGN_IDENTITY`) and runs `hdiutil verify`. The window layout is written to the image directly, so no Finder session is opened. Window size, background size and icon positions come from `Scripts/dmg/layout.json`. The image holds only the app and the Applications link; the hint about the command line is part of the background. The first run installs a pinned copy of dmgbuild into `.build/dmg-venv`, which needs network access once.
+The script checks the app first and refuses one that is unsigned, ad hoc, missing the Hardened Runtime or missing the Calendar entitlement on the app or the helper. `--allow-adhoc` skips that for a local test and prints a warning. It writes `dist/Calopod.dmg` and a `.sha256` file, signs the image with `--identity` (default `CALOPOD_SIGN_IDENTITY`) and runs `hdiutil verify`. The window layout is written to the image directly, so no Finder session is opened. Window size, background size and icon positions come from `Scripts/dmg/layout.json`. The image holds only the app and the Applications link; the hint about the command line is part of the background. The first run installs a pinned copy of dmgbuild into `.build/dmg-venv`, which needs network access once.
 
 `Scripts/build-calopod-release.sh --dmg` builds the app and the image after the ZIP, with the same signing identity.
 
 Notarizing is a separate step and uses your own keychain profile. Run it yourself, or pass `--notarize PROFILE` to the script:
 
 ```sh
-xcrun notarytool submit dist/Calopod-*.dmg --keychain-profile PROFILE --wait
-xcrun stapler staple dist/Calopod-*.dmg
-xcrun stapler validate dist/Calopod-*.dmg
-spctl -a -t open --context context:primary-signature -vv dist/Calopod-*.dmg
-shasum -a 256 dist/Calopod-*.dmg > dist/Calopod-<version>.dmg.sha256
+xcrun notarytool submit dist/Calopod.dmg --keychain-profile PROFILE --wait
+xcrun stapler staple dist/Calopod.dmg
+xcrun stapler validate dist/Calopod.dmg
+spctl -a -t open --context context:primary-signature -vv dist/Calopod.dmg
+shasum -a 256 dist/Calopod.dmg > dist/Calopod.dmg.sha256
 ```
 
 The script's tests and the release builds never notarize. Stapling changes the file, so refresh the checksum afterwards (the script does this itself with `--notarize`). Publish the image and its `.sha256` only after you have opened it on a clean Mac.
@@ -102,7 +102,7 @@ The script's tests and the release builds never notarize. Stapling changes the f
 
 Tag the reviewed commit and create the release as a pre-release. Upload these four files:
 
-- `Calopod-<version>.dmg` and its `.sha256`, the app.
+- `Calopod.dmg` and its `.sha256`, the app. The name has no version, so the site can link to it; say the version in the release notes.
 - `Calopod-<version>-macos-arm64.zip` and its `.sha256`, the command-line install. It is complete on its own and needs no app.
 
 Check each download against its checksum from the release page before announcing it. Keep the notes short: supported Macs, a link to [Install](install.md), and where to report problems.

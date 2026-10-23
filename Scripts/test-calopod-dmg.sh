@@ -65,10 +65,10 @@ grep -q 'Developer ID' "$log"
 # With the flag it builds, warns, and reads the version.
 "$script" "$app" --output-directory "$out" --allow-adhoc > "$log" 2>&1
 grep -q 'not release-signed' "$log"
-dmg="$out/Calopod-9.8.7.dmg"
+dmg="$out/Calopod.dmg"
 [ -s "$dmg" ]
 hdiutil verify -quiet "$dmg" > /dev/null
-(cd "$out" && shasum -a 256 -c Calopod-9.8.7.dmg.sha256 > /dev/null)
+(cd "$out" && shasum -a 256 -c Calopod.dmg.sha256 > /dev/null)
 grep -q 'Not notarized' "$log"
 
 # Both backgrounds are exactly the window content size, from the shared layout file.

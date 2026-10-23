@@ -14,7 +14,7 @@ Usage:
                               [--notarize PROFILE] [--allow-adhoc]
 
 APP defaults to .build/mac-app/Calopod.app and must be signed with the hardened runtime and
-the Calendar entitlement. The image goes to dist/Calopod-<version>.dmg with a .sha256 file.
+the Calendar entitlement. The image goes to dist/Calopod.dmg with a .sha256 file.
 --identity signs the image itself and defaults to CALOPOD_SIGN_IDENTITY.
 --notarize PROFILE submits the image with that notarytool keychain profile and staples it.
 --allow-adhoc packages an unsigned or ad hoc app for local testing only.
@@ -150,7 +150,7 @@ case "$output_directory" in
 esac
 mkdir -p "$output_directory"
 output_directory=$(CDPATH= cd -- "$output_directory" && pwd -P)
-dmg_name="$app_name-$version.dmg"
+dmg_name="$app_name.dmg"
 dmg_path="$output_directory/$dmg_name"
 rm -f "$dmg_path" "$dmg_path.sha256"
 
