@@ -1,0 +1,56 @@
+name: Bug report
+description: Something doesn't work the way it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Please leave out real event titles, names, email addresses, meeting links, tokens, private feed URLs and home-directory paths. Redact logs and screenshots first.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: And what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can it be reproduced?
+      description: Made-up events or calendars are best.
+  - type: input
+    id: version
+    attributes:
+      label: Calopod version
+      placeholder: "1.0.1"
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where does it happen?
+      options:
+        - Mac app
+        - Command line
+        - iPhone app
+        - Not sure
+  - type: dropdown
+    id: source
+    attributes:
+      label: Calendar source involved
+      options:
+        - Mac calendars
+        - Google
+        - Microsoft
+        - Several or not sure
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output or screenshots
+      description: Redacted only.
+      render: text

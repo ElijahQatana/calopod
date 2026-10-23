@@ -1,0 +1,28 @@
+name: Feature request
+description: An idea for something Calopod could do
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: Please leave out real event titles, names, email addresses, meeting links, tokens, private feed URLs and home-directory paths. Redact logs and screenshots first.
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like Calopod to do?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Anything else you considered?
+  - type: dropdown
+    id: where
+    attributes:
+      label: Which part is this about?
+      options:
+        - Mac app
+        - Command line
+        - iPhone app
+        - Inbox
+        - Calendar sources
+        - Not sure

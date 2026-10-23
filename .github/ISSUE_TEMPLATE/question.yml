@@ -1,0 +1,14 @@
+name: Question or discussion
+description: Ask how something works or how to set it up, or get a conversation started
+labels: [question]
+body:
+  - type: markdown
+    attributes:
+      value: Please leave out real event titles, names, email addresses, meeting links, tokens, private feed URLs and home-directory paths. Redact logs and screenshots first.
+  - type: textarea
+    id: question
+    attributes:
+      label: What's on your mind?
+      description: A question, an idea you want to talk through, or something you're not sure how to set up(The docs folder may already cover it).
+    validations:
+      required: true
