@@ -10,9 +10,9 @@ You need an Apple Silicon Mac on macOS 14 or newer.
 2. Check and unpack it:
 
 ```sh
-shasum -a 256 -c Calopod-1.0.1-macos-arm64.zip.sha256
-ditto -x -k Calopod-1.0.1-macos-arm64.zip extracted
-cd extracted/Calopod-1.0.1-macos-arm64
+shasum -a 256 -c Calopod-1.2.0-macos-arm64.zip.sha256
+ditto -x -k Calopod-1.2.0-macos-arm64.zip extracted
+cd extracted/Calopod-1.2.0-macos-arm64
 ```
 
 3. Run the installer:
@@ -29,7 +29,7 @@ If `calopod` already points into Calopod.app, the installer leaves that link alo
 
 ## Install the app from the disk image
 
-Open `Calopod-<version>.dmg`, drag Calopod onto Applications and eject the image. The window shows the app, an Applications shortcut and a line about adding the `calopod` command from Settings, Command line. Check the download first with `shasum -a 256 -c Calopod-<version>.dmg.sha256`. The first time you open the app, macOS may ask you to confirm it was downloaded from the internet.
+Open `Calopod.dmg`, drag Calopod onto Applications and eject the image. The window shows the app, an Applications shortcut and a line about adding the `calopod` command from Settings, Command line. Check the download first with `shasum -a 256 -c Calopod.dmg.sha256`. The first time you open the app, macOS may ask you to confirm it was downloaded from the internet.
 
 ## Three ways to install
 
@@ -59,6 +59,8 @@ If you stop part way, setup keeps what you've finished and picks up where you le
 The first time, macOS asks whether Calopod may access your calendars. Choose full access, which is the only level that lets Calopod read event details. You can change it later in System Settings, under Privacy & Security, then Calendars.
 
 ## Upgrade
+
+`calopod update check` tells you whether a newer release is out. To upgrade:
 
 ```sh
 calopod agent disable

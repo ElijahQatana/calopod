@@ -8,6 +8,7 @@ struct SettingsScreen: View {
     @State private var command: CommandLineModel
     @Environment(PermissionsModel.self) private var permissions
     @Environment(\.iPhoneFeed) private var iPhoneFeed
+    @Environment(\.updates) private var updates
     @Environment(NotificationSettingsModel.self) private var reminders
     @Environment(WorkingHoursModel.self) private var workingHours
 
@@ -20,6 +21,7 @@ struct SettingsScreen: View {
 
     @ViewBuilder
     private var sections: some View {
+        if let updates { UpdatesSection(model: updates) }
         appearance
         menuBar
         transparency
