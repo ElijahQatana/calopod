@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct CalopodApp: App {
+    @UIApplicationDelegateAdaptor private var appDelegate: AppDelegate
     @State private var store = SnapshotStore(reader: Self.reader(), cache: Self.cache())
     @State private var reminders = Reminders(center: Self.isFixture ? FixtureNotificationCenter() : UserNotificationCenter())
 

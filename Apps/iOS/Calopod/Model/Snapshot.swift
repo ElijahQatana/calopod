@@ -12,12 +12,14 @@ struct Snapshot: Codable, Equatable, Sendable {
     var reminders: ReminderSettings?
     var calendars: [CalendarEntry]
     var status: SyncStatus
+    var feed: Feed?
+    var feeds: [Feed] = []
 
     func calendar(for id: String) -> CalendarEntry? { calendars.first { $0.id == id } }
 }
 
 extension Snapshot {
-    /// A copy saved before events or reminders existed has no `days` or `reminders`.
+    /// A copy saved before these existed lacks `days`, `reminders`, `feed` and `feeds`.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         publishedAt = try container.decode(Date.self, forKey: .publishedAt)
@@ -27,9 +29,13 @@ extension Snapshot {
         reminders = try container.decodeIfPresent(ReminderSettings.self, forKey: .reminders)
         calendars = try container.decode([CalendarEntry].self, forKey: .calendars)
         status = try container.decode(SyncStatus.self, forKey: .status)
+        feed = try container.decodeIfPresent(Feed.self, forKey: .feed)
+        feeds = try container.decodeIfPresent([Feed].self, forKey: .feeds) ?? []
     }
 
-    private enum CodingKeys: String, CodingKey { case publishedAt, inbox, availability, days, reminders, calendars, status }
+    private enum CodingKeys: String, CodingKey {
+        case publishedAt, inbox, availability, days, reminders, calendars, status, feed, feeds
+    }
 }
 
 enum SnapshotResult: Equatable, Sendable {

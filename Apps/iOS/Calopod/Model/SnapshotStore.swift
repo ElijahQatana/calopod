@@ -19,11 +19,18 @@ final class SnapshotStore {
 
     private let reader: SnapshotReader
     private let cache: SnapshotCache
+    private let selection: FeedSelection
 
-    init(reader: SnapshotReader, cache: SnapshotCache) {
+    init(reader: SnapshotReader, cache: SnapshotCache, selection: FeedSelection = .standard) {
         self.reader = reader
         self.cache = cache
+        self.selection = selection
         if let cached = cache.load() { phase = .content(cached, offline: false) }
+    }
+
+    func select(_ feed: Feed) async {
+        selection.preferred = feed.id
+        await refresh()
     }
 
     func refresh() async {

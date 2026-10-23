@@ -11,34 +11,65 @@ struct SystemICloud: ICloudAvailability {
     var isSignedIn: Bool { FileManager.default.ubiquityIdentityToken != nil }
 }
 
-/// Reads the snapshot the Mac publishes to the user's private iCloud database.
+/// Reads the feeds in this phone's iCloud and any shared with it.
 ///
 /// The names below match docs/iphone-feed.md on the Mac publisher's branch: one `Snapshot` record
 /// per Inbox item, per day of busy time and per day of events, plus one each for the calendar list, reminder settings and sync status,
-/// all in the `Snapshots` zone. They are copied, not shared, so keep them in step with the Mac.
+/// in a zone per Mac. They are copied, not shared, so keep them in step with the Mac.
 struct CloudKitReader: SnapshotReader {
     var iCloud: ICloudAvailability = SystemICloud()
+    var selection = FeedSelection.standard
 
-    static let containerID = "iCloud.pro.elijahquintana.calopod"
-    private static let zoneName = "Snapshots"
-    private static let kindField = "kind"
-    private static let payloadField = "payload"
+    static let containerID = SnapshotRemote.containerIdentifier
+    private static let kindField = SnapshotRemote.Field.kind
+    private static let payloadField = SnapshotRemote.Field.payload
 
     func read() async throws -> SnapshotResult {
         // CKContainer traps when iCloud can't be used, so check before touching it.
         guard iCloud.isSignedIn else { throw ReaderError.signedOut }
-        let database = CKContainer(identifier: Self.containerID).privateCloudDatabase
-        let zone = CKRecordZone.ID(zoneName: Self.zoneName)
-        let changes: [CKRecord]
-        do {
-            let result = try await database.recordZoneChanges(inZoneWith: zone, since: nil)
-            changes = result.modificationResultsByID.values.compactMap { try? $0.get().record }
-        } catch let error as CKError where error.code == .zoneNotFound {
-            return .sharingOff
-        } catch {
-            throw ReaderError.unavailable
+        let container = CKContainer(identifier: Self.containerID)
+        var found: [(feed: Feed, snapshot: Snapshot)] = []
+        var zoneCount = 0
+        var needsNewerApp = false
+        for (database, shared) in [(container.privateCloudDatabase, false), (container.sharedCloudDatabase, true)] {
+            let zones: [CKRecordZone]
+            do { zones = try await database.allRecordZones() } catch { throw ReaderError.unavailable }
+            for zone in zones {
+                guard let kind = SnapshotRemote.feed(inZone: zone.zoneID.zoneName) else { continue }
+                zoneCount += 1
+                let records: [CKRecord]
+                do {
+                    let result = try await database.recordZoneChanges(inZoneWith: zone.zoneID, since: nil)
+                    records = result.modificationResultsByID.values.compactMap { try? $0.get().record }
+                } catch { throw ReaderError.unavailable }
+                do {
+                    guard case .snapshot(let snapshot) = try Self.assemble(records.compactMap(Self.payload)) else { continue }
+                    let feed = Feed(
+                        id: "\(shared ? "shared" : "private"):\(zone.zoneID.ownerName):\(zone.zoneID.zoneName)",
+                        name: snapshot.status.macName ?? "Mac", isShared: shared, level: kind.level,
+                        publishedAt: snapshot.publishedAt)
+                    found.append((feed, snapshot))
+                } catch ReaderError.needsNewerApp {
+                    needsNewerApp = true
+                }
+            }
         }
-        return try Self.assemble(changes.compactMap(Self.payload))
+        return try Self.choose(found, zoneCount: zoneCount, needsNewerApp: needsNewerApp, preferred: selection.preferred)
+    }
+
+    static func choose(
+        _ found: [(feed: Feed, snapshot: Snapshot)], zoneCount: Int, needsNewerApp: Bool, preferred: String?
+    ) throws -> SnapshotResult {
+        let feeds = FeedChoice.ordered(found.map(\.feed))
+        guard let chosen = FeedChoice.pick(feeds, preferred: preferred),
+            var snapshot = found.first(where: { $0.feed.id == chosen.id })?.snapshot
+        else {
+            if needsNewerApp { throw ReaderError.needsNewerApp }
+            return zoneCount == 0 ? .sharingOff : .nothingPublished
+        }
+        snapshot.feed = chosen
+        snapshot.feeds = feeds
+        return .snapshot(snapshot)
     }
 
     private static func payload(_ record: CKRecord) -> (kind: String, data: Data)? {

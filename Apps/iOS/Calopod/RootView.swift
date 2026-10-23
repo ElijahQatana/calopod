@@ -20,9 +20,11 @@ struct RootView: View {
         }
         .animation(.easeOut(duration: 0.2), value: navigation.menuOpen)
         .environment(\.openMenu, { navigation.menuOpen = true })
+        .environment(\.feedLabel, feedLabel)
         .preferredColorScheme(appearance.choice.colorScheme)
         .tint(Theme.accent)
         .task { await refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: .feedShareAccepted)) { _ in Task { await refresh() } }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await refresh() } }
         }
@@ -37,12 +39,17 @@ struct RootView: View {
         if case .content(let snapshot, _) = store.phase { snapshot } else { nil }
     }
 
+    private var feedLabel: String? {
+        guard let snapshot, let feed = snapshot.feed, feed.isShared || snapshot.feeds.count > 1 else { return nil }
+        return feed.label
+    }
+
     @ViewBuilder private func pageScreen(_ page: Navigation.Page) -> some View {
         switch page {
         case .settings:
             SettingsScreen(
                 info: SettingsInfo(phase: store.phase), snapshot: snapshot, reminders: reminders, appearance: appearance,
-                filter: filter, navigation: navigation)
+                filter: filter, navigation: navigation, selectFeed: { feed in Task { await store.select(feed) } })
         case .calendars: CalendarsScreen(snapshot: snapshot, filter: filter, navigation: navigation)
         case .help: HelpScreen(navigation: navigation)
         case .about: AboutScreen(navigation: navigation)
@@ -57,7 +64,7 @@ struct RootView: View {
             case .sharingOff:
                 EmptyState(
                     title: "Welcome", subtitle: "iPhone sync is off", heading: "Your Mac stays in charge",
-                    message: "Calopod on your Mac can share your Inbox, calendar and sync status with this phone. Nothing appears here until you turn it on there.",
+                    message: "Calopod on your Mac can share your Inbox, calendar and sync status with this phone. Nothing appears here until you turn it on there. If the feed was shared with you and has stopped, ask for a new invitation.",
                     steps: ["Open Calopod on your Mac", "Go to Settings, then iPhone", "Turn on Share with iPhone"],
                     systemImage: "macbook.and.iphone")
             case .nothingPublished:
