@@ -7,7 +7,7 @@ struct CalendarsScreen: View {
 
     var body: some View {
         CardPage(title: "Calendars") {
-            if let busy = model.busy { BusyLine(text: busy) }
+            if let busy = model.busy { BusyLine(text: busy, cancel: model.cancelSignIn) }
             if let notice = model.notice { Banner(kind: .error, text: notice, onDismiss: model.dismissNotice) }
 
             CardSection(

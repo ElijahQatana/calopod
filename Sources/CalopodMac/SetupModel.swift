@@ -18,6 +18,7 @@ final class SetupModel {
     private(set) var busy: String?
     private(set) var notice: String?
     private var loadFailed = false
+    private var inFlight: Task<Void, any Error>?
 
     private let service: SetupService
     @ObservationIgnored let aliases: CalendarAliases
@@ -31,6 +32,17 @@ final class SetupModel {
     }
 
     var isBusy: Bool { busy != nil }
+
+    private static let signInLabel = "Waiting for browser sign-in…"
+
+    /// A browser sign-in can be abandoned. Waiting for macOS to answer a Calendar prompt cannot.
+    var canCancelSignIn: Bool { busy == Self.signInLabel }
+
+    /// The action behind a Cancel button, or nil when there is nothing to cancel.
+    var cancelSignIn: (() -> Void)? {
+        guard canCancelSignIn else { return nil }
+        return { [weak self] in self?.inFlight?.cancel() }
+    }
 
     /// True once Calendars on this Mac has been added, which is when Calendar access matters.
     var hasMacConnection: Bool {
@@ -102,7 +114,7 @@ final class SetupModel {
 
     func connect(_ provider: SetupProvider) async {
         let service = service
-        await run(provider == .mac ? "Waiting for Calendar access…" : "Waiting for browser sign-in…") {
+        await run(provider == .mac ? "Waiting for Calendar access…" : Self.signInLabel) {
             try await service.connect(provider)
         }
     }
@@ -175,11 +187,16 @@ final class SetupModel {
         }
         busy = label ?? "Saving…"
         notice = nil
+        let task = Task.detached { try await work() }
+        inFlight = task
         do {
-            try await Task.detached { try await work() }.value
+            try await task.value
+        } catch is CancellationError {
+            // The user backed out, so there is nothing to report.
         } catch {
             notice = service.message(for: error)
         }
+        inFlight = nil
         busy = nil
         await reload()
     }
