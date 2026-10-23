@@ -202,6 +202,9 @@ render_plist() {
   if [ -n "${CALOPOD_GOOGLE_CLIENT_ID:-}" ]; then
     plutil -insert EnvironmentVariables.CALOPOD_GOOGLE_CLIENT_ID -string "$CALOPOD_GOOGLE_CLIENT_ID" "$destination"
   fi
+  if [ -n "${CALOPOD_GOOGLE_CLIENT_SECRET:-}" ]; then
+    plutil -insert EnvironmentVariables.CALOPOD_GOOGLE_CLIENT_SECRET -string "$CALOPOD_GOOGLE_CLIENT_SECRET" "$destination"
+  fi
   if [ -n "${CALOPOD_MICROSOFT_CLIENT_ID:-}" ]; then
     plutil -insert EnvironmentVariables.CALOPOD_MICROSOFT_CLIENT_ID -string "$CALOPOD_MICROSOFT_CLIENT_ID" "$destination"
   fi

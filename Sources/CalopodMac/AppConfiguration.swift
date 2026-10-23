@@ -5,6 +5,7 @@ import Foundation
 enum AppConfiguration {
     private static let plistKeys: [(plist: String, variable: String)] = [
         ("CalopodGoogleClientID", "CALOPOD_GOOGLE_CLIENT_ID"),
+        ("CalopodGoogleClientSecret", "CALOPOD_GOOGLE_CLIENT_SECRET"),
         ("CalopodMicrosoftClientID", "CALOPOD_MICROSOFT_CLIENT_ID"),
         ("CalopodMicrosoftTenant", "CALOPOD_MICROSOFT_TENANT"),
     ]

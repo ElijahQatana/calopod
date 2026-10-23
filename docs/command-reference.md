@@ -82,6 +82,7 @@ Errors go to standard error. Secrets and provider responses are never printed, a
 |---|---|
 | `CALOPOD_STATE_PATH` | Absolute path to the database, for tests and throwaway runs. |
 | `CALOPOD_GOOGLE_CLIENT_ID` | Your Google desktop client ID. |
+| `CALOPOD_GOOGLE_CLIENT_SECRET` | The secret of that Google desktop client. |
 | `CALOPOD_MICROSOFT_CLIENT_ID` | Your Microsoft public client ID. |
 | `CALOPOD_MICROSOFT_TENANT` | Microsoft tenant. Defaults to `common`. |
 
