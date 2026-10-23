@@ -39,7 +39,7 @@ struct SettingsScreen: View {
             CardSection(
                 "iPhone",
                 footnote: feed.availability.isAvailable
-                    ? "Sends a read-only copy of your Inbox, busy time, calendar names and the events of calendars you choose to your private iCloud after each sync. Nothing is shared with anyone else, and nothing on the iPhone changes a calendar. Turning this off deletes the copy."
+                    ? "Sends a read-only copy of your Inbox, busy time, calendar names and the events of calendars you choose to your private iCloud after each sync. Nothing is shared with anyone else unless you invite them below, and nothing on the iPhone changes a calendar. Turning this off deletes the copy."
                     : feed.availability.unavailableMessage
             ) {
                 CardRow("Show Inbox and busy time on iPhone") {
@@ -48,6 +48,7 @@ struct SettingsScreen: View {
                         .disabled(!feed.availability.isAvailable || feed.isBusy)
                 }
                 if feed.availability.isAvailable { calendarRows(feed) }
+                if feed.availability.isAvailable, feed.isOn { IPhoneShareRows(feed: feed) }
                 if let problem = feed.problem {
                     CardRow {
                         VStack(alignment: .leading, spacing: 8) {
@@ -62,7 +63,10 @@ struct SettingsScreen: View {
                     }
                 }
             }
-            .task { await feed.tick() }
+            .task {
+                await feed.tick()
+                await feed.loadPeople()
+            }
         }
     }
 
