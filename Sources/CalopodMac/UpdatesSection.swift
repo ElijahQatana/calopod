@@ -21,7 +21,9 @@ struct UpdatesSection: View {
                 }
             }
             CardRow("Check once a day") {
-                Toggle("", isOn: Binding(get: { model.checksDaily }, set: model.setChecksDaily)).labelsHidden()
+                // A closure, not `model.setChecksDaily`: Xcode 16.4 crashes building a thunk for the isolated method.
+                Toggle("", isOn: Binding(get: { model.checksDaily }, set: { on in MainActor.assumeIsolated { model.setChecksDaily(on) } }))
+                    .labelsHidden()
             }
         }
     }
