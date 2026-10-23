@@ -2,10 +2,12 @@ import ArgumentParser
 
 /// The top-level `calopod` command and its subcommands.
 public struct CalopodRoot: AsyncParsableCommand {
+    public static let version = "1.0.1"
+
     public static let configuration = CommandConfiguration(
         commandName: "calopod",
         abstract: "One schedule. Many calendars.",
-        version: "1.0.1",
+        version: version,
         subcommands: [
             ConnectionCommand.self,
             CalendarsCommand.self,
@@ -18,6 +20,7 @@ public struct CalopodRoot: AsyncParsableCommand {
             AvailabilityCommand.self,
             HoursCommand.self,
             IPhoneCommand.self,
+            UpdateCommand.self,
             SyncCommand.self,
             DoctorCommand.self,
             AgentCommand.self,

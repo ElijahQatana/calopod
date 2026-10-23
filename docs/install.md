@@ -60,6 +60,8 @@ The first time, macOS asks whether Calopod may access your calendars. Choose ful
 
 ## Upgrade
 
+`calopod update check` tells you whether a newer release is out. To upgrade:
+
 ```sh
 calopod agent disable
 ./install
