@@ -16,7 +16,7 @@ enum IPhoneFeedBuilder {
     static let runsLimit = RunMark.barCount
 
     static func records(
-        repository: LocalStateRepository, now: Date = Date(), calendar: Calendar = .current
+        repository: LocalStateRepository, now: Date = Date(), calendar: Calendar = .current, macName: String? = nil
     ) throws -> [SnapshotPayload] {
         let cutoff = now.addingTimeInterval(-3600)
         let snapshot = try repository.inboxContextSnapshot()
@@ -34,7 +34,7 @@ enum IPhoneFeedBuilder {
         }
         records.append(try SnapshotPayload(calendars(snapshot, repository: repository), kind: .calendars, at: now))
         records.append(try SnapshotPayload(reminderSettings(try repository.notificationSettings()), kind: .reminderSettings, at: now))
-        records.append(try SnapshotPayload(try syncStatus(snapshot, repository: repository, cutoff: cutoff), kind: .syncStatus, at: now))
+        records.append(try SnapshotPayload(try syncStatus(snapshot, repository: repository, cutoff: cutoff, macName: macName), kind: .syncStatus, at: now))
         return records
     }
 
@@ -204,7 +204,7 @@ enum IPhoneFeedBuilder {
     }
 
     private static func syncStatus(
-        _ snapshot: InboxContextSnapshot, repository: LocalStateRepository, cutoff: Date
+        _ snapshot: InboxContextSnapshot, repository: LocalStateRepository, cutoff: Date, macName: String?
     ) throws -> SyncStatus {
         var issues: [SyncIssue] = []
         for source in snapshot.sources {
@@ -226,6 +226,7 @@ enum IPhoneFeedBuilder {
             source.coverage.map { CalendarUpdate(calendarID: source.bindingID, at: $0.observedAt) }
         }
         return SyncStatus(
-            lastSyncAt: try repository.latestSuccessfulSyncRun()?.finishedAt, issues: issues, runs: runs, calendarUpdates: updates)
+            lastSyncAt: try repository.latestSuccessfulSyncRun()?.finishedAt, issues: issues, runs: runs, calendarUpdates: updates,
+            macName: macName)
     }
 }

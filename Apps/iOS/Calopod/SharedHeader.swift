@@ -16,12 +16,22 @@ extension EnvironmentValues {
     }
 }
 
+private struct FeedLabelKey: EnvironmentKey { static let defaultValue: String? = nil }
+
+extension EnvironmentValues {
+    var feedLabel: String? {
+        get { self[FeedLabelKey.self] }
+        set { self[FeedLabelKey.self] = newValue }
+    }
+}
+
 /// The header every screen shares: logo, the read-only mark, then a title and one line under it.
 struct SharedHeader: View {
     var title: String
     var subtitle: String
     var back: BackAction?
     @Environment(\.openMenu) private var openMenu
+    @Environment(\.feedLabel) private var feedLabel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -36,6 +46,14 @@ struct SharedHeader: View {
                     logo
                 }
                 Spacer()
+                if let feedLabel {
+                    Label(feedLabel, systemImage: "macbook")
+                        .font(.caption.weight(.semibold)).lineLimit(1)
+                        .padding(.horizontal, 11)
+                        .frame(height: 26)
+                        .frame(maxWidth: 190)
+                        .background(Theme.onAccent.opacity(0.2), in: Capsule())
+                }
                 Label("Read only", systemImage: "lock")
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 11)

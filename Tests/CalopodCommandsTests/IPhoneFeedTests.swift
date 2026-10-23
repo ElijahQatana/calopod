@@ -181,6 +181,50 @@ struct IPhoneFeedTests {
         #expect(await service(state, at: later).run(publisher: remote) == .idle)
     }
 
+    @Test("A Mac writes only its own zone, and the old shared zone is deleted once")
+    func ownZoneAndLegacyRemoval() async throws {
+        let state = try fixture()
+        try finishSync(state, id: "run1")
+        let feed = service(state), remote = InMemorySnapshotPublisher()
+        try feed.setEnabled(true)
+        _ = await feed.run(publisher: remote)
+        let zones = try feed.zones()
+        #expect(await remote.zones.keys.sorted() == [zones.full] && zones.full.hasPrefix("Snapshots-"))
+        #expect(await remote.deletedZones == [SnapshotRemote.legacyZoneName])
+
+        try finishSync(state, id: "run2")
+        _ = await feed.run(publisher: remote)
+        #expect(await remote.deletedZones == [SnapshotRemote.legacyZoneName])
+        let other = try service(try fixture()).zones()
+        #expect(other != zones)
+    }
+
+    @Test("The busy-only copy holds times and status, and goes when the feed goes")
+    func busyCopy() async throws {
+        let state = try fixture()
+        try finishSync(state, id: "run1")
+        let feed = service(state), remote = InMemorySnapshotPublisher()
+        try feed.setEnabled(true)
+        _ = await feed.run(publisher: remote)
+        #expect(await remote.zones.count == 1)
+
+        guard case .published = await feed.startBusyCopy(publisher: remote) else { Issue.record("not published"); return }
+        let busy = try await remote.records(inZone: feed.zones().busy)
+        #expect(Set(busy.values.map(\.kind)) == [.availabilityDay, .syncStatus])
+        let text = busy.values.map { String(decoding: $0.bytes, as: UTF8.self) }.joined()
+        #expect(!text.contains("Title a") && !text.contains("Room 4") && !text.contains("Work"))
+
+        try await feed.endBusyCopy(publisher: remote)
+        let stillShared = try feed.busyShared()
+        #expect(await remote.zones.count == 1 && !stillShared)
+
+        _ = await feed.startBusyCopy(publisher: remote)
+        try feed.setEnabled(false)
+        #expect(await feed.run(publisher: remote) == .removed)
+        let sharedAfterOff = try feed.busyShared()
+        #expect(await remote.zones.isEmpty && !sharedAfterOff)
+    }
+
     private func days(_ remote: InMemorySnapshotPublisher) async throws -> [CalendarEvent] {
         try await remote.records.values.filter { $0.kind == .calendarDay }
             .flatMap { try SnapshotCoding.decode(CalendarDay.self, from: $0.bytes).record.events }

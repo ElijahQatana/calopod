@@ -24,22 +24,59 @@ public struct IPhoneFeedService: Sendable {
     /// After a failed upload, wait this long before trying again on its own.
     static let retryDelay: TimeInterval = 300
 
+    public struct Zones: Equatable, Sendable {
+        public let full: String
+        public let busy: String
+    }
+
     private let makeRepository: @Sendable () throws -> LocalStateRepository
     private let now: @Sendable () -> Date
+    private let macName: @Sendable () -> String?
 
     public init() {
         makeRepository = { try CommandEnvironment.repository() }
         now = Date.init
+        macName = Self.systemName
     }
 
-    init(makeRepository: @escaping @Sendable () throws -> LocalStateRepository, now: @escaping @Sendable () -> Date = Date.init) {
+    init(
+        makeRepository: @escaping @Sendable () throws -> LocalStateRepository, now: @escaping @Sendable () -> Date = Date.init,
+        macName: @escaping @Sendable () -> String? = { "Test Mac" }
+    ) {
         self.makeRepository = makeRepository
         self.now = now
+        self.macName = macName
+    }
+
+    private static func systemName() -> String? {
+        #if os(macOS)
+        Host.current().localizedName
+        #else
+        ProcessInfo.processInfo.hostName
+        #endif
     }
 
     public func state() throws -> StoredIPhoneFeed { try makeRepository().iPhoneFeed() }
 
     public func setEnabled(_ enabled: Bool) throws { try makeRepository().setIPhoneFeedEnabled(enabled) }
+
+    public func zones() throws -> Zones {
+        let id = try makeRepository().iPhoneFeedZone().macID
+        return Zones(full: SnapshotRemote.zoneName(mac: id), busy: SnapshotRemote.zoneName(mac: id, level: .busy))
+    }
+
+    public func busyShared() throws -> Bool { try makeRepository().iPhoneFeedZone().busyShared }
+
+    public func startBusyCopy(publisher: any SnapshotPublisher) async -> Outcome {
+        do { try makeRepository().setIPhoneFeedBusyShared(true) } catch { return .failed("The sync state could not be read.") }
+        return await run(publisher: publisher, force: true)
+    }
+
+    public func endBusyCopy(publisher: any SnapshotPublisher) async throws {
+        let zones = try zones()
+        try await publisher.deleteZone(zones.busy)
+        try makeRepository().setIPhoneFeedBusyShared(false)
+    }
 
     /// Every calendar that is not ignored, with whether its events go to the phone.
     public func calendarChoices() throws -> [CalendarChoice] {
@@ -80,16 +117,27 @@ public struct IPhoneFeedService: Sendable {
         }
         if !force, let failedAt = feed.failedAt, date.timeIntervalSince(failedAt) < Self.retryDelay { return .idle }
         do {
+            let zone = try repository.iPhoneFeedZone()
+            let zones = Zones(full: SnapshotRemote.zoneName(mac: zone.macID), busy: SnapshotRemote.zoneName(mac: zone.macID, level: .busy))
             if feed.removePending {
-                try await publisher.deleteAll()
+                try await publisher.deleteZone(zones.full)
+                try await publisher.deleteZone(zones.busy)
+                if !zone.legacyRemoved { try await publisher.deleteZone(SnapshotRemote.legacyZoneName) }
                 try repository.recordIPhoneFeedRemoved()
                 return .removed
             }
             guard feed.isEnabled else { return .idle }
             let runID = try repository.latestSuccessfulSyncRun()?.id ?? ""
             guard force || feed.publishedAt == nil || feed.publishedRunID != runID else { return .idle }
-            let records = try IPhoneFeedBuilder.records(repository: repository, now: date)
-            try await publisher.replaceAll(with: records)
+            let records = try IPhoneFeedBuilder.records(repository: repository, now: date, macName: macName())
+            try await publisher.replaceAll(with: records, inZone: zones.full)
+            if zone.busyShared {
+                try await publisher.replaceAll(with: records.filter { SnapshotLevel.busy.keeps($0.kind) }, inZone: zones.busy)
+            }
+            // The old shared zone can go now. If this fails it is tried again next time.
+            if !zone.legacyRemoved, (try? await publisher.deleteZone(SnapshotRemote.legacyZoneName)) != nil {
+                try? repository.recordIPhoneFeedLegacyRemoved()
+            }
             try repository.recordIPhoneFeedPublished(runID: runID, at: date)
             return .published(records: records.count)
         } catch {

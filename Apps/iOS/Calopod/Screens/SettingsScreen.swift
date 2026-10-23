@@ -9,6 +9,7 @@ struct SettingsScreen: View {
     var appearance: Appearance
     var filter: CalendarFilter
     var navigation: Navigation
+    var selectFeed: (Feed) -> Void = { _ in }
     @Environment(\.openURL) private var openURL
 
     var body: some View {
@@ -32,6 +33,7 @@ struct SettingsScreen: View {
                 }
                 .shadow(color: Theme.text.opacity(0.06), radius: 6, y: 2)
             }
+            if let snapshot, let feed = snapshot.feed { feedSection(feed, all: snapshot.feeds) }
             SectionLabel(text: "iCloud")
             Card {
                 row("iCloud", value: icloudText, tone: info.icloud == .signedIn ? Theme.good : Theme.bad)
@@ -50,6 +52,37 @@ struct SettingsScreen: View {
             .shadow(color: Theme.text.opacity(0.06), radius: 6, y: 2)
             ReadOnlyFoot(text: "Working hours, sync, colors and answers to invitations all stay on your Mac.")
         }
+    }
+
+    private func feedSection(_ current: Feed, all feeds: [Feed]) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SectionLabel(text: "Feed")
+            Card {
+                ForEach(feeds) { feed in
+                    Button { selectFeed(feed) } label: {
+                        HStack {
+                            rowLabel(feed.name, detail: feedDetail(feed))
+                            Spacer(minLength: 8)
+                            if feed.id == current.id { Image(systemName: "checkmark").foregroundStyle(Theme.accent) }
+                        }
+                        .padding(.horizontal, 14).padding(.vertical, 12).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(feed.id == current.id ? .isSelected : [])
+                    Divider().overlay(Theme.line)
+                }
+                note(current.isShared
+                    ? "Shared with you. You can only read it, and whoever shared it can stop at any time."
+                    : "From your own iCloud.")
+            }
+            .shadow(color: Theme.text.opacity(0.06), radius: 6, y: 2)
+        }
+    }
+
+    private func feedDetail(_ feed: Feed) -> String {
+        let source = feed.isShared ? "Shared with you" : "Your iCloud"
+        return feed.level == .busy ? "\(source), busy time only" : source
     }
 
     private var icloudText: String {

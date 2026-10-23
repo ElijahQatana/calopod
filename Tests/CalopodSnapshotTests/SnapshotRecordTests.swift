@@ -29,7 +29,7 @@ private let calendarDay = CalendarDay(
 private let status = SyncStatus(
     lastSyncAt: now, issues: [SyncIssue(kind: .stale, calendarID: "cal-1", since: now), SyncIssue(kind: .partial)],
     runs: [SyncRunMark(at: now, failed: false), SyncRunMark(at: now.addingTimeInterval(900), failed: true)],
-    calendarUpdates: [CalendarUpdate(calendarID: "cal-1", at: now)])
+    calendarUpdates: [CalendarUpdate(calendarID: "cal-1", at: now)], macName: "Work Mac")
 
 private let calendars = CalendarList(calendars: [
     CalendarEntry(id: "cal-1", name: "Work", colorIndex: 0),
@@ -151,11 +151,31 @@ func payloadsUseTheRecordIDAndReplaceTheRemoteSet() async throws {
     let second = try SnapshotPayload(status, kind: .syncStatus, at: now)
     #expect(first.recordName == "availability-2027-01-15" && first.schemaVersion == SnapshotSchema.currentVersion)
     let remote = InMemorySnapshotPublisher()
-    try await remote.replaceAll(with: [first, second])
-    try await remote.replaceAll(with: [second])
+    let zone = SnapshotRemote.zoneName(mac: "m1")
+    try await remote.replaceAll(with: [first, second], inZone: zone)
+    try await remote.replaceAll(with: [second], inZone: zone)
     #expect(await remote.records.keys.sorted() == ["sync-status"])
-    try await remote.deleteAll()
+    try await remote.deleteZone(zone)
     #expect(await remote.records.isEmpty)
+}
+
+@Test
+func zoneNamesRoundTripAndKeepMacsApart() {
+    let full = SnapshotRemote.zoneName(mac: "3f2a-9c")
+    let busy = SnapshotRemote.zoneName(mac: "3f2a-9c", level: .busy)
+    #expect(full == "Snapshots-3f2a-9c" && busy == "Snapshots-3f2a-9c-busy")
+    #expect(SnapshotRemote.feed(inZone: full)?.mac == "3f2a-9c" && SnapshotRemote.feed(inZone: full)?.level == .full)
+    #expect(SnapshotRemote.feed(inZone: busy)?.mac == "3f2a-9c" && SnapshotRemote.feed(inZone: busy)?.level == .busy)
+    #expect(SnapshotRemote.feed(inZone: "Snapshots")?.mac == nil)
+    #expect(SnapshotRemote.feed(inZone: "Snapshots-") == nil && SnapshotRemote.feed(inZone: "Other") == nil)
+}
+
+@Test
+func theBusyLevelKeepsOnlyTimesAndStatus() {
+    let kept = Set(["inbox-item", "availability-day", "calendar-day", "calendars", "reminder-settings", "sync-status"]
+        .compactMap(SnapshotKind.init(rawValue:)).filter(SnapshotLevel.busy.keeps))
+    #expect(kept == [.availabilityDay, .syncStatus])
+    #expect(SnapshotLevel.full.keeps(.inboxItem))
 }
 
 @Test
