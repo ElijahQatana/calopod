@@ -94,6 +94,12 @@ public enum SyncPlanner {
             by: { $0.0 }
         ).mapValues { $0.map(\.1) }
 
+        // Events already on the target, so a meeting invited to both calendars isn't copied.
+        let targetEventKeys = Set(
+            sources.filter { $0.calendarBindingID == arm.targetBindingID && !$0.isCancelled }
+                .compactMap(sameEventKey)
+        )
+
         var items: [SyncPlanItem] = []
         var desiredMirrorKeys = Set<String>()
 
@@ -156,6 +162,9 @@ public enum SyncPlanner {
             } else if !targetSnapshotComplete {
                 action = .repair
                 reason = .targetSnapshotIncomplete
+            } else if let key = sameEventKey(source), targetEventKeys.contains(key) {
+                action = .noOp
+                reason = .targetMatches
             } else {
                 action = .create
                 reason = .targetMissing
@@ -277,6 +286,15 @@ public enum SyncPlanner {
                 payload.notes ?? "",
             ]
         )
+    }
+
+    /// Title and time. All-day events compare by day, so other zones still match.
+    private static func sameEventKey(_ event: StoredNormalizedInstance) -> String? {
+        guard let title = normalizedText(event.title)?.lowercased() else { return nil }
+        let (start, end) = event.isAllDay
+            ? AllDayDate.days(startsAt: event.startsAt, endsAt: event.endsAt, timeZoneIdentifier: event.timeZoneIdentifier)
+            : (dateIdentity(event.startsAt), dateIdentity(event.endsAt))
+        return [title, start, end, event.isAllDay ? "1" : "0"].joined(separator: "\n")
     }
 
     private static func allDayIdentity(_ payload: DesiredEventPayload) -> (String, String) {
