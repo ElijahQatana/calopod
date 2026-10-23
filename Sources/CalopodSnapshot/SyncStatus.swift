@@ -50,17 +50,21 @@ public struct SyncStatus: SnapshotRecord {
     public let runs: [SyncRunMark]?
     /// Nil in a feed from an older Mac.
     public let calendarUpdates: [CalendarUpdate]?
+    /// Tells feeds apart on the phone. Nil in a feed from an older Mac.
+    public let macName: String?
 
     public var id: String { Self.recordID }
 
     public init(
-        lastSyncAt: Date?, issues: [SyncIssue] = [], runs: [SyncRunMark]? = nil, calendarUpdates: [CalendarUpdate]? = nil
+        lastSyncAt: Date?, issues: [SyncIssue] = [], runs: [SyncRunMark]? = nil, calendarUpdates: [CalendarUpdate]? = nil,
+        macName: String? = nil
     ) {
         self.lastSyncAt = lastSyncAt
         self.issues = issues
         self.runs = runs
         self.calendarUpdates = calendarUpdates
+        self.macName = macName
     }
 
-    private enum CodingKeys: String, CodingKey { case lastSyncAt, issues, runs, calendarUpdates }
+    private enum CodingKeys: String, CodingKey { case lastSyncAt, issues, runs, calendarUpdates, macName }
 }

@@ -66,11 +66,43 @@ extension LocalStateRepository {
         }
     }
 
-    /// The remote copy is gone.
+    /// The remote copy is gone, including any busy-only copy.
     public func recordIPhoneFeedRemoved() throws {
         try database.write { db in
             try db.execute(sql: "UPDATE iphone_feed SET remove_pending = 0, failed_at = NULL, failure = NULL WHERE id = 1")
+            try db.execute(sql: "UPDATE iphone_feed_zone SET busy_shared = 0 WHERE id = 1")
         }
+    }
+}
+
+/// What names this Mac's iCloud zones. Made once.
+extension LocalStateRepository {
+    public struct IPhoneFeedZone: Equatable, Sendable {
+        public var macID: String
+        public var busyShared: Bool
+        public var legacyRemoved: Bool
+    }
+
+    public func iPhoneFeedZone(proposedID: String = UUID().uuidString.lowercased()) throws -> IPhoneFeedZone {
+        try database.write { db in
+            try db.execute(sql: "INSERT OR IGNORE INTO iphone_feed_zone (id, mac_id) VALUES (1, ?)", arguments: [proposedID])
+            let row = try Row.fetchOne(db, sql: "SELECT mac_id, busy_shared, legacy_removed FROM iphone_feed_zone WHERE id = 1")!
+            return IPhoneFeedZone(macID: row["mac_id"], busyShared: row["busy_shared"], legacyRemoved: row["legacy_removed"])
+        }
+    }
+
+    /// Turning it on makes the next run publish the busy-only copy.
+    public func setIPhoneFeedBusyShared(_ on: Bool) throws {
+        _ = try iPhoneFeedZone()
+        try database.write { db in
+            try db.execute(sql: "UPDATE iphone_feed_zone SET busy_shared = ? WHERE id = 1", arguments: [on])
+            if on { try db.execute(sql: "UPDATE iphone_feed SET published_run_id = NULL WHERE id = 1") }
+        }
+    }
+
+    public func recordIPhoneFeedLegacyRemoved() throws {
+        _ = try iPhoneFeedZone()
+        try database.write { db in try db.execute(sql: "UPDATE iphone_feed_zone SET legacy_removed = 1 WHERE id = 1") }
     }
 }
 

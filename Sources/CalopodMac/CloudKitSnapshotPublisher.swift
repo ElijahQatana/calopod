@@ -12,34 +12,35 @@ struct CloudKitSnapshotPublisher: SnapshotPublisher {
 
     private static let batchSize = 300
 
-    private var zoneID: CKRecordZone.ID {
-        CKRecordZone.ID(zoneName: SnapshotRemote.zoneName, ownerName: CKCurrentUserDefaultName)
+    static func zoneID(_ zone: String) -> CKRecordZone.ID {
+        CKRecordZone.ID(zoneName: zone, ownerName: CKCurrentUserDefaultName)
     }
 
-    func replaceAll(with records: [SnapshotPayload]) async throws {
+    func replaceAll(with records: [SnapshotPayload], inZone zone: String) async throws {
         do {
             let container = CKContainer(identifier: SnapshotRemote.containerIdentifier)
-            try await requireAccount(container)
+            try await Self.requireAccount(container)
             let database = container.privateCloudDatabase
+            let zoneID = Self.zoneID(zone)
             _ = try await database.save(CKRecordZone(zoneID: zoneID))
             let wanted = Set(records.map(\.recordName))
-            let stale = try await existingNames(in: database).filter { !wanted.contains($0) }
-            let saving = records.map(record)
+            let stale = try await existingNames(in: database, zoneID: zoneID).filter { !wanted.contains($0) }
+            let saving = records.map { record($0, zoneID: zoneID) }
             for start in stride(from: 0, to: max(saving.count, 1), by: Self.batchSize) {
                 let batch = Array(saving[start..<min(start + Self.batchSize, saving.count)])
                 _ = try await database.modifyRecords(
-                    saving: batch, deleting: start == 0 ? stale.map(recordID) : [], savePolicy: .allKeys)
+                    saving: batch, deleting: start == 0 ? stale.map { CKRecord.ID(recordName: $0, zoneID: zoneID) } : [], savePolicy: .allKeys)
             }
         } catch {
             throw Self.plain(error)
         }
     }
 
-    func deleteAll() async throws {
+    func deleteZone(_ zone: String) async throws {
         do {
             let container = CKContainer(identifier: SnapshotRemote.containerIdentifier)
-            try await requireAccount(container)
-            _ = try await container.privateCloudDatabase.deleteRecordZone(withID: zoneID)
+            try await Self.requireAccount(container)
+            _ = try await container.privateCloudDatabase.deleteRecordZone(withID: Self.zoneID(zone))
         } catch let error as CKError where error.code == .zoneNotFound {
             return
         } catch {
@@ -49,14 +50,14 @@ struct CloudKitSnapshotPublisher: SnapshotPublisher {
 
     // MARK: Helpers
 
-    private func requireAccount(_ container: CKContainer) async throws {
+    static func requireAccount(_ container: CKContainer) async throws {
         guard try await container.accountStatus() == .available else {
             throw Failure(errorDescription: "iCloud is not signed in on this Mac.")
         }
     }
 
     /// Reads the zone's changes from the start, which lists every record without needing a query index.
-    private func existingNames(in database: CKDatabase) async throws -> [String] {
+    private func existingNames(in database: CKDatabase, zoneID: CKRecordZone.ID) async throws -> [String] {
         var names: Set<String> = []
         var token: CKServerChangeToken?
         var more = true
@@ -70,10 +71,9 @@ struct CloudKitSnapshotPublisher: SnapshotPublisher {
         return names.sorted()
     }
 
-    private func recordID(_ name: String) -> CKRecord.ID { CKRecord.ID(recordName: name, zoneID: zoneID) }
-
-    private func record(_ payload: SnapshotPayload) -> CKRecord {
-        let record = CKRecord(recordType: SnapshotRemote.recordType, recordID: recordID(payload.recordName))
+    private func record(_ payload: SnapshotPayload, zoneID: CKRecordZone.ID) -> CKRecord {
+        let record = CKRecord(
+            recordType: SnapshotRemote.recordType, recordID: CKRecord.ID(recordName: payload.recordName, zoneID: zoneID))
         record[SnapshotRemote.Field.kind] = payload.kind.rawValue
         record[SnapshotRemote.Field.schemaVersion] = payload.schemaVersion
         record[SnapshotRemote.Field.publishedAt] = payload.publishedAt

@@ -25,6 +25,7 @@ extension CalopodDatabase {
         "v21_working_hours",
         "v22_iphone_feed",
         "v23_iphone_calendars",
+        "v24_iphone_feed_zone",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -459,6 +460,18 @@ extension CalopodDatabase {
         // The calendars whose events go to the iPhone. A calendar is here only while it is chosen.
         migrator.registerMigration("v23_iphone_calendars") { database in
             try database.execute(sql: "CREATE TABLE iphone_calendars (calendar_id TEXT PRIMARY KEY)")
+        }
+
+        // This Mac's zone id and share state. One row, made on first use.
+        migrator.registerMigration("v24_iphone_feed_zone") { database in
+            try database.execute(sql: """
+                CREATE TABLE iphone_feed_zone (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    mac_id TEXT NOT NULL,
+                    busy_shared INTEGER NOT NULL DEFAULT 0,
+                    legacy_removed INTEGER NOT NULL DEFAULT 0
+                )
+                """)
         }
 
         return migrator

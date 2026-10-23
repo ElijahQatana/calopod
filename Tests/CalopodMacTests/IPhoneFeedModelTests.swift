@@ -29,7 +29,7 @@ struct IPhoneFeedModelTests {
         #expect(await remote.replaceCount == 1)
         await model.setOn(false)
         #expect(!model.isOn && !model.feed.removePending)
-        #expect(await remote.deleteCount == 1)
+        #expect(await remote.zones.isEmpty)
     }
 
     @Test("A calendar starts unchosen and the choice is saved and uploaded")
