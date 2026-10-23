@@ -105,8 +105,10 @@ plutil -lint "$plist_path" >/dev/null
 
 ! plutil -extract EnvironmentVariables.CALOPOD_GOOGLE_CLIENT_ID raw "$plist_path" >/dev/null 2>&1
 ! plutil -extract EnvironmentVariables.CALOPOD_MICROSOFT_CLIENT_ID raw "$plist_path" >/dev/null 2>&1
+! plutil -extract EnvironmentVariables.CALOPOD_GOOGLE_CLIENT_SECRET raw "$plist_path" >/dev/null 2>&1
 (
   export CALOPOD_GOOGLE_CLIENT_ID=synthetic-google-id
+  export CALOPOD_GOOGLE_CLIENT_SECRET=synthetic-google-secret
   export CALOPOD_MICROSOFT_CLIENT_ID=synthetic-microsoft-id
   export CALOPOD_MICROSOFT_TENANT=organizations
   run_service install \
@@ -116,6 +118,7 @@ plutil -lint "$plist_path" >/dev/null
     --horizon-days 30 >/dev/null
 )
 [ "$(plutil -extract EnvironmentVariables.CALOPOD_GOOGLE_CLIENT_ID raw "$plist_path")" = "synthetic-google-id" ]
+[ "$(plutil -extract EnvironmentVariables.CALOPOD_GOOGLE_CLIENT_SECRET raw "$plist_path")" = "synthetic-google-secret" ]
 [ "$(plutil -extract EnvironmentVariables.CALOPOD_MICROSOFT_CLIENT_ID raw "$plist_path")" = "synthetic-microsoft-id" ]
 [ "$(plutil -extract EnvironmentVariables.CALOPOD_MICROSOFT_TENANT raw "$plist_path")" = "organizations" ]
 

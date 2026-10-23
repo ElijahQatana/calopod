@@ -26,8 +26,10 @@ rm -rf "$bundle_root"
 mkdir -p "$contents_root/MacOS" "$contents_root/Resources" "$contents_root/Library/LaunchAgents"
 sed "s/__VERSION__/$version/" "$repository_root/Support/Mac/Info.plist" > "$contents_root/Info.plist"
 cp "$repository_root/Support/Mac/$agent_plist_name" "$contents_root/Library/LaunchAgents/$agent_plist_name"
-# Public OAuth client IDs only, never secrets.
+# OAuth client IDs, plus the Google Desktop client's secret, which Google treats as non-confidential
+# for installed apps. Both come from the environment and never from the repository.
 for pair in CalopodGoogleClientID:CALOPOD_GOOGLE_CLIENT_ID \
+  CalopodGoogleClientSecret:CALOPOD_GOOGLE_CLIENT_SECRET \
   CalopodMicrosoftClientID:CALOPOD_MICROSOFT_CLIENT_ID \
   CalopodMicrosoftTenant:CALOPOD_MICROSOFT_TENANT; do
   value=$(printenv "${pair#*:}" || true)

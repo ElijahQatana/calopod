@@ -10,11 +10,12 @@ Don't connect the same account both ways. Calopod warns when it spots that.
 
 1. In Google Cloud, create or pick a project and turn on the Google Calendar API.
 2. Set up the OAuth consent screen for your account.
-3. Create an OAuth client of type **Desktop app**, and copy the client ID. You don't need a client secret.
-4. Export the ID and connect:
+3. Create an OAuth client of type **Desktop app**, and copy the client ID and client secret. Google asks for the secret when Calopod trades the sign-in for tokens.
+4. Export both and connect:
 
 ```sh
 export CALOPOD_GOOGLE_CLIENT_ID='your-desktop-client-id'
+export CALOPOD_GOOGLE_CLIENT_SECRET='your-desktop-client-secret'
 calopod connection add google
 calopod calendars
 calopod calendars --connection CONNECTION_ID --select CALENDAR_ID
@@ -37,7 +38,7 @@ calopod connection add microsoft
 
 ## Automatic sync with these accounts
 
-The background service can't see your shell. Export the client ID before you install or reinstall the service, and the installer will copy it in. If it's missing, `calopod doctor` reports a `client-id` problem. A client ID is public, so this stores no secrets.
+The background service can't see your shell. Export the client ID, and the Google client secret if you use Google, before you install or reinstall the service, and the installer will copy them in. If the ID is missing, `calopod doctor` reports a `client-id` problem. These are app credentials, not sign-in tokens, and tokens never go in the service file.
 
 If you connected with an older, read-only version, remove the connection and add it again before using it for writing.
 

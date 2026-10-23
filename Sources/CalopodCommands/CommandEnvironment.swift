@@ -29,7 +29,10 @@ enum CommandEnvironment {
         }
         return GoogleConnectionService(
             oauth: GoogleOAuthClient(
-                configuration: GoogleOAuthConfiguration(clientID: clientID)
+                configuration: GoogleOAuthConfiguration(
+                    clientID: clientID,
+                    clientSecret: ProcessInfo.processInfo.environment["CALOPOD_GOOGLE_CLIENT_SECRET"]
+                )
             ),
             calendarClient: GoogleCalendarClient(),
             tokenVault: OAuthTokenVault(secretStore: KeychainSecretStore()),

@@ -169,7 +169,10 @@ public struct CalopodRuntimeEnvironment: Sendable {
         }
         return GoogleConnectionService(
             oauth: GoogleOAuthClient(
-                configuration: GoogleOAuthConfiguration(clientID: clientID)
+                configuration: GoogleOAuthConfiguration(
+                    clientID: clientID,
+                    clientSecret: variables["CALOPOD_GOOGLE_CLIENT_SECRET"]
+                )
             ),
             calendarClient: GoogleCalendarClient(),
             tokenVault: OAuthTokenVault(secretStore: KeychainSecretStore()),

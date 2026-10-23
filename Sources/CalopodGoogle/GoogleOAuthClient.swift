@@ -5,18 +5,22 @@ import FoundationNetworking
 #endif
 
 /// Endpoints and client identity for Google OAuth. Only `clientID` is needed; the defaults are
-/// Google's.
+/// Google's. A Desktop app client also has a secret, which Google asks for at the token endpoint
+/// even with PKCE.
 public struct GoogleOAuthConfiguration: Sendable {
     public let clientID: String
+    public let clientSecret: String?
     public let authorizationEndpoint: URL
     public let tokenEndpoint: URL
 
     public init(
         clientID: String,
+        clientSecret: String? = nil,
         authorizationEndpoint: URL = URL(string: "https://accounts.google.com/o/oauth2/v2/auth")!,
         tokenEndpoint: URL = URL(string: "https://oauth2.googleapis.com/token")!
     ) {
         self.clientID = clientID
+        self.clientSecret = clientSecret.flatMap { $0.isEmpty ? nil : $0 }
         self.authorizationEndpoint = authorizationEndpoint
         self.tokenEndpoint = tokenEndpoint
     }
@@ -137,6 +141,8 @@ public struct GoogleOAuthClient: Sendable {
     }
 
     private func tokenRequest(_ fields: [String: String]) async throws -> HTTPResponse {
+        var fields = fields
+        if let secret = configuration.clientSecret { fields["client_secret"] = secret }
         var request = URLRequest(url: configuration.tokenEndpoint)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")

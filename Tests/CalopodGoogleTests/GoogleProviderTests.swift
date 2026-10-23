@@ -92,6 +92,27 @@ struct GoogleOAuthTests {
             try await client.refresh(expired)
         }
     }
+
+    @Test("The client secret is sent to the token endpoint only when set", arguments: [
+        (nil as String?, false), ("", false), ("synthetic-secret", true),
+    ])
+    func clientSecret(secret: String?, sent: Bool) async throws {
+        let transport = RecordingTransport { request in
+            let body = String(decoding: request.httpBody ?? Data(), as: UTF8.self)
+            #expect(body.contains("client_secret=") == sent)
+            return HTTPResponse(
+                statusCode: 200,
+                body: Data(#"{"access_token":"a","refresh_token":"r","expires_in":60}"#.utf8)
+            )
+        }
+        let client = GoogleOAuthClient(
+            configuration: GoogleOAuthConfiguration(clientID: "client-id", clientSecret: secret),
+            transport: transport
+        )
+
+        let tokens = try await client.authorize(using: StubBrowserSession { _ in })
+        _ = try await client.refresh(tokens)
+    }
 }
 
 @Suite("Google Calendar API")
