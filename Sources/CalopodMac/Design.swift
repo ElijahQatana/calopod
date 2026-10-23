@@ -377,12 +377,14 @@ struct PillPicker<Value: Hashable>: View {
 
 struct BusyLine: View {
     let text: String?
+    var cancel: (() -> Void)?
 
     var body: some View {
         if let text {
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
                 Text(text).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+                if let cancel { Button("Cancel", action: cancel).buttonStyle(.link).font(Theme.Fonts.secondary) }
             }
         }
     }

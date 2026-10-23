@@ -26,7 +26,9 @@ struct FirstRunSheet: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    if let busy = setup.busy ?? service.busyAction { BusyLine(text: busy) }
+                    if let busy = setup.busy ?? service.busyAction {
+                        BusyLine(text: busy, cancel: setup.cancelSignIn)
+                    }
                     if let notice = setup.notice ?? service.notice { Banner(kind: .error, text: notice, onDismiss: { setup.dismissNotice(); service.dismissNotice() }) }
                     switch progress.step {
                     case .connect: connect

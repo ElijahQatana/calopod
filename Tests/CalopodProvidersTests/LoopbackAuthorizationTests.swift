@@ -55,6 +55,20 @@ struct LoopbackAuthorizationTests {
         #expect(result.failureValue == .consentDenied)
     }
 
+    @Test("Cancelling the task ends the sign-in at once")
+    func cancelled() async {
+        let session = LoopbackBrowserAuthorizationSession(timeoutSeconds: 8, openURL: { _ in true })
+        let task = Task {
+            try await session.authorize { _ in URL(string: "https://example.com/authorize")! }
+        }
+        try? await Task.sleep(for: .milliseconds(300))
+        let started = ContinuousClock.now
+        task.cancel()
+        let result = await task.result
+        #expect(ContinuousClock.now - started < .seconds(3))
+        #expect({ if case .failure(let error) = result { error is CancellationError } else { false } }())
+    }
+
     @Test("The timeout still reports authorization required")
     func timeout() async {
         let result = await authorizeWhileSending(timeout: 1) { _, _ in ["/favicon.ico"] }

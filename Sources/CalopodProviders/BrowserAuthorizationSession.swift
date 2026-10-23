@@ -55,6 +55,18 @@ public final class LoopbackBrowserAuthorizationSession: BrowserAuthorizationSess
     public func authorize(
         makeURL: @escaping @Sendable (BrowserAuthorizationContext) throws -> URL
     ) async throws -> BrowserAuthorizationResult {
+        let cancellation = CancellationLink()
+        return try await withTaskCancellationHandler {
+            try await listen(makeURL: makeURL, cancellation: cancellation)
+        } onCancel: {
+            cancellation.cancel()
+        }
+    }
+
+    private func listen(
+        makeURL: @escaping @Sendable (BrowserAuthorizationContext) throws -> URL,
+        cancellation: CancellationLink
+    ) async throws -> BrowserAuthorizationResult {
         let redirectHost = self.redirectHost
         let callbackPath = self.callbackPath
         let openURL = self.openURL
@@ -70,6 +82,7 @@ public final class LoopbackBrowserAuthorizationSession: BrowserAuthorizationSess
                     listener: listener,
                     continuation: continuation
                 )
+                cancellation.attach(coordinator)
 
                 listener.stateUpdateHandler = { listenerState in
                     switch listenerState {
@@ -195,6 +208,30 @@ public final class LoopbackBrowserAuthorizationSession: BrowserAuthorizationSess
             content: Data(response.utf8),
             completion: .contentProcessed { _ in connection.cancel() }
         )
+    }
+}
+
+/// Lets a cancelled task end the flow even though the listener lives on its own queue. The task can
+/// be cancelled before the coordinator exists, so a cancel that comes first is applied on attach.
+private final class CancellationLink: @unchecked Sendable {
+    private let lock = NSLock()
+    private var coordinator: AuthorizationCoordinator?
+    private var cancelled = false
+
+    func attach(_ coordinator: AuthorizationCoordinator) {
+        let alreadyCancelled = lock.withLock {
+            self.coordinator = coordinator
+            return cancelled
+        }
+        if alreadyCancelled { coordinator.finish(.failure(CancellationError())) }
+    }
+
+    func cancel() {
+        let coordinator = lock.withLock {
+            cancelled = true
+            return self.coordinator
+        }
+        coordinator?.finish(.failure(CancellationError()))
     }
 }
 
