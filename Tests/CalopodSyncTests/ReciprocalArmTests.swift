@@ -77,6 +77,27 @@ struct ReciprocalArmTests {
         ).isEmpty)
     }
 
+    @Test("An invite already on both calendars is not copied either way")
+    func bothAlreadyInvited() async throws {
+        let fixture = try ReciprocalInviteFixture()
+        await fixture.calendars.plantInvite(in: ["a", "b"])
+        #expect(try await fixture.run() == 0)
+        #expect(await fixture.calendars.copyCount() == 0)
+        #expect(try await fixture.run() == 0)
+    }
+
+    @Test("A copy is removed once the target becomes an invitee too")
+    func removesCopyWhenTargetIsInvited() async throws {
+        let fixture = try ReciprocalInviteFixture()
+        await fixture.calendars.plantInvite(in: ["a"])
+        #expect(try await fixture.run() == 1)
+        #expect(await fixture.calendars.copyCount() == 1)
+        await fixture.calendars.plantInvite(in: ["b"])
+        #expect(try await fixture.run() == 1)
+        #expect(await fixture.calendars.copyCount() == 0)
+        #expect(try await fixture.run() == 0)
+    }
+
 }
 
 private struct ReciprocalFixture {
@@ -123,10 +144,14 @@ private struct ReciprocalFixture {
         let observations = try ManagedTargetObserver(secretStore: secrets).observations(
             snapshots: await calendars.snapshots(in: arm.targetBindingID), arm: arm, mappings: mappings
         )
+        let targetOriginals = try repository.normalizedInstances(
+            calendarBindingIDs: [arm.targetBindingID], from: window.start, through: window.end
+        )
         return SyncPlanner.plan(
             arm: arm, targetProvider: provider,
             sources: try repository.normalizedInstances(calendarBindingIDs: arm.sourceBindingIDs, from: window.start, through: window.end),
-            mappings: mappings, targetEvents: observations, window: window, sourceSnapshotComplete: true
+            mappings: mappings, targetEvents: observations, window: window, sourceSnapshotComplete: true,
+            targetOriginals: targetOriginals
         )
     }
 
@@ -139,9 +164,12 @@ private struct ReciprocalFixture {
                 snapshots: await calendars.snapshots(in: arm.targetBindingID), arm: arm,
                 mappings: try repository.mirrorMappings(armID: arm.id)
             )
+            let targetOriginals = try repository.normalizedInstances(
+                calendarBindingIDs: [arm.targetBindingID], from: window.start, through: window.end
+            )
             let summary = try await ManagedEventConvergenceService(repository: repository, secretStore: secrets).converge(
                 initialItems: plan.items, arm: arm, targetProvider: provider,
-                initialObservations: observations, window: window
+                initialObservations: observations, window: window, targetOriginals: targetOriginals
             ) {
                 await calendars.snapshots(in: arm.targetBindingID)
             } perform: { mutation in
@@ -150,6 +178,167 @@ private struct ReciprocalFixture {
             writes += summary.providerWriteCount
         }
         return writes
+    }
+}
+
+/// Two calendars with reciprocal Arms and a shared invite planted by the tests.
+private struct ReciprocalInviteFixture {
+    let repository: LocalStateRepository
+    let connection: StoredConnection
+    let bindings: [StoredCalendarBinding]
+    let arms: [StoredArm]
+    let window: SyncWindow
+    let calendars = ReciprocalInviteCalendars()
+    let secrets = ReciprocalSecrets()
+
+    init() throws {
+        repository = LocalStateRepository(database: try CalopodDatabase.inMemory())
+        connection = StoredConnection(
+            id: "connection", configurationID: "default", provider: ProviderKind.eventKit.rawValue,
+            displayLabel: "Synthetic", isEnabled: true
+        )
+        try repository.saveConnection(connection)
+        bindings = ["a", "b"].map {
+            StoredCalendarBinding(
+                id: $0, connectionID: "connection", providerCalendarID: $0,
+                displayLabel: "Synthetic \($0)", isSelected: true, isReadOnly: false
+            )
+        }
+        try repository.replaceCalendarBindings(connectionID: connection.id, bindings: bindings)
+        let service = ArmConfigurationService(repository: repository)
+        arms = [
+            try service.createArm(id: "a-to-b", sourceBindingIDs: ["a"], targetBindingID: "b"),
+            try service.createArm(id: "b-to-a", sourceBindingIDs: ["b"], targetBindingID: "a"),
+        ]
+        window = try SyncWindow(start: Date(timeIntervalSince1970: 0), end: Date(timeIntervalSince1970: 100))
+    }
+
+    func refresh() async throws {
+        for binding in bindings {
+            let events = await calendars.events(in: binding.id)
+            try EventCache(repository: repository).apply(
+                ProviderEventPage(events: events, nextSyncToken: nil, refreshMode: .full),
+                connection: connection, calendar: binding,
+                from: window.start, through: window.end
+            )
+        }
+    }
+
+    func plan(arm: StoredArm) async throws -> SyncPlan {
+        let mappings = try repository.mirrorMappings(armID: arm.id)
+        let observations = try ManagedTargetObserver(secretStore: secrets).observations(
+            snapshots: await calendars.snapshots(in: arm.targetBindingID), arm: arm, mappings: mappings
+        )
+        let targetOriginals = try repository.normalizedInstances(
+            calendarBindingIDs: [arm.targetBindingID], from: window.start, through: window.end
+        )
+        return SyncPlanner.plan(
+            arm: arm, targetProvider: .eventKit,
+            sources: try repository.normalizedInstances(
+                calendarBindingIDs: arm.sourceBindingIDs, from: window.start, through: window.end
+            ),
+            mappings: mappings, targetEvents: observations, window: window, sourceSnapshotComplete: true,
+            targetOriginals: targetOriginals
+        )
+    }
+
+    func run() async throws -> Int {
+        try await refresh()
+        var writes = 0
+        for arm in arms {
+            let plan = try await plan(arm: arm)
+            let observations = try ManagedTargetObserver(secretStore: secrets).observations(
+                snapshots: await calendars.snapshots(in: arm.targetBindingID), arm: arm,
+                mappings: try repository.mirrorMappings(armID: arm.id)
+            )
+            let targetOriginals = try repository.normalizedInstances(
+                calendarBindingIDs: [arm.targetBindingID], from: window.start, through: window.end
+            )
+            let summary = try await ManagedEventConvergenceService(
+                repository: repository, secretStore: secrets
+            ).converge(
+                initialItems: plan.items, arm: arm, targetProvider: .eventKit,
+                initialObservations: observations, window: window, targetOriginals: targetOriginals
+            ) {
+                await calendars.snapshots(in: arm.targetBindingID)
+            } perform: { mutation in
+                try await calendars.perform(mutation, in: arm.targetBindingID)
+            }
+            writes += summary.providerWriteCount
+        }
+        return writes
+    }
+}
+
+private actor ReciprocalInviteCalendars {
+    private var storage: [String: [ManagedEventSnapshot]] = ["a": [], "b": []]
+    private var nextID = 0
+
+    func plantInvite(in calendars: [String]) {
+        let invite = ManagedEventSnapshot(
+            providerEventID: "invite",
+            providerVersion: "v1",
+            payload: DesiredEventPayload(
+                startsAt: Date(timeIntervalSince1970: 10),
+                endsAt: Date(timeIntervalSince1970: 20),
+                isAllDay: false,
+                availability: "busy",
+                title: "Synthetic shared invite",
+                isPrivate: false,
+                location: "Example room",
+                notes: "Synthetic notes"
+            ),
+            markerStatus: .absent,
+            provenance: nil,
+            providerExternalID: "shared-uid"
+        )
+        for calendar in calendars {
+            storage[calendar, default: []].removeAll { $0.providerEventID == "invite" }
+            storage[calendar, default: []].append(invite)
+        }
+    }
+
+    func snapshots(in calendar: String) -> [ManagedEventSnapshot] { storage[calendar] ?? [] }
+    func copies() -> [ManagedEventSnapshot] {
+        storage.values.flatMap { $0.filter { $0.providerEventID != "invite" } }
+    }
+    func copyCount() -> Int { copies().count }
+    func events(in calendar: String) -> [ProviderEvent] {
+        snapshots(in: calendar).map {
+            ProviderEvent(
+                provider: ProviderKind.eventKit.rawValue, connectionID: "connection", calendarID: calendar,
+                eventID: $0.providerEventID, seriesID: nil, originalStart: nil,
+                start: $0.payload?.startsAt, end: $0.payload?.endsAt,
+                isAllDay: $0.payload?.isAllDay ?? false, availability: .busy, isCancelled: false,
+                isPrivate: false, title: $0.payload?.title, updatedAt: nil,
+                isManagedMirror: $0.markerStatus != .absent,
+                location: $0.payload?.location, notes: $0.payload?.notes,
+                externalID: $0.providerExternalID
+            )
+        }
+    }
+    func perform(_ mutation: ManagedEventMutation, in calendar: String) throws -> ManagedEventMutationResult {
+        switch mutation {
+        case let .create(request):
+            nextID += 1
+            let id = "copy-\(nextID)"
+            storage[calendar, default: []].append(ManagedEventSnapshot(
+                providerEventID: id, providerVersion: "v1", payload: request.payload,
+                markerStatus: .parsed, provenance: request.provenance
+            ))
+            return .written(ManagedEventWriteResult(providerEventID: id, providerVersion: "v1"))
+        case let .update(id, _, request):
+            let index = try #require(storage[calendar]!.firstIndex { $0.providerEventID == id && $0.provenance != nil })
+            storage[calendar]![index] = ManagedEventSnapshot(
+                providerEventID: id, providerVersion: "v2", payload: request.payload,
+                markerStatus: .parsed, provenance: request.provenance
+            )
+            return .written(ManagedEventWriteResult(providerEventID: id, providerVersion: "v2"))
+        case let .delete(id, _):
+            #expect(id != "invite")
+            storage[calendar, default: []].removeAll { $0.providerEventID == id }
+            return .deleted
+        }
     }
 }
 

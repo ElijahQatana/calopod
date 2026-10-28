@@ -136,9 +136,18 @@ public struct SyncEngine: Sendable {
             otherSources, from: readWindow.start, through: readWindow.end, repository: repository)
         var ingestion = armRefresh.ingestion
         ingestion.add(otherRefresh.ingestion)
+        let failedBindingIDs = armRefresh.failedBindingIDs.union(otherRefresh.failedBindingIDs)
+        let attemptedBindingIDs = Set(
+            (sources + otherSources).map(\.calendar.id)
+        )
+        // Only calendars refreshed this run may drive "already on the target" decisions; the cache
+        // is not pruned when a calendar is deselected.
+        let readBindingIDs = attemptedBindingIDs.subtracting(failedBindingIDs)
         let refresh = CalendarRefreshSummary(
             ingestion: ingestion, failedSourceCount: armRefresh.failedSourceCount,
-            warnings: armRefresh.warnings + otherRefresh.warnings)
+            warnings: armRefresh.warnings + otherRefresh.warnings,
+            failedBindingIDs: failedBindingIDs
+        )
         guard let sourceProviders = Dictionary(
             uniquelyKeyed: sources.map { ($0.calendar.id, $0.connection.provider) }
         ) else {
@@ -147,6 +156,7 @@ public struct SyncEngine: Sendable {
         var planItems: [SyncPlanItem] = []
         var review = SyncReviewSummary()
         var observationsByArm: [String: [TargetEventObservation]] = [:]
+        var targetOriginalsByArm: [String: [StoredNormalizedInstance]] = [:]
         var targetFailureCount = 0
         var uncheckedArmIDs = Set<String>()
         var targetWarnings: [String] = []
@@ -183,6 +193,17 @@ public struct SyncEngine: Sendable {
                 from: window.start,
                 through: window.end
             )
+            let targetOriginals: [StoredNormalizedInstance]
+            if readBindingIDs.contains(arm.targetBindingID) {
+                targetOriginals = try repository.normalizedInstances(
+                    calendarBindingIDs: [arm.targetBindingID],
+                    from: window.start,
+                    through: window.end
+                )
+            } else {
+                targetOriginals = []
+            }
+            targetOriginalsByArm[arm.id] = targetOriginals
             let mappings = try repository.mirrorMappings(armID: arm.id)
             let observations: [TargetEventObservation]
             let targetComplete: Bool
@@ -218,7 +239,8 @@ public struct SyncEngine: Sendable {
                 targetEvents: observations,
                 window: window,
                 sourceSnapshotComplete: refresh.failedSourceCount == 0,
-                targetSnapshotComplete: targetComplete
+                targetSnapshotComplete: targetComplete,
+                targetOriginals: targetOriginals
             )
             review.add(SyncPlanReview.summarize(
                 plan: plan, sources: events,
@@ -299,6 +321,7 @@ public struct SyncEngine: Sendable {
                     targetProvider: targetProvider,
                     initialObservations: observationsByArm[arm.id] ?? [],
                     window: window,
+                    targetOriginals: targetOriginalsByArm[arm.id] ?? [],
                     readSnapshots: {
                         try await managedTargetSnapshots(
                             target: target,
@@ -414,6 +437,7 @@ public struct SyncEngine: Sendable {
     ) async -> CalendarRefreshSummary {
         let cache = EventCache(repository: repository)
         var failedCount = 0
+        var failedBindingIDs = Set<String>()
         var ingestion = EventIngestionSummary()
         var warnings: [String] = []
         // Sources on one connection are fetched together, so EventKit launches the host once.
@@ -460,6 +484,7 @@ public struct SyncEngine: Sendable {
                     }
                 } catch {
                     failedCount += group.sources.count
+                    failedBindingIDs.formUnion(group.sources.map(\.calendar.id))
                     failureCode = refreshFailureCode(error)
                 }
             } else {
@@ -482,6 +507,7 @@ public struct SyncEngine: Sendable {
                         ingestion.add(result.ingestion)
                     } catch {
                         failedCount += 1
+                        failedBindingIDs.insert(source.calendar.id)
                         failureCode = failureCode ?? refreshFailureCode(error)
                     }
                 }
@@ -501,7 +527,8 @@ public struct SyncEngine: Sendable {
         return CalendarRefreshSummary(
             ingestion: ingestion,
             failedSourceCount: failedCount,
-            warnings: warnings
+            warnings: warnings,
+            failedBindingIDs: failedBindingIDs
         )
     }
 
@@ -704,6 +731,19 @@ private struct CalendarRefreshSummary: Sendable {
     let ingestion: EventIngestionSummary
     let failedSourceCount: Int
     let warnings: [String]
+    let failedBindingIDs: Set<String>
+
+    init(
+        ingestion: EventIngestionSummary,
+        failedSourceCount: Int,
+        warnings: [String],
+        failedBindingIDs: Set<String> = []
+    ) {
+        self.ingestion = ingestion
+        self.failedSourceCount = failedSourceCount
+        self.warnings = warnings
+        self.failedBindingIDs = failedBindingIDs
+    }
 }
 
 private func isDeterministicRepair(_ item: SyncPlanItem) -> Bool {

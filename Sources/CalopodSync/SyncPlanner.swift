@@ -70,7 +70,8 @@ public enum SyncPlanner {
         targetEvents: [TargetEventObservation],
         window: SyncWindow,
         sourceSnapshotComplete: Bool,
-        targetSnapshotComplete: Bool = true
+        targetSnapshotComplete: Bool = true,
+        targetOriginals: [StoredNormalizedInstance] = []
     ) -> SyncPlan {
         let armSourceIDs = Set(arm.sourceBindingIDs)
         let boundedSources = sources.filter {
@@ -94,11 +95,13 @@ public enum SyncPlanner {
             by: { $0.0 }
         ).mapValues { $0.map(\.1) }
 
-        // Events already on the target, so a meeting invited to both calendars isn't copied.
-        let targetEventKeys = Set(
-            sources.filter { $0.calendarBindingID == arm.targetBindingID && !$0.isCancelled }
-                .compactMap(sameEventKey)
-        )
+        // Events already on the target (passed separately so a meeting invited to both calendars
+        // isn't copied). Callers must only include calendars read in this run.
+        let originals = targetOriginals.filter {
+            $0.calendarBindingID == arm.targetBindingID && !$0.isCancelled
+        }
+        let targetEventKeys = Set(originals.compactMap(sameEventKey))
+        let targetExternalIDs = Set(originals.compactMap { normalizedText($0.providerExternalID) })
 
         var items: [SyncPlanItem] = []
         var desiredMirrorKeys = Set<String>()
@@ -120,6 +123,9 @@ public enum SyncPlanner {
             let unverified = observations.filter {
                 $0.ownershipStatus != .verified && $0.ownershipStatus != .unmanaged
             }
+            let originalOnTarget = targetHolds(
+                source, eventKeys: targetEventKeys, externalIDs: targetExternalIDs
+            )
 
             // Ownership comes first: an unverifiable event, or several verified ones for one
             // mirror, goes to `.repair`, never auto-resolved.
@@ -149,6 +155,10 @@ public enum SyncPlanner {
                 if target.providerEventID != mapping.providerEventID {
                     action = .repair
                     reason = .providerIdentityChanged
+                } else if originalOnTarget {
+                    // The target calendar already holds the invite itself; remove Calopod's copy.
+                    action = .remove
+                    reason = .targetHasOriginal
                 } else if target.contentFingerprint == fingerprint {
                     action = .noOp
                     reason = .targetMatches
@@ -162,7 +172,7 @@ public enum SyncPlanner {
             } else if !targetSnapshotComplete {
                 action = .repair
                 reason = .targetSnapshotIncomplete
-            } else if let key = sameEventKey(source), targetEventKeys.contains(key) {
+            } else if originalOnTarget {
                 action = .noOp
                 reason = .targetMatches
             } else {
@@ -286,6 +296,23 @@ public enum SyncPlanner {
                 payload.notes ?? "",
             ]
         )
+    }
+
+    /// True when the target calendar already holds this source event: same title and time, or the
+    /// same server UID (`providerExternalID`, EventKit's calendarItemExternalIdentifier).
+    private static func targetHolds(
+        _ source: StoredNormalizedInstance,
+        eventKeys: Set<String>,
+        externalIDs: Set<String>
+    ) -> Bool {
+        if let key = sameEventKey(source), eventKeys.contains(key) {
+            return true
+        }
+        if let externalID = normalizedText(source.providerExternalID),
+           externalIDs.contains(externalID) {
+            return true
+        }
+        return false
     }
 
     /// Title and time. All-day events compare by day, so other zones still match.

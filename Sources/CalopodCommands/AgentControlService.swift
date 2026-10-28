@@ -551,6 +551,7 @@ public struct AgentControlService: Sendable {
         case .targetMissing: "Not on the target calendar yet"
         case .targetDiffers: "Target copy is out of date"
         case .targetMatches: "Already up to date"
+        case .targetHasOriginal: "Already on the target calendar"
         case .sourceMissing: "No longer on the source calendar"
         case .verifiedDuplicates: "Duplicate copies found"
         case .mappingMissing: "Copy exists but is not tracked"
