@@ -2,7 +2,7 @@ import ArgumentParser
 
 /// The top-level `calopod` command and its subcommands.
 public struct CalopodRoot: AsyncParsableCommand {
-    public static let version = "1.3.1"
+    public static let version = "1.4.0"
 
     public static let configuration = CommandConfiguration(
         commandName: "calopod",
