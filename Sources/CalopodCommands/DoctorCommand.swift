@@ -235,7 +235,37 @@ func doctorReport(
         warnings.append("Run automatic sync once to establish service health.")
     }
 
+    let armChecks = try armSyncChecks(repository: repository)
+    items += armChecks.items
+    warnings += armChecks.warnings
+
     return doctorReport(items: items, warnings: warnings)
+}
+
+/// One check per Arm, numbered so the shared report needs no Arm names.
+func armSyncChecks(repository: LocalStateRepository) throws -> (items: [CommandItem], warnings: [String]) {
+    let health = try repository.armSyncHealths()
+    var items: [CommandItem] = []
+    var warnings: [String] = []
+    for (index, arm) in try repository.arms().enumerated() {
+        let status = ArmSyncStatus(arm: arm, health: health[arm.id])
+        let kind: String
+        switch status.state {
+        case .ok: kind = "ok"
+        case .failing: kind = "attention"
+        case .neverSynced: kind = "pending"
+        case .disabled: kind = "skipped"
+        }
+        items.append(CommandItem(
+            id: "arm-sync-\(index + 1)", kind: kind, label: status.line(),
+            syncState: status.state.rawValue, lastSyncAt: InboxCLI.date(status.lastSyncAt),
+            lastError: status.errorCategory, waiting: status.waiting, reason: status.errorCategory))
+        if let category = status.errorCategory, !warnings.contains(actionForFailure(category)) {
+            warnings.append(actionForFailure(category))
+        }
+    }
+    if items.contains(where: { $0.kind == "pending" }) { warnings.append("Run automatic sync once to check each Arm.") }
+    return (items, warnings)
 }
 
 /// The three macOS permissions, read the way the app reads them. Nothing here can raise a prompt.

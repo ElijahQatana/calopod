@@ -264,6 +264,11 @@ public struct CommandItem: Codable, Equatable, Sendable {
     public let padding: String?
     /// For Arms: the filters that are on, such as "skip-declined".
     public let filters: [String]?
+    /// For Arms: "ok", "failing", "never-synced" or "disabled".
+    public let syncState: String?
+    public let lastSyncAt: String?
+    public let lastError: String?
+    public let waiting: Int?
     public let reason: String?
     public let armID: String?
     public let mirrorKey: String?
@@ -301,6 +306,10 @@ public struct CommandItem: Codable, Equatable, Sendable {
         armLabel: String? = nil,
         padding: String? = nil,
         filters: [String]? = nil,
+        syncState: String? = nil,
+        lastSyncAt: String? = nil,
+        lastError: String? = nil,
+        waiting: Int? = nil,
         reason: String? = nil,
         armID: String? = nil,
         mirrorKey: String? = nil,
@@ -334,6 +343,10 @@ public struct CommandItem: Codable, Equatable, Sendable {
         self.armLabel = armLabel
         self.padding = padding
         self.filters = filters
+        self.syncState = syncState
+        self.lastSyncAt = lastSyncAt
+        self.lastError = lastError
+        self.waiting = waiting
         self.reason = reason
         self.armID = armID
         self.mirrorKey = mirrorKey

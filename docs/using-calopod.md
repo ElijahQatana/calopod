@@ -85,6 +85,8 @@ calopod arm add --source WORK_ID --target PERSONAL_ID --pad-before 15 --pad-afte
 calopod arm update ARM_ID --pad-after 30 --pad-in-person-only
 ```
 
+`calopod arm list` also shows how each Arm is doing: when it last synced, the category of its last error, and how many changes are waiting. An Arm that has not synced yet says so, and a disabled one is marked disabled. The numbers come from the last sync or preview, so reading them makes no calls to your calendars.
+
 Creating or removing an Arm only changes Calopod's settings. It doesn't touch your calendars. Calopod refuses targets that are read-only and routes that point at themselves or repeat another route.
 
 ## Main calendar

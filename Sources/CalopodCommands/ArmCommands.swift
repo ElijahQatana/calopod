@@ -240,13 +240,14 @@ public struct ArmListCommand: ParsableCommand {
         do {
             let repository = try CommandEnvironment.repository()
             let arms = try repository.arms()
+            let health = try repository.armSyncHealths()
             try OutputRenderer.write(
                 command: "arm.list",
                 payload: CommandPayload(
                     status: "ok",
                     message: arms.isEmpty ? "No Arms are configured." : "Configured Arms.",
                     count: arms.count,
-                    items: arms.map(armItem)
+                    items: arms.map { armItem($0, status: ArmSyncStatus(arm: $0, health: health[$0.id])) }
                 ),
                 format: output.format,
                 showIDs: output.ids,
@@ -280,7 +281,7 @@ public struct ArmInspectCommand: ParsableCommand {
                     status: "ok",
                     message: "Configured Arm.",
                     count: 1,
-                    items: [armItem(arm)]
+                    items: [armItem(arm, status: ArmSyncStatus(arm: arm, health: try repository.armSyncHealth(armID: arm.id)))]
                 ),
                 format: output.format,
                 showIDs: output.ids,
@@ -359,7 +360,7 @@ public struct ArmRemoveCommand: ParsableCommand {
     }
 }
 
-private func armItem(_ arm: StoredArm) -> CommandItem {
+private func armItem(_ arm: StoredArm, status: ArmSyncStatus? = nil) -> CommandItem {
     CommandItem(
         id: arm.id,
         kind: arm.isMain ? "main-calendar" : "arm",
@@ -374,7 +375,11 @@ private func armItem(_ arm: StoredArm) -> CommandItem {
             arm.filters.skipDeclined ? "skip-declined" : nil,
             arm.filters.skipAllDay ? "skip-all-day" : nil,
             arm.filters.skipDontClone ? "skip-dontclone" : nil,
-        ].compactMap { $0 }
+        ].compactMap { $0 },
+        syncState: status?.state.rawValue,
+        lastSyncAt: InboxCLI.date(status?.lastSyncAt),
+        lastError: status?.errorCategory,
+        waiting: status?.waiting
     )
 }
 
