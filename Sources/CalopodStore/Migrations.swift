@@ -28,6 +28,7 @@ extension CalopodDatabase {
         "v24_iphone_feed_zone",
         "v25_arm_filters",
         "v26_arm_label",
+        "v27_arm_padding",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -488,6 +489,14 @@ extension CalopodDatabase {
         migrator.registerMigration("v26_arm_label") { database in
             try database.alter(table: "arms") { table in
                 table.add(column: "copy_label", .text)
+            }
+        }
+
+        migrator.registerMigration("v27_arm_padding") { database in
+            try database.alter(table: "arms") { table in
+                table.add(column: "pad_before_minutes", .integer).notNull().defaults(to: 0)
+                table.add(column: "pad_after_minutes", .integer).notNull().defaults(to: 0)
+                table.add(column: "pad_in_person_only", .boolean).notNull().defaults(to: false)
             }
         }
 

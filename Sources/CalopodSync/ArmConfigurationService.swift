@@ -21,6 +21,8 @@ public enum ArmConfigurationError: Error, Equatable, Sendable, CustomStringConve
     case mainCalendarRuleFixed
     case invalidLabel
     case labelRequired
+    case invalidPadding
+    case paddingNeedsCopies
 
     public var description: String {
         switch self {
@@ -58,6 +60,10 @@ public enum ArmConfigurationError: Error, Equatable, Sendable, CustomStringConve
             "Use a label of up to 60 characters without control characters."
         case .labelRequired:
             "The Label Rule needs a label."
+        case .invalidPadding:
+            "Use padding of 0 to \(ArmPadding.maxMinutes) minutes."
+        case .paddingNeedsCopies:
+            "Padding applies to Busy and Label copies, not Full details."
         }
     }
 }
@@ -138,6 +144,31 @@ public struct ArmConfigurationService: Sendable {
         return arm
     }
 
+    public func updatePadding(
+        armID: String,
+        padding: ArmPadding,
+        now: Date = Date()
+    ) throws -> StoredArm {
+        guard let existing = try repository.arm(id: armID) else {
+            throw ArmConfigurationError.armNotFound(armID)
+        }
+        try validate(padding, ruleMode: existing.ruleMode)
+        guard let arm = try repository.setArmPadding(id: armID, padding: padding, now: now) else {
+            throw ArmConfigurationError.armNotFound(armID)
+        }
+        return arm
+    }
+
+    private func validate(_ padding: ArmPadding, ruleMode: ArmRuleMode) throws {
+        guard (0...ArmPadding.maxMinutes).contains(padding.beforeMinutes),
+              (0...ArmPadding.maxMinutes).contains(padding.afterMinutes) else {
+            throw ArmConfigurationError.invalidPadding
+        }
+        if ruleMode == .fullDetails && !padding.isEmpty {
+            throw ArmConfigurationError.paddingNeedsCopies
+        }
+    }
+
     /// The Arm that already makes exactly this route, so a repeated setup can leave it alone.
     public func existingArm(
         sourceBindingIDs: [String],
@@ -201,10 +232,12 @@ public struct ArmConfigurationService: Sendable {
         name: String? = nil,
         filters: ArmFilters = ArmFilters(),
         label: String? = nil,
+        padding: ArmPadding = ArmPadding(),
         now: Date = Date()
     ) throws -> StoredArm {
         let name = try normalizedName(name)
         let label = try normalizedLabel(label)
+        try validate(padding, ruleMode: ruleMode)
         if ruleMode == .label && label == nil {
             throw ArmConfigurationError.labelRequired
         }
@@ -296,7 +329,8 @@ public struct ArmConfigurationService: Sendable {
             isMain: isMain,
             name: name,
             filters: filters,
-            label: label
+            label: label,
+            padding: padding
         )
         try repository.saveArm(arm, now: now)
         return arm

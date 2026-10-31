@@ -81,6 +81,20 @@ public struct StoredNormalizedInstance: Codable, Equatable, Sendable {
         self.currentUserResponse = currentUserResponse
         self.providerExternalID = providerExternalID
     }
+
+    public func spanning(startsAt: Date, endsAt: Date) -> StoredNormalizedInstance {
+        StoredNormalizedInstance(
+            sourceKeyHash: sourceKeyHash, connectionID: connectionID,
+            calendarBindingID: calendarBindingID, providerEventID: providerEventID,
+            recurrenceID: recurrenceID, startsAt: startsAt, endsAt: endsAt, isAllDay: isAllDay,
+            availability: availability, isCancelled: isCancelled, isPrivate: isPrivate,
+            title: title, contentFingerprint: contentFingerprint,
+            providerUpdatedAt: providerUpdatedAt, location: location, notes: notes, url: url,
+            organizer: organizer, attendees: attendees, currentUserResponse: currentUserResponse,
+            providerSeriesID: providerSeriesID, timeZoneIdentifier: timeZoneIdentifier,
+            providerExternalID: providerExternalID
+        )
+    }
 }
 
 /// A provider cursor for one scope, read back on the next fetch.

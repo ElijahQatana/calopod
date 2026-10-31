@@ -126,6 +126,7 @@ enum HumanOutputRenderer {
                         if let enabled = item.enabled { lines.append("  State: \(enabled ? "enabled" : "disabled")") }
                         if let rule = item.rule { lines.append("  Rule: \(rule == "full-details" ? "Full details" : readable(rule))") }
                         if let armLabel = item.armLabel { lines.append("  Label: \(armLabel)") }
+                        if let padding = item.padding { lines.append("  Padding: \(padding)") }
                         if let filters = item.filters { lines.append("  Filters: \(filters.map(readable).joined(separator: ", "))") }
                         if let sources = item.sourceIDs {
                             lines.append("  Sources: \(sources.count)")

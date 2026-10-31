@@ -89,6 +89,7 @@ public struct StoredArm: Equatable, Sendable {
     public let filters: ArmFilters
     /// The fixed title of copies under the `label` Rule.
     public let label: String?
+    public let padding: ArmPadding
 
     public init(
         id: String,
@@ -101,7 +102,8 @@ public struct StoredArm: Equatable, Sendable {
         isMain: Bool = false,
         name: String? = nil,
         filters: ArmFilters = ArmFilters(),
-        label: String? = nil
+        label: String? = nil,
+        padding: ArmPadding = ArmPadding()
     ) {
         self.name = name
         self.id = id
@@ -114,7 +116,11 @@ public struct StoredArm: Equatable, Sendable {
         self.isMain = isMain
         self.filters = filters
         self.label = label
+        self.padding = padding
     }
+
+    /// The padding that applies: Full details copies are never padded.
+    public var effectivePadding: ArmPadding { ruleMode == .fullDetails ? ArmPadding() : padding }
 
     /// The title of a copy on a Busy or Label Arm. A Private event never gets the label.
     public func plainCopyTitle(isPrivate: Bool?) -> String {
@@ -470,8 +476,9 @@ public final class LocalStateRepository: @unchecked Sendable {
                     INSERT INTO arms
                         (id, configuration_id, target_binding_id, rule_mode,
                          preferred_writer_device_id, is_enabled, is_main, created_at, updated_at, name,
-                         skip_declined, skip_all_day, skip_dont_clone, copy_label)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         skip_declined, skip_all_day, skip_dont_clone, copy_label,
+                         pad_before_minutes, pad_after_minutes, pad_in_person_only)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                 arguments: [
                     arm.id,
@@ -488,6 +495,9 @@ public final class LocalStateRepository: @unchecked Sendable {
                     arm.filters.skipAllDay,
                     arm.filters.skipDontClone,
                     arm.label,
+                    arm.padding.beforeMinutes,
+                    arm.padding.afterMinutes,
+                    arm.padding.inPersonOnly,
                 ]
             )
             for sourceBindingID in arm.sourceBindingIDs {
@@ -508,7 +518,8 @@ public final class LocalStateRepository: @unchecked Sendable {
                     sql: """
                         SELECT id, configuration_id, target_binding_id, rule_mode,
                                preferred_writer_device_id, is_enabled, is_main, name,
-                               skip_declined, skip_all_day, skip_dont_clone, copy_label
+                               skip_declined, skip_all_day, skip_dont_clone, copy_label,
+                               pad_before_minutes, pad_after_minutes, pad_in_person_only
                         FROM arms
                         WHERE configuration_id = ?
                         ORDER BY created_at, id
@@ -521,7 +532,8 @@ public final class LocalStateRepository: @unchecked Sendable {
                     sql: """
                         SELECT id, configuration_id, target_binding_id, rule_mode,
                                preferred_writer_device_id, is_enabled, is_main, name,
-                               skip_declined, skip_all_day, skip_dont_clone, copy_label
+                               skip_declined, skip_all_day, skip_dont_clone, copy_label,
+                               pad_before_minutes, pad_after_minutes, pad_in_person_only
                         FROM arms
                         ORDER BY created_at, id
                         """
@@ -538,7 +550,8 @@ public final class LocalStateRepository: @unchecked Sendable {
                 sql: """
                     SELECT id, configuration_id, target_binding_id, rule_mode,
                            preferred_writer_device_id, is_enabled, is_main, name,
-                           skip_declined, skip_all_day, skip_dont_clone, copy_label
+                           skip_declined, skip_all_day, skip_dont_clone, copy_label,
+                           pad_before_minutes, pad_after_minutes, pad_in_person_only
                     FROM arms
                     WHERE id = ?
                     """,
@@ -583,6 +596,24 @@ public final class LocalStateRepository: @unchecked Sendable {
             try database.execute(
                 sql: "UPDATE arms SET rule_mode = ?, copy_label = ?, updated_at = ? WHERE id = ?",
                 arguments: [ruleMode.rawValue, label, now, id]
+            )
+        }
+        return try arm(id: id)
+    }
+
+    @discardableResult
+    public func setArmPadding(
+        id: String,
+        padding: ArmPadding,
+        now: Date = Date()
+    ) throws -> StoredArm? {
+        try database.write { database in
+            try database.execute(
+                sql: """
+                    UPDATE arms SET pad_before_minutes = ?, pad_after_minutes = ?,
+                        pad_in_person_only = ?, updated_at = ? WHERE id = ?
+                    """,
+                arguments: [padding.beforeMinutes, padding.afterMinutes, padding.inPersonOnly, now, id]
             )
         }
         return try arm(id: id)
@@ -732,7 +763,12 @@ private func storedArm(row: Row, database: Database) throws -> StoredArm {
             skipAllDay: row["skip_all_day"],
             skipDontClone: row["skip_dont_clone"]
         ),
-        label: row["copy_label"]
+        label: row["copy_label"],
+        padding: ArmPadding(
+            beforeMinutes: row["pad_before_minutes"],
+            afterMinutes: row["pad_after_minutes"],
+            inPersonOnly: row["pad_in_person_only"]
+        )
     )
 }
 

@@ -64,6 +64,30 @@ struct InboxContextSnapshotTests {
         #expect(keys.contains("a"))
     }
 
+    @Test("A padded copy re-read under another id is still taken for a copy", arguments: [
+        // arm padding before, after, inPersonOnly, copy start, copy end, kept
+        (15, 15, false, 1100.0, 3900.0, false),
+        (15, 15, false, 2000.0, 3000.0, true),
+        (15, 15, false, 1100.0, 3000.0, true),
+        (0, 30, false, 2000.0, 4800.0, false),
+        (15, 15, true, 1100.0, 3900.0, true),
+        (0, 0, false, 1100.0, 3900.0, true),
+    ])
+    func paddedCopies(before: Int, after: Int, inPersonOnly: Bool, start: Double, end: Double, kept: Bool) throws {
+        let fixture = try ContextFixture()
+        let stray = StoredNormalizedInstance(sourceKeyHash: "stray", connectionID: "connection", calendarBindingID: "two", providerEventID: "stray",
+            recurrenceID: nil, startsAt: Date(timeIntervalSince1970: start), endsAt: Date(timeIntervalSince1970: end), isAllDay: false, availability: "busy",
+            isCancelled: false, isPrivate: false, title: "Busy", contentFingerprint: "synthetic", providerUpdatedAt: nil,
+            currentUserResponse: EventResponse(state: .unknown))
+        try fixture.refresh("one", events: [fixture.event("a", binding: "one")])
+        try fixture.refresh("two", events: [stray])
+        try fixture.repository.saveArm(StoredArm(id: "arm", configurationID: "default", sourceBindingIDs: ["one"], targetBindingID: "two", ruleMode: .busy,
+            padding: ArmPadding(beforeMinutes: before, afterMinutes: after, inPersonOnly: inPersonOnly)))
+        let keys = try fixture.repository.inboxContextSnapshot().events.map(\.event.sourceKeyHash)
+        #expect(keys.contains("stray") == kept)
+        #expect(keys.contains("a"))
+    }
+
     @Test("A copy edited beyond its shape is found by the server id when the event id changed", arguments: [
         // stored server id, read-back server id, kept
         ("uid-1", "uid-1", false),

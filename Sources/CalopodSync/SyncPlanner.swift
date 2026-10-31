@@ -351,9 +351,10 @@ public enum SyncPlanner {
     ) -> DesiredEventPayload {
         switch arm.ruleMode {
         case .busy, .label:
-            DesiredEventPayload(
-                startsAt: source.startsAt,
-                endsAt: source.endsAt,
+            let span = arm.effectivePadding.padded(of: source)
+            return DesiredEventPayload(
+                startsAt: span.startsAt,
+                endsAt: span.endsAt,
                 isAllDay: source.isAllDay,
                 availability: source.availability,
                 title: arm.plainCopyTitle(isPrivate: source.isPrivate),
@@ -363,7 +364,7 @@ public enum SyncPlanner {
                 timeZoneIdentifier: source.isAllDay ? source.timeZoneIdentifier : nil
             )
         case .fullDetails:
-            DesiredEventPayload(
+            return DesiredEventPayload(
                 startsAt: source.startsAt,
                 endsAt: source.endsAt,
                 isAllDay: source.isAllDay,

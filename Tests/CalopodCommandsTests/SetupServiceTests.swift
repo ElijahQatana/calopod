@@ -180,6 +180,25 @@ struct SetupServiceTests {
         #expect(arm.rule == .label && arm.label == "Personal")
     }
 
+    @Test("padding is set when an arm is made and can change")
+    func padding() throws {
+        let (service, _, root) = try makeService()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try service.setSelected(calendarID: "work", selected: true)
+        try service.setSelected(calendarID: "main", selected: true)
+        try service.addArm(sourceIDs: ["work"], targetID: "main", rule: .busy, name: nil)
+        let id = try #require(try service.snapshot().arms.first?.id)
+        #expect(try service.snapshot().arms.first?.padding == ArmPadding())
+
+        let padding = ArmPadding(beforeMinutes: 15, afterMinutes: 30, inPersonOnly: true)
+        try service.setPadding(armID: id, padding: padding)
+        #expect(try service.snapshot().arms.first?.padding == padding)
+        #expect(throws: ArmConfigurationError.invalidPadding) {
+            try service.setPadding(armID: id, padding: ArmPadding(beforeMinutes: 999))
+        }
+    }
+
     @Test("renaming trims the name and refuses empty, long and repeated names")
     func renameRules() throws {
         let (service, _, root) = try makeService()

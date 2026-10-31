@@ -154,6 +154,11 @@ final class SetupModel {
         await run(nil) { try service.setRule(armID: armID, rule: rule, label: label) }
     }
 
+    func setPadding(_ armID: String, _ padding: ArmPadding) async {
+        let service = service
+        await run(nil) { try service.setPadding(armID: armID, padding: padding) }
+    }
+
     func setFilters(_ armID: String, _ filters: ArmFilters) async {
         let service = service
         await run(nil) { try service.setFilters(armID: armID, filters: filters) }

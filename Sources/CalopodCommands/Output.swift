@@ -260,6 +260,8 @@ public struct CommandItem: Codable, Equatable, Sendable {
     public let enabled: Bool?
     /// For Arms under the label Rule: the title their copies carry.
     public let armLabel: String?
+    /// For Arms that pad their copies, such as "15 min before, 15 min after".
+    public let padding: String?
     /// For Arms: the filters that are on, such as "skip-declined".
     public let filters: [String]?
     public let reason: String?
@@ -297,6 +299,7 @@ public struct CommandItem: Codable, Equatable, Sendable {
         rule: String? = nil,
         enabled: Bool? = nil,
         armLabel: String? = nil,
+        padding: String? = nil,
         filters: [String]? = nil,
         reason: String? = nil,
         armID: String? = nil,
@@ -329,6 +332,7 @@ public struct CommandItem: Codable, Equatable, Sendable {
         self.rule = rule
         self.enabled = enabled
         self.armLabel = armLabel
+        self.padding = padding
         self.filters = filters
         self.reason = reason
         self.armID = armID
