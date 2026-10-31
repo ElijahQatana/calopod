@@ -63,6 +63,12 @@ calopod arm disable ARM_ID
 calopod arm remove ARM_ID
 ```
 
+An Arm copies everything unless you turn on a filter. `--skip-declined`, `--skip-all-day` and `--skip-dontclone` leave out events you declined, all-day events, and events with `#dontclone` in the title or notes. They work with `arm add`, and `arm update` takes them and the matching `--no-skip-...` flags. When an event starts to match a filter, the copy Calopod made of it is removed on the next sync, and the preview lists that as a removal.
+
+```sh
+calopod arm update ARM_ID --skip-declined --no-skip-all-day
+```
+
 The default Rule is `busy`: the copy has the start, end and the title "Busy", nothing else. Use `full-details` only for a calendar you trust. It copies the title, location and notes, with attendees and links written into the notes. It never invites anyone and clears alerts so you aren't notified twice.
 
 Creating or removing an Arm only changes Calopod's settings. It doesn't touch your calendars. Calopod refuses targets that are read-only and routes that point at themselves or repeat another route.

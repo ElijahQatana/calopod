@@ -42,6 +42,7 @@ struct ArmCard: View {
                 .layoutPriority(1)
             Spacer(minLength: 4)
             ruleBadge
+            filtersMenu
             overflowMenu
             Toggle("Enabled", isOn: Binding(
                 get: { arm.isEnabled },
@@ -85,6 +86,41 @@ struct ArmCard: View {
                 .accessibilityLabel("Rule for \(arm.name)")
                 .accessibilityValue("\(Self.ruleName(arm.rule)), fixed")
         }
+    }
+
+    private func filterBinding(_ keyPath: WritableKeyPath<ArmFilters, Bool>) -> Binding<Bool> {
+        Binding(
+            get: { arm.filters[keyPath: keyPath] },
+            set: { value in
+                var filters = arm.filters
+                filters[keyPath: keyPath] = value
+                Task { await model.setFilters(arm.id, filters) }
+            })
+    }
+
+    private var filtersMenu: some View {
+        let count = [arm.filters.skipDeclined, arm.filters.skipAllDay, arm.filters.skipDontClone].filter { $0 }.count
+        return Menu {
+            Toggle("Skip declined events", isOn: filterBinding(\.skipDeclined))
+            Toggle("Skip all-day events", isOn: filterBinding(\.skipAllDay))
+            Toggle("Skip events tagged #dontclone", isOn: filterBinding(\.skipDontClone))
+        } label: {
+            HStack(spacing: 4) {
+                Text(count == 0 ? "Filters" : "Filters: \(count)")
+                Image(systemName: "chevron.down").font(Theme.Fonts.tinyBold)
+            }
+            .font(Theme.Fonts.secondaryMedium)
+            .padding(.horizontal, 12).frame(minHeight: Theme.Control.smallChipHeight)
+            .background(Capsule().fill(Color.primary.opacity(0.07)))
+            .contentShape(Capsule())
+            .fixedSize()
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Choose which events this arm leaves out")
+        .accessibilityLabel("Filters for \(arm.name)")
+        .accessibilityValue(count == 0 ? "None" : "\(count) on")
     }
 
     private var overflowMenu: some View {

@@ -258,6 +258,8 @@ public struct CommandItem: Codable, Equatable, Sendable {
     public let targetID: String?
     public let rule: String?
     public let enabled: Bool?
+    /// For Arms: the filters that are on, such as "skip-declined".
+    public let filters: [String]?
     public let reason: String?
     public let armID: String?
     public let mirrorKey: String?
@@ -292,6 +294,7 @@ public struct CommandItem: Codable, Equatable, Sendable {
         targetID: String? = nil,
         rule: String? = nil,
         enabled: Bool? = nil,
+        filters: [String]? = nil,
         reason: String? = nil,
         armID: String? = nil,
         mirrorKey: String? = nil,
@@ -322,6 +325,7 @@ public struct CommandItem: Codable, Equatable, Sendable {
         self.targetID = targetID
         self.rule = rule
         self.enabled = enabled
+        self.filters = filters
         self.reason = reason
         self.armID = armID
         self.mirrorKey = mirrorKey

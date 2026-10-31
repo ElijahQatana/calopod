@@ -630,3 +630,11 @@ func commandVersionMatchesTheVersionFile() throws {
     let text = try String(contentsOf: root.appendingPathComponent("VERSION"), encoding: .utf8)
     #expect(CalopodRoot.configuration.version == text.trimmingCharacters(in: .whitespacesAndNewlines))
 }
+
+@Test("arm add and update take the filter flags")
+func armFilterFlags() throws {
+    let add = try ArmAddCommand.parse(["--target", "t", "--skip-declined", "--skip-dontclone"])
+    #expect(add.skipDeclined && add.skipDontclone && !add.skipAllDay)
+    let update = try ArmUpdateCommand.parse(["arm", "--no-skip-all-day", "--skip-declined"])
+    #expect(update.skipAllDay == false && update.skipDeclined == true && update.skipDontclone == nil)
+}
