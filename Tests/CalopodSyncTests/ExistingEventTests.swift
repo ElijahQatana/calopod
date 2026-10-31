@@ -82,10 +82,21 @@ struct ExistingEventTests {
         #expect(try actions(sources: [event("a")], targetOriginals: []) == [.create])
     }
 
-    @Test("A verified copy is removed when the target already holds the original")
-    func removesExistingCopy() throws {
+    @Test("A declined event on the target does not stand in for the source")
+    func declinedOriginal() throws {
+        let declined = event("b", response: .declined)
+        #expect(try actions(sources: [event("a")], targetOriginals: [declined]) == [.create])
+    }
+
+    @Test("A verified copy is removed when the target already holds the original", arguments: [
+        (EventResponseState.needsResponse, SyncPlanAction.remove, SyncPlanReason.targetHasOriginal),
+        (EventResponseState.declined, SyncPlanAction.noOp, SyncPlanReason.targetMatches),
+    ])
+    func removesExistingCopy(
+        response: EventResponseState, action: SyncPlanAction, reason: SyncPlanReason
+    ) throws {
         let source = event("a")
-        let original = event("b")
+        let original = event("b", response: response)
         let mirror = SyncPlanner.mirrorKey(armID: arm.id, sourceKeyHash: source.sourceKeyHash)
         let payload = DesiredEventPayload(
             startsAt: source.startsAt,
@@ -120,8 +131,8 @@ struct ExistingEventTests {
             targetEvents: [observation]
         )
         let item = try #require(result.items.first)
-        #expect(item.action == .remove)
-        #expect(item.reason == .targetHasOriginal)
+        #expect(item.action == action)
+        #expect(item.reason == reason)
     }
 }
 
@@ -131,12 +142,14 @@ private let arm = StoredArm(
 
 private func event(
     _ calendar: String, title: String? = "Planning", start: TimeInterval = 2_000, end: TimeInterval = 3_000,
-    allDay: Bool = false, zone: String? = nil, externalID: String? = nil
+    allDay: Bool = false, zone: String? = nil, externalID: String? = nil,
+    response: EventResponseState = .notApplicable
 ) -> StoredNormalizedInstance {
     StoredNormalizedInstance(
         sourceKeyHash: "key-\(calendar)", connectionID: "c-\(calendar)", calendarBindingID: calendar,
         providerEventID: "id-\(calendar)", recurrenceID: nil, startsAt: Date(timeIntervalSince1970: start),
         endsAt: Date(timeIntervalSince1970: end), isAllDay: allDay, availability: "busy", isCancelled: false,
         isPrivate: false, title: title, contentFingerprint: "f-\(calendar)", providerUpdatedAt: nil,
+        currentUserResponse: EventResponse(state: response),
         timeZoneIdentifier: zone, providerExternalID: externalID)
 }
