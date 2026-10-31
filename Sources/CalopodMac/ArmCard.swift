@@ -32,6 +32,7 @@ struct ArmCard: View {
         VStack(alignment: .leading, spacing: 12) {
             topRow
             flow
+            if let status = arm.syncStatus { statusLine(status) }
             if editingLabel { labelEditor }
             if editingPadding { paddingEditor }
             if confirmingRemoval { removalConfirm }
@@ -170,6 +171,14 @@ struct ArmCard: View {
         .opacity(arm.isEnabled ? 1 : 0.55)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Copies from \(sources.map(\.1).joined(separator: ", ")) into \(model.targetName(of: arm))")
+    }
+
+    private func statusLine(_ status: ArmSyncStatus) -> some View {
+        Text(status.line())
+            .font(Theme.Fonts.secondary)
+            .foregroundStyle(status.state == .failing ? Theme.badText : .secondary)
+            .lineLimit(2)
+            .accessibilityLabel("Sync status for \(arm.name): \(status.line())")
     }
 
     private func startEditingLabel() {

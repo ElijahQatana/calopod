@@ -39,6 +39,7 @@ public struct SetupArm: Identifiable, Equatable, Sendable {
     public let filters: ArmFilters
     public var label: String? = nil
     public var padding = ArmPadding()
+    public var syncStatus: ArmSyncStatus? = nil
     public let sourceNames: [String]
     public let targetName: String
     public let sourceIDs: [String]
@@ -94,6 +95,7 @@ public struct SetupService: Sendable {
                 )
             )
         }
+        let health = try repository.armSyncHealths()
         let arms = try repository.arms().map { arm in
             SetupArm(
                 id: arm.id,
@@ -104,6 +106,7 @@ public struct SetupService: Sendable {
                 filters: arm.filters,
                 label: arm.label,
                 padding: arm.padding,
+                syncStatus: ArmSyncStatus(arm: arm, health: health[arm.id]),
                 sourceNames: arm.sourceBindingIDs.map { namesByBinding[$0] ?? "Unknown calendar" },
                 targetName: namesByBinding[arm.targetBindingID] ?? "Unknown calendar",
                 sourceIDs: arm.sourceBindingIDs,

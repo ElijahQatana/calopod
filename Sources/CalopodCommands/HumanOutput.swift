@@ -116,6 +116,7 @@ enum HumanOutputRenderer {
                             lines.append("\(readable(item.id)): \(readable(item.kind))")
                             if let reason = item.reason { lines.append("  Reason: \(readable(reason))") }
                             if command == "doctor", ["calendar-permission", "permission-calendar"].contains(item.id), let helper = item.label { lines.append("  Helper: \(clean(helper))") }
+                            if command == "doctor", item.id.hasPrefix("arm-sync-"), let detail = item.label { lines.append("  \(clean(detail))") }
                             if command == "doctor", ["service-in-use", "automatic-run"].contains(item.id), let detail = item.label { lines.append("  \(item.id == "automatic-run" ? "Last failed run" : "Using"): \(clean(detail))") }
                         }
                         continue
@@ -128,6 +129,7 @@ enum HumanOutputRenderer {
                         if let armLabel = item.armLabel { lines.append("  Label: \(armLabel)") }
                         if let padding = item.padding { lines.append("  Padding: \(padding)") }
                         if let filters = item.filters { lines.append("  Filters: \(filters.map(readable).joined(separator: ", "))") }
+                        if let status = item.syncStatus { lines.append("  Sync: \(status.line())") }
                         if let sources = item.sourceIDs {
                             lines.append("  Sources: \(sources.count)")
                             for source in sources {

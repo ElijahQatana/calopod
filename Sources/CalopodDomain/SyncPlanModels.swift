@@ -111,3 +111,10 @@ public struct SyncPlan: Codable, Equatable, Sendable {
         self.items = items
     }
 }
+
+extension SyncPlan {
+    /// Changes still to make. Copies left alone and copies whose target was not read are not counted.
+    public var waitingCount: Int {
+        items.filter { $0.action != .noOp && !$0.isUnchecked }.count
+    }
+}

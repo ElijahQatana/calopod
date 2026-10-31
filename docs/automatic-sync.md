@@ -35,7 +35,7 @@ calopod agent status
 calopod doctor
 ```
 
-`status` shows whether the service is installed, enabled, paused and when it last succeeded. `doctor` checks the installed files, local data, account connections and Calendar permission. Both leave out calendar names, accounts, event content and file paths, so you can share them.
+`status` shows whether the service is installed, enabled, paused and when it last succeeded. `doctor` checks the installed files, local data, account connections and Calendar permission, and lists each Arm's last sync, last error and waiting changes. Both leave out calendar names, accounts, event content and file paths, so you can share them.
 
 For a short summary to share, use `calopod support export`. See [Troubleshooting](troubleshooting.md).
 
