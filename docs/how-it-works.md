@@ -31,6 +31,7 @@ Rules in short:
 - Updates and deletes stop unless ownership is proven.
 - A source that vanished during an incomplete read is not treated as deleted.
 - Titles, attendees and locations are never used to work out the identity of a Calopod copy. An event is not copied, and an existing verified copy is removed, when the target calendar already holds the same event (same title and time, or the same server UID on EventKit), and only when that target calendar was read in the same run.
+- A target calendar that isn't selected is never read, so select both calendars of a pair. A declined event doesn't count as holding the event.
 - On EventKit, a marker only counts if the event's ID matches the one Calopod stored. A copied marker, a missing record or a changed ID blocks the apply and is reported. Markers also sign the target calendar (version 2); version 1 markers on known copies still verify.
 - Duplicate repair keeps one deterministic survivor and only considers verified copies in the target calendar.
 
