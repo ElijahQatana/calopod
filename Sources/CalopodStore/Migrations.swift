@@ -29,6 +29,7 @@ extension CalopodDatabase {
         "v25_arm_filters",
         "v26_arm_label",
         "v27_arm_padding",
+        "v28_arm_sync_health",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -497,6 +498,15 @@ extension CalopodDatabase {
                 table.add(column: "pad_before_minutes", .integer).notNull().defaults(to: 0)
                 table.add(column: "pad_after_minutes", .integer).notNull().defaults(to: 0)
                 table.add(column: "pad_in_person_only", .boolean).notNull().defaults(to: false)
+            }
+        }
+
+        migrator.registerMigration("v28_arm_sync_health") { database in
+            try database.create(table: "arm_sync_health") { table in
+                table.column("arm_id", .text).primaryKey().references("arms", onDelete: .cascade)
+                table.column("last_success_at", .datetime)
+                table.column("last_error", .text)
+                table.column("waiting", .integer)
             }
         }
 
