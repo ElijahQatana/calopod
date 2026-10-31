@@ -954,3 +954,88 @@ func serviceLogsLiveBesideTheStateAndAreCreatedOwnerOnly() throws {
 func testRunsAreRecognizedSoTheRealStateIsOffLimits() {
     #expect(RunningUnderTests.isActive)
 }
+
+@Test(arguments: [
+    (["synthetic-target"], [String](), 1),
+    (["synthetic-source", "synthetic-target"], [String](), 1),
+    (["synthetic-target"], ["synthetic-target"], 0),
+    (["synthetic-source"], [String](), 0),
+    ([String](), [String](), 0),
+])
+func targetOriginalsComeOnlyFromACalendarReadWithoutFailing(
+    attempted: [String],
+    failed: [String],
+    expected: Int
+) throws {
+    let repository = LocalStateRepository(database: try CalopodDatabase.inMemory())
+    try repository.saveConnection(
+        StoredConnection(
+            id: "synthetic-connection",
+            configurationID: "default",
+            provider: "eventkit",
+            displayLabel: "Synthetic provider",
+            isEnabled: true
+        )
+    )
+    try repository.replaceCalendarBindings(
+        connectionID: "synthetic-connection",
+        bindings: ["synthetic-source", "synthetic-target"].map {
+            StoredCalendarBinding(
+                id: $0,
+                connectionID: "synthetic-connection",
+                providerCalendarID: "\($0)-provider-id",
+                displayLabel: $0,
+                isSelected: true,
+                isReadOnly: false
+            )
+        }
+    )
+    let window = try SyncWindow(
+        start: Date(timeIntervalSince1970: 0),
+        end: Date(timeIntervalSince1970: 100_000)
+    )
+    try repository.applyEventRefresh(
+        connectionID: "synthetic-connection",
+        calendarBindingID: "synthetic-target",
+        windowStart: window.start,
+        windowEnd: window.end,
+        instances: [
+            StoredNormalizedInstance(
+                sourceKeyHash: "synthetic-key",
+                connectionID: "synthetic-connection",
+                calendarBindingID: "synthetic-target",
+                providerEventID: "synthetic-event",
+                recurrenceID: nil,
+                startsAt: Date(timeIntervalSince1970: 2_000),
+                endsAt: Date(timeIntervalSince1970: 3_000),
+                isAllDay: false,
+                availability: "busy",
+                isCancelled: false,
+                isPrivate: false,
+                title: "Planning",
+                contentFingerprint: "synthetic-fingerprint",
+                providerUpdatedAt: nil
+            )
+        ],
+        cancelledSourceKeyHashes: [],
+        isFullRefresh: true,
+        cursorUpdates: []
+    )
+    let arm = StoredArm(
+        id: "synthetic-arm",
+        configurationID: "default",
+        sourceBindingIDs: ["synthetic-source"],
+        targetBindingID: "synthetic-target",
+        ruleMode: .busy
+    )
+
+    let found = try SyncEngine.targetOriginals(
+        for: arm,
+        attempted: Set(attempted),
+        failed: Set(failed),
+        repository: repository,
+        window: window
+    )
+
+    #expect(found.count == expected)
+}

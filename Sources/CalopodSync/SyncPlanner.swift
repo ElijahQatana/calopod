@@ -96,9 +96,11 @@ public enum SyncPlanner {
         ).mapValues { $0.map(\.1) }
 
         // Events already on the target (passed separately so a meeting invited to both calendars
-        // isn't copied). Callers must only include calendars read in this run.
+        // isn't copied). Callers must only include calendars read in this run. A declined event
+        // takes no time there, so it doesn't count.
         let originals = targetOriginals.filter {
             $0.calendarBindingID == arm.targetBindingID && !$0.isCancelled
+                && $0.currentUserResponse.state != .declined
         }
         let targetEventKeys = Set(originals.compactMap(sameEventKey))
         let targetExternalIDs = Set(originals.compactMap { normalizedText($0.providerExternalID) })

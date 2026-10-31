@@ -110,6 +110,23 @@ public struct SyncEngine: Sendable {
         }
     }
 
+    /// The target calendar's own events, for the "already on the target" check. Only a calendar
+    /// read without failing in this run counts; the cache is not pruned when one is deselected.
+    static func targetOriginals(
+        for arm: StoredArm,
+        attempted: Set<String>,
+        failed: Set<String>,
+        repository: LocalStateRepository,
+        window: SyncWindow
+    ) throws -> [StoredNormalizedInstance] {
+        guard attempted.subtracting(failed).contains(arm.targetBindingID) else { return [] }
+        return try repository.normalizedInstances(
+            calendarBindingIDs: [arm.targetBindingID],
+            from: window.start,
+            through: window.end
+        )
+    }
+
     /// Plans every eligible Arm and, in apply mode only, converges each one. Dry-run never reaches
     /// `performManagedMutation`.
     private func execute(
@@ -137,12 +154,7 @@ public struct SyncEngine: Sendable {
         var ingestion = armRefresh.ingestion
         ingestion.add(otherRefresh.ingestion)
         let failedBindingIDs = armRefresh.failedBindingIDs.union(otherRefresh.failedBindingIDs)
-        let attemptedBindingIDs = Set(
-            (sources + otherSources).map(\.calendar.id)
-        )
-        // Only calendars refreshed this run may drive "already on the target" decisions; the cache
-        // is not pruned when a calendar is deselected.
-        let readBindingIDs = attemptedBindingIDs.subtracting(failedBindingIDs)
+        let attemptedBindingIDs = Set((sources + otherSources).map(\.calendar.id))
         let refresh = CalendarRefreshSummary(
             ingestion: ingestion, failedSourceCount: armRefresh.failedSourceCount,
             warnings: armRefresh.warnings + otherRefresh.warnings,
@@ -193,16 +205,13 @@ public struct SyncEngine: Sendable {
                 from: window.start,
                 through: window.end
             )
-            let targetOriginals: [StoredNormalizedInstance]
-            if readBindingIDs.contains(arm.targetBindingID) {
-                targetOriginals = try repository.normalizedInstances(
-                    calendarBindingIDs: [arm.targetBindingID],
-                    from: window.start,
-                    through: window.end
-                )
-            } else {
-                targetOriginals = []
-            }
+            let targetOriginals = try Self.targetOriginals(
+                for: arm,
+                attempted: attemptedBindingIDs,
+                failed: failedBindingIDs,
+                repository: repository,
+                window: window
+            )
             targetOriginalsByArm[arm.id] = targetOriginals
             let mappings = try repository.mirrorMappings(armID: arm.id)
             let observations: [TargetEventObservation]
