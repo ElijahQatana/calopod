@@ -648,7 +648,7 @@ private struct GoogleEvent: Decodable {
                 isAllDay: start?.dateOnly != nil,
                 availability: transparency == "transparent" ? "free" : "busy",
                 title: summary,
-                isPrivate: decoded.provenance?.ruleMode == .busy
+                isPrivate: [.busy, .label].contains(decoded.provenance?.ruleMode)
                     ? nil
                     : visibility == "private" || visibility == "confidential",
                 location: location,

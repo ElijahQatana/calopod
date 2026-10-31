@@ -122,7 +122,7 @@ public enum SyncPlanner {
             desiredMirrorKeys.insert(mirrorKey)
             let payload = desiredPayload(
                 source: source,
-                ruleMode: arm.ruleMode,
+                arm: arm,
                 targetProvider: targetProvider
             )
             let fingerprint = desiredFingerprint(payload: payload, ruleMode: arm.ruleMode)
@@ -346,17 +346,17 @@ public enum SyncPlanner {
 
     private static func desiredPayload(
         source: StoredNormalizedInstance,
-        ruleMode: ArmRuleMode,
+        arm: StoredArm,
         targetProvider: ProviderKind?
     ) -> DesiredEventPayload {
-        switch ruleMode {
-        case .busy:
+        switch arm.ruleMode {
+        case .busy, .label:
             DesiredEventPayload(
                 startsAt: source.startsAt,
                 endsAt: source.endsAt,
                 isAllDay: source.isAllDay,
                 availability: source.availability,
-                title: "Busy",
+                title: arm.plainCopyTitle(isPrivate: source.isPrivate),
                 isPrivate: nil,
                 location: nil,
                 notes: nil,

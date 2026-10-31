@@ -635,7 +635,7 @@ private struct MicrosoftEvent: Decodable {
                 isAllDay: isAllDay ?? false,
                 availability: availability.rawValue,
                 title: subject,
-                isPrivate: decoded.provenance?.ruleMode == .busy
+                isPrivate: [.busy, .label].contains(decoded.provenance?.ruleMode)
                     ? nil
                     : sensitivity == "private"
                         || sensitivity == "personal"
