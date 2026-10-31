@@ -31,6 +31,7 @@ public struct ManagedEventConvergenceService: Sendable {
         targetProvider: ProviderKind,
         initialObservations: [TargetEventObservation],
         window: SyncWindow,
+        targetOriginals: [StoredNormalizedInstance] = [],
         maximumMutationPasses: Int = 3,
         readSnapshots: @Sendable () async throws -> [ManagedEventSnapshot],
         performBatch: ManagedEventBatchPerformer? = nil,
@@ -98,7 +99,8 @@ public struct ManagedEventConvergenceService: Sendable {
                 targetEvents: observations,
                 window: window,
                 sourceSnapshotComplete: true,
-                targetSnapshotComplete: true
+                targetSnapshotComplete: true,
+                targetOriginals: targetOriginals
             ).items
             if items.allSatisfy({ $0.action == .noOp }) {
                 return ManagedEventLifecycleSummary(
