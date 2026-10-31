@@ -4,7 +4,11 @@ Calopod installs for your own user account only. Don't use `sudo`.
 
 You need an Apple Silicon Mac on macOS 14 or newer.
 
-## Install from a release
+## Install the app from the disk image
+
+Open `Calopod.dmg`, drag Calopod onto Applications and eject the image. The window shows the app, an Applications shortcut and a line about adding the `calopod` command from Settings, Command line. Check the download first with `shasum -a 256 -c Calopod.dmg.sha256`. The first time you open the app, macOS may ask you to confirm it was downloaded from the internet.
+
+## Install the command line from a release
 
 1. Download the ZIP and its `.sha256` file from the release page.
 2. Check and unpack it:
@@ -26,10 +30,6 @@ A fresh install syncs every 10 minutes with up to 30 seconds of random jitter, l
 The installer links `calopod`, `calopod-setup` and `calopod-uninstall` into `~/.local/bin`. Add that folder to your `PATH` if it isn't there already. It doesn't edit your shell files and it doesn't start automatic sync.
 
 If `calopod` already points into Calopod.app, the installer leaves that link alone, links `calopod-setup` and `calopod-uninstall` as usual and says so. To point `calopod` at this install instead, run `./install --replace-app-command`.
-
-## Install the app from the disk image
-
-Open `Calopod.dmg`, drag Calopod onto Applications and eject the image. The window shows the app, an Applications shortcut and a line about adding the `calopod` command from Settings, Command line. Check the download first with `shasum -a 256 -c Calopod.dmg.sha256`. The first time you open the app, macOS may ask you to confirm it was downloaded from the internet.
 
 ## Three ways to install
 

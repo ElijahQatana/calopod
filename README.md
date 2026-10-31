@@ -48,6 +48,8 @@ swift test --disable-sandbox
 
 ## Guides
 
+The same guides, with search, are on the [docs site](https://calopod.elijahquintana.pro/docs/).
+
 - [Install](docs/install.md)
 - [Using Calopod](docs/using-calopod.md)
 - [The Mac app](docs/mac-app.md)
