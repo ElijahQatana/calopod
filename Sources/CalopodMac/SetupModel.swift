@@ -154,6 +154,11 @@ final class SetupModel {
         await run(nil) { try service.setRule(armID: armID, rule: rule) }
     }
 
+    func setFilters(_ armID: String, _ filters: ArmFilters) async {
+        let service = service
+        await run(nil) { try service.setFilters(armID: armID, filters: filters) }
+    }
+
     func setArmEnabled(_ armID: String, _ enabled: Bool) async {
         let service = service
         await run(nil) { try service.setArmEnabled(armID: armID, enabled: enabled) }

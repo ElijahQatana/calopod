@@ -74,12 +74,19 @@ public enum SyncPlanner {
         targetOriginals: [StoredNormalizedInstance] = []
     ) -> SyncPlan {
         let armSourceIDs = Set(arm.sourceBindingIDs)
-        let boundedSources = sources.filter {
+        let inWindow = sources.filter {
             armSourceIDs.contains($0.calendarBindingID)
                 && !$0.isCancelled
                 && $0.endsAt > window.start
                 && $0.startsAt < window.end
         }
+        // A filtered event is planned like one that left the source.
+        let boundedSources = inWindow.filter { arm.filters.copies($0) }
+        let filteredMirrorKeys = Set(
+            inWindow.filter { !arm.filters.copies($0) }.map {
+                mirrorKey(armID: arm.id, sourceKeyHash: $0.sourceKeyHash)
+            }
+        )
         let armMappings = mappings.filter { $0.armID == arm.id }
         let targetObservations = targetEvents.filter {
             $0.calendarBindingID == arm.targetBindingID
@@ -216,7 +223,7 @@ public enum SyncPlanner {
             } else if let target = verified.first,
                       target.providerEventID == mapping.providerEventID {
                 action = .remove
-                reason = .sourceMissing
+                reason = filteredMirrorKeys.contains(mapping.mirrorKey) ? .filteredOut : .sourceMissing
             } else if verified.first != nil {
                 action = .repair
                 reason = .providerIdentityChanged

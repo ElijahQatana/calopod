@@ -553,6 +553,7 @@ public struct AgentControlService: Sendable {
         case .targetMatches: "Already up to date"
         case .targetHasOriginal: "Already on the target calendar"
         case .sourceMissing: "No longer on the source calendar"
+        case .filteredOut: "Left out by this Arm's filters"
         case .verifiedDuplicates: "Duplicate copies found"
         case .mappingMissing: "Copy exists but is not tracked"
         case .providerIdentityChanged: "Calendar account changed"

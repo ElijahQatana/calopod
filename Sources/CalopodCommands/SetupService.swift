@@ -36,6 +36,7 @@ public struct SetupArm: Identifiable, Equatable, Sendable {
     public let isMain: Bool
     public let isEnabled: Bool
     public let rule: ArmRuleMode
+    public let filters: ArmFilters
     public let sourceNames: [String]
     public let targetName: String
     public let sourceIDs: [String]
@@ -98,6 +99,7 @@ public struct SetupService: Sendable {
                 isMain: arm.isMain,
                 isEnabled: arm.isEnabled,
                 rule: arm.ruleMode,
+                filters: arm.filters,
                 sourceNames: arm.sourceBindingIDs.map { namesByBinding[$0] ?? "Unknown calendar" },
                 targetName: namesByBinding[arm.targetBindingID] ?? "Unknown calendar",
                 sourceIDs: arm.sourceBindingIDs,
@@ -214,6 +216,14 @@ public struct SetupService: Sendable {
         _ = try ArmConfigurationService(repository: repository).updateRule(
             armID: armID,
             ruleMode: rule
+        )
+    }
+
+    public func setFilters(armID: String, filters: ArmFilters) throws {
+        let repository = try makeRepository()
+        _ = try ArmConfigurationService(repository: repository).updateFilters(
+            armID: armID,
+            filters: filters
         )
     }
 

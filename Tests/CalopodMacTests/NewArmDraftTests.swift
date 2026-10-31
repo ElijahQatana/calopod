@@ -1,6 +1,7 @@
 import XCTest
 
 @testable import CalopodCommands
+import CalopodDomain
 @testable import CalopodMac
 
 @MainActor
@@ -61,7 +62,7 @@ final class NewArmDraftTests: XCTestCase {
     func testOnlyTheMainCalendarHasAFixedRule() {
         func arm(main: Bool) -> SetupArm {
             SetupArm(id: "a", name: "A", isMain: main, isEnabled: true, rule: .fullDetails,
-                     sourceNames: ["Work"], targetName: "Home", sourceIDs: ["work"], targetID: "home")
+                     filters: ArmFilters(), sourceNames: ["Work"], targetName: "Home", sourceIDs: ["work"], targetID: "home")
         }
         XCTAssertFalse(arm(main: true).canChangeRule)
         XCTAssertTrue(arm(main: false).canChangeRule)

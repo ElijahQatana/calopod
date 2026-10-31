@@ -144,6 +144,22 @@ struct SetupServiceTests {
         #expect(try service.snapshot().arms.isEmpty)
     }
 
+    @Test("filters start off and change configuration only")
+    func armFilters() throws {
+        let (service, _, root) = try makeService()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try service.setSelected(calendarID: "work", selected: true)
+        try service.setSelected(calendarID: "main", selected: true)
+        try service.addArm(sourceIDs: ["work"], targetID: "main", rule: .busy, name: "Busy copy")
+        let id = try #require(try service.snapshot().arms.first?.id)
+        #expect(try service.snapshot().arms.first?.filters == ArmFilters())
+
+        let filters = ArmFilters(skipAllDay: true, skipDontClone: true)
+        try service.setFilters(armID: id, filters: filters)
+        #expect(try service.snapshot().arms.first?.filters == filters)
+    }
+
     @Test("renaming trims the name and refuses empty, long and repeated names")
     func renameRules() throws {
         let (service, _, root) = try makeService()

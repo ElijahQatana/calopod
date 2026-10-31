@@ -33,11 +33,12 @@ public struct ArmCommand: ParsableCommand {
     public init() {}
 }
 
-/// Changes an Arm's name, Rule or preferred writer. Configuration only; never writes to a calendar.
+/// Changes an Arm's name, Rule, filters or preferred writer. Configuration only; never writes to a
+/// calendar.
 public struct ArmUpdateCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "update",
-        abstract: "Change an Arm name, Rule or preferred writer without writing calendar events."
+        abstract: "Change an Arm name, Rule, filters or preferred writer without writing calendar events."
     )
 
     @Argument(help: "Arm identifier.")
@@ -52,15 +53,25 @@ public struct ArmUpdateCommand: ParsableCommand {
     @Option(name: .long, help: "Private display name. Use an empty value to clear it.")
     public var name: String?
 
+    @Flag(inversion: .prefixedNo, help: "Leave out events you declined.")
+    public var skipDeclined: Bool?
+
+    @Flag(inversion: .prefixedNo, help: "Leave out all-day events.")
+    public var skipAllDay: Bool?
+
+    @Flag(inversion: .prefixedNo, help: "Leave out events with #dontclone in the title or notes.")
+    public var skipDontclone: Bool?
+
     @OptionGroup public var output: OutputOptions
 
     public init() {}
 
     public func run() throws {
         do {
-            guard name != nil || rule != nil || preferCurrentDevice else {
+            let changesFilters = skipDeclined != nil || skipAllDay != nil || skipDontclone != nil
+            guard name != nil || rule != nil || preferCurrentDevice || changesFilters else {
                 throw ValidationError(
-                    "Choose --name, --rule or --prefer-current-device."
+                    "Choose --name, --rule, a filter such as --skip-declined or --prefer-current-device."
                 )
             }
             let repository = try CommandEnvironment.repository()
@@ -75,6 +86,16 @@ public struct ArmUpdateCommand: ParsableCommand {
             }
             if let name {
                 arm = try service.rename(armID: arm.id, name: name)
+            }
+            if changesFilters {
+                arm = try service.updateFilters(
+                    armID: arm.id,
+                    filters: ArmFilters(
+                        skipDeclined: skipDeclined ?? arm.filters.skipDeclined,
+                        skipAllDay: skipAllDay ?? arm.filters.skipAllDay,
+                        skipDontClone: skipDontclone ?? arm.filters.skipDontClone
+                    )
+                )
             }
             if preferCurrentDevice {
                 arm = try service.preferCurrentDevice(armID: arm.id)
@@ -119,6 +140,15 @@ public struct ArmAddCommand: ParsableCommand {
     @Option(name: .long, help: "Private display name. Use an empty value to clear it.")
     public var name: String?
 
+    @Flag(help: "Leave out events you declined.")
+    public var skipDeclined = false
+
+    @Flag(help: "Leave out all-day events.")
+    public var skipAllDay = false
+
+    @Flag(help: "Leave out events with #dontclone in the title or notes.")
+    public var skipDontclone = false
+
     @OptionGroup public var output: OutputOptions
 
     public init() {}
@@ -130,7 +160,12 @@ public struct ArmAddCommand: ParsableCommand {
                 sourceBindingIDs: source,
                 targetBindingID: target,
                 ruleMode: rule.ruleMode,
-                name: name
+                name: name,
+                filters: ArmFilters(
+                    skipDeclined: skipDeclined,
+                    skipAllDay: skipAllDay,
+                    skipDontClone: skipDontclone
+                )
             )
             try OutputRenderer.write(
                 command: "arm.add",
@@ -290,6 +325,11 @@ private func armItem(_ arm: StoredArm) -> CommandItem {
         sourceIDs: arm.sourceBindingIDs,
         targetID: arm.targetBindingID,
         rule: arm.ruleMode.rawValue,
-        enabled: arm.isEnabled
+        enabled: arm.isEnabled,
+        filters: arm.filters.isEmpty ? nil : [
+            arm.filters.skipDeclined ? "skip-declined" : nil,
+            arm.filters.skipAllDay ? "skip-all-day" : nil,
+            arm.filters.skipDontClone ? "skip-dontclone" : nil,
+        ].compactMap { $0 }
     )
 }
