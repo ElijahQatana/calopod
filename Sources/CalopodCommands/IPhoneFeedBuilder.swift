@@ -83,7 +83,9 @@ enum IPhoneFeedBuilder {
         let sources = (try? selectedCalendarSources(connectionID: nil, calendarID: nil, repository: repository)) ?? []
         let first = calendar.startOfDay(for: now)
         guard !sources.isEmpty, let end = calendar.date(byAdding: .day, value: availabilityDays, to: first) else { return [] }
-        let events = try repository.normalizedInstances(calendarBindingIDs: sources.map(\.calendar.id), from: first, through: end)
+        let events = AvailabilityCalculator.withPadding(
+            try repository.normalizedInstances(calendarBindingIDs: sources.map(\.calendar.id), from: first, through: end),
+            arms: try repository.arms())
         let hours = try repository.workingHours()
         let format = DateFormatter()
         format.locale = Locale(identifier: "en_US_POSIX")

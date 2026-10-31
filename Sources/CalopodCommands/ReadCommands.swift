@@ -177,7 +177,7 @@ public struct AvailabilityCommand: AsyncParsableCommand {
                 through: resolved.window.end
             )
             let availability = AvailabilityCalculator.calculate(
-                instances: events,
+                instances: AvailabilityCalculator.withPadding(events, arms: try repository.arms()),
                 from: resolved.window.start,
                 through: resolved.window.end,
                 workingHours: ignoreWorkingHours ? nil : try repository.workingHours(),

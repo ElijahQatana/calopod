@@ -27,8 +27,10 @@ public struct AvailabilityService: Sendable {
             calendar.date(byAdding: .day, value: 1, to: start).map { DateInterval(start: start, end: $0) }
         }
         guard let first = ranges.map(\.start).min(), let last = ranges.map(\.end).max() else { return [] }
-        let instances = try repository.normalizedInstances(
-            calendarBindingIDs: sources.map(\.calendar.id), from: first, through: last)
+        let instances = AvailabilityCalculator.withPadding(
+            try repository.normalizedInstances(
+                calendarBindingIDs: sources.map(\.calendar.id), from: first, through: last),
+            arms: try repository.arms())
         return ranges.map { range in
             let result = AvailabilityCalculator.calculate(
                 instances: instances, from: range.start, through: range.end,
