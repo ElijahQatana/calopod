@@ -35,7 +35,7 @@ Availability rules:
 
 - Events marked free don't block time. Busy, tentative, unavailable and out-of-office events do.
 - Overlapping or touching busy time merges into one block, and free time is whatever is left.
-- Copies made by Calopod are left out, so nothing is counted twice.
+- Copies made by Calopod are left out, so nothing is counted twice. Time that an Arm pads onto its copies is added to the events it copies, so it counts as busy.
 - Free and busy time count only inside your working hours, so 3 a.m. isn't free and a 7 p.m. meeting doesn't make the day look fuller. Meetings before or after working hours, and every meeting on a day off, are listed separately as outside working hours, so a late meeting doesn't disappear. A meeting that crosses the start or end of the day is split there. Add `--ignore-working-hours` to count the whole day.
 
 Working hours are set per weekday in your local time zone, with days off allowed. Until you set them they are Monday to Friday, 9:00 to 17:00.
@@ -76,6 +76,13 @@ Rule `label` sits between the two: the copy has the start and end and a fixed ti
 ```sh
 calopod arm add --source WORK_ID --target PERSONAL_ID --rule label --label "Client"
 calopod arm update ARM_ID --label "Personal"
+```
+
+An Arm can also pad its Busy and Label copies. `--pad-before` and `--pad-after` take minutes (0 to 480, default 0), so the copy starts early and ends late and blocks travel or prep time on the other calendar. The original is never changed, all-day events are left alone, and Full details copies are not padded. `--pad-in-person-only` pads only events that have a location and no meeting link. Changing the padding updates the Arm's copies on the next sync. Availability counts the padded time as busy.
+
+```sh
+calopod arm add --source WORK_ID --target PERSONAL_ID --pad-before 15 --pad-after 15
+calopod arm update ARM_ID --pad-after 30 --pad-in-person-only
 ```
 
 Creating or removing an Arm only changes Calopod's settings. It doesn't touch your calendars. Calopod refuses targets that are read-only and routes that point at themselves or repeat another route.

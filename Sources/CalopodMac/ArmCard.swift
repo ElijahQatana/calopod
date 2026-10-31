@@ -12,6 +12,8 @@ struct ArmCard: View {
     @State private var confirmingRemoval = false
     @State private var editingLabel = false
     @State private var labelText = ""
+    @State private var editingPadding = false
+    @State private var padding = ArmPadding()
 
     private var ruleBinding: Binding<ArmRuleMode> {
         Binding(
@@ -31,6 +33,7 @@ struct ArmCard: View {
             topRow
             flow
             if editingLabel { labelEditor }
+            if editingPadding { paddingEditor }
             if confirmingRemoval { removalConfirm }
         }
         .padding(16)
@@ -135,6 +138,7 @@ struct ArmCard: View {
         Menu {
             Button("Rename") { renaming = true }
             if arm.rule == .label { Button("Change label…") { startEditingLabel() } }
+            if arm.rule != .fullDetails { Button("Padding…") { startEditingPadding() } }
             Divider()
             Button(arm.isMain ? "Remove Main calendar…" : "Remove…", role: .destructive) { confirmingRemoval = true }
         } label: {
@@ -187,6 +191,28 @@ struct ArmCard: View {
             .buttonStyle(.quiet)
             .disabled(text.isEmpty)
         }
+    }
+
+    private func startEditingPadding() {
+        padding = arm.padding
+        editingPadding = true
+    }
+
+    private var paddingEditor: some View {
+        HStack(spacing: 8) {
+            Stepper("Before: \(padding.beforeMinutes) min", value: $padding.beforeMinutes, in: 0...ArmPadding.maxMinutes, step: 5)
+            Stepper("After: \(padding.afterMinutes) min", value: $padding.afterMinutes, in: 0...ArmPadding.maxMinutes, step: 5)
+            Toggle("In-person only", isOn: $padding.inPersonOnly)
+                .help("Pad only events with a location and no meeting link")
+            Spacer(minLength: 4)
+            Button("Cancel") { editingPadding = false }.buttonStyle(.quiet)
+            Button("Save") {
+                editingPadding = false
+                Task { await model.setPadding(arm.id, padding) }
+            }
+            .buttonStyle(.quiet)
+        }
+        .font(Theme.Fonts.secondary)
     }
 
     private var removalConfirm: some View {

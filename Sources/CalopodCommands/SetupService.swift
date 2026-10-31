@@ -38,6 +38,7 @@ public struct SetupArm: Identifiable, Equatable, Sendable {
     public let rule: ArmRuleMode
     public let filters: ArmFilters
     public var label: String? = nil
+    public var padding = ArmPadding()
     public let sourceNames: [String]
     public let targetName: String
     public let sourceIDs: [String]
@@ -102,6 +103,7 @@ public struct SetupService: Sendable {
                 rule: arm.ruleMode,
                 filters: arm.filters,
                 label: arm.label,
+                padding: arm.padding,
                 sourceNames: arm.sourceBindingIDs.map { namesByBinding[$0] ?? "Unknown calendar" },
                 targetName: namesByBinding[arm.targetBindingID] ?? "Unknown calendar",
                 sourceIDs: arm.sourceBindingIDs,
@@ -229,6 +231,14 @@ public struct SetupService: Sendable {
         _ = try ArmConfigurationService(repository: repository).updateFilters(
             armID: armID,
             filters: filters
+        )
+    }
+
+    public func setPadding(armID: String, padding: ArmPadding) throws {
+        let repository = try makeRepository()
+        _ = try ArmConfigurationService(repository: repository).updatePadding(
+            armID: armID,
+            padding: padding
         )
     }
 

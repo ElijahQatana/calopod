@@ -646,3 +646,12 @@ func armLabelFlags() throws {
     let update = try ArmUpdateCommand.parse(["arm", "--label", "Personal"])
     #expect(update.rule == nil && update.label == "Personal")
 }
+
+@Test("arm add and update take padding")
+func armPaddingFlags() throws {
+    let add = try ArmAddCommand.parse(["--target", "t", "--pad-before", "15", "--pad-after", "30", "--pad-in-person-only"])
+    #expect(add.padBefore == 15 && add.padAfter == 30 && add.padInPersonOnly)
+    #expect(try ArmAddCommand.parse(["--target", "t"]).padBefore == 0)
+    let update = try ArmUpdateCommand.parse(["arm", "--pad-after", "10", "--no-pad-in-person-only"])
+    #expect(update.padBefore == nil && update.padAfter == 10 && update.padInPersonOnly == false)
+}

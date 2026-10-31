@@ -35,12 +35,12 @@ public struct ArmCommand: ParsableCommand {
     public init() {}
 }
 
-/// Changes an Arm's name, Rule, filters or preferred writer. Configuration only; never writes to a
-/// calendar.
+/// Changes an Arm's name, Rule, filters, padding or preferred writer. Configuration only; never
+/// writes to a calendar.
 public struct ArmUpdateCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "update",
-        abstract: "Change an Arm name, Rule, filters or preferred writer without writing calendar events."
+        abstract: "Change an Arm name, Rule, filters, padding or preferred writer without writing calendar events."
     )
 
     @Argument(help: "Arm identifier.")
@@ -67,16 +67,26 @@ public struct ArmUpdateCommand: ParsableCommand {
     @Flag(inversion: .prefixedNo, help: "Leave out events with #dontclone in the title or notes.")
     public var skipDontclone: Bool?
 
+    @Option(name: .long, help: "Minutes the copy starts before the event.")
+    public var padBefore: Int?
+
+    @Option(name: .long, help: "Minutes the copy ends after the event.")
+    public var padAfter: Int?
+
+    @Flag(inversion: .prefixedNo, help: "Pad only events with a location and no meeting link.")
+    public var padInPersonOnly: Bool?
+
     @OptionGroup public var output: OutputOptions
 
     public init() {}
 
     public func run() throws {
         do {
+            let changesPadding = padBefore != nil || padAfter != nil || padInPersonOnly != nil
             let changesFilters = skipDeclined != nil || skipAllDay != nil || skipDontclone != nil
-            guard name != nil || rule != nil || label != nil || preferCurrentDevice || changesFilters else {
+            guard name != nil || rule != nil || label != nil || preferCurrentDevice || changesFilters || changesPadding else {
                 throw ValidationError(
-                    "Choose --name, --rule, --label, a filter such as --skip-declined or --prefer-current-device."
+                    "Choose --name, --rule, --label, --prefer-current-device, a filter such as --skip-declined or padding such as --pad-before."
                 )
             }
             let repository = try CommandEnvironment.repository()
@@ -101,6 +111,16 @@ public struct ArmUpdateCommand: ParsableCommand {
                         skipDeclined: skipDeclined ?? arm.filters.skipDeclined,
                         skipAllDay: skipAllDay ?? arm.filters.skipAllDay,
                         skipDontClone: skipDontclone ?? arm.filters.skipDontClone
+                    )
+                )
+            }
+            if changesPadding {
+                arm = try service.updatePadding(
+                    armID: arm.id,
+                    padding: ArmPadding(
+                        beforeMinutes: padBefore ?? arm.padding.beforeMinutes,
+                        afterMinutes: padAfter ?? arm.padding.afterMinutes,
+                        inPersonOnly: padInPersonOnly ?? arm.padding.inPersonOnly
                     )
                 )
             }
@@ -159,6 +179,15 @@ public struct ArmAddCommand: ParsableCommand {
     @Flag(help: "Leave out events with #dontclone in the title or notes.")
     public var skipDontclone = false
 
+    @Option(name: .long, help: "Minutes the copy starts before the event.")
+    public var padBefore: Int = 0
+
+    @Option(name: .long, help: "Minutes the copy ends after the event.")
+    public var padAfter: Int = 0
+
+    @Flag(help: "Pad only events with a location and no meeting link.")
+    public var padInPersonOnly = false
+
     @OptionGroup public var output: OutputOptions
 
     public init() {}
@@ -176,7 +205,9 @@ public struct ArmAddCommand: ParsableCommand {
                     skipAllDay: skipAllDay,
                     skipDontClone: skipDontclone
                 ),
-                label: label
+                label: label,
+                padding: ArmPadding(
+                    beforeMinutes: padBefore, afterMinutes: padAfter, inPersonOnly: padInPersonOnly)
             )
             try OutputRenderer.write(
                 command: "arm.add",
@@ -338,10 +369,16 @@ private func armItem(_ arm: StoredArm) -> CommandItem {
         rule: arm.ruleMode.rawValue,
         enabled: arm.isEnabled,
         armLabel: arm.ruleMode == .label ? arm.label : nil,
+        padding: arm.effectivePadding.isEmpty ? nil : paddingText(arm.effectivePadding),
         filters: arm.filters.isEmpty ? nil : [
             arm.filters.skipDeclined ? "skip-declined" : nil,
             arm.filters.skipAllDay ? "skip-all-day" : nil,
             arm.filters.skipDontClone ? "skip-dontclone" : nil,
         ].compactMap { $0 }
     )
+}
+
+private func paddingText(_ padding: ArmPadding) -> String {
+    let text = "\(padding.beforeMinutes) min before, \(padding.afterMinutes) min after"
+    return padding.inPersonOnly ? text + ", in-person events only" : text
 }
