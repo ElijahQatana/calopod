@@ -7,6 +7,7 @@ struct CopyTarget: Equatable {
     let bindingID: String
     let armName: String
     let fullDetails: Bool
+    let arm: StoredArm
 
     /// Copy targets by source event key. Read once per schedule or listing.
     static func bySource(_ repository: LocalStateRepository, arms: [StoredArm]) throws -> [String: [CopyTarget]] {
@@ -14,7 +15,7 @@ struct CopyTarget: Equatable {
         for arm in arms where arm.isEnabled {
             for mapping in try repository.mirrorMappings(armID: arm.id) {
                 found[mapping.sourceKeyHash, default: []].append(
-                    CopyTarget(bindingID: arm.targetBindingID, armName: arm.displayName, fullDetails: arm.ruleMode == .fullDetails))
+                    CopyTarget(bindingID: arm.targetBindingID, armName: arm.displayName, fullDetails: arm.ruleMode == .fullDetails, arm: arm))
             }
         }
         return found
