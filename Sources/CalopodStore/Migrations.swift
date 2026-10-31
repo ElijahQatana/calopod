@@ -26,6 +26,7 @@ extension CalopodDatabase {
         "v22_iphone_feed",
         "v23_iphone_calendars",
         "v24_iphone_feed_zone",
+        "v25_arm_filters",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -472,6 +473,15 @@ extension CalopodDatabase {
                     legacy_removed INTEGER NOT NULL DEFAULT 0
                 )
                 """)
+        }
+
+        // What an Arm leaves out.
+        migrator.registerMigration("v25_arm_filters") { database in
+            try database.alter(table: "arms") { table in
+                table.add(column: "skip_declined", .boolean).notNull().defaults(to: false)
+                table.add(column: "skip_all_day", .boolean).notNull().defaults(to: false)
+                table.add(column: "skip_dont_clone", .boolean).notNull().defaults(to: false)
+            }
         }
 
         return migrator

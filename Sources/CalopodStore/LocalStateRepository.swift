@@ -86,6 +86,7 @@ public struct StoredArm: Equatable, Sendable {
     public let preferredWriterDeviceID: String?
     public let isEnabled: Bool
     public let isMain: Bool
+    public let filters: ArmFilters
 
     public init(
         id: String,
@@ -96,7 +97,8 @@ public struct StoredArm: Equatable, Sendable {
         preferredWriterDeviceID: String? = nil,
         isEnabled: Bool = true,
         isMain: Bool = false,
-        name: String? = nil
+        name: String? = nil,
+        filters: ArmFilters = ArmFilters()
     ) {
         self.name = name
         self.id = id
@@ -107,6 +109,7 @@ public struct StoredArm: Equatable, Sendable {
         self.preferredWriterDeviceID = preferredWriterDeviceID
         self.isEnabled = isEnabled
         self.isMain = isMain
+        self.filters = filters
     }
 }
 
@@ -454,8 +457,9 @@ public final class LocalStateRepository: @unchecked Sendable {
                 sql: """
                     INSERT INTO arms
                         (id, configuration_id, target_binding_id, rule_mode,
-                         preferred_writer_device_id, is_enabled, is_main, created_at, updated_at, name)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         preferred_writer_device_id, is_enabled, is_main, created_at, updated_at, name,
+                         skip_declined, skip_all_day, skip_dont_clone)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                 arguments: [
                     arm.id,
@@ -468,6 +472,9 @@ public final class LocalStateRepository: @unchecked Sendable {
                     now,
                     now,
                     arm.name,
+                    arm.filters.skipDeclined,
+                    arm.filters.skipAllDay,
+                    arm.filters.skipDontClone,
                 ]
             )
             for sourceBindingID in arm.sourceBindingIDs {
@@ -487,7 +494,8 @@ public final class LocalStateRepository: @unchecked Sendable {
                     database,
                     sql: """
                         SELECT id, configuration_id, target_binding_id, rule_mode,
-                               preferred_writer_device_id, is_enabled, is_main, name
+                               preferred_writer_device_id, is_enabled, is_main, name,
+                               skip_declined, skip_all_day, skip_dont_clone
                         FROM arms
                         WHERE configuration_id = ?
                         ORDER BY created_at, id
@@ -499,7 +507,8 @@ public final class LocalStateRepository: @unchecked Sendable {
                     database,
                     sql: """
                         SELECT id, configuration_id, target_binding_id, rule_mode,
-                               preferred_writer_device_id, is_enabled, is_main, name
+                               preferred_writer_device_id, is_enabled, is_main, name,
+                               skip_declined, skip_all_day, skip_dont_clone
                         FROM arms
                         ORDER BY created_at, id
                         """
@@ -515,7 +524,8 @@ public final class LocalStateRepository: @unchecked Sendable {
                 database,
                 sql: """
                     SELECT id, configuration_id, target_binding_id, rule_mode,
-                           preferred_writer_device_id, is_enabled, is_main, name
+                           preferred_writer_device_id, is_enabled, is_main, name,
+                           skip_declined, skip_all_day, skip_dont_clone
                     FROM arms
                     WHERE id = ?
                     """,
@@ -559,6 +569,27 @@ public final class LocalStateRepository: @unchecked Sendable {
             try database.execute(
                 sql: "UPDATE arms SET rule_mode = ?, updated_at = ? WHERE id = ?",
                 arguments: [ruleMode.rawValue, now, id]
+            )
+        }
+        return try arm(id: id)
+    }
+
+    @discardableResult
+    public func setArmFilters(
+        id: String,
+        filters: ArmFilters,
+        now: Date = Date()
+    ) throws -> StoredArm? {
+        try database.write { database in
+            try database.execute(
+                sql: """
+                    UPDATE arms SET skip_declined = ?, skip_all_day = ?, skip_dont_clone = ?,
+                        updated_at = ?
+                    WHERE id = ?
+                    """,
+                arguments: [
+                    filters.skipDeclined, filters.skipAllDay, filters.skipDontClone, now, id,
+                ]
             )
         }
         return try arm(id: id)
@@ -681,7 +712,12 @@ private func storedArm(row: Row, database: Database) throws -> StoredArm {
         preferredWriterDeviceID: row["preferred_writer_device_id"],
         isEnabled: row["is_enabled"],
         isMain: row["is_main"],
-        name: row["name"]
+        name: row["name"],
+        filters: ArmFilters(
+            skipDeclined: row["skip_declined"],
+            skipAllDay: row["skip_all_day"],
+            skipDontClone: row["skip_dont_clone"]
+        )
     )
 }
 

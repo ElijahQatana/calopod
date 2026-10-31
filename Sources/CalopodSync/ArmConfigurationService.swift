@@ -104,6 +104,17 @@ public struct ArmConfigurationService: Sendable {
         return arm
     }
 
+    public func updateFilters(
+        armID: String,
+        filters: ArmFilters,
+        now: Date = Date()
+    ) throws -> StoredArm {
+        guard let arm = try repository.setArmFilters(id: armID, filters: filters, now: now) else {
+            throw ArmConfigurationError.armNotFound(armID)
+        }
+        return arm
+    }
+
     /// The Arm that already makes exactly this route, so a repeated setup can leave it alone.
     public func existingArm(
         sourceBindingIDs: [String],
@@ -165,6 +176,7 @@ public struct ArmConfigurationService: Sendable {
         ruleMode: ArmRuleMode = .busy,
         isMain: Bool = false,
         name: String? = nil,
+        filters: ArmFilters = ArmFilters(),
         now: Date = Date()
     ) throws -> StoredArm {
         let name = try normalizedName(name)
@@ -254,7 +266,8 @@ public struct ArmConfigurationService: Sendable {
             ruleMode: ruleMode,
             preferredWriterDeviceID: preferredWriterDeviceID,
             isMain: isMain,
-            name: name
+            name: name,
+            filters: filters
         )
         try repository.saveArm(arm, now: now)
         return arm
