@@ -115,6 +115,15 @@ struct ArmFilterTests {
         #expect(try plan(ArmFilters(), sources: series).items.count == 3)
     }
 
+    @Test("Only changes still to make are waiting")
+    func waiting() throws {
+        let declined = event("a", response: .declined)
+        #expect(try plan(Self.declined, sources: [declined]).waitingCount == 0)
+        #expect(try plan(ArmFilters(), sources: [declined]).waitingCount == 1)
+        #expect(try plan(ArmFilters(), sources: [declined], copy: Copy(of: declined)).waitingCount == 0)
+        #expect(try plan(Self.declined, sources: [declined], copy: Copy(of: event("a"))).waitingCount == 1)
+    }
+
     @Test("Filters persist and start off")
     func persists() throws {
         let repository = LocalStateRepository(database: try CalopodDatabase.inMemory())

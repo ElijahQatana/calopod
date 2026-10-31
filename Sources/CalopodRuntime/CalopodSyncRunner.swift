@@ -101,11 +101,13 @@ public struct SyncEngine: Sendable {
             )
             throw CancellationError()
         } catch {
-            try? repository.finishSyncRun(
-                id: runID,
-                status: "failed",
-                errorCode: syncFailureCategory(error)
-            )
+            let category = syncFailureCategory(error)
+            try? repository.finishSyncRun(id: runID, status: "failed", errorCode: category)
+            if request.mode == .apply {
+                for arm in (try? repository.arms()) ?? [] where arm.isEnabled {
+                    try? repository.recordArmSync(armID: arm.id, succeededAt: nil, error: category, waiting: nil)
+                }
+            }
             throw error
         }
     }
@@ -171,6 +173,7 @@ public struct SyncEngine: Sendable {
         var targetOriginalsByArm: [String: [StoredNormalizedInstance]] = [:]
         var targetFailureCount = 0
         var uncheckedArmIDs = Set<String>()
+        var waitingByArm: [String: Int] = [:]
         var targetWarnings: [String] = []
         var writerBlockedArmIDs = Set<String>()
         let secretStore = KeychainSecretStore()
@@ -251,6 +254,7 @@ public struct SyncEngine: Sendable {
                 targetSnapshotComplete: targetComplete,
                 targetOriginals: targetOriginals
             )
+            waitingByArm[arm.id] = plan.waitingCount
             review.add(SyncPlanReview.summarize(
                 plan: plan, sources: events,
                 sourceProviders: sourceProviders
@@ -264,6 +268,9 @@ public struct SyncEngine: Sendable {
 
         let warnings = eligibility.warnings + refresh.warnings + targetWarnings
         if mode == .dryRun {
+            for (armID, waiting) in waitingByArm where !uncheckedArmIDs.contains(armID) {
+                try repository.recordArmWaiting(armID: armID, waiting: waiting)
+            }
             return SyncExecutionResult(
                 status: refresh.failedSourceCount == 0 && targetFailureCount == 0
                     ? "ok"
@@ -352,6 +359,14 @@ public struct SyncEngine: Sendable {
             appliedCount += summary.providerWriteCount
             reconciledCount += summary.mappingReconciliationCount
             noOpCount += summary.noOpCount
+        }
+
+        let finishedAt = Date()
+        for arm in arms {
+            let unchecked = uncheckedArmIDs.contains(arm.id)
+            try repository.recordArmSync(
+                armID: arm.id, succeededAt: unchecked ? nil : finishedAt,
+                error: unchecked ? "target-refresh" : nil, waiting: unchecked ? nil : 0)
         }
 
         // A target that could not be read is skipped, not treated as empty. The rest still sync.
