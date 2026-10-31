@@ -31,6 +31,19 @@ final class NewArmDraftTests: XCTestCase {
         XCTAssertNotNil(draft.problem, "a calendar cannot copy into itself")
     }
 
+    func testTheLabelRuleNeedsALabel() {
+        var draft = NewArmDraft()
+        draft.toggleSource("work")
+        draft.target = "home"
+        draft.rule = .label
+        XCTAssertNotNil(draft.problem)
+        draft.label = "  Client "
+        XCTAssertNil(draft.problem)
+        XCTAssertEqual(draft.trimmedLabel, "Client")
+        draft.rule = .busy
+        XCTAssertNil(draft.trimmedLabel, "a label is only sent for the label Rule")
+    }
+
     func testChoosingTheDestinationAsASourceClearsIt() {
         var draft = NewArmDraft()
         draft.target = "home"

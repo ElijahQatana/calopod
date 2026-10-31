@@ -71,6 +71,13 @@ calopod arm update ARM_ID --skip-declined --no-skip-all-day
 
 The default Rule is `busy`: the copy has the start, end and the title "Busy", nothing else. Use `full-details` only for a calendar you trust. It copies the title, location and notes, with attendees and links written into the notes. It never invites anyone and clears alerts so you aren't notified twice.
 
+Rule `label` sits between the two: the copy has the start and end and a fixed title you set on the Arm, such as "Personal" or "Client". Nothing from the original's title, notes, location or people goes into it. A Private event is copied as plain "Busy" without the label. Changing an Arm's Rule or label updates its copies on the next sync instead of making new ones.
+
+```sh
+calopod arm add --source WORK_ID --target PERSONAL_ID --rule label --label "Client"
+calopod arm update ARM_ID --label "Personal"
+```
+
 Creating or removing an Arm only changes Calopod's settings. It doesn't touch your calendars. Calopod refuses targets that are read-only and routes that point at themselves or repeat another route.
 
 ## Main calendar
