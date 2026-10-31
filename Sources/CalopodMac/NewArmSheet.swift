@@ -94,7 +94,13 @@ struct NewArmSheet: View {
         section("What the copies show", note: nil) {
             HStack(alignment: .top, spacing: 10) {
                 ruleCard(.busy, "Busy only", "Copies appear as plain Busy blocks. Titles, places and notes stay behind.")
+                ruleCard(.label, "Label", "Copies show your label and the time. Nothing else from the original.")
                 ruleCard(.fullDetails, "Full details", "Copies keep the title, place and notes of the original.")
+            }
+            if draft.rule == .label {
+                TextField("Label, such as Personal", text: $draft.label).textFieldStyle(.roundedBorder)
+                    .padding(.top, 6)
+                    .accessibilityLabel("Label for the copies")
             }
         }
     }
@@ -188,7 +194,7 @@ struct NewArmSheet: View {
         guard let target = draft.target, draft.problem == nil else { return }
         let draft = draft
         Task {
-            await model.addArm(sources: Array(draft.sources), target: target, rule: draft.rule, name: draft.trimmedName)
+            await model.addArm(sources: Array(draft.sources), target: target, rule: draft.rule, name: draft.trimmedName, label: draft.trimmedLabel)
             // A refused arm leaves its reason in the sheet; a saved one closes it.
             if model.notice == nil { dismiss() }
         }

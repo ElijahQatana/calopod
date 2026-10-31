@@ -192,11 +192,11 @@ private struct CopyContext {
 private func copyContext(_ db: Database) throws -> CopyContext {
     CopyContext(
         arms: try Row.fetchAll(db, sql: """
-            SELECT a.id, a.target_binding_id, a.rule_mode, s.calendar_binding_id AS source_binding_id
+            SELECT a.id, a.target_binding_id, a.rule_mode, a.copy_label, s.calendar_binding_id AS source_binding_id
             FROM arms a JOIN arm_sources s ON s.arm_id = a.id WHERE a.is_enabled = 1
             """),
         mapped: try Row.fetchAll(db, sql: """
-            SELECT m.source_key_hash, m.provider_event_id, m.provider_external_id, a.rule_mode, a.target_binding_id
+            SELECT m.source_key_hash, m.provider_event_id, m.provider_external_id, a.rule_mode, a.copy_label, a.target_binding_id
             FROM mirror_mappings m JOIN arms a ON a.id = m.arm_id
             """))
 }
@@ -210,6 +210,16 @@ private func participants(_ event: StoredNormalizedInstance) -> Set<String> {
     guestSet(event).union(event.organizer.map { [($0.emailAddress ?? $0.name ?? "").lowercased()] } ?? [])
 }
 
+private func copyTitle(mode: String, label: String?, of source: StoredNormalizedInstance) -> String {
+    switch ArmRuleMode(rawValue: mode) {
+    case .fullDetails: return source.title ?? ""
+    case .label:
+        let text = (label ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return source.isPrivate || text.isEmpty ? "Busy" : text
+    default: return "Busy"
+    }
+}
+
 private func copyDiagnoses(
     of event: StoredNormalizedInstance, among events: [InboxContextEvent], _ context: CopyContext,
     overlappingOnly: Bool = false
@@ -221,11 +231,12 @@ private func copyDiagnoses(
             : (other.startsAt != event.startsAt || other.endsAt != event.endsAt) { continue }
         let routes = context.arms.filter { ($0["source_binding_id"] as String) == other.calendarBindingID }
         let stored = context.mapped.filter { ($0["source_key_hash"] as String) == other.sourceKeyHash }
-        let modes = routes.map { ($0["rule_mode"] as String, ($0["target_binding_id"] as String) == event.calendarBindingID) }
-            + stored.map { ($0["rule_mode"] as String, true) }
+        let modes = routes.map {
+            ($0["rule_mode"] as String, $0["copy_label"] as String?, ($0["target_binding_id"] as String) == event.calendarBindingID)
+        } + stored.map { ($0["rule_mode"] as String, $0["copy_label"] as String?, true) }
         guard !modes.isEmpty else { continue }
-        for (mode, routedHere) in modes {
-            let title = mode == ArmRuleMode.busy.rawValue ? "Busy" : (other.title ?? "")
+        for (mode, label, routedHere) in modes {
+            let title = copyTitle(mode: mode, label: label, of: other)
             let mine = guestSet(event)
             let checks: [InboxCopyDiagnosis.Check] = [
                 .init(name: "arm routes the source calendar to this calendar", passed: routedHere),

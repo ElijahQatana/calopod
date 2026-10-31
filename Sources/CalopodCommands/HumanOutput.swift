@@ -125,6 +125,7 @@ enum HumanOutputRenderer {
                         lines.append("\(index + 1). \(label(item.label, fallback: item.kind == "main-calendar" ? "Main calendar" : "Unnamed Arm"))")
                         if let enabled = item.enabled { lines.append("  State: \(enabled ? "enabled" : "disabled")") }
                         if let rule = item.rule { lines.append("  Rule: \(rule == "full-details" ? "Full details" : readable(rule))") }
+                        if let armLabel = item.armLabel { lines.append("  Label: \(armLabel)") }
                         if let filters = item.filters { lines.append("  Filters: \(filters.map(readable).joined(separator: ", "))") }
                         if let sources = item.sourceIDs {
                             lines.append("  Sources: \(sources.count)")

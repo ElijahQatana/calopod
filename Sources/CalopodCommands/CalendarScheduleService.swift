@@ -278,7 +278,7 @@ public struct CalendarScheduleService: Sendable {
                     sourceCalendarName: calendarName(event.calendarBindingID), sourceResponse: sourceResponse)
                 events.append(ScheduleEvent(
                     id: "copy:\(target.bindingID):\(event.sourceKeyHash)", calendarID: target.bindingID,
-                    title: target.fullDetails ? Self.title(event) : "Busy",
+                    title: target.fullDetails ? Self.title(event) : target.arm.plainCopyTitle(isPrivate: event.isPrivate),
                     startsAt: event.startsAt, endsAt: event.endsAt, isAllDay: event.isAllDay,
                     response: .none, copyOrigin: origin,
                     replyUnavailableReason: ConflictResolutionService.reasonText([.managedMirror])))

@@ -26,7 +26,7 @@ It never edits or deletes events it didn't create. Sign-in tokens go in your Key
 |---|---|
 | **Connection** | A calendar account Calopod reads from, such as your Mac's calendars, Google, or Microsoft. |
 | **Arm** | A copy route: events from one or more source calendars go to one target calendar. |
-| **Rule** | What an Arm may copy. `Busy` copies times only. `Full details` also copies title, location and notes. |
+| **Rule** | What an Arm may copy. `Busy` copies times only. `Label` copies times under a fixed label you choose, such as "Personal". `Full details` also copies title, location and notes. |
 | **Main calendar** | A target that receives everything with full details. |
 
 ## Requirements

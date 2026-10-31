@@ -87,6 +87,8 @@ public struct StoredArm: Equatable, Sendable {
     public let isEnabled: Bool
     public let isMain: Bool
     public let filters: ArmFilters
+    /// The fixed title of copies under the `label` Rule.
+    public let label: String?
 
     public init(
         id: String,
@@ -98,7 +100,8 @@ public struct StoredArm: Equatable, Sendable {
         isEnabled: Bool = true,
         isMain: Bool = false,
         name: String? = nil,
-        filters: ArmFilters = ArmFilters()
+        filters: ArmFilters = ArmFilters(),
+        label: String? = nil
     ) {
         self.name = name
         self.id = id
@@ -110,6 +113,15 @@ public struct StoredArm: Equatable, Sendable {
         self.isEnabled = isEnabled
         self.isMain = isMain
         self.filters = filters
+        self.label = label
+    }
+
+    /// The title of a copy on a Busy or Label Arm. A Private event never gets the label.
+    public func plainCopyTitle(isPrivate: Bool?) -> String {
+        guard ruleMode == .label, isPrivate != true,
+              case let label = (label ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
+              !label.isEmpty else { return "Busy" }
+        return label
     }
 }
 
@@ -458,8 +470,8 @@ public final class LocalStateRepository: @unchecked Sendable {
                     INSERT INTO arms
                         (id, configuration_id, target_binding_id, rule_mode,
                          preferred_writer_device_id, is_enabled, is_main, created_at, updated_at, name,
-                         skip_declined, skip_all_day, skip_dont_clone)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         skip_declined, skip_all_day, skip_dont_clone, copy_label)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                 arguments: [
                     arm.id,
@@ -475,6 +487,7 @@ public final class LocalStateRepository: @unchecked Sendable {
                     arm.filters.skipDeclined,
                     arm.filters.skipAllDay,
                     arm.filters.skipDontClone,
+                    arm.label,
                 ]
             )
             for sourceBindingID in arm.sourceBindingIDs {
@@ -495,7 +508,7 @@ public final class LocalStateRepository: @unchecked Sendable {
                     sql: """
                         SELECT id, configuration_id, target_binding_id, rule_mode,
                                preferred_writer_device_id, is_enabled, is_main, name,
-                               skip_declined, skip_all_day, skip_dont_clone
+                               skip_declined, skip_all_day, skip_dont_clone, copy_label
                         FROM arms
                         WHERE configuration_id = ?
                         ORDER BY created_at, id
@@ -508,7 +521,7 @@ public final class LocalStateRepository: @unchecked Sendable {
                     sql: """
                         SELECT id, configuration_id, target_binding_id, rule_mode,
                                preferred_writer_device_id, is_enabled, is_main, name,
-                               skip_declined, skip_all_day, skip_dont_clone
+                               skip_declined, skip_all_day, skip_dont_clone, copy_label
                         FROM arms
                         ORDER BY created_at, id
                         """
@@ -525,7 +538,7 @@ public final class LocalStateRepository: @unchecked Sendable {
                 sql: """
                     SELECT id, configuration_id, target_binding_id, rule_mode,
                            preferred_writer_device_id, is_enabled, is_main, name,
-                           skip_declined, skip_all_day, skip_dont_clone
+                           skip_declined, skip_all_day, skip_dont_clone, copy_label
                     FROM arms
                     WHERE id = ?
                     """,
@@ -563,12 +576,13 @@ public final class LocalStateRepository: @unchecked Sendable {
     public func setArmRuleMode(
         id: String,
         ruleMode: ArmRuleMode,
+        label: String?,
         now: Date = Date()
     ) throws -> StoredArm? {
         try database.write { database in
             try database.execute(
-                sql: "UPDATE arms SET rule_mode = ?, updated_at = ? WHERE id = ?",
-                arguments: [ruleMode.rawValue, now, id]
+                sql: "UPDATE arms SET rule_mode = ?, copy_label = ?, updated_at = ? WHERE id = ?",
+                arguments: [ruleMode.rawValue, label, now, id]
             )
         }
         return try arm(id: id)
@@ -717,7 +731,8 @@ private func storedArm(row: Row, database: Database) throws -> StoredArm {
             skipDeclined: row["skip_declined"],
             skipAllDay: row["skip_all_day"],
             skipDontClone: row["skip_dont_clone"]
-        )
+        ),
+        label: row["copy_label"]
     )
 }
 

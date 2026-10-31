@@ -23,6 +23,7 @@ struct NewArmDraft: Equatable {
     var sources = Set<String>()
     var target: String?
     var rule: ArmRuleMode = .busy
+    var label = ""
 
     /// Every calendar, grouped by account. Ignored calendars keep syncing but are not offered for new arms.
     @MainActor
@@ -58,6 +59,7 @@ struct NewArmDraft: Equatable {
         if sources.isEmpty { return "Choose at least one calendar to copy from." }
         guard let target else { return "Choose the calendar to copy into." }
         if sources.contains(target) { return "A calendar can't copy into itself." }
+        if rule == .label && trimmedLabel == nil { return "Enter the label the copies will show." }
         return nil
     }
 
@@ -65,6 +67,12 @@ struct NewArmDraft: Equatable {
     var trimmedName: String? {
         let text = name.trimmingCharacters(in: .whitespacesAndNewlines)
         return text.isEmpty ? nil : text
+    }
+
+    /// The label to send: only for the Label Rule.
+    var trimmedLabel: String? {
+        let text = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        return rule == .label && !text.isEmpty ? text : nil
     }
 
     mutating func toggleSource(_ id: String) {

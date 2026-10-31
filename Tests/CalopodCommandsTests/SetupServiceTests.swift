@@ -160,6 +160,26 @@ struct SetupServiceTests {
         #expect(try service.snapshot().arms.first?.filters == filters)
     }
 
+    @Test("the label Rule needs a label and shows it in the snapshot")
+    func labelRule() throws {
+        let (service, _, root) = try makeService()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try service.setSelected(calendarID: "work", selected: true)
+        try service.setSelected(calendarID: "main", selected: true)
+        #expect(throws: ArmConfigurationError.labelRequired) {
+            try service.addArm(sourceIDs: ["work"], targetID: "main", rule: .label, name: nil)
+        }
+        try service.addArm(sourceIDs: ["work"], targetID: "main", rule: .label, name: nil, label: "Client")
+        let id = try #require(try service.snapshot().arms.first?.id)
+        #expect(try service.snapshot().arms.first?.label == "Client")
+
+        try service.setRule(armID: id, rule: .busy)
+        try service.setRule(armID: id, rule: .label, label: "Personal")
+        let arm = try #require(try service.snapshot().arms.first)
+        #expect(arm.rule == .label && arm.label == "Personal")
+    }
+
     @Test("renaming trims the name and refuses empty, long and repeated names")
     func renameRules() throws {
         let (service, _, root) = try makeService()

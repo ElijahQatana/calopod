@@ -142,16 +142,16 @@ final class SetupModel {
         }
     }
 
-    func addArm(sources: [String], target: String, rule: ArmRuleMode, name: String?) async {
+    func addArm(sources: [String], target: String, rule: ArmRuleMode, name: String?, label: String? = nil) async {
         let service = service
         await run("Saving…") {
-            try service.addArm(sourceIDs: sources, targetID: target, rule: rule, name: name)
+            try service.addArm(sourceIDs: sources, targetID: target, rule: rule, name: name, label: label)
         }
     }
 
-    func setRule(_ armID: String, _ rule: ArmRuleMode) async {
+    func setRule(_ armID: String, _ rule: ArmRuleMode, label: String? = nil) async {
         let service = service
-        await run(nil) { try service.setRule(armID: armID, rule: rule) }
+        await run(nil) { try service.setRule(armID: armID, rule: rule, label: label) }
     }
 
     func setFilters(_ armID: String, _ filters: ArmFilters) async {

@@ -116,7 +116,7 @@ func destinationCopies(
             guard let event = originals[mapping.sourceKeyHash], event.calendarBindingID != arm.targetBindingID else { continue }
             items.append(CommandItem(
                 id: "copy:\(arm.targetBindingID):\(event.sourceKeyHash)", kind: "copy",
-                label: arm.ruleMode == .fullDetails ? event.title : "Busy", parentID: arm.targetBindingID,
+                label: arm.ruleMode == .fullDetails ? event.title : arm.plainCopyTitle(isPrivate: event.isPrivate), parentID: arm.targetBindingID,
                 startsAt: outputDate(event.startsAt), endsAt: outputDate(event.endsAt), allDay: event.isAllDay,
                 cancelled: false, availability: event.availability,
                 copyMode: arm.ruleMode == .fullDetails ? "full-details" : "busy",

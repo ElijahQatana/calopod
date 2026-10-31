@@ -638,3 +638,11 @@ func armFilterFlags() throws {
     let update = try ArmUpdateCommand.parse(["arm", "--no-skip-all-day", "--skip-declined"])
     #expect(update.skipAllDay == false && update.skipDeclined == true && update.skipDontclone == nil)
 }
+
+@Test("arm add and update take the label Rule and its label")
+func armLabelFlags() throws {
+    let add = try ArmAddCommand.parse(["--target", "t", "--rule", "label", "--label", "Client"])
+    #expect(add.rule.ruleMode == .label && add.label == "Client")
+    let update = try ArmUpdateCommand.parse(["arm", "--label", "Personal"])
+    #expect(update.rule == nil && update.label == "Personal")
+}

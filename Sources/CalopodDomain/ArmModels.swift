@@ -1,7 +1,8 @@
-/// What an Arm may put on its target. `busy` is timing only; `fullDetails` (Main calendar) adds
-/// title, location and notes.
+/// What an Arm may put on its target. `busy` is timing only; `label` is timing under the Arm's
+/// fixed label; `fullDetails` (Main calendar) adds title, location and notes.
 public enum ArmRuleMode: String, CaseIterable, Codable, Sendable {
     case busy
+    case label
     case fullDetails = "full-details"
 }
 

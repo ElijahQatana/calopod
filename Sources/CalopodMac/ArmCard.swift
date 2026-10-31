@@ -10,13 +10,19 @@ struct ArmCard: View {
 
     @State private var renaming = false
     @State private var confirmingRemoval = false
+    @State private var editingLabel = false
+    @State private var labelText = ""
 
     private var ruleBinding: Binding<ArmRuleMode> {
         Binding(
             get: { arm.rule },
             set: { value in
                 guard arm.canChangeRule else { return }
-                Task { await model.setRule(arm.id, value) }
+                if value == .label && arm.label == nil {
+                    startEditingLabel()
+                } else {
+                    Task { await model.setRule(arm.id, value) }
+                }
             })
     }
 
@@ -24,6 +30,7 @@ struct ArmCard: View {
         VStack(alignment: .leading, spacing: 12) {
             topRow
             flow
+            if editingLabel { labelEditor }
             if confirmingRemoval { removalConfirm }
         }
         .padding(16)
@@ -69,6 +76,7 @@ struct ArmCard: View {
             Menu {
                 Picker("Rule", selection: ruleBinding) {
                     Text("Busy only").tag(ArmRuleMode.busy)
+                    Text("Label").tag(ArmRuleMode.label)
                     Text("Full details").tag(ArmRuleMode.fullDetails)
                 }
                 .pickerStyle(.inline)
@@ -126,6 +134,7 @@ struct ArmCard: View {
     private var overflowMenu: some View {
         Menu {
             Button("Rename") { renaming = true }
+            if arm.rule == .label { Button("Change label…") { startEditingLabel() } }
             Divider()
             Button(arm.isMain ? "Remove Main calendar…" : "Remove…", role: .destructive) { confirmingRemoval = true }
         } label: {
@@ -159,6 +168,27 @@ struct ArmCard: View {
         .accessibilityLabel("Copies from \(sources.map(\.1).joined(separator: ", ")) into \(model.targetName(of: arm))")
     }
 
+    private func startEditingLabel() {
+        labelText = arm.label ?? ""
+        editingLabel = true
+    }
+
+    private var labelEditor: some View {
+        let text = labelText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return HStack(spacing: 8) {
+            TextField("Label, such as Personal", text: $labelText)
+                .textFieldStyle(.roundedBorder)
+                .accessibilityLabel("Label for \(arm.name)")
+            Button("Cancel") { editingLabel = false }.buttonStyle(.quiet)
+            Button("Save") {
+                editingLabel = false
+                Task { await model.setRule(arm.id, .label, label: text) }
+            }
+            .buttonStyle(.quiet)
+            .disabled(text.isEmpty)
+        }
+    }
+
     private var removalConfirm: some View {
         HStack(spacing: 8) {
             Text("Remove this arm? Events already copied stay put.").font(Theme.Fonts.secondary).foregroundStyle(.secondary)
@@ -172,7 +202,13 @@ struct ArmCard: View {
         }
     }
 
-    static func ruleName(_ rule: ArmRuleMode) -> String { rule == .busy ? "Busy only" : "Full details" }
+    static func ruleName(_ rule: ArmRuleMode) -> String {
+        switch rule {
+        case .busy: "Busy only"
+        case .label: "Label"
+        case .fullDetails: "Full details"
+        }
+    }
 }
 
 /// A calendar as a small capsule with its color. The destination gets an outline.

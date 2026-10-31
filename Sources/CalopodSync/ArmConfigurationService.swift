@@ -19,6 +19,8 @@ public enum ArmConfigurationError: Error, Equatable, Sendable, CustomStringConve
     case duplicateRoute(source: String, target: String)
     case mainCalendarAlreadyConfigured
     case mainCalendarRuleFixed
+    case invalidLabel
+    case labelRequired
 
     public var description: String {
         switch self {
@@ -52,6 +54,10 @@ public enum ArmConfigurationError: Error, Equatable, Sendable, CustomStringConve
             "A Main calendar is already configured."
         case .mainCalendarRuleFixed:
             "The Main calendar always uses the Full details Rule."
+        case .invalidLabel:
+            "Use a label of up to 60 characters without control characters."
+        case .labelRequired:
+            "The Label Rule needs a label."
         }
     }
 }
@@ -83,9 +89,21 @@ public struct ArmConfigurationService: Sendable {
         return trimmed.isEmpty ? nil : trimmed
     }
 
+    private func normalizedLabel(_ label: String?) throws -> String? {
+        guard let label else { return nil }
+        guard label.count <= 60,
+              !label.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
+            throw ArmConfigurationError.invalidLabel
+        }
+        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// A label given here replaces the stored one; without one the stored label stays.
     public func updateRule(
         armID: String,
         ruleMode: ArmRuleMode,
+        label: String? = nil,
         now: Date = Date()
     ) throws -> StoredArm {
         guard let existing = try repository.arm(id: armID) else {
@@ -94,9 +112,14 @@ public struct ArmConfigurationService: Sendable {
         if existing.isMain && ruleMode != .fullDetails {
             throw ArmConfigurationError.mainCalendarRuleFixed
         }
+        let label = try normalizedLabel(label) ?? existing.label
+        if ruleMode == .label && label == nil {
+            throw ArmConfigurationError.labelRequired
+        }
         guard let arm = try repository.setArmRuleMode(
             id: armID,
             ruleMode: ruleMode,
+            label: label,
             now: now
         ) else {
             throw ArmConfigurationError.armNotFound(armID)
@@ -177,9 +200,14 @@ public struct ArmConfigurationService: Sendable {
         isMain: Bool = false,
         name: String? = nil,
         filters: ArmFilters = ArmFilters(),
+        label: String? = nil,
         now: Date = Date()
     ) throws -> StoredArm {
         let name = try normalizedName(name)
+        let label = try normalizedLabel(label)
+        if ruleMode == .label && label == nil {
+            throw ArmConfigurationError.labelRequired
+        }
         // Cheap input checks run before any repository lookup.
         if isMain && ruleMode != .fullDetails {
             throw ArmConfigurationError.mainCalendarRuleFixed
@@ -267,7 +295,8 @@ public struct ArmConfigurationService: Sendable {
             preferredWriterDeviceID: preferredWriterDeviceID,
             isMain: isMain,
             name: name,
-            filters: filters
+            filters: filters,
+            label: label
         )
         try repository.saveArm(arm, now: now)
         return arm

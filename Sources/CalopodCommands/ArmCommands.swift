@@ -5,11 +5,13 @@ import CalopodSync
 
 public enum ArmRuleArgument: String, CaseIterable, ExpressibleByArgument, Sendable {
     case busy
+    case label
     case fullDetails = "full-details"
 
     var ruleMode: ArmRuleMode {
         switch self {
         case .busy: .busy
+        case .label: .label
         case .fullDetails: .fullDetails
         }
     }
@@ -44,8 +46,11 @@ public struct ArmUpdateCommand: ParsableCommand {
     @Argument(help: "Arm identifier.")
     public var armID: String
 
-    @Option(name: .long, help: "Disclosure Rule: busy or full-details.")
+    @Option(name: .long, help: "Disclosure Rule: busy, label or full-details.")
     public var rule: ArmRuleArgument?
+
+    @Option(name: .long, help: "Fixed title for copies under the label Rule.")
+    public var label: String?
 
     @Flag(name: .customLong("prefer-current-device"), help: "Make this device the preferred writer.")
     public var preferCurrentDevice = false
@@ -69,20 +74,22 @@ public struct ArmUpdateCommand: ParsableCommand {
     public func run() throws {
         do {
             let changesFilters = skipDeclined != nil || skipAllDay != nil || skipDontclone != nil
-            guard name != nil || rule != nil || preferCurrentDevice || changesFilters else {
+            guard name != nil || rule != nil || label != nil || preferCurrentDevice || changesFilters else {
                 throw ValidationError(
-                    "Choose --name, --rule, a filter such as --skip-declined or --prefer-current-device."
+                    "Choose --name, --rule, --label, a filter such as --skip-declined or --prefer-current-device."
                 )
             }
             let repository = try CommandEnvironment.repository()
             let service = ArmConfigurationService(repository: repository)
             var arm: StoredArm
-            if let rule {
-                arm = try service.updateRule(armID: armID, ruleMode: rule.ruleMode)
-            } else if let existing = try repository.arm(id: armID) {
-                arm = existing
-            } else {
+            guard let existing = try repository.arm(id: armID) else {
                 throw ArmConfigurationError.armNotFound(armID)
+            }
+            if rule != nil || label != nil {
+                arm = try service.updateRule(
+                    armID: armID, ruleMode: rule?.ruleMode ?? existing.ruleMode, label: label)
+            } else {
+                arm = existing
             }
             if let name {
                 arm = try service.rename(armID: arm.id, name: name)
@@ -134,8 +141,11 @@ public struct ArmAddCommand: ParsableCommand {
     @Option(name: .long, help: "Writable target calendar identifier.")
     public var target: String
 
-    @Option(name: .long, help: "Disclosure Rule: busy or full-details. (default: busy)")
+    @Option(name: .long, help: "Disclosure Rule: busy, label or full-details. (default: busy)")
     public var rule: ArmRuleArgument = .busy
+
+    @Option(name: .long, help: "Fixed title for copies under the label Rule.")
+    public var label: String?
 
     @Option(name: .long, help: "Private display name. Use an empty value to clear it.")
     public var name: String?
@@ -165,7 +175,8 @@ public struct ArmAddCommand: ParsableCommand {
                     skipDeclined: skipDeclined,
                     skipAllDay: skipAllDay,
                     skipDontClone: skipDontclone
-                )
+                ),
+                label: label
             )
             try OutputRenderer.write(
                 command: "arm.add",
@@ -326,6 +337,7 @@ private func armItem(_ arm: StoredArm) -> CommandItem {
         targetID: arm.targetBindingID,
         rule: arm.ruleMode.rawValue,
         enabled: arm.isEnabled,
+        armLabel: arm.ruleMode == .label ? arm.label : nil,
         filters: arm.filters.isEmpty ? nil : [
             arm.filters.skipDeclined ? "skip-declined" : nil,
             arm.filters.skipAllDay ? "skip-all-day" : nil,
