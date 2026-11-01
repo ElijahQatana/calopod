@@ -57,6 +57,14 @@ public struct SettingsFile: Codable, Equatable, Sendable {
         public var includePrivate: Bool?
     }
 
+    public struct Skip: Codable, Equatable, Sendable {
+        public var calendar: String
+        /// The series id or the event's server id. Missing when only the old Mac can name the event.
+        public var ref: String?
+        /// Which occurrence of the series. Missing for a whole series or a single event.
+        public var occurrence: String?
+    }
+
     public struct Day: Codable, Equatable, Sendable {
         public var weekday: Int
         public var startMinute: Int
@@ -91,6 +99,8 @@ public struct SettingsFile: Codable, Equatable, Sendable {
     public var reminders: Reminders
     public var inboxMargins: InboxMargins
     public var inboxDigest: InboxDigest
+    /// Missing in older files, which had no skipped events.
+    public var skips: [Skip]?
 
     public static func decode(_ data: Data) throws -> SettingsFile {
         struct Header: Decodable { let formatVersion: Int }
@@ -119,6 +129,7 @@ extension SettingsFile {
         let hidden = try Dictionary(uniqueKeysWithValues: CalendarViewMode.allCases.map {
             ($0.rawValue, try repository.hiddenCalendars(view: $0.rawValue))
         })
+        let skipped = try repository.eventSkips()
         let armCalendars = Set(arms.flatMap { $0.sourceBindingIDs + [$0.targetBindingID] })
 
         var calendars: [Calendar] = []
@@ -129,7 +140,7 @@ extension SettingsFile {
                 let views = CalendarViewMode.allCases.map(\.rawValue).filter { hidden[$0]?.contains(binding.id) == true }
                 guard binding.isSelected || armCalendars.contains(binding.id) || iPhone.contains(binding.id)
                     || !views.isEmpty || preference?.alias != nil || preference?.color != nil
-                    || preference?.isIgnored == true else { continue }
+                    || preference?.isIgnored == true || skipped.contains(where: { $0.calendarBindingID == binding.id }) else { continue }
                 keys[binding.id] = "calendar-\(calendars.count + 1)"
                 calendars.append(Calendar(
                     key: "calendar-\(calendars.count + 1)", connection: "connection-\(index + 1)",
@@ -138,6 +149,13 @@ extension SettingsFile {
                     hiddenIn: views, iPhone: iPhone.contains(binding.id)))
             }
         }
+
+        let skips = skipped.compactMap { skip in
+            keys[skip.calendarBindingID].map {
+                Skip(calendar: $0, ref: skip.isPortable ? skip.ref : nil,
+                     occurrence: skip.isPortable && !skip.occurrence.isEmpty ? skip.occurrence : nil)
+            }
+        }.sorted { ($0.calendar, $0.ref ?? "", $0.occurrence ?? "") < ($1.calendar, $1.ref ?? "", $1.occurrence ?? "") }
 
         let hours = try repository.workingHours()
         let reminders = try repository.notificationSettings()
@@ -164,6 +182,7 @@ extension SettingsFile {
                 enabled: reminders.enabled, firstEnabled: reminders.firstEnabled, firstMinutes: reminders.firstMinutes,
                 finalEnabled: reminders.finalEnabled, finalMinutes: reminders.finalMinutes, hideTitles: reminders.hideTitles),
             inboxMargins: InboxMargins(beforeMinutes: margins.beforeMinutes, afterMinutes: margins.afterMinutes),
-            inboxDigest: InboxDigest(enabled: digest.enabled, minute: digest.minute))
+            inboxDigest: InboxDigest(enabled: digest.enabled, minute: digest.minute),
+            skips: skips.isEmpty ? nil : skips)
     }
 }

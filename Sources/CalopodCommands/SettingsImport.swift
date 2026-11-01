@@ -155,6 +155,24 @@ public struct SettingsImporter: Sendable {
             }
         }
 
+        let haveSkips = Set(try repository.eventSkips().map(\.id))
+        var newSkips: [String: [EventSkip]] = [:]
+        for skip in file.skips ?? [] {
+            guard let binding = bindings[skip.calendar], let ref = skip.ref else {
+                unmatched.append("Skipped event on \"\(names[skip.calendar] ?? "")\"")
+                continue
+            }
+            let value = EventSkip(
+                calendarBindingID: binding.id, ref: ref, occurrence: skip.occurrence ?? "", isPortable: true, skippedAt: Date())
+            if !haveSkips.contains(value.id) { newSkips[skip.calendar, default: []].append(value) }
+        }
+        for (calendar, skips) in newSkips.sorted(by: { $0.key < $1.key }) {
+            changes.append(.init(
+                text: "Don't copy \(skips.count) event\(skips.count == 1 ? "" : "s") on \"\(names[calendar] ?? "")\"") {
+                for skip in skips { try repository.addEventSkip(skip) }
+            })
+        }
+
         let hours: WorkingHours, focus: FocusSettings, reminders: NotificationSettings
         let margins: InboxContextSettings, digest: InboxDigestSettings
         do {
