@@ -79,7 +79,7 @@ calopod arm disable ARM_ID
 calopod arm remove ARM_ID
 ```
 
-An Arm copies everything unless you turn on a filter. `--skip-declined`, `--skip-all-day` and `--skip-dontclone` leave out events you declined, all-day events, and events with `#dontclone` in the title or notes. They work with `arm add`, and `arm update` takes them and the matching `--no-skip-...` flags. When an event starts to match a filter, the copy Calopod made of it is removed on the next sync, and the preview lists that as a removal.
+An Arm copies everything unless you turn on a filter. `--skip-declined`, `--skip-all-day` and `--skip-dontclone` leave out events you declined, all-day events, and events with `#dontclone` in the title or notes. They work with `arm add`, and `arm update` takes them and the matching `--no-skip-...` flags. When an event starts to match a filter, the copy Calopod made of it is removed on the next sync, and the preview lists that as a removal. [Event tags](tags.md) work on every Arm: `#justbusy` copies one event as plain Busy.
 
 ```sh
 calopod arm update ARM_ID --skip-declined --no-skip-all-day

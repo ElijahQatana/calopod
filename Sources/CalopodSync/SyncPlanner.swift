@@ -82,10 +82,13 @@ public enum SyncPlanner {
         }
         // A filtered event is planned like one that left the source.
         let boundedSources = inWindow.filter { arm.filters.copies($0) }
-        let filteredMirrorKeys = Set(
-            inWindow.filter { !arm.filters.copies($0) }.map {
-                mirrorKey(armID: arm.id, sourceKeyHash: $0.sourceKeyHash)
-            }
+        let leftOutReasons = Dictionary(
+            inWindow.compactMap { source in
+                arm.filters.leftOutReason(source).map {
+                    (mirrorKey(armID: arm.id, sourceKeyHash: source.sourceKeyHash), $0)
+                }
+            },
+            uniquingKeysWith: { first, _ in first }
         )
         let armMappings = mappings.filter { $0.armID == arm.id }
         let targetObservations = targetEvents.filter {
@@ -120,10 +123,12 @@ public enum SyncPlanner {
         for source in boundedSources.sorted(by: sourceOrder) {
             let mirrorKey = mirrorKey(armID: arm.id, sourceKeyHash: source.sourceKeyHash)
             desiredMirrorKeys.insert(mirrorKey)
+            let justBusy = arm.ruleMode == .fullDetails && EventTag.read(source).contains(.justBusy)
             let payload = desiredPayload(
                 source: source,
                 arm: arm,
-                targetProvider: targetProvider
+                targetProvider: targetProvider,
+                justBusy: justBusy
             )
             let fingerprint = desiredFingerprint(payload: payload, ruleMode: arm.ruleMode)
             let mapping = mappingsByMirror[mirrorKey]
@@ -194,7 +199,7 @@ public enum SyncPlanner {
                     mirrorKey: mirrorKey,
                     sourceKeyHash: source.sourceKeyHash,
                     action: action,
-                    reason: reason,
+                    reason: justBusy && (action == .create || action == .update) ? .taggedJustBusy : reason,
                     desiredFingerprint: fingerprint,
                     payload: payload
                 )
@@ -223,7 +228,7 @@ public enum SyncPlanner {
             } else if let target = verified.first,
                       target.providerEventID == mapping.providerEventID {
                 action = .remove
-                reason = filteredMirrorKeys.contains(mapping.mirrorKey) ? .filteredOut : .sourceMissing
+                reason = leftOutReasons[mapping.mirrorKey] ?? .sourceMissing
             } else if verified.first != nil {
                 action = .repair
                 reason = .providerIdentityChanged
@@ -347,9 +352,10 @@ public enum SyncPlanner {
     private static func desiredPayload(
         source: StoredNormalizedInstance,
         arm: StoredArm,
-        targetProvider: ProviderKind?
+        targetProvider: ProviderKind?,
+        justBusy: Bool
     ) -> DesiredEventPayload {
-        switch arm.ruleMode {
+        switch justBusy ? .busy : arm.ruleMode {
         case .busy, .label:
             let span = arm.effectivePadding.padded(of: source)
             return DesiredEventPayload(

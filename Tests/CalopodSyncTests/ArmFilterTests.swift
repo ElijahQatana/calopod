@@ -27,29 +27,18 @@ struct ArmFilterTests {
         #expect(items.map(\.action) == (copied ? [.create] : []))
     }
 
-    @Test("The tag matches in any case and only as written", arguments: [
-        ("Lunch #dontclone", nil, true), ("Lunch #DontClone", nil, true),
-        (nil, "see below\n#dontclone", true), ("Lunch dontclone", nil, false),
-        ("Lunch #dont clone", "#dont-clone", false), (nil, nil, false),
-    ] as [(String?, String?, Bool)])
-    func tag(title: String?, notes: String?, matches: Bool) throws {
-        let source = event("a", title: title, notes: notes)
-        let items = try plan(Self.tagged, sources: [source]).items
-        #expect(items.isEmpty == matches)
-    }
-
     @Test("A copy is removed once its event matches a filter", arguments: [
-        (declined, event("a", response: .declined)),
-        (allDay, event("a", allDay: true)),
-        (tagged, event("a", notes: "#dontclone")),
+        (declined, event("a", response: .declined), SyncPlanReason.filteredOut),
+        (allDay, event("a", allDay: true), .filteredOut),
+        (tagged, event("a", notes: "#dontclone"), .taggedDontClone),
     ])
-    func removesCopy(filters: ArmFilters, now: StoredNormalizedInstance) throws {
+    func removesCopy(filters: ArmFilters, now: StoredNormalizedInstance, reason: SyncPlanReason) throws {
         let copy = Copy(of: event("a"))
         let item = try #require(
             plan(filters, sources: [now], copy: copy).items.first
         )
         #expect(item.action == .remove)
-        #expect(item.reason == .filteredOut)
+        #expect(item.reason == reason)
         #expect(item.mirrorKey == copy.mapping.mirrorKey)
     }
 

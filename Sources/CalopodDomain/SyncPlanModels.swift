@@ -18,6 +18,8 @@ public enum SyncPlanReason: String, Codable, Sendable {
     case targetHasOriginal = "target-has-original"
     case sourceMissing = "source-missing"
     case filteredOut = "filtered-out"
+    case taggedDontClone = "tagged-dont-clone"
+    case taggedJustBusy = "tagged-just-busy"
     case verifiedDuplicates = "verified-duplicates"
     case mappingMissing = "mapping-missing"
     case providerIdentityChanged = "provider-identity-changed"

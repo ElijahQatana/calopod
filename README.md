@@ -53,6 +53,7 @@ The same guides, with search, are on the [docs site](https://calopod.elijahquint
 - [Install](docs/install.md)
 - [Using Calopod](docs/using-calopod.md)
 - [The Mac app](docs/mac-app.md)
+- [Event tags](docs/tags.md)
 - [Inbox and invitations](docs/inbox.md)
 - [iPhone feed](docs/iphone-feed.md)
 - [Automatic sync](docs/automatic-sync.md)
