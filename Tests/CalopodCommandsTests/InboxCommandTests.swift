@@ -25,6 +25,30 @@ import Testing
         #expect(throws: (any Error).self) { try dates.resolve(default: .none) }
     }
 
+    @Test func snoozeHidesListsAndUnsnoozes() throws {
+        #expect(try CalopodRoot.parseAsRoot(["inbox", "snooze", "event:1", "--until", "later"]) is InboxSnoozeCommand)
+        #expect(try CalopodRoot.parseAsRoot(["inbox", "unsnooze", "event:1"]) is InboxUnsnoozeCommand)
+        #expect(try CalopodRoot.parseAsRoot(["inbox", "--snoozed"]) is InboxCommand)
+        #expect(throws: (any Error).self) { try CalopodRoot.parseAsRoot(["inbox", "snooze", "event:1"]) }
+        #expect(throws: (any Error).self) { try InboxCLI.snoozeChoice("soon") }
+        #expect(try InboxCLI.snoozeChoice("tomorrow") == .tomorrow)
+
+        let f = try Fixture()
+        let zero = Date(timeIntervalSince1970: 0)
+        try f.refresh([f.event("maybe", response: .tentative), f.event("needs", response: .needsResponse)])
+        #expect(throws: (any Error).self) { try InboxCLI.snooze("needs:2", until: .tomorrow, repository: f.repository, now: zero) }
+        #expect(throws: (any Error).self) { try InboxCLI.snooze("needs:1", until: .day(zero.addingTimeInterval(-86400 * 5)), repository: f.repository, now: zero) }
+        #expect(throws: (any Error).self) { try InboxCLI.unsnooze("needs:1", repository: f.repository) }
+        _ = try InboxCLI.snooze("maybe:1", until: .tomorrow, repository: f.repository, now: zero)
+        #expect(try f.list().items?.map(\.id) == ["needs:1"])
+        let snoozed = try f.list(snoozed: true)
+        #expect(snoozed.items?.map(\.id) == ["maybe:1"])
+        #expect(snoozed.items?.first?.inbox?.snoozedUntil != nil)
+        _ = try InboxCLI.unsnooze("maybe:1", repository: f.repository)
+        #expect(try f.list().items?.map(\.id) == ["maybe:1", "needs:1"])
+        #expect(try f.list(snoozed: true).count == 0)
+    }
+
     @Test func listsAndFormats() throws {
         let f = try Fixture()
         #expect(try f.list().count == 0)
@@ -194,8 +218,9 @@ private struct Fixture {
         try repository.applyEventRefresh(connectionID: "connection", calendarBindingID: "calendar", windowStart: start, windowEnd: end,
             instances: events, cancelledSourceKeyHashes: [], isFullRefresh: true, cursorUpdates: [], now: Date(), removedSourceKeyHashes: removed)
     }
-    func list(_ options: InboxOptions? = nil, range: ResolvedDateRange? = nil, activity: Bool = false, all: Bool = false) throws -> CommandPayload {
+    func list(_ options: InboxOptions? = nil, range: ResolvedDateRange? = nil, activity: Bool = false, all: Bool = false,
+              snoozed: Bool = false) throws -> CommandPayload {
         try InboxCLI.list(repository: repository, options: try options ?? InboxOptions.parse([]), range: range, activity: activity, all: all,
-            now: Date(timeIntervalSince1970: 0))
+            snoozed: snoozed, now: Date(timeIntervalSince1970: 0))
     }
 }

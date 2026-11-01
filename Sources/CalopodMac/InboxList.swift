@@ -70,6 +70,9 @@ struct InboxList: View {
                 Text(entry.title).fontWeight(.semibold).lineLimit(1)
                 Text(InboxText.time(entry)).font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                 InboxText.statusLine(entry).font(Theme.Fonts.tinyMedium)
+                if let until = entry.snoozedUntil {
+                    Text(SnoozeText.until(until)).font(Theme.Fonts.tinyMedium).foregroundStyle(.secondary)
+                }
             }
         }
         .padding(.vertical, 2)

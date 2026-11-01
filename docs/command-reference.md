@@ -12,7 +12,7 @@ calopod join [event]
 calopod availability [find]
 calopod hours [set|focus]
 calopod sync
-calopod inbox [activity | refresh | inspect | acknowledge | review | config]
+calopod inbox [activity | refresh | inspect | acknowledge | snooze | unsnooze | review | config]
 calopod agent enable | disable | pause | resume | interval | run-now | status
 calopod iphone [on | off | status | calendars]
 calopod update [check]

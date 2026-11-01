@@ -57,6 +57,26 @@ final class InboxReviewModelTests: XCTestCase {
         XCTAssertEqual(model.progress?.totals.yes, 1)
     }
 
+    func testSnoozeAsksForATimeThenMovesOnWithoutSending() async throws {
+        let f = try MacFixture(count: 2)
+        let model = await started(f)
+        await model.perform(.snooze)
+        XCTAssertEqual(model.keyboardMode, .snooze)
+        await model.perform(.cancel)
+        XCTAssertEqual(try card(model).entry.id, "key0")
+
+        await model.perform(.snooze)
+        await model.perform(.snoozeUntil(.tomorrow))
+        XCTAssertEqual(try card(model).entry.id, "key1")
+        XCTAssertEqual(model.notice?.hasPrefix("Snoozed until"), true)
+        let writes = await f.remote.writes
+        XCTAssertEqual(writes, 0)
+
+        await model.perform(.hold)
+        XCTAssertEqual(model.progress?.totals.lines.first { $0.label == "Snoozed" }?.value, 1)
+        XCTAssertEqual(model.progress?.totals.held, 1)
+    }
+
     func testOnlyRepliesTheEventOffersCanBeChosen() async throws {
         let f = try MacFixture(count: 1, provider: "eventkit")
         let model = await started(f)

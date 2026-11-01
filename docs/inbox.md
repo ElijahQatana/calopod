@@ -33,6 +33,16 @@ calopod inbox acknowledge 'EVENT_ID:REVISION'
 
 Use `--ids` to see these IDs. `acknowledge` marks that one change as seen on your Mac. It never sends a reply, and it doesn't hide an unanswered invitation, a Maybe, a newer edit or a real conflict.
 
+## Snoozing
+
+```sh
+calopod inbox snooze 'EVENT_ID:REVISION' --until tomorrow
+calopod inbox --snoozed
+calopod inbox unsnooze 'EVENT_ID:REVISION'
+```
+
+Snooze hides an item until `later` (three hours, but not past midnight), `tomorrow` at 8:00, or 8:00 on a date given as `YYYY-MM-DD`. It works on Needs RSVP, Maybe, Changed and conflicts alike. It sends nothing and acknowledges nothing; the item is still unanswered and still counts as a conflict. It comes back early if the event changes, gains a new overlap, or starts, and one that came due while the app was closed is back on the next launch. The snooze is kept on your Mac only. Hold is separate and still lasts for one review session.
+
 ## Reviewing and replying
 
 ```sh
@@ -48,6 +58,7 @@ Type a letter and press Enter:
 
 - `y`, `n`, `m`: reply Yes, No or Maybe. This sends your answer and may notify the organizer.
 - `h`: Hold. Skips the event for this session without sending or marking anything.
+- `z`: Snooze. Asks for `l` (later today), `t` (tomorrow) or a date, then puts the event away until then.
 - `g1`, `g2`, …: jump to an event in the current conflict group. `b` goes back.
 - `q` or Ctrl-C: stop. Your progress is saved, and `--resume` continues.
 
@@ -57,7 +68,7 @@ If a reply's outcome is unclear (say the network dropped), Calopod won't send it
 
 At the end you get a summary that separates how many items you reviewed from how many are actually resolved, and which conflicts you created or still have. Only confirmed replies count. Set `NO_COLOR` or pass `--no-decoration` to turn off the flourishes.
 
-In the Mac app, **Review** on the Inbox screen does the same thing in a sheet. Only the replies a calendar allows are shown. Press `Y`, `N`, `M` or `H`, `G` then a number to jump to an overlapping event, and `S` to stop. Every reply gets a confirm step that shows who is told, the answer, the account it goes through and the overlaps that would remain; press Return to send. For calendars read through the Mac's Calendar app there is no reply to send, so the sheet offers **Open in Calendar** (`O`), **Done, next** (`D`) once you have answered there, and Hold. Those events count as held, never as answered, and show up again in the next review. Closing the sheet keeps your progress, and **Resume** continues it, checking any unclear reply first.
+In the Mac app, **Review** on the Inbox screen does the same thing in a sheet. Only the replies a calendar allows are shown. Press `Y`, `N`, `M`, `H`, `Z` to snooze, `G` then a number to jump to an overlapping event, and `S` to stop. Every reply gets a confirm step that shows who is told, the answer, the account it goes through and the overlaps that would remain; press Return to send. For calendars read through the Mac's Calendar app there is no reply to send, so the sheet offers **Open in Calendar** (`O`), **Done, next** (`D`) once you have answered there, and Hold. Those events count as held, never as answered, and show up again in the next review. Closing the sheet keeps your progress, and **Resume** continues it, checking any unclear reply first.
 
 ## Who can reply
 

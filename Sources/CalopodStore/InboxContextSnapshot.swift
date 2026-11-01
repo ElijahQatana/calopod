@@ -53,14 +53,25 @@ public struct InboxContextSnapshot: Codable, Equatable, Sendable {
     public let sources: [InboxContextSource]
     public let events: [InboxContextEvent]
     public let unprovenDuplicateBindingIDs: Set<String>
+    public let snoozes: [String: InboxSnooze]
 
     public init(
         sources: [InboxContextSource], events: [InboxContextEvent],
-        unprovenDuplicateBindingIDs: Set<String> = []
+        unprovenDuplicateBindingIDs: Set<String> = [], snoozes: [String: InboxSnooze] = [:]
     ) {
         self.sources = sources
         self.events = events
         self.unprovenDuplicateBindingIDs = unprovenDuplicateBindingIDs
+        self.snoozes = snoozes
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        sources = try values.decode([InboxContextSource].self, forKey: .sources)
+        events = try values.decode([InboxContextEvent].self, forKey: .events)
+        unprovenDuplicateBindingIDs = try values.decode(Set<String>.self, forKey: .unprovenDuplicateBindingIDs)
+        // Reviews saved before snoozing have none.
+        snoozes = try values.decodeIfPresent([String: InboxSnooze].self, forKey: .snoozes) ?? [:]
     }
 }
 
@@ -138,7 +149,8 @@ extension LocalStateRepository {
             events.sort { ($0.event.startsAt, $0.event.sourceKeyHash) < ($1.event.startsAt, $1.event.sourceKeyHash) }
             return InboxContextSnapshot(
                 sources: sources, events: events,
-                unprovenDuplicateBindingIDs: unprovenDuplicateBindingIDs.intersection(bindingIDs)
+                unprovenDuplicateBindingIDs: unprovenDuplicateBindingIDs.intersection(bindingIDs),
+                snoozes: try loadInboxSnoozes(db)
             )
         }
     }

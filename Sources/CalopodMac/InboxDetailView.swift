@@ -89,6 +89,18 @@ struct InboxDetailView: View {
                 reply("No", .no)
                 Button("Hold") { model.hold(in: entries) }
                     .help("Skip for now. Nothing is sent or marked.")
+                if entry.snoozedUntil == nil {
+                    SnoozeMenu { choice in Task { await model.snooze(entry, choice) } }
+                        .disabled(model.isBusy)
+                }
+            }
+            if let until = entry.snoozedUntil {
+                HStack(spacing: 8) {
+                    Button("Unsnooze") { Task { await model.unsnooze(entry) } }
+                        .disabled(model.isBusy)
+                    Text("\(SnoozeText.until(until)). Nothing was sent.")
+                        .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+                }
             }
             if let link = entry.meeting {
                 JoinButton(link: link, prominent: MeetingLink.isNear(startsAt: entry.startsAt, endsAt: entry.endsAt)) {

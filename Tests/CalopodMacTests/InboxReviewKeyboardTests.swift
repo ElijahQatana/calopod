@@ -13,6 +13,9 @@ final class InboxReviewKeyboardTests: XCTestCase {
             // Nothing but Return sends, so a stray letter cannot.
             (.confirm, ["y"], nil), (.confirm, ["n"], nil), (.confirm, ["h"], nil),
             (.confirm, [ReviewKeyboard.returnKey], .send), (.confirm, [ReviewKeyboard.escapeKey], .cancel),
+            (.card, ["z"], .snooze), (.confirm, ["z"], nil), (.problem, ["z"], nil),
+            (.snooze, ["l"], .snoozeUntil(.laterToday)), (.snooze, ["t"], .snoozeUntil(.tomorrow)),
+            (.snooze, [ReviewKeyboard.escapeKey], .cancel), (.snooze, ["y"], nil), (.snooze, ["h"], nil),
             (.problem, ["r"], .refresh), (.problem, ["h"], .hold), (.problem, ["y"], nil),
         ]
         for (mode, keys, expected) in cases {

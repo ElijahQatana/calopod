@@ -2,6 +2,10 @@ import CalopodDomain
 import CalopodStore
 import Foundation
 
+public enum InboxSnoozeScope: Sendable {
+    case hide, only, all
+}
+
 public struct InboxAttentionFilter: Codable, Equatable, Sendable {
     public let window: SyncWindow?
     public let excludeMaybe: Bool
@@ -10,18 +14,21 @@ public struct InboxAttentionFilter: Codable, Equatable, Sendable {
     /// With no window, events that ended by this time are left out: a finished meeting can't
     /// be answered, and its response is no longer re-read. Not persisted with a review.
     public var asOf: Date?
+    /// Snoozed items are left out unless asked for. Not persisted with a review.
+    public var snoozed = InboxSnoozeScope.hide
 
     private enum CodingKeys: String, CodingKey { case window, excludeMaybe, conflictsOnly, bindingIDs }
 
     /// A nil window includes all relevant retained occurrences that haven't ended.
     /// CLI date parsing supplies normalized local-day or timestamp boundaries.
     public init(window: SyncWindow? = nil, excludeMaybe: Bool = false, conflictsOnly: Bool = false,
-                bindingIDs: Set<String>? = nil, asOf: Date? = nil) {
+                bindingIDs: Set<String>? = nil, asOf: Date? = nil, snoozed: InboxSnoozeScope = .hide) {
         self.window = window
         self.excludeMaybe = excludeMaybe
         self.conflictsOnly = conflictsOnly
         self.bindingIDs = bindingIDs
         self.asOf = asOf
+        self.snoozed = snoozed
     }
 }
 
@@ -33,6 +40,8 @@ public struct InboxAttentionRow: Equatable, Sendable {
     /// Uncertain order must not be rendered as a proven change after an RSVP.
     public let changeTiming: InboxResponseTiming?
     public let conflicts: [InboxConflict]
+    /// Nil unless a snooze is still holding.
+    public let snoozedUntil: Date?
 }
 
 public struct InboxAttentionResult: Equatable, Sendable {
@@ -105,12 +114,34 @@ public enum InboxAttentionQuery {
             let conflicts = conflictsByKey[event.sourceKeyHash] ?? []
             if !conflicts.isEmpty { reasons.append(.conflict) }
             guard !reasons.isEmpty, !filter.conflictsOnly || !conflicts.isEmpty else { continue }
-            rows.append(InboxAttentionRow(item: item, source: source, reasons: reasons,
-                                          changeTiming: changeTiming, conflicts: conflicts))
+            let snoozedUntil = full.snoozes[event.sourceKeyHash].flatMap {
+                $0.isActive(revision: item.observation?.revision, conflictKeys: conflictKeys(conflicts, of: event.sourceKeyHash),
+                            startsAt: event.startsAt, now: filter.asOf ?? Date()) ? $0.until : nil
+            }
+            switch filter.snoozed {
+            case .hide where snoozedUntil != nil, .only where snoozedUntil == nil: continue
+            default: break
+            }
+            rows.append(InboxAttentionRow(item: item, source: source, reasons: reasons, changeTiming: changeTiming,
+                                          conflicts: conflicts, snoozedUntil: snoozedUntil))
         }
         rows.sort { ($0.item.event.startsAt, $0.item.event.sourceKeyHash) < ($1.item.event.startsAt, $1.item.event.sourceKeyHash) }
         return InboxAttentionResult(rows: rows, sources: snapshot.sources.sorted { $0.bindingID < $1.bindingID },
                                     analysisWindow: window, analysis: analysis)
+    }
+
+    /// What to store to snooze one item as it is shown now. Nil if the Inbox does not list it.
+    public static func snooze(
+        _ key: String, until: Date, in snapshot: InboxContextSnapshot, asOf: Date, freshnessCutoff: Date
+    ) -> InboxSnooze? {
+        let result = evaluate(snapshot, filter: InboxAttentionFilter(asOf: asOf, snoozed: .all), freshnessCutoff: freshnessCutoff)
+        guard let row = result.rows.first(where: { $0.item.event.sourceKeyHash == key }) else { return nil }
+        return InboxSnooze(sourceKeyHash: key, until: until, revision: row.item.observation?.revision ?? 0,
+                           conflictKeys: conflictKeys(row.conflicts, of: key))
+    }
+
+    private static func conflictKeys(_ conflicts: [InboxConflict], of key: String) -> Set<String> {
+        Set(conflicts.map { $0.pair.first == key ? $0.pair.second : $0.pair.first })
     }
 
     /// The events the Inbox still considers: gone events are left out, and with `asOf` so are events

@@ -63,7 +63,7 @@ struct InboxReviewTerminal {
             let choices = card.providerSnapshot == nil ? [InboxConflictChoice.hold] :
                 InboxCalendarContextBuilder.choices(for: card.context.focused, snapshot: card.context.snapshot).choices
             let neighbors = card.context.conflictGroup.filter { $0.event.sourceKeyHash != key }
-            emit(choices.map { "[\(Self.letter($0))] \(Self.name($0))" }.joined(separator: "  ") + "  [q] Exit")
+            emit(choices.map { "[\(Self.letter($0))] \(Self.name($0))" }.joined(separator: "  ") + "  [z] Snooze  [q] Exit")
             if !neighbors.isEmpty {
                 for (index, neighbor) in neighbors.enumerated() { emit("[g\(index + 1)] Review \(neighbor.event.title ?? "Untitled")") }
             }
@@ -73,6 +73,20 @@ struct InboxReviewTerminal {
             if input == "b", focusedKey != nil { focusedKey = nil; originKey = nil; continue }
             if input.hasPrefix("g"), let number = Int(input.dropFirst()), neighbors.indices.contains(number - 1) {
                 originKey = key; focusedKey = neighbors[number - 1].event.sourceKeyHash; continue
+            }
+            if input == "z" {
+                emit("Snooze until: [l] later today  [t] tomorrow  or YYYY-MM-DD")
+                guard let answer = read() else { stopped = true; break }
+                guard let until = (try? InboxCLI.snoozeChoice(answer == "l" ? "later" : answer == "t" ? "tomorrow" : answer))?.until(from: Date()) else {
+                    emit("Not snoozed. Nothing was saved."); continue
+                }
+                do {
+                    session = try await controller.snooze(until: until, card: card, freshnessCutoff: cutoff, refresh: refresh)
+                    emit("Saved: Snoozed until \(date(until)). Nothing was sent.")
+                    focusedKey = nil; originKey = nil
+                } catch is CancellationError { stopped = true; break }
+                catch { emit("Event changed or could not be snoozed. Read the refreshed card.") }
+                continue
             }
             guard let choice = choices.first(where: { Self.letter($0) == input }) else {
                 emit("Enter one available choice, then Enter."); continue

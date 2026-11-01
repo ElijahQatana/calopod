@@ -19,7 +19,7 @@ struct InboxScreen: View {
             if let board = model.board, !board.isComplete { staleBanner(board) }
             if let board = model.board {
                 filters(board)
-                if board.entries.isEmpty { allAnswered(board) } else { split }
+                if board.entries.isEmpty && board.snoozed.isEmpty { allAnswered(board) } else { split }
             } else {
                 Spacer()
             }

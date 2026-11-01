@@ -91,6 +91,29 @@ struct InboxReviewSessionTests {
         #expect(new.entries.map(\.sourceKeyHash) == ["a", "b"])
     }
 
+    @Test func snoozeLeavesTheQueueWithoutSendingAndHoldStaysSeparate() async throws {
+        let f = try ReviewFixture(keys: ["a", "b"])
+        defer { f.remove() }
+        let session = try f.start()
+        let first = try #require(try await f.card(session.id))
+        let held = try await f.decide(.hold, first)
+        #expect(try f.state.inboxSnoozes().isEmpty)
+        let second = try #require(try await f.card(session.id))
+        let done = try await f.controller.snooze(until: Date(timeIntervalSince1970: 5000), card: second,
+                                                 freshnessCutoff: f.cutoff, refresh: f.refresh)
+        #expect(held.entries[0].outcome == .hold)
+        #expect(done.entries[1].outcome == .snoozed)
+        #expect(done.summary?.snoozed == 1)
+        #expect(done.summary?.hold == 1)
+        #expect(done.summary?.queueReviewed == true)
+        #expect(done.summary?.remainingInboxItems == 1)
+        #expect(done.summary?.lines.contains { $0.label == "Snoozed" && $0.value == 1 } == true)
+        #expect(try f.state.inboxSnoozes().keys.sorted() == ["b"])
+        #expect(try f.state.inboxObservation(sourceKeyHash: "b")?.acknowledgedRevision == nil)
+        #expect(await f.remote.writes == 0)
+        #expect(try f.start(filter: InboxAttentionFilter(asOf: Date(timeIntervalSince1970: 0))).entries.map(\.sourceKeyHash) == ["a"])
+    }
+
     @Test func fixedQueueFiltersAndFreshCards() async throws {
         let f = try ReviewFixture(keys: ["a", "b"])
         defer { f.remove() }

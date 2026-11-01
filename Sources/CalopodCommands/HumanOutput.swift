@@ -201,6 +201,7 @@ enum HumanOutputRenderer {
                         lines.append("  Timing: \(readable(inbox.timing))")
                         if let observed = inbox.observedAt { lines.append("  Observed: \(clean(observed))") }
                         if let acknowledged = inbox.acknowledgedAt { lines.append("  Reviewed: \(clean(acknowledged))") }
+                        if let until = inbox.snoozedUntil { lines.append("  Snoozed until: \(clean(until))") }
                         if let location = inbox.location { lines.append("  Location: \(clean(location))") }
                         if let notes = inbox.notes { lines.append("  Notes: \(clean(notes))") }
                         if let url = inbox.url { lines.append("  Link: \(clean(url))") }

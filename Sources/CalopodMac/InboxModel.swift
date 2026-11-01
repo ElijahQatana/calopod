@@ -72,7 +72,8 @@ final class InboxModel {
             notice = "The inbox could not be loaded. Try again."
             loadFailed = true
         }
-        if let selection, board?.entries.contains(where: { $0.id == selection }) != true {
+        if let selection, board?.entries.contains(where: { $0.id == selection }) != true,
+           board?.snoozed.contains(where: { $0.id == selection }) != true {
             // Clearing the selection already clears the detail.
             self.selection = nil
         } else {
@@ -135,6 +136,34 @@ final class InboxModel {
             try await Task.detached { try service.acknowledge(revisionID: entry.revisionID) }.value
         } catch {
             notice = "That change could not be marked as seen. It may have changed again."
+        }
+        busy = nil
+        await reload()
+    }
+
+    func snooze(_ entry: InboxEntry, _ choice: InboxSnoozeChoice) async {
+        guard busy == nil else { return }
+        let service = service
+        busy = "Snoozing…"
+        notice = nil
+        do {
+            try await Task.detached { try service.snooze(revisionID: entry.revisionID, until: choice) }.value
+        } catch {
+            notice = "That could not be snoozed. It may have changed, or that time has passed."
+        }
+        busy = nil
+        await reload()
+    }
+
+    func unsnooze(_ entry: InboxEntry) async {
+        guard busy == nil else { return }
+        let service = service
+        busy = "Bringing it back…"
+        notice = nil
+        do {
+            try await Task.detached { try service.unsnooze(revisionID: entry.revisionID) }.value
+        } catch {
+            notice = "That could not be brought back."
         }
         busy = nil
         await reload()
