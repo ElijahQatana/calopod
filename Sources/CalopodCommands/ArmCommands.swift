@@ -70,6 +70,9 @@ public struct ArmUpdateCommand: ParsableCommand {
     @Flag(inversion: .prefixedNo, help: "Leave out events marked Free.")
     public var skipFree: Bool?
 
+    @Flag(inversion: .prefixedNo, help: "Keep the details of private events on a Full details Arm.")
+    public var includePrivate: Bool?
+
     @Option(name: .long, help: "Minutes the copy starts before the event.")
     public var padBefore: Int?
 
@@ -87,7 +90,8 @@ public struct ArmUpdateCommand: ParsableCommand {
         do {
             let changesPadding = padBefore != nil || padAfter != nil || padInPersonOnly != nil
             let changesFilters = skipDeclined != nil || skipAllDay != nil || skipDontclone != nil || skipFree != nil
-            guard name != nil || rule != nil || label != nil || preferCurrentDevice || changesFilters || changesPadding else {
+            guard name != nil || rule != nil || label != nil || preferCurrentDevice || changesFilters || changesPadding
+                || includePrivate != nil else {
                 throw ValidationError(
                     "Choose --name, --rule, --label, --prefer-current-device, a filter such as --skip-declined or padding such as --pad-before."
                 )
@@ -127,6 +131,9 @@ public struct ArmUpdateCommand: ParsableCommand {
                         inPersonOnly: padInPersonOnly ?? arm.padding.inPersonOnly
                     )
                 )
+            }
+            if let includePrivate {
+                arm = try service.updateIncludePrivate(armID: arm.id, includePrivate: includePrivate)
             }
             if preferCurrentDevice {
                 arm = try service.preferCurrentDevice(armID: arm.id)
@@ -186,6 +193,9 @@ public struct ArmAddCommand: ParsableCommand {
     @Flag(help: "Leave out events marked Free.")
     public var skipFree = false
 
+    @Flag(help: "Keep the details of private events on a Full details Arm.")
+    public var includePrivate = false
+
     @Option(name: .long, help: "Minutes the copy starts before the event.")
     public var padBefore: Int = 0
 
@@ -215,7 +225,8 @@ public struct ArmAddCommand: ParsableCommand {
                 ),
                 label: label,
                 padding: ArmPadding(
-                    beforeMinutes: padBefore, afterMinutes: padAfter, inPersonOnly: padInPersonOnly)
+                    beforeMinutes: padBefore, afterMinutes: padAfter, inPersonOnly: padInPersonOnly),
+                includePrivate: includePrivate
             )
             try OutputRenderer.write(
                 command: "arm.add",

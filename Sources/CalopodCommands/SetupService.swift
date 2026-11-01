@@ -39,6 +39,7 @@ public struct SetupArm: Identifiable, Equatable, Sendable {
     public let filters: ArmFilters
     public var label: String? = nil
     public var padding = ArmPadding()
+    public var includePrivate = false
     public var syncStatus: ArmSyncStatus? = nil
     public let sourceNames: [String]
     public let targetName: String
@@ -106,6 +107,7 @@ public struct SetupService: Sendable {
                 filters: arm.filters,
                 label: arm.label,
                 padding: arm.padding,
+                includePrivate: arm.includePrivate,
                 syncStatus: ArmSyncStatus(arm: arm, health: health[arm.id]),
                 sourceNames: arm.sourceBindingIDs.map { namesByBinding[$0] ?? "Unknown calendar" },
                 targetName: namesByBinding[arm.targetBindingID] ?? "Unknown calendar",
@@ -234,6 +236,14 @@ public struct SetupService: Sendable {
         _ = try ArmConfigurationService(repository: repository).updateFilters(
             armID: armID,
             filters: filters
+        )
+    }
+
+    public func setIncludePrivate(armID: String, includePrivate: Bool) throws {
+        let repository = try makeRepository()
+        _ = try ArmConfigurationService(repository: repository).updateIncludePrivate(
+            armID: armID,
+            includePrivate: includePrivate
         )
     }
 

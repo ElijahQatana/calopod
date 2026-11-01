@@ -158,6 +158,10 @@ struct SetupServiceTests {
         let filters = ArmFilters(skipAllDay: true, skipDontClone: true, skipFree: true)
         try service.setFilters(armID: id, filters: filters)
         #expect(try service.snapshot().arms.first?.filters == filters)
+
+        #expect(try service.snapshot().arms.first?.includePrivate == false)
+        try service.setIncludePrivate(armID: id, includePrivate: true)
+        #expect(try service.snapshot().arms.first?.includePrivate == true)
     }
 
     @Test("the label Rule needs a label and shows it in the snapshot")

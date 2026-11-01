@@ -32,6 +32,7 @@ struct ArmCard: View {
         VStack(alignment: .leading, spacing: 12) {
             topRow
             flow
+            if arm.rule == .fullDetails { includePrivateRow }
             if let status = arm.syncStatus { statusLine(status) }
             if editingLabel { labelEditor }
             if editingPadding { paddingEditor }
@@ -172,6 +173,17 @@ struct ArmCard: View {
         .opacity(arm.isEnabled ? 1 : 0.55)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Copies from \(sources.map(\.1).joined(separator: ", ")) into \(model.targetName(of: arm))")
+    }
+
+    private var includePrivateRow: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Toggle("Include private events", isOn: Binding(
+                get: { arm.includePrivate },
+                set: { value in Task { await model.setIncludePrivate(arm.id, value) } }))
+            Text("Off copies a private event as plain Busy. On a Mac calendar a private event's details show openly.")
+                .foregroundStyle(.secondary)
+        }
+        .font(Theme.Fonts.secondary)
     }
 
     private func statusLine(_ status: ArmSyncStatus) -> some View {
