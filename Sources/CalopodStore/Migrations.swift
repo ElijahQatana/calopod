@@ -30,6 +30,7 @@ extension CalopodDatabase {
         "v26_arm_label",
         "v27_arm_padding",
         "v28_arm_sync_health",
+        "v29_inbox_snoozes",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -507,6 +508,16 @@ extension CalopodDatabase {
                 table.column("last_success_at", .datetime)
                 table.column("last_error", .text)
                 table.column("waiting", .integer)
+            }
+        }
+
+        // No foreign key, so a snooze outlasts a refresh that drops the event for a while.
+        migrator.registerMigration("v29_inbox_snoozes") { database in
+            try database.create(table: "inbox_snoozes") { table in
+                table.column("source_key_hash", .text).primaryKey()
+                table.column("until", .datetime).notNull()
+                table.column("revision", .integer).notNull()
+                table.column("conflict_keys", .text).notNull()
             }
         }
 

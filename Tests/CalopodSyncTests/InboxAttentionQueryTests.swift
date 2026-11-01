@@ -262,11 +262,12 @@ struct InboxAttentionQueryTests {
     func window(_ start: Double, _ end: Double) throws -> SyncWindow { try SyncWindow(start: date(start), end: date(end)) }
 }
 
-private struct AttentionFixture {
+struct AttentionFixture {
     let repository: LocalStateRepository
 
-    init() throws {
-        repository = LocalStateRepository(database: try CalopodDatabase.inMemory())
+    init(path: String? = nil, reopening: Bool = false) throws {
+        repository = LocalStateRepository(database: try path.map { try CalopodDatabase(path: $0) } ?? CalopodDatabase.inMemory())
+        guard !reopening else { return }
         try repository.saveConnection(StoredConnection(id: "connection", configurationID: "default", provider: "google", displayLabel: "Example Connection", isEnabled: true))
         try repository.replaceCalendarBindings(connectionID: "connection", bindings: [StoredCalendarBinding(id: "calendar", connectionID: "connection", providerCalendarID: "source", displayLabel: "Example calendar", isSelected: true, isReadOnly: false, responseIdentityScope: .authenticatedUser)])
     }

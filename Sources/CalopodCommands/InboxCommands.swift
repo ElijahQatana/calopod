@@ -205,7 +205,7 @@ enum InboxCLI {
         if options.calendar != nil && sources.isEmpty { throw ValidationError("Calendar is not selected on that Connection.") }
         let bindings = Set(sources.map(\.bindingID))
         return InboxContextSnapshot(sources: sources, events: full.events.filter { bindings.contains($0.event.calendarBindingID) },
-            unprovenDuplicateBindingIDs: full.unprovenDuplicateBindingIDs.intersection(bindings))
+            unprovenDuplicateBindingIDs: full.unprovenDuplicateBindingIDs.intersection(bindings), snoozes: full.snoozes)
     }
     static func list(repository: LocalStateRepository, options: InboxOptions, range: ResolvedDateRange?,
                      activity: Bool, all: Bool = false, now: Date = Date()) throws -> CommandPayload {
