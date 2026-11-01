@@ -14,9 +14,9 @@ Open `Calopod.dmg`, drag Calopod onto Applications and eject the image. The wind
 2. Check and unpack it:
 
 ```sh
-shasum -a 256 -c Calopod-1.4.0-macos-arm64.zip.sha256
-ditto -x -k Calopod-1.4.0-macos-arm64.zip extracted
-cd extracted/Calopod-1.4.0-macos-arm64
+shasum -a 256 -c Calopod-1.5.0-macos-arm64.zip.sha256
+ditto -x -k Calopod-1.5.0-macos-arm64.zip extracted
+cd extracted/Calopod-1.5.0-macos-arm64
 ```
 
 3. Run the installer:
