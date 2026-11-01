@@ -26,18 +26,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .notifications: "Notifications"
         case .iPhone: "iPhone"
         case .permissions: "Permissions"
-        case .app: "App and command line"
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .appearance: "paintbrush"
-        case .workingHours: "clock"
-        case .notifications: "bell"
-        case .iPhone: "iphone"
-        case .permissions: "lock.shield"
-        case .app: "terminal"
+        case .app: "General"
         }
     }
 

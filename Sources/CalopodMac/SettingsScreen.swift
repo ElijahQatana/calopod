@@ -35,7 +35,7 @@ struct SettingsScreen: View {
     private var sections: some View {
         let results = SettingsSection.results(query: query, features: features)
         let shown = SettingsSection.shown(selected: navigation.settingsSection, in: results)
-        return HStack(alignment: .top, spacing: 20) {
+        return HStack(alignment: .top, spacing: 16) {
             sectionList(results, shown: shown)
             VStack(alignment: .leading, spacing: 16) {
                 if let shown { content(of: shown) } else { Text("No matching settings").foregroundStyle(.secondary) }
@@ -55,22 +55,21 @@ struct SettingsScreen: View {
                 let selected = result.section == shown
                 Button { navigation.settingsSection = result.section } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: result.section.symbol).frame(width: 20)
                         Text(result.section.title).lineLimit(1)
                         Spacer(minLength: 0)
                         if !query.isEmpty { Text("\(result.count)").font(Theme.Fonts.tinySemibold.monospacedDigit()) }
                     }
-                    .font(Theme.Fonts.bodyMedium)
-                    .foregroundStyle(selected ? Theme.onAccent : .primary)
-                    .padding(.horizontal, 10).frame(height: 36)
-                    .background(Capsule().fill(selected ? Theme.accent : .clear))
+                    .font(Theme.Fonts.secondaryMedium)
+                    .foregroundStyle(selected ? Theme.accent : .primary)
+                    .padding(.horizontal, 10).frame(height: 32)
+                    .background(Capsule().fill(selected ? Theme.accent.opacity(0.14) : .clear))
                     .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
-        .frame(width: 200)
+        .frame(width: 140)
     }
 
     @ViewBuilder
