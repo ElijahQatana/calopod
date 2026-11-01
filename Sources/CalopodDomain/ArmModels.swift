@@ -13,11 +13,16 @@ public struct ArmFilters: Equatable, Codable, Sendable {
     public var skipDeclined: Bool
     public var skipAllDay: Bool
     public var skipDontClone: Bool
+    public var skipFree: Bool
 
-    public init(skipDeclined: Bool = false, skipAllDay: Bool = false, skipDontClone: Bool = false) {
+    public init(
+        skipDeclined: Bool = false, skipAllDay: Bool = false, skipDontClone: Bool = false,
+        skipFree: Bool = false
+    ) {
         self.skipDeclined = skipDeclined
         self.skipAllDay = skipAllDay
         self.skipDontClone = skipDontClone
+        self.skipFree = skipFree
     }
 
     public var isEmpty: Bool { self == ArmFilters() }

@@ -476,9 +476,9 @@ public final class LocalStateRepository: @unchecked Sendable {
                     INSERT INTO arms
                         (id, configuration_id, target_binding_id, rule_mode,
                          preferred_writer_device_id, is_enabled, is_main, created_at, updated_at, name,
-                         skip_declined, skip_all_day, skip_dont_clone, copy_label,
+                         skip_declined, skip_all_day, skip_dont_clone, skip_free, copy_label,
                          pad_before_minutes, pad_after_minutes, pad_in_person_only)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                 arguments: [
                     arm.id,
@@ -494,6 +494,7 @@ public final class LocalStateRepository: @unchecked Sendable {
                     arm.filters.skipDeclined,
                     arm.filters.skipAllDay,
                     arm.filters.skipDontClone,
+                    arm.filters.skipFree,
                     arm.label,
                     arm.padding.beforeMinutes,
                     arm.padding.afterMinutes,
@@ -518,7 +519,7 @@ public final class LocalStateRepository: @unchecked Sendable {
                     sql: """
                         SELECT id, configuration_id, target_binding_id, rule_mode,
                                preferred_writer_device_id, is_enabled, is_main, name,
-                               skip_declined, skip_all_day, skip_dont_clone, copy_label,
+                               skip_declined, skip_all_day, skip_dont_clone, skip_free, copy_label,
                                pad_before_minutes, pad_after_minutes, pad_in_person_only
                         FROM arms
                         WHERE configuration_id = ?
@@ -532,7 +533,7 @@ public final class LocalStateRepository: @unchecked Sendable {
                     sql: """
                         SELECT id, configuration_id, target_binding_id, rule_mode,
                                preferred_writer_device_id, is_enabled, is_main, name,
-                               skip_declined, skip_all_day, skip_dont_clone, copy_label,
+                               skip_declined, skip_all_day, skip_dont_clone, skip_free, copy_label,
                                pad_before_minutes, pad_after_minutes, pad_in_person_only
                         FROM arms
                         ORDER BY created_at, id
@@ -550,7 +551,7 @@ public final class LocalStateRepository: @unchecked Sendable {
                 sql: """
                     SELECT id, configuration_id, target_binding_id, rule_mode,
                            preferred_writer_device_id, is_enabled, is_main, name,
-                           skip_declined, skip_all_day, skip_dont_clone, copy_label,
+                           skip_declined, skip_all_day, skip_dont_clone, skip_free, copy_label,
                            pad_before_minutes, pad_after_minutes, pad_in_person_only
                     FROM arms
                     WHERE id = ?
@@ -629,11 +630,12 @@ public final class LocalStateRepository: @unchecked Sendable {
             try database.execute(
                 sql: """
                     UPDATE arms SET skip_declined = ?, skip_all_day = ?, skip_dont_clone = ?,
-                        updated_at = ?
+                        skip_free = ?, updated_at = ?
                     WHERE id = ?
                     """,
                 arguments: [
-                    filters.skipDeclined, filters.skipAllDay, filters.skipDontClone, now, id,
+                    filters.skipDeclined, filters.skipAllDay, filters.skipDontClone,
+                    filters.skipFree, now, id,
                 ]
             )
         }
@@ -761,7 +763,8 @@ private func storedArm(row: Row, database: Database) throws -> StoredArm {
         filters: ArmFilters(
             skipDeclined: row["skip_declined"],
             skipAllDay: row["skip_all_day"],
-            skipDontClone: row["skip_dont_clone"]
+            skipDontClone: row["skip_dont_clone"],
+            skipFree: row["skip_free"]
         ),
         label: row["copy_label"],
         padding: ArmPadding(

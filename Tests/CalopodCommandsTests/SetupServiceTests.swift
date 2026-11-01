@@ -155,7 +155,7 @@ struct SetupServiceTests {
         let id = try #require(try service.snapshot().arms.first?.id)
         #expect(try service.snapshot().arms.first?.filters == ArmFilters())
 
-        let filters = ArmFilters(skipAllDay: true, skipDontClone: true)
+        let filters = ArmFilters(skipAllDay: true, skipDontClone: true, skipFree: true)
         try service.setFilters(armID: id, filters: filters)
         #expect(try service.snapshot().arms.first?.filters == filters)
     }

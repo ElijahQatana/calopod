@@ -33,6 +33,7 @@ extension CalopodDatabase {
         "v29_inbox_snoozes",
         "v30_inbox_digest",
         "v31_focus_length",
+        "v32_event_flags",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -542,6 +543,15 @@ extension CalopodDatabase {
                     minutes INTEGER NOT NULL CHECK (minutes BETWEEN 15 AND 1440)
                 );
                 """)
+        }
+
+        migrator.registerMigration("v32_event_flags") { database in
+            try database.alter(table: "arms") { table in
+                table.add(column: "skip_free", .boolean).notNull().defaults(to: false)
+            }
+            try database.alter(table: "normalized_instances") { table in
+                table.add(column: "event_kind", .text)
+            }
         }
 
         return migrator

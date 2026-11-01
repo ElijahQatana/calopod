@@ -219,6 +219,7 @@ private actor LiveEventKitGateway: EventKitGateway {
                 availability: availability($0.availability),
                 isCancelled: $0.status == .canceled,
                 isPrivate: false,
+                kind: $0.calendar.type == .birthday ? .birthday : nil,
                 title: $0.title,
                 updatedAt: $0.lastModifiedDate,
                 // The ownership marker is stored in the URL field, so an event with one is

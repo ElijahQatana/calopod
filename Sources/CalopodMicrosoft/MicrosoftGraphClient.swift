@@ -569,6 +569,7 @@ private struct MicrosoftEvent: Decodable {
             isPrivate: sensitivity == "private"
                 || sensitivity == "personal"
                 || sensitivity == "confidential",
+            kind: EventKind(microsoftShowAs: showAs),
             title: subject,
             updatedAt: lastModifiedDateTime.flatMap { MicrosoftDate.date(from: $0) },
             isManagedMirror: extensions?.contains(where: \.isCalopodMarker) == true,

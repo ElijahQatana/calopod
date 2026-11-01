@@ -208,6 +208,7 @@ public enum EventNormalizer {
                 availability: event.availability.rawValue,
                 isCancelled: false,
                 isPrivate: event.isPrivate,
+                kind: event.kind,
                 title: event.title,
                 contentFingerprint: fingerprint,
                 providerUpdatedAt: event.updatedAt,
