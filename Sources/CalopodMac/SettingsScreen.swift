@@ -20,10 +20,10 @@ struct SettingsScreen: View {
         _command = State(initialValue: command)
     }
 
-    var body: some View { CardPage(title: "Settings") { sections } }
+    var body: some View { CardPage(title: "Settings", maxWidth: Theme.Page.maxWidth) { sections } }
 
     /// The page contents, for rendering without the scroll view.
-    var page: some View { CardPage(title: "Settings") { sections }.page }
+    var page: some View { CardPage(title: "Settings", maxWidth: Theme.Page.maxWidth) { sections }.page }
 
     private var features: Set<SettingsFeature> {
         var features: Set<SettingsFeature> = []
