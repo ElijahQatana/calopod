@@ -76,6 +76,8 @@ final class AppNavigation {
     var calendarPage: CalendarPage = .schedule
     /// The Inbox filter to show. Set it with `openInbox` from other screens.
     var inboxFilter: InboxFilter = .all
+    /// The Settings section last shown.
+    var settingsSection: SettingsSection = .appearance
     /// An event to select when Inbox opens. Inbox clears it once it has looked for the event.
     var inboxEvent: String?
 

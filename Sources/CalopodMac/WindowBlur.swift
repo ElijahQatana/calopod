@@ -52,8 +52,10 @@ struct WindowBlurHelper: NSViewRepresentable {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
                 guard let window = self?.window else { return }
                 let style = AppSettings.shared.launchWindowStyle
+                let minimum = window.contentMinSize
                 if style != .solid, !NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency {
                     if style == .glass { Self.installGlass(in: window) } else { Self.installWrapper(in: window) }
+                    Self.hold(minimum, in: window)
                 }
                 windowLog.notice("window style: \(style.rawValue, privacy: .public)")
             }
@@ -63,6 +65,14 @@ struct WindowBlurHelper: NSViewRepresentable {
             hosting.wantsLayer = true
             hosting.layer?.backgroundColor = NSColor.clear.cgColor
             hosting.layer?.isOpaque = false
+        }
+
+        /// Swapping the content view clears the minimum SwiftUI set, so restore it.
+        private static func hold(_ minimum: NSSize, in window: NSWindow) {
+            window.contentMinSize = minimum
+            let size = window.contentRect(forFrameRect: window.frame).size
+            let held = NSSize(width: max(size.width, minimum.width), height: max(size.height, minimum.height))
+            if held != size { window.setContentSize(held) }
         }
 
         /// The blur view is the content view and the SwiftUI view fills it.

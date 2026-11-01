@@ -98,7 +98,7 @@ struct CalendarColorSource: Equatable, Sendable {
 final class CalendarColors {
     static let shared = CalendarColors(defaults: AppDefaults.forSingleton, state: try? LocalState.repository())
 
-    private(set) var choices: [String: String]
+    private(set) var choices: [String: String] = [:]
     private(set) var sources: [String: CalendarColorSource] = [:]
     @ObservationIgnored private let state: LocalStateRepository?
 
@@ -107,8 +107,10 @@ final class CalendarColors {
     init(defaults: UserDefaults, state: LocalStateRepository?) {
         self.state = state
         if let state { CalendarPreferenceMigration.run(defaults: defaults, state: state) }
-        choices = ((try? state?.calendarPreferences()) ?? [:]).compactMapValues(\.color)
+        reload()
     }
+
+    func reload() { choices = ((try? state?.calendarPreferences()) ?? [:]).compactMapValues(\.color) }
 
     /// The chosen color for a calendar, or a neutral one until it has been given a color.
     func color(for calendarID: String) -> CalendarColor {

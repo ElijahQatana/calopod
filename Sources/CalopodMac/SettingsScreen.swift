@@ -2,35 +2,95 @@ import AppKit
 import CalopodCommands
 import SwiftUI
 
-/// Appearance, menu bar, window style and how see-through the panels are.
+/// Settings, one section at a time, with a search across them.
 struct SettingsScreen: View {
     private let settings = AppSettings.shared
+    let navigation: AppNavigation
     @State private var command: CommandLineModel
+    @State private var query = ""
     @Environment(PermissionsModel.self) private var permissions
     @Environment(\.iPhoneFeed) private var iPhoneFeed
     @Environment(\.updates) private var updates
     @Environment(NotificationSettingsModel.self) private var reminders
     @Environment(WorkingHoursModel.self) private var workingHours
+    @Environment(SettingsFileModel.self) private var settingsFile
 
-    init(command: CommandLineModel = CommandLineModel()) { _command = State(initialValue: command) }
+    init(navigation: AppNavigation, command: CommandLineModel = CommandLineModel()) {
+        self.navigation = navigation
+        _command = State(initialValue: command)
+    }
 
     var body: some View { CardPage(title: "Settings") { sections } }
 
     /// The page contents, for rendering without the scroll view.
     var page: some View { CardPage(title: "Settings") { sections }.page }
 
-    @ViewBuilder
+    private var features: Set<SettingsFeature> {
+        var features: Set<SettingsFeature> = []
+        if updates != nil { features.insert(.updates) }
+        if iPhoneFeed != nil { features.insert(.iPhone) }
+        if command.isAvailable { features.insert(.commandLine) }
+        return features
+    }
+
     private var sections: some View {
-        if let updates { UpdatesSection(model: updates) }
-        appearance
-        menuBar
-        transparency
-        windowStyle
-        WorkingHoursSection(model: workingHours)
-        NotificationsSection(model: reminders, workingHours: workingHours.hours, permission: permissions.notifications)
-        permissionsSection
-        iPhoneSection
-        commandLine
+        let results = SettingsSection.results(query: query, features: features)
+        let shown = SettingsSection.shown(selected: navigation.settingsSection, in: results)
+        return HStack(alignment: .top, spacing: 16) {
+            sectionList(results, shown: shown)
+            VStack(alignment: .leading, spacing: 16) {
+                if let shown { content(of: shown) } else { Text("No matching settings").foregroundStyle(.secondary) }
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+        .task { await permissions.refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await permissions.refresh() }
+        }
+    }
+
+    private func sectionList(_ results: [SettingsMatch], shown: SettingsSection?) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            TextField("Search", text: $query).textFieldStyle(.roundedBorder).padding(.bottom, 8)
+            ForEach(results, id: \.section) { result in
+                let selected = result.section == shown
+                Button { navigation.settingsSection = result.section } label: {
+                    HStack(spacing: 8) {
+                        Text(result.section.title).lineLimit(1)
+                        Spacer(minLength: 0)
+                        if !query.isEmpty { Text("\(result.count)").font(Theme.Fonts.tinySemibold.monospacedDigit()) }
+                    }
+                    .font(Theme.Fonts.secondaryMedium)
+                    .foregroundStyle(selected ? Theme.accent : .primary)
+                    .padding(.horizontal, 10).frame(height: 32)
+                    .background(Capsule().fill(selected ? Theme.accent.opacity(0.14) : .clear))
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        .frame(width: 140)
+    }
+
+    @ViewBuilder
+    private func content(of section: SettingsSection) -> some View {
+        switch section {
+        case .appearance:
+            appearance
+            windowStyle
+            transparency
+        case .workingHours: WorkingHoursSection(model: workingHours)
+        case .notifications:
+            NotificationsSection(model: reminders, workingHours: workingHours.hours, permission: permissions.notifications)
+        case .iPhone: iPhoneSection
+        case .permissions: permissionsSection
+        case .app:
+            menuBar
+            if let updates { UpdatesSection(model: updates) }
+            SettingsFileSection(model: settingsFile)
+            commandLine
+        }
     }
 
     @ViewBuilder
@@ -135,10 +195,6 @@ struct SettingsScreen: View {
                 }
                 .disabled(permissions.checkingKeychain)
             }
-        }
-        .task { await permissions.refresh() }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            Task { await permissions.refresh() }
         }
     }
 

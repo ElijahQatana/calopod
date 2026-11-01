@@ -37,7 +37,7 @@ struct MainWindow: View {
         case .calendars: CalendarsScreen(model: setup)
         case .arms: ArmsScreen(model: setup)
         case .service: ServiceScreen(model: service)
-        case .settings: SettingsScreen()
+        case .settings: SettingsScreen(navigation: navigation)
         }
     }
 }

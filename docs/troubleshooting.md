@@ -40,6 +40,31 @@ calopod agent enable
 
 Restore waits for any running sync, refresh or cached read to finish and refuses while one is active. Your backup file is kept, and if the restore fails your current data is left in place. If a crash left `-wal` or `-shm` files next to the database, don't delete them; restore recovers them first.
 
+## Move to a new Mac
+
+A backup can't be opened on another Mac, but your setup can move in a settings file.
+
+```sh
+umask 077
+calopod config export > calopod-config.json
+```
+
+Unlike `support export`, this file has your calendar and account names in it. Don't share it or attach it to an issue.
+
+It holds your Connections (the kind and name), the calendars you selected, your Arms and Main calendar, calendar names, colors, ignored and hidden calendars, working hours, reminders, Inbox margins and digest, and which calendars go to the iPhone feed. The feed itself stays off until you turn it on. It leaves out sign-ins, the signing key, cached events, history and this Mac's ids. The file is versioned, and a Calopod that is older than the file refuses it.
+
+On the new Mac, add your Connections first (`calopod connection add`, which means signing in again), then:
+
+```sh
+calopod config import calopod-config.json
+```
+
+Import lists what it would add or change and waits for a yes. `--dry-run` only lists, and `--yes` skips the question. It writes only to Calopod's own data on this Mac and never to a calendar or an invitation. A Connection it can't find is named, so you can add it and import again. A calendar that can't be matched by name and account is listed and left alone, and an Arm that needs one is not added. Nothing is guessed.
+
+Copies the old Mac made carry a signature from a key that stays in the old Mac's Keychain, so the new Mac can't prove they are its own. It never adopts or deletes them. An Arm that finds one stops and reports it, and its other copies wait. Before the first sync on the new Mac, delete the Calopod copies from the target calendars, or do that on the old Mac before you export. Your original events are not touched. The Arm then makes fresh copies. Stop the old Mac's Arms, or stop using it, so it doesn't write copies to the same calendars again.
+
+The Mac app has Export settings and Import settings under Settings, General.
+
 ## What Calopod stores
 
 To keep the inbox, change detection, replies and full-details copies working, Calopod caches event details from your calendars, including events marked private: titles, notes, locations, links, organizer and attendee names and emails, times, and your response. It also keeps connection and calendar names and the inbox history.

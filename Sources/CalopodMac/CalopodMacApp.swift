@@ -13,6 +13,7 @@ struct CalopodMacApp: App {
     @State private var permissions: PermissionsModel
     @State private var reminderSettings: NotificationSettingsModel
     @State private var workingHours: WorkingHoursModel
+    @State private var settingsFile: SettingsFileModel
     @State private var availability: AvailabilityModel
     @State private var reminders: ReminderScheduler
     @State private var refresh: OverviewRefresh
@@ -47,6 +48,8 @@ struct CalopodMacApp: App {
         reminderSettings.onChange = { Task { await reminders.reconcile() } }
         schedule.onReload = { Task { await reminders.reconcile() } }
         workingHours.onChange = { Task { await availability.reload() } }
+        let settingsFile = SettingsFileModel(state: state)
+        _settingsFile = State(initialValue: settingsFile)
         _workingHours = State(initialValue: workingHours)
         _availability = State(initialValue: availability)
         _reminderSettings = State(initialValue: reminderSettings)
@@ -62,6 +65,17 @@ struct CalopodMacApp: App {
         DockPresence.enter()
         AppConfiguration.apply()
         AppSettings.shared.applyAppearance()
+    }
+
+    private func reloadAfterImport() {
+        workingHours.reload()
+        reminderSettings.reload()
+        CalendarAliases.shared.reload()
+        CalendarColors.shared.reload()
+        Task {
+            await setup.reload()
+            await schedule.reload()
+        }
     }
 
     /// One answer for Overview, the sidebar dot and the menu bar window.
@@ -90,11 +104,13 @@ struct CalopodMacApp: App {
                 .environment(permissions)
                 .environment(reminderSettings)
                 .environment(workingHours)
+                .environment(settingsFile)
                 .environment(availability)
                 .environment(refresh)
                 .environment(\.iPhoneFeed, iPhoneFeed)
                 .environment(\.updates, updates)
                 .task { await inbox.reload() }
+                .onAppear { settingsFile.onImported = reloadAfterImport }
                 .task { await access.check() }
                 .task { await updates.checkIfDue() }
                 .onChange(of: access.status, initial: true) { refreshAccess() }
