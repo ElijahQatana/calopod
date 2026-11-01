@@ -53,6 +53,8 @@ public struct SettingsFile: Codable, Equatable, Sendable {
         public var main: Bool
         public var filters: ArmFilters
         public var padding: ArmPadding
+        /// Missing in older files, which kept the words of private events on Full details Arms.
+        public var includePrivate: Bool?
     }
 
     public struct Day: Codable, Equatable, Sendable {
@@ -151,7 +153,8 @@ extension SettingsFile {
                 let sources = arm.sourceBindingIDs.compactMap { keys[$0] }
                 guard sources.count == arm.sourceBindingIDs.count, let target = keys[arm.targetBindingID] else { return nil }
                 return Arm(id: arm.id, name: arm.name, sources: sources, target: target, rule: arm.ruleMode, label: arm.label,
-                           enabled: arm.isEnabled, main: arm.isMain, filters: arm.filters, padding: arm.padding)
+                           enabled: arm.isEnabled, main: arm.isMain, filters: arm.filters, padding: arm.padding,
+                           includePrivate: arm.includePrivate)
             },
             workingDays: hours.days.sorted { $0.key < $1.key }.map {
                 Day(weekday: $0.key, startMinute: $0.value.startMinute, endMinute: $0.value.endMinute)

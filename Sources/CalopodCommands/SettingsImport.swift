@@ -127,6 +127,7 @@ public struct SettingsImporter: Sendable {
                 unmatched.append("Arm \(title)")
                 continue
             }
+            let includePrivate = arm.includePrivate ?? (arm.rule == .fullDetails)
             if let existing = try repository.arm(id: arm.id) {
                 var edits = Edits()
                 if existing.name != arm.name { edits.add("name") { _ = try service.rename(armID: arm.id, name: arm.name) } }
@@ -134,6 +135,9 @@ public struct SettingsImporter: Sendable {
                     edits.add("Rule") { _ = try service.updateRule(armID: arm.id, ruleMode: arm.rule, label: arm.label) }
                 }
                 if existing.filters != arm.filters { edits.add("filters") { _ = try service.updateFilters(armID: arm.id, filters: arm.filters) } }
+                if existing.includePrivate != includePrivate {
+                    edits.add("private events") { _ = try service.updateIncludePrivate(armID: arm.id, includePrivate: includePrivate) }
+                }
                 if existing.padding != arm.padding { edits.add("padding") { _ = try service.updatePadding(armID: arm.id, padding: arm.padding) } }
                 if existing.isEnabled != arm.enabled {
                     edits.add(arm.enabled ? "turn on" : "turn off") { _ = try repository.setArmEnabled(id: arm.id, isEnabled: arm.enabled) }
@@ -144,7 +148,8 @@ public struct SettingsImporter: Sendable {
                 changes.append(.init(text: "Add Arm \(title)") {
                     try service.createArm(
                         id: arm.id, sourceBindingIDs: sources, targetBindingID: target, ruleMode: arm.rule, isMain: arm.main,
-                        name: arm.name, filters: arm.filters, label: arm.label, padding: arm.padding)
+                        name: arm.name, filters: arm.filters, label: arm.label, padding: arm.padding,
+                        includePrivate: includePrivate)
                     if !arm.enabled { _ = try repository.setArmEnabled(id: arm.id, isEnabled: false) }
                 })
             }

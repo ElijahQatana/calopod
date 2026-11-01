@@ -25,6 +25,14 @@ public struct ArmFilters: Equatable, Codable, Sendable {
         self.skipFree = skipFree
     }
 
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        skipDeclined = try values.decode(Bool.self, forKey: .skipDeclined)
+        skipAllDay = try values.decode(Bool.self, forKey: .skipAllDay)
+        skipDontClone = try values.decode(Bool.self, forKey: .skipDontClone)
+        skipFree = try values.decodeIfPresent(Bool.self, forKey: .skipFree) ?? false
+    }
+
     public var isEmpty: Bool { self == ArmFilters() }
 }
 
