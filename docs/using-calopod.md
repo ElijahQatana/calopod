@@ -48,6 +48,12 @@ It lists the free windows that are at least that long, starting from now, using 
 
 Add `--copy` to also copy the windows as plain text for a message, such as `Tue Nov 3, 2:00 to 4:00 PM EST`, in the time zone of the range. The text is printed too; where there is no clipboard tool, nothing is copied. JSON output is unchanged.
 
+`availability` also lists each day's longest free stretch, and flags a working day with no stretch as long as your focus time, two hours until you change it. Days off are never flagged.
+
+```sh
+calopod hours focus 90m
+```
+
 Working hours are set per weekday in your local time zone, with days off allowed. Until you set them they are Monday to Friday, 9:00 to 17:00.
 
 ```sh
@@ -57,7 +63,7 @@ calopod hours set --days fri --start 08:30 --end 13:00
 calopod hours set --days sat,sun --off
 ```
 
-The Mac app reads and changes the same hours in Settings.
+The Mac app reads and changes the same hours and focus time in Settings.
 
 Dates can be a single `--day`, or `--from` and `--through`. A plain date means the whole local day, in your time zone unless you pass `--timezone`. Full timestamps need an offset such as `-04:00`.
 

@@ -8,6 +8,7 @@ import Observation
 @Observable
 final class WorkingHoursModel {
     private(set) var hours: WorkingHours
+    private(set) var focus: FocusSettings
     /// Why the last change was refused, in plain words. Cleared by the next change that works.
     private(set) var notice: String?
     /// Called after a saved change, so availability follows.
@@ -17,11 +18,13 @@ final class WorkingHoursModel {
     init(state: LocalStateRepository?) {
         self.state = state
         hours = (try? state?.workingHours()) ?? .standard
+        focus = (try? state?.focusSettings()) ?? .standard
     }
 
     func reload() {
-        guard let state, let saved = try? state.workingHours(), saved != hours else { return }
-        hours = saved
+        guard let state else { return }
+        if let saved = try? state.workingHours(), saved != hours { hours = saved }
+        if let saved = try? state.focusSettings(), saved != focus { focus = saved }
     }
 
     func apply(_ change: (WorkingHours) throws -> WorkingHours) {
@@ -30,6 +33,19 @@ final class WorkingHoursModel {
             guard changed != hours else { notice = nil; return }
             try state?.saveWorkingHours(changed)
             hours = changed
+            notice = nil
+            onChange?()
+        } catch {
+            notice = error.localizedDescription
+        }
+    }
+
+    func setFocus(minutes: Int) {
+        do {
+            let changed = try FocusSettings(minutes: minutes)
+            guard changed != focus else { notice = nil; return }
+            try state?.saveFocusSettings(changed)
+            focus = changed
             notice = nil
             onChange?()
         } catch {

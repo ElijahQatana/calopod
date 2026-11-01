@@ -39,6 +39,17 @@ enum AvailabilityText {
 
     static func overlaps(_ count: Int) -> String { count == 1 ? "1 overlap" : "\(count) overlaps" }
 
+    /// "3h 30m" for the strip, where "3 hr 30 min" would not fit.
+    static func stretch(_ seconds: TimeInterval) -> String {
+        let minutes = Int((seconds / 60).rounded())
+        let (hours, rest) = (minutes / 60, minutes % 60)
+        switch (hours, rest) {
+        case (0, _): return "\(rest)m"
+        case (_, 0): return "\(hours)h"
+        default: return "\(hours)h \(rest)m"
+        }
+    }
+
     /// The working window of the day, or why there is none.
     static func hours(_ report: AvailabilityDayReport) -> String {
         guard let windows = report.result.workingWindows else { return "Working hours are not applied." }
@@ -160,13 +171,15 @@ struct AvailabilityCard: View {
     private var strip: some View {
         HStack(spacing: 6) {
             ForEach(model.days, id: \.self) { day in
-                let load = model.report(for: day)?.summary.load
+                let report = model.report(for: day)
+                let load = report?.summary.load
                 let chosen = day == model.selected
                 Button { model.selected = day } label: {
                     VStack(spacing: 6) {
                         Text(day.formatted(.dateTime.weekday(.narrow))).font(Theme.Fonts.tinyMedium).foregroundStyle(.secondary)
                         Text(day.formatted(.dateTime.day())).font(Theme.Fonts.bodySemibold).monospacedDigit()
                         dot(load)
+                        longest(report)
                     }
                     .frame(maxWidth: .infinity).padding(.vertical, 8)
                     .overlay(RoundedRectangle(cornerRadius: Theme.controlRadius, style: .continuous)
@@ -174,10 +187,29 @@ struct AvailabilityCard: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(day.formatted(.dateTime.weekday(.wide).day().month(.wide)) + ", " + (load?.words ?? "not loaded")
-                    + (model.isToday(day) ? ", today" : ""))
+                .accessibilityLabel(spokenLabel(day, report))
                 .accessibilityAddTraits(chosen ? .isSelected : [])
             }
+        }
+    }
+
+    private func spokenLabel(_ day: Date, _ report: AvailabilityDayReport?) -> String {
+        var label = day.formatted(.dateTime.weekday(.wide).day().month(.wide)) + ", " + (report?.summary.load.words ?? "not loaded")
+        if let report, report.summary.load != .dayOff {
+            label += ", longest free stretch " + EventDuration.total(report.summary.longestFreeSeconds)
+            if report.lacksFocus { label += ", short of focus time" }
+        }
+        return label + (model.isToday(day) ? ", today" : "")
+    }
+
+    @ViewBuilder
+    private func longest(_ report: AvailabilityDayReport?) -> some View {
+        if let report, report.summary.load != .dayOff {
+            Text(AvailabilityText.stretch(report.summary.longestFreeSeconds)).font(Theme.Fonts.tiny).monospacedDigit()
+                .foregroundStyle(report.lacksFocus ? Theme.cautionText : Color.secondary)
+        } else {
+            // Keeps a day off the same height as the others.
+            Text(" ").font(Theme.Fonts.tiny)
         }
     }
 
@@ -240,6 +272,10 @@ struct AvailabilityCard: View {
                     tile("Free", EventDuration.total(summary.freeSeconds), note: AvailabilityText.hours(report))
                     tile("Busy", EventDuration.total(summary.busySeconds), note: AvailabilityText.overlaps(summary.overlaps),
                          flagged: summary.overlaps > 0)
+                    tile("Longest free", EventDuration.total(summary.longestFreeSeconds),
+                         note: report.lacksFocus ? "Shorter than your \(EventDuration.text(report.focusSeconds)) focus time"
+                             : "Meets your \(EventDuration.text(report.focusSeconds)) focus time",
+                         flagged: report.lacksFocus)
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 Text("\(report.day.start.formatted(.dateTime.weekday(.wide))) is \(summary.load.words).")

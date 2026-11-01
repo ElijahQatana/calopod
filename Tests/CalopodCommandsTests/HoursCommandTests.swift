@@ -43,4 +43,20 @@ struct HoursCommandTests {
         #expect(output.days[0] == .init(weekday: "monday", working: true, start: "09:00", end: "17:00"))
         #expect(output.days[6] == .init(weekday: "sunday", working: false, start: nil, end: nil))
     }
+
+    @Test("Focus takes minutes or hours and keeps the allowed range")
+    func focus() throws {
+        #expect(try HoursFocusCommand.parse(["90m"]).resolve().minutes == 90)
+        #expect(try HoursFocusCommand.parse(["3h"]).resolve().minutes == 180)
+        for length in ["10m", "25h", "2d", "2", "90s"] {
+            #expect(throws: (any Error).self) { try HoursFocusCommand.parse([length]).resolve() }
+        }
+    }
+
+    @Test("JSON carries the focus length next to the days")
+    func focusJSON() throws {
+        let payload = CommandPayload(status: "ok", message: "Working hours.", workingHours: WorkingHoursOutput(.standard, focusMinutes: 150))
+        let json = try OutputRenderer.render(command: "hours", payload: payload, format: .json)
+        #expect(json.contains("\"focusMinutes\" : 150") || json.contains("\"focusMinutes\":150"))
+    }
 }

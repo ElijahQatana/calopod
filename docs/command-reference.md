@@ -10,7 +10,7 @@ calopod main configure | inspect
 calopod events
 calopod join [event]
 calopod availability [find]
-calopod hours [set]
+calopod hours [set|focus]
 calopod sync
 calopod inbox [activity | refresh | inspect | acknowledge | review | config]
 calopod agent enable | disable | pause | resume | interval | run-now | status
@@ -30,6 +30,8 @@ calopod-setup [--arms]
 `hours` shows your working hours, one line per weekday, and `hours set --days mon-fri --start 09:00 --end 17:00` changes them. `--days` takes day names or short forms, ranges such as `mon-thu`, or `weekdays`, `weekend` and `all`, separated by commas. `--off` makes those days days off. On a working day you can give just `--start` or just `--end`; a day that is off needs both. The default is Monday to Friday, 9:00 to 17:00, and the times are in your local time zone. The Mac app edits the same hours in Settings.
 
 `availability` counts free and busy time only inside working hours. Busy time before or after them, and all of it on a day off, is listed separately and not counted as busy. `--ignore-working-hours` counts the whole day. In the JSON, items with `availability` of `busy` now cover only time inside working hours; before this change they also included time outside them. New items have `availability` set to `before-hours`, `after-hours` or `day-off`, with the label "Before hours", "After hours" or "Day off". A new `totals` object has `freeSeconds`, `busySeconds` and `outsideSeconds`. `workingWindows` is unchanged: one start and end for each working window in the range, left out when working hours are ignored.
+
+`hours focus 90m` sets how long a free stretch must be to count as focus time, from 15 minutes to 24 hours, two hours by default; `hours` shows it as `focusMinutes` in JSON. `availability` JSON gains `days`, one entry per local day with `date`, `longestFreeSeconds` and `short`, which is true for a working day with no free stretch of `focusSeconds`. `totals` and the other fields are unchanged.
 
 `availability find --duration 45m --within 5d` lists the free windows at least that long, from now. In JSON, `items` holds only free windows with `startsAt` and `endsAt`, and `lengthSeconds` is the length asked for. `schemaVersion` is unchanged.
 
