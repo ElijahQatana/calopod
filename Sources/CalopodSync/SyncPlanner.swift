@@ -120,10 +120,12 @@ public enum SyncPlanner {
         for source in boundedSources.sorted(by: sourceOrder) {
             let mirrorKey = mirrorKey(armID: arm.id, sourceKeyHash: source.sourceKeyHash)
             desiredMirrorKeys.insert(mirrorKey)
+            let justBusy = arm.ruleMode == .fullDetails && EventTag.read(source).contains(.justBusy)
             let payload = desiredPayload(
                 source: source,
                 arm: arm,
-                targetProvider: targetProvider
+                targetProvider: targetProvider,
+                justBusy: justBusy
             )
             let fingerprint = desiredFingerprint(payload: payload, ruleMode: arm.ruleMode)
             let mapping = mappingsByMirror[mirrorKey]
@@ -347,9 +349,10 @@ public enum SyncPlanner {
     private static func desiredPayload(
         source: StoredNormalizedInstance,
         arm: StoredArm,
-        targetProvider: ProviderKind?
+        targetProvider: ProviderKind?,
+        justBusy: Bool
     ) -> DesiredEventPayload {
-        switch arm.ruleMode {
+        switch justBusy ? .busy : arm.ruleMode {
         case .busy, .label:
             let span = arm.effectivePadding.padded(of: source)
             return DesiredEventPayload(
