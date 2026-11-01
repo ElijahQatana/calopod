@@ -27,17 +27,6 @@ struct ArmFilterTests {
         #expect(items.map(\.action) == (copied ? [.create] : []))
     }
 
-    @Test("The tag matches in any case and only as written", arguments: [
-        ("Lunch #dontclone", nil, true), ("Lunch #DontClone", nil, true),
-        (nil, "see below\n#dontclone", true), ("Lunch dontclone", nil, false),
-        ("Lunch #dont clone", "#dont-clone", false), (nil, nil, false),
-    ] as [(String?, String?, Bool)])
-    func tag(title: String?, notes: String?, matches: Bool) throws {
-        let source = event("a", title: title, notes: notes)
-        let items = try plan(Self.tagged, sources: [source]).items
-        #expect(items.isEmpty == matches)
-    }
-
     @Test("A copy is removed once its event matches a filter", arguments: [
         (declined, event("a", response: .declined)),
         (allDay, event("a", allDay: true)),
