@@ -79,11 +79,13 @@ calopod arm disable ARM_ID
 calopod arm remove ARM_ID
 ```
 
-An Arm copies everything unless you turn on a filter. `--skip-declined`, `--skip-all-day` and `--skip-dontclone` leave out events you declined, all-day events, and events with `#dontclone` in the title or notes. They work with `arm add`, and `arm update` takes them and the matching `--no-skip-...` flags. When an event starts to match a filter, the copy Calopod made of it is removed on the next sync, and the preview lists that as a removal. [Event tags](tags.md) work on every Arm: `#justbusy` copies one event as plain Busy.
+An Arm copies everything unless you turn on a filter. `--skip-declined`, `--skip-all-day`, `--skip-dontclone` and `--skip-free` leave out events you declined, all-day events, events with `#dontclone` in the title or notes, and events marked Free. They work with `arm add`, and `arm update` takes them and the matching `--no-skip-...` flags. When an event starts to match a filter, the copy Calopod made of it is removed on the next sync, and the preview lists that as a removal. [Event tags](tags.md) work on every Arm: `#justbusy` copies one event as plain Busy.
 
 ```sh
 calopod arm update ARM_ID --skip-declined --no-skip-all-day
 ```
+
+Working location and birthday entries are never copied, because they are not commitments. An Out of office event is copied as Busy like any other. The preview names the reason when one of these is left out.
 
 The default Rule is `busy`: the copy has the start, end and the title "Busy", nothing else. Use `full-details` only for a calendar you trust. It copies the title, location and notes, with attendees and links written into the notes. It never invites anyone and clears alerts so you aren't notified twice.
 
