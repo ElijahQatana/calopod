@@ -7,7 +7,7 @@ calopod connection add | list | inspect | disable | remove
 calopod calendars
 calopod arm add | list | inspect | update | disable | remove
 calopod main configure | inspect
-calopod events
+calopod events [skip | unskip | skipped]
 calopod join [event]
 calopod availability [find]
 calopod hours [set|focus]
@@ -42,6 +42,8 @@ calopod-setup [--arms]
 `availability find --duration 45m --within 5d` lists the free windows at least that long, from now. In JSON, `items` holds only free windows with `startsAt` and `endsAt`, and `lengthSeconds` is the length asked for. `schemaVersion` is unchanged.
 
 `events` lists the Teams, Zoom, Meet or Webex link of each event (`Join:` in text, `joinProvider` and `joinURL` in JSON). `join` opens one: give it an id from `events --ids`, or leave it out for the event the menu bar card shows as next: the meeting that is on now during its first 10 minutes, then the next one to start within 12 hours. It opens the meeting app when there is one, otherwise the link in the browser.
+
+`events skip ID` stops copying an event (`--series` for every event in its series), `events unskip ID` undoes it, and `events skipped` lists them. See [Event tags](tags.md#dont-copy-from-calopod).
 
 `events --view all|sources|destinations` shows the calendars that view offers and leaves out the ones hidden in it. Each view keeps its own hidden calendars, the same ones the Mac app's Calendar screen remembers. `calendars hide CALENDAR --view VIEW` and `calendars show CALENDAR --view VIEW` change them. Without `--view`, or with `--calendar`, `events` hides nothing.
 

@@ -24,6 +24,7 @@ public enum SyncPlanReason: String, Codable, Sendable {
     case markedFree = "marked-free"
     case workingLocation = "working-location"
     case birthday
+    case skipped
     case verifiedDuplicates = "verified-duplicates"
     case mappingMissing = "mapping-missing"
     case providerIdentityChanged = "provider-identity-changed"

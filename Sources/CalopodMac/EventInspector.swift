@@ -14,6 +14,8 @@ struct EventInspector: View {
     @State private var joinNotice: String?
     /// Selects a copy's original in the Calendar. Nil when it is not on screen.
     var showOriginal: (() -> Void)?
+    /// Nil for events that cannot be skipped.
+    var setSkipped: ((_ skipped: Bool, _ wholeSeries: Bool) -> Void)?
 
     var body: some View {
         ScrollView { content }
@@ -35,6 +37,7 @@ struct EventInspector: View {
             if let origin = event.copyOrigin { provenance(origin) }
             if hasPeopleAndPlace { peopleAndPlace }
             if !event.copiedTo.isEmpty { copies }
+            skipSection
             notes
             replies
         }
@@ -100,6 +103,25 @@ struct EventInspector: View {
                         Text(copy.fullDetails ? "Full details" : "Busy only")
                             .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
                     }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var skipSection: some View {
+        if !event.isCopy, let setSkipped {
+            VStack(alignment: .leading, spacing: 8) {
+                if event.isSkipped {
+                    Text("Calopod does not copy this event.").font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+                    Button("Copy again") { setSkipped(false, false) }
+                } else if event.isRecurring {
+                    Menu("Don't copy") {
+                        Button("This event") { setSkipped(true, false) }
+                        Button("All events in the series") { setSkipped(true, true) }
+                    }
+                } else {
+                    Button("Don't copy") { setSkipped(true, false) }
                 }
             }
         }

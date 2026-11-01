@@ -158,7 +158,7 @@ enum HumanOutputRenderer {
                             lines.append("  Connection: \(label(context.connectionLabels[parent], fallback: "Unnamed Connection"))")
                             if localIDs { lines.append("  Connection ID: \(clean(parent))") }
                         }
-                    case "events", "inbox", "inbox.activity", "inbox.inspect":
+                    case "events", "events.skipped", "inbox", "inbox.activity", "inbox.inspect":
                         let marker = item.copyMode.map { $0 == "busy" ? " [busy copy]" : " [full details copy]" } ?? ""
                         lines.append("\(index + 1). \(label(item.label, fallback: "Untitled event"))\(marker)")
                         if item.copyMode != nil {

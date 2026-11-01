@@ -45,10 +45,12 @@ struct CalendarScheduleServiceTests {
         try state.saveMirrorMapping(StoredMirrorMapping(
             mirrorKey: "m", armID: "arm", sourceKeyHash: "c", providerEventID: "copy-c",
             providerVersion: nil, desiredFingerprint: "x", ownershipKeyID: "k", updatedAt: Date()))
+        try state.addEventSkip(EventSkip(event("b", hour: 11), wholeSeries: false, isEventKit: false))
 
         let schedule = try CalendarScheduleService(makeRepository: { state }).schedule()
 
         let byID = Dictionary(uniqueKeysWithValues: schedule.events.map { ($0.id, $0) })
+        #expect(byID["b"]?.isSkipped == true && byID["a"]?.isSkipped == false && byID["a"]?.isRecurring == false)
         #expect(byID["a"]?.overlaps == ["Event b"])
         #expect(byID["c"]?.overlaps == [])
         #expect(byID["a"]?.replies == [.yes, .no, .maybe])

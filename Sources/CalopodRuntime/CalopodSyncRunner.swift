@@ -176,6 +176,7 @@ public struct SyncEngine: Sendable {
         var waitingByArm: [String: Int] = [:]
         var targetWarnings: [String] = []
         var writerBlockedArmIDs = Set<String>()
+        let skips = try repository.eventSkips()
         let secretStore = KeychainSecretStore()
         let observer = ManagedTargetObserver(secretStore: secretStore)
         for arm in arms {
@@ -252,7 +253,8 @@ public struct SyncEngine: Sendable {
                 window: window,
                 sourceSnapshotComplete: refresh.failedSourceCount == 0,
                 targetSnapshotComplete: targetComplete,
-                targetOriginals: targetOriginals
+                targetOriginals: targetOriginals,
+                skips: skips
             )
             waitingByArm[arm.id] = plan.waitingCount
             review.add(SyncPlanReview.summarize(

@@ -328,6 +328,16 @@ extension LocalStateRepository {
         }
     }
 
+    public func cachedEvent(sourceKeyHash: String) throws -> StoredNormalizedInstance? {
+        try database.read { database in
+            try Row.fetchOne(
+                database,
+                sql: "SELECT * FROM normalized_instances WHERE source_key_hash = ? AND is_cancelled = 0",
+                arguments: [sourceKeyHash]
+            ).map(normalizedInstance)
+        }
+    }
+
     public func markConnectionStale(
         connectionID: String,
         errorCode: String,

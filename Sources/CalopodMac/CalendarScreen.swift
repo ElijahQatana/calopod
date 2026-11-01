@@ -68,7 +68,10 @@ struct CalendarScreen: View {
                 EventInspector(
                     event: event, calendar: model.calendars.first { $0.id == event.calendarID },
                     colors: colors, close: { model.selectedID = nil }, openInbox: { openInbox(event) },
-                    showOriginal: model.original(of: event).map { original in { model.show(original) } })
+                    showOriginal: model.original(of: event).map { original in { model.show(original) } },
+                    setSkipped: { skipped, wholeSeries in
+                        Task { await model.setSkipped(skipped, event, wholeSeries: wholeSeries) }
+                    })
             }
         }
     }

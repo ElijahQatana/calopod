@@ -33,6 +33,8 @@ struct SettingsTransferTests {
         // Arms made in the same instant have no fixed order.
         #expect(try inArmOrder(SettingsFile(repository: new)) == inArmOrder(file))
         #expect(try importer.plan(file).lines.isEmpty)
+        #expect(file.skips?.count == 2)
+        #expect(try new.eventSkips().map(\.ref).sorted() == ["weekly", "weekly"])
     }
 
     @Test("The preview writes nothing")
@@ -106,6 +108,21 @@ struct SettingsTransferTests {
         #expect(arm.padding.afterMinutes == 10 && !arm.isEnabled)
     }
 
+    @Test("A skip only the old Mac can name is listed, not guessed", arguments: [false, true])
+    func unnamedSkip(missingCalendar: Bool) throws {
+        let old = try makeMac(prefix: "old", configured: true)
+        let work = try #require(try old.calendarBindings(connectionID: "old-google").first { $0.displayLabel == "Synthetic work" })
+        try old.addEventSkip(EventSkip(calendarBindingID: work.id, ref: "old-only-id", isPortable: false, skippedAt: Date()))
+        let file = try SettingsFile(repository: old)
+        #expect(file.skips?.contains { $0.ref == nil } == true)
+        let new = try makeMac(prefix: "new", configured: false, skipping: missingCalendar ? "Synthetic work" : nil)
+        let importer = SettingsImporter(repository: new)
+        let plan = try importer.plan(file)
+        #expect(plan.unmatched.filter { $0 == "Skipped event on \"Synthetic work\"" }.count == (missingCalendar ? 3 : 1))
+        _ = importer.apply(plan)
+        #expect(try new.eventSkips().map(\.ref).contains("old-only-id") == false)
+    }
+
     @Test("A file from before private events and the Free filter reads the old way")
     func olderFile() throws {
         let old = try makeMac(prefix: "old", configured: true)
@@ -117,13 +134,16 @@ struct SettingsTransferTests {
             arm["filters"] = (arm["filters"] as? [String: Any])?.filter { $0.key != "skipFree" }
             return arm
         }
+        json["skips"] = nil
         let file = try SettingsFile.decode(JSONSerialization.data(withJSONObject: json))
+        #expect(file.skips == nil)
         #expect(file.arms.allSatisfy { $0.includePrivate == nil && !$0.filters.skipFree })
         let importer = SettingsImporter(repository: new)
         _ = importer.apply(try importer.plan(file))
         let arms = try new.arms()
         #expect(arms.filter { $0.includePrivate }.map(\.ruleMode) == [.fullDetails])
         #expect(arms.count == 2)
+        #expect(try new.eventSkips().isEmpty)
     }
 }
 
@@ -166,6 +186,11 @@ private func makeMac(
     try repository.setCalendarIgnored(true, calendarID: personal.id)
     try repository.setCalendarHidden(true, view: CalendarViewMode.sources.rawValue, calendarID: work.id)
     try repository.setIPhoneCalendar(personal.id, chosen: true)
+
+    for occurrence in ["", "2026-01-05T10:00:00.000Z"] {
+        try repository.addEventSkip(EventSkip(
+            calendarBindingID: work.id, ref: "weekly", occurrence: occurrence, isPortable: true, skippedAt: Date()))
+    }
 
     let service = ArmConfigurationService(repository: repository)
     try service.configureMainCalendar(id: "synthetic-main", sourceBindingIDs: [work.id], targetBindingID: target.id)

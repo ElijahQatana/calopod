@@ -206,6 +206,15 @@ final class CalendarModel {
         }
     }
 
+    /// Saved on this Mac only; the event is not changed. The next sync removes or brings back the copy.
+    func setSkipped(_ skipped: Bool, _ event: ScheduleEvent, wholeSeries: Bool = false) async {
+        guard let state else { return }
+        _ = try? skipped
+            ? EventSkipService.skip(eventID: event.id, wholeSeries: wholeSeries, repository: state)
+            : EventSkipService.unskip(event.id, repository: state)
+        await reload()
+    }
+
     func toggle(_ calendarID: String) {
         let nowHidden = !hidden.contains(calendarID)
         if nowHidden { hidden.insert(calendarID) } else { hidden.remove(calendarID) }
