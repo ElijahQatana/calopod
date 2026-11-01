@@ -32,6 +32,9 @@ public struct AvailabilityFindCommand: AsyncParsableCommand {
     @Flag(name: .long, help: "Count free time all day instead of only inside working hours (see `calopod hours`).")
     public var ignoreWorkingHours = false
 
+    @Flag(name: .long, help: "Copy the windows as plain text for a message.")
+    public var copy = false
+
     public init() {}
 
     public func validate() throws {
@@ -72,7 +75,8 @@ public struct AvailabilityFindCommand: AsyncParsableCommand {
                 workingHours: ignoreWorkingHours ? nil : try repository.workingHours(),
                 timeZone: TimeZone(identifier: resolved.timeZoneIdentifier) ?? .current
             )
-            let items = Self.items(availability.freeWindows(atLeast: length, after: Date()))
+            let windows = availability.freeWindows(atLeast: length, after: Date())
+            let items = Self.items(windows)
             try OutputRenderer.write(
                 command: "availability.find",
                 payload: CommandPayload(
@@ -92,6 +96,16 @@ public struct AvailabilityFindCommand: AsyncParsableCommand {
                 showIDs: output.ids,
                 human: output.localContext(repository: repository)
             )
+            if copy {
+                let zone = TimeZone(identifier: resolved.timeZoneIdentifier) ?? .current
+                let note = Self.copyNote(windows, timeZone: zone, copier: Pasteboard.copy)
+                // Keep JSON on stdout as it is.
+                if output.format == .json {
+                    try? FileHandle.standardError.write(contentsOf: Data((note + "\n").utf8))
+                } else {
+                    print(note)
+                }
+            }
         } catch {
             try failCommand(error, format: output.format)
         }
@@ -113,6 +127,13 @@ public struct AvailabilityFindCommand: AsyncParsableCommand {
             throw ValidationError("--within must be a span such as 5d or 36h.")
         }
         return ResolvedDateRange(window: try SyncWindow(start: now, end: end), timeZoneIdentifier: timeZone.identifier)
+    }
+
+    /// The text to print, with whether it reached the clipboard.
+    static func copyNote(_ windows: [AvailabilityInterval], timeZone: TimeZone, copier: (String) -> Bool) -> String {
+        guard !windows.isEmpty else { return "No free windows, so nothing was copied." }
+        let text = FreeSlotText.text(windows, timeZone: timeZone)
+        return text + "\n" + (copier(text) ? "Copied to the clipboard." : "No clipboard tool was found, so nothing was copied.")
     }
 
     static func items(_ windows: [AvailabilityInterval]) -> [CommandItem] {
