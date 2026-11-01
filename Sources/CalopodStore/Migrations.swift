@@ -31,6 +31,7 @@ extension CalopodDatabase {
         "v27_arm_padding",
         "v28_arm_sync_health",
         "v29_inbox_snoozes",
+        "v30_inbox_digest",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -519,6 +520,17 @@ extension CalopodDatabase {
                 table.column("revision", .integer).notNull()
                 table.column("conflict_keys", .text).notNull()
             }
+        }
+
+        // One row, like the meeting reminders. No time means the start of the working day.
+        migrator.registerMigration("v30_inbox_digest") { database in
+            try database.execute(sql: """
+                CREATE TABLE inbox_digest_settings (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    enabled INTEGER NOT NULL,
+                    minute INTEGER CHECK (minute BETWEEN 0 AND 1439)
+                );
+                """)
         }
 
         return migrator
