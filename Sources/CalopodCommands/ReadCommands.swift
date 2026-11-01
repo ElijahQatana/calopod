@@ -8,7 +8,8 @@ import Foundation
 public struct EventsCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "events",
-        abstract: "List normalized events for a day or range."
+        abstract: "List normalized events for a day or range.",
+        subcommands: [EventsSkipCommand.self, EventsUnskipCommand.self, EventsSkippedCommand.self]
     )
 
     @OptionGroup public var range: DateRangeOptions
