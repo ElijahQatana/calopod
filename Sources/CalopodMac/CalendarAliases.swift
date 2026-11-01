@@ -30,6 +30,12 @@ final class CalendarAliases {
         expanded = Set(defaults.stringArray(forKey: Self.expandedKey) ?? [])
     }
 
+    func reload() {
+        let saved = (try? state?.calendarPreferences()) ?? [:]
+        aliases = saved.compactMapValues { CalendarDisplayName.alias($0.alias, real: nil) }
+        ignored = Set(saved.filter(\.value.isIgnored).keys)
+    }
+
     func alias(for calendarID: String) -> String? { aliases[calendarID] }
 
     /// The name to show: the alias when there is one, else the name the provider gives.

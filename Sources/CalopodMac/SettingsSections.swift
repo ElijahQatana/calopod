@@ -58,6 +58,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         ]
         case .app: [
             SettingsItem(title: "Menu bar", keywords: "dock"),
+            SettingsItem(title: "Export settings", keywords: "save file new mac backup"),
+            SettingsItem(title: "Import settings", keywords: "load file new mac restore"),
             SettingsItem(title: "Updates", keywords: "version release check", needs: .updates),
             SettingsItem(title: "Command line", keywords: "calopod terminal install path", needs: .commandLine),
         ]

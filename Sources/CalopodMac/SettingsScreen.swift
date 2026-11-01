@@ -13,6 +13,7 @@ struct SettingsScreen: View {
     @Environment(\.updates) private var updates
     @Environment(NotificationSettingsModel.self) private var reminders
     @Environment(WorkingHoursModel.self) private var workingHours
+    @Environment(SettingsFileModel.self) private var settingsFile
 
     init(navigation: AppNavigation, command: CommandLineModel = CommandLineModel()) {
         self.navigation = navigation
@@ -87,6 +88,7 @@ struct SettingsScreen: View {
         case .app:
             menuBar
             if let updates { UpdatesSection(model: updates) }
+            SettingsFileSection(model: settingsFile)
             commandLine
         }
     }
