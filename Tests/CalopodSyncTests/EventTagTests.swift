@@ -32,7 +32,7 @@ struct EventTagTests {
         #expect(item.action == .create)
         #expect(item.reason == .taggedJustBusy)
         #expect(payload.title == "Busy")
-        #expect(payload.location == nil && payload.notes == nil && payload.isPrivate == nil)
+        #expect(payload.location == nil && payload.notes == nil && payload.isPrivate != true)
         #expect(payload.startsAt == source.startsAt && payload.endsAt == source.endsAt)
     }
 

@@ -34,6 +34,7 @@ extension CalopodDatabase {
         "v30_inbox_digest",
         "v31_focus_length",
         "v32_event_flags",
+        "v33_include_private",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -552,6 +553,14 @@ extension CalopodDatabase {
             try database.alter(table: "normalized_instances") { table in
                 table.add(column: "event_kind", .text)
             }
+        }
+
+        // Full details Arms keep copying the words of private events until it is turned off.
+        migrator.registerMigration("v33_include_private") { database in
+            try database.alter(table: "arms") { table in
+                table.add(column: "include_private", .boolean).notNull().defaults(to: false)
+            }
+            try database.execute(sql: "UPDATE arms SET include_private = 1 WHERE rule_mode = 'full-details'")
         }
 
         return migrator

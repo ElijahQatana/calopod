@@ -556,6 +556,7 @@ public struct AgentControlService: Sendable {
         case .filteredOut: "Left out by this Arm's filters"
         case .taggedDontClone: "Left out because of #dontclone"
         case .taggedJustBusy: "Copied as Busy because of #justbusy"
+        case .privateEvent: "Copied as Busy because it is private"
         case .markedFree: "Left out because it is marked Free"
         case .workingLocation: "Left out because it is a working location"
         case .birthday: "Left out because it is a birthday"

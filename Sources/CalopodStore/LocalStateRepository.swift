@@ -90,6 +90,8 @@ public struct StoredArm: Equatable, Sendable {
     /// The fixed title of copies under the `label` Rule.
     public let label: String?
     public let padding: ArmPadding
+    /// Whether a Full details copy of a private event keeps its words.
+    public let includePrivate: Bool
 
     public init(
         id: String,
@@ -103,7 +105,8 @@ public struct StoredArm: Equatable, Sendable {
         name: String? = nil,
         filters: ArmFilters = ArmFilters(),
         label: String? = nil,
-        padding: ArmPadding = ArmPadding()
+        padding: ArmPadding = ArmPadding(),
+        includePrivate: Bool = false
     ) {
         self.name = name
         self.id = id
@@ -117,6 +120,7 @@ public struct StoredArm: Equatable, Sendable {
         self.filters = filters
         self.label = label
         self.padding = padding
+        self.includePrivate = includePrivate
     }
 
     /// The padding that applies: Full details copies are never padded.
@@ -477,8 +481,8 @@ public final class LocalStateRepository: @unchecked Sendable {
                         (id, configuration_id, target_binding_id, rule_mode,
                          preferred_writer_device_id, is_enabled, is_main, created_at, updated_at, name,
                          skip_declined, skip_all_day, skip_dont_clone, skip_free, copy_label,
-                         pad_before_minutes, pad_after_minutes, pad_in_person_only)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         pad_before_minutes, pad_after_minutes, pad_in_person_only, include_private)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                 arguments: [
                     arm.id,
@@ -499,6 +503,7 @@ public final class LocalStateRepository: @unchecked Sendable {
                     arm.padding.beforeMinutes,
                     arm.padding.afterMinutes,
                     arm.padding.inPersonOnly,
+                    arm.includePrivate,
                 ]
             )
             for sourceBindingID in arm.sourceBindingIDs {
@@ -520,7 +525,7 @@ public final class LocalStateRepository: @unchecked Sendable {
                         SELECT id, configuration_id, target_binding_id, rule_mode,
                                preferred_writer_device_id, is_enabled, is_main, name,
                                skip_declined, skip_all_day, skip_dont_clone, skip_free, copy_label,
-                               pad_before_minutes, pad_after_minutes, pad_in_person_only
+                               pad_before_minutes, pad_after_minutes, pad_in_person_only, include_private
                         FROM arms
                         WHERE configuration_id = ?
                         ORDER BY created_at, id
@@ -534,7 +539,7 @@ public final class LocalStateRepository: @unchecked Sendable {
                         SELECT id, configuration_id, target_binding_id, rule_mode,
                                preferred_writer_device_id, is_enabled, is_main, name,
                                skip_declined, skip_all_day, skip_dont_clone, skip_free, copy_label,
-                               pad_before_minutes, pad_after_minutes, pad_in_person_only
+                               pad_before_minutes, pad_after_minutes, pad_in_person_only, include_private
                         FROM arms
                         ORDER BY created_at, id
                         """
@@ -552,7 +557,7 @@ public final class LocalStateRepository: @unchecked Sendable {
                     SELECT id, configuration_id, target_binding_id, rule_mode,
                            preferred_writer_device_id, is_enabled, is_main, name,
                            skip_declined, skip_all_day, skip_dont_clone, skip_free, copy_label,
-                           pad_before_minutes, pad_after_minutes, pad_in_person_only
+                           pad_before_minutes, pad_after_minutes, pad_in_person_only, include_private
                     FROM arms
                     WHERE id = ?
                     """,
@@ -615,6 +620,21 @@ public final class LocalStateRepository: @unchecked Sendable {
                         pad_in_person_only = ?, updated_at = ? WHERE id = ?
                     """,
                 arguments: [padding.beforeMinutes, padding.afterMinutes, padding.inPersonOnly, now, id]
+            )
+        }
+        return try arm(id: id)
+    }
+
+    @discardableResult
+    public func setArmIncludePrivate(
+        id: String,
+        includePrivate: Bool,
+        now: Date = Date()
+    ) throws -> StoredArm? {
+        try database.write { database in
+            try database.execute(
+                sql: "UPDATE arms SET include_private = ?, updated_at = ? WHERE id = ?",
+                arguments: [includePrivate, now, id]
             )
         }
         return try arm(id: id)
@@ -771,7 +791,8 @@ private func storedArm(row: Row, database: Database) throws -> StoredArm {
             beforeMinutes: row["pad_before_minutes"],
             afterMinutes: row["pad_after_minutes"],
             inPersonOnly: row["pad_in_person_only"]
-        )
+        ),
+        includePrivate: row["include_private"]
     )
 }
 

@@ -144,6 +144,19 @@ public struct ArmConfigurationService: Sendable {
         return arm
     }
 
+    public func updateIncludePrivate(
+        armID: String,
+        includePrivate: Bool,
+        now: Date = Date()
+    ) throws -> StoredArm {
+        guard let arm = try repository.setArmIncludePrivate(
+            id: armID, includePrivate: includePrivate, now: now
+        ) else {
+            throw ArmConfigurationError.armNotFound(armID)
+        }
+        return arm
+    }
+
     public func updatePadding(
         armID: String,
         padding: ArmPadding,
@@ -233,6 +246,7 @@ public struct ArmConfigurationService: Sendable {
         filters: ArmFilters = ArmFilters(),
         label: String? = nil,
         padding: ArmPadding = ArmPadding(),
+        includePrivate: Bool = false,
         now: Date = Date()
     ) throws -> StoredArm {
         let name = try normalizedName(name)
@@ -330,7 +344,8 @@ public struct ArmConfigurationService: Sendable {
             name: name,
             filters: filters,
             label: label,
-            padding: padding
+            padding: padding,
+            includePrivate: includePrivate
         )
         try repository.saveArm(arm, now: now)
         return arm
