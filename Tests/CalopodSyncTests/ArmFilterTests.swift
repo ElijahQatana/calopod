@@ -28,17 +28,17 @@ struct ArmFilterTests {
     }
 
     @Test("A copy is removed once its event matches a filter", arguments: [
-        (declined, event("a", response: .declined)),
-        (allDay, event("a", allDay: true)),
-        (tagged, event("a", notes: "#dontclone")),
+        (declined, event("a", response: .declined), SyncPlanReason.filteredOut),
+        (allDay, event("a", allDay: true), .filteredOut),
+        (tagged, event("a", notes: "#dontclone"), .taggedDontClone),
     ])
-    func removesCopy(filters: ArmFilters, now: StoredNormalizedInstance) throws {
+    func removesCopy(filters: ArmFilters, now: StoredNormalizedInstance, reason: SyncPlanReason) throws {
         let copy = Copy(of: event("a"))
         let item = try #require(
             plan(filters, sources: [now], copy: copy).items.first
         )
         #expect(item.action == .remove)
-        #expect(item.reason == .filteredOut)
+        #expect(item.reason == reason)
         #expect(item.mirrorKey == copy.mapping.mirrorKey)
     }
 

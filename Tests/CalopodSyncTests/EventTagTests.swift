@@ -30,6 +30,7 @@ struct EventTagTests {
         let item = try #require(plan(.fullDetails, [source]).items.first)
         let payload = try #require(item.payload)
         #expect(item.action == .create)
+        #expect(item.reason == .taggedJustBusy)
         #expect(payload.title == "Busy")
         #expect(payload.location == nil && payload.notes == nil && payload.isPrivate == nil)
         #expect(payload.startsAt == source.startsAt && payload.endsAt == source.endsAt)
@@ -43,6 +44,7 @@ struct EventTagTests {
     func unchanged(rule: ArmRuleMode, source: StoredNormalizedInstance, title: String) throws {
         let item = try #require(plan(rule, [source]).items.first)
         #expect(item.payload?.title == title)
+        #expect(item.reason == .targetMissing)
     }
 
     @Test("Gaining the tag reduces a copy to Busy and losing it brings the details back")
@@ -53,12 +55,34 @@ struct EventTagTests {
         let busy = try copy(of: tagged)
 
         let gained = try #require(plan(.fullDetails, [tagged], copy: full).items.first)
-        #expect(gained.action == .update)
+        #expect(gained.action == .update && gained.reason == .taggedJustBusy)
         #expect(gained.payload?.location == nil)
         let lost = try #require(plan(.fullDetails, [plain], copy: busy).items.first)
-        #expect(lost.action == .update)
+        #expect(lost.action == .update && lost.reason == .targetDiffers)
         #expect(lost.payload?.location == "Room 4")
         #expect(try plan(.fullDetails, [tagged], copy: busy).items.first?.action == .noOp)
+    }
+
+    @Test("A copy is removed for #dontclone only when Calopod can prove it made it", arguments: [
+        (TargetOwnershipStatus.verified, SyncPlanAction.remove, SyncPlanReason.taggedDontClone),
+        (.missingMarker, .repair, .ownershipUnverified),
+        (.wrongTarget, .repair, .ownershipUnverified),
+    ])
+    func removal(status: TargetOwnershipStatus, action: SyncPlanAction, reason: SyncPlanReason) throws {
+        let source = event(title: "Review #dontclone")
+        let item = try #require(
+            plan(.busy, [source], copy: copy(of: event(title: "Review"), status: status), filters: ArmFilters(skipDontClone: true)).items.first)
+        #expect(item.action == action && item.reason == reason)
+    }
+
+    @Test("#dontclone does nothing while the filter is off, and another filter keeps its own reason")
+    func filterOff() throws {
+        let tagged = event(title: "Review #dontclone")
+        #expect(try plan(.busy, [tagged]).items.map(\.action) == [.create])
+        let declined = event(title: "Review #dontclone", response: .declined)
+        let filters = ArmFilters(skipDeclined: true, skipDontClone: true)
+        let item = try #require(plan(.busy, [declined], copy: copy(of: declined), filters: filters).items.first)
+        #expect(item.reason == .filteredOut)
     }
 }
 
