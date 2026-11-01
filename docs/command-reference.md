@@ -11,6 +11,7 @@ calopod events
 calopod join [event]
 calopod availability [find]
 calopod hours [set|focus]
+calopod notifications [set]
 calopod sync
 calopod inbox [activity | refresh | inspect | acknowledge | snooze | unsnooze | review | config]
 calopod agent enable | disable | pause | resume | interval | run-now | status
@@ -28,6 +29,8 @@ calopod-setup [--arms]
 `connection add` takes `mac`, `google` or `microsoft`. `events` and `availability` take `--cached` to read local data without refreshing.
 
 `hours` shows your working hours, one line per weekday, and `hours set --days mon-fri --start 09:00 --end 17:00` changes them. `--days` takes day names or short forms, ranges such as `mon-thu`, or `weekdays`, `weekend` and `all`, separated by commas. `--off` makes those days days off. On a working day you can give just `--start` or just `--end`; a day that is off needs both. The default is Monday to Friday, 9:00 to 17:00, and the times are in your local time zone. The Mac app edits the same hours in Settings.
+
+`notifications` shows the meeting reminder and Inbox digest settings, and `notifications set` changes them: `--first` and `--final` for the reminder times, `--hide-titles`, and `--digest`, `--no-digest` and `--digest-at 08:30` for the digest. The notifications themselves come from the Mac app.
 
 `availability` counts free and busy time only inside working hours. Busy time before or after them, and all of it on a day off, is listed separately and not counted as busy. `--ignore-working-hours` counts the whole day. In the JSON, items with `availability` of `busy` now cover only time inside working hours; before this change they also included time outside them. New items have `availability` set to `before-hours`, `after-hours` or `day-off`, with the label "Before hours", "After hours" or "Day off". A new `totals` object has `freeSeconds`, `busySeconds` and `outsideSeconds`. `workingWindows` is unchanged: one start and end for each working window in the range, left out when working hours are ignored.
 

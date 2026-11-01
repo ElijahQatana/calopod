@@ -8,6 +8,7 @@ protocol ReminderCenter: Sendable {
     func requestPermission() async -> Bool
     func pending() async -> [PendingReminder]
     func add(_ reminder: PlannedReminder) async
+    func add(_ digest: PlannedDigest) async
     func remove(ids: [String]) async
 }
 
@@ -21,6 +22,7 @@ final class ReminderScheduler {
     private let schedule: @MainActor () -> CalendarSchedule?
     private let ignored: @MainActor (String) -> Bool
     private let shownName: @MainActor (ScheduleCalendar) -> String
+    private let digest: @MainActor () -> PlannedDigest?
     private let now: () -> Date
     private var running = false
     private var again = false
@@ -28,13 +30,15 @@ final class ReminderScheduler {
     init(
         center: (any ReminderCenter)?, settings: @escaping @MainActor () -> NotificationSettings,
         schedule: @escaping @MainActor () -> CalendarSchedule?, ignored: @escaping @MainActor (String) -> Bool,
-        shownName: @escaping @MainActor (ScheduleCalendar) -> String, now: @escaping () -> Date = Date.init
+        shownName: @escaping @MainActor (ScheduleCalendar) -> String,
+        digest: @escaping @MainActor () -> PlannedDigest? = { nil }, now: @escaping () -> Date = Date.init
     ) {
         self.center = center
         self.settings = settings
         self.schedule = schedule
         self.ignored = ignored
         self.shownName = shownName
+        self.digest = digest
         self.now = now
     }
 
@@ -53,15 +57,24 @@ final class ReminderScheduler {
         guard let center else { return }
         // Before the first load there is nothing to compare with, and an empty plan would clear every reminder.
         guard let loaded = schedule() else { return }
-        let wanted: [PlannedReminder]
-        if await center.permission() == .allowed {
-            wanted = ReminderPlanner.plan(
+        let allowed = await center.permission() == .allowed
+        let wanted = allowed
+            ? ReminderPlanner.plan(
                 schedule: loaded, settings: settings(), now: now(), ignored: ignored, calendarName: shownName)
-        } else {
-            wanted = []
-        }
-        let diff = ReminderReconciler.diff(desired: wanted, pending: await center.pending())
+            : []
+        let pending = await center.pending()
+        let diff = ReminderReconciler.diff(desired: wanted, pending: pending)
         if !diff.remove.isEmpty { await center.remove(ids: diff.remove) }
         for reminder in diff.add { await center.add(reminder) }
+        await reconcileDigest(allowed ? digest() : nil, pending: pending, center: center)
+    }
+
+    private func reconcileDigest(_ wanted: PlannedDigest?, pending: [PendingReminder], center: any ReminderCenter) async {
+        let have = pending.first { $0.id == InboxDigest.id }
+        if let wanted {
+            if have?.fingerprint != wanted.fingerprint { await center.add(wanted) }
+        } else if have != nil {
+            await center.remove(ids: [InboxDigest.id])
+        }
     }
 }

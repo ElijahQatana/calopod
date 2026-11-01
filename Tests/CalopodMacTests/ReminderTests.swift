@@ -10,6 +10,7 @@ final class FakeReminderCenter: ReminderCenter, @unchecked Sendable {
     private let lock = NSLock()
     private var _permission = NotificationPermissionState.allowed
     private var _pending: [String: PlannedReminder] = [:]
+    private var _digest: PlannedDigest?
     private var _added: [String] = []
     private var _removed: [String] = []
 
@@ -18,6 +19,7 @@ final class FakeReminderCenter: ReminderCenter, @unchecked Sendable {
         set { lock.withLock { _permission = newValue } }
     }
     var pendingIDs: [String] { lock.withLock { _pending.keys.sorted() } }
+    var digest: PlannedDigest? { lock.withLock { _digest } }
     var added: [String] { lock.withLock { _added } }
     var removed: [String] { lock.withLock { _removed } }
     func reminder(_ id: String) -> PlannedReminder? { lock.withLock { _pending[id] } }
@@ -28,10 +30,14 @@ final class FakeReminderCenter: ReminderCenter, @unchecked Sendable {
     func permission() async -> NotificationPermissionState { permissionState }
     func requestPermission() async -> Bool { permissionState = .allowed; return true }
     func pending() async -> [PendingReminder] {
-        lock.withLock { _pending.values.map { PendingReminder(id: $0.id, fingerprint: $0.fingerprint) } }
+        lock.withLock {
+            _pending.values.map { PendingReminder(id: $0.id, fingerprint: $0.fingerprint) }
+                + (_digest.map { [PendingReminder(id: InboxDigest.id, fingerprint: $0.fingerprint)] } ?? [])
+        }
     }
+    func add(_ digest: PlannedDigest) async { lock.withLock { _digest = digest; _added.append(InboxDigest.id) } }
     func add(_ reminder: PlannedReminder) async { lock.withLock { _pending[reminder.id] = reminder; _added.append(reminder.id) } }
-    func remove(ids: [String]) async { lock.withLock { ids.forEach { _pending[$0] = nil }; _removed += ids } }
+    func remove(ids: [String]) async { lock.withLock { ids.forEach { _pending[$0] = nil }; if ids.contains(InboxDigest.id) { _digest = nil }; _removed += ids } }
 }
 
 final class ReminderPlannerTests: XCTestCase {
@@ -332,7 +338,7 @@ final class ReminderResponseTests: XCTestCase {
         router.receive(.open(eventID: "e1"))
         router.receive(.open(eventID: "e2"))
         var opened: [String] = []
-        router.attach { opened.append($0) }
+        router.attach(open: { opened.append($0) }, openInbox: {})
         XCTAssertEqual(opened, ["e2"])
         router.receive(.open(eventID: "e3"))
         XCTAssertEqual(opened, ["e2", "e3"])

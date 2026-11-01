@@ -34,13 +34,18 @@ struct CalopodMacApp: App {
         _access = State(initialValue: access)
         _permissions = State(initialValue: PermissionsModel(access: access))
         let reminderSettings = NotificationSettingsModel(state: state)
+        let workingHours = WorkingHoursModel(state: state), availability = AvailabilityModel()
         let reminders = ReminderScheduler(
             center: AppNotifications.live, settings: { reminderSettings.current() }, schedule: { schedule.schedule },
             ignored: { CalendarAliases.shared.isIgnored($0) },
-            shownName: { CalendarAliases.shared.name(for: $0.id, real: $0.name) })
+            shownName: { CalendarAliases.shared.name(for: $0.id, real: $0.name) },
+            digest: {
+                workingHours.reload()
+                return InboxDigest.plan(
+                    board: inbox.board, settings: reminderSettings.currentDigest(), workingHours: workingHours.hours, now: Date())
+            })
         reminderSettings.onChange = { Task { await reminders.reconcile() } }
         schedule.onReload = { Task { await reminders.reconcile() } }
-        let workingHours = WorkingHoursModel(state: state), availability = AvailabilityModel()
         workingHours.onChange = { Task { await availability.reload() } }
         _workingHours = State(initialValue: workingHours)
         _availability = State(initialValue: availability)

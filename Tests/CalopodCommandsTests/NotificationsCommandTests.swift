@@ -26,6 +26,31 @@ struct NotificationsCommandTests {
         #expect(try back.resolve(saved).finalEnabled)
     }
 
+    @Test("The digest switch and time are saved apart from the reminders")
+    func digestRoundTrip() throws {
+        let state = try repository()
+        let set = try NotificationsSetCommand.parse(["--digest-at", "08:15"])
+        try state.saveInboxDigestSettings(set.resolveDigest(state.inboxDigestSettings()))
+        #expect(try state.inboxDigestSettings() == (try InboxDigestSettings(enabled: true, minute: 495)))
+        #expect(try state.notificationSettings() == .standard)
+
+        let off = try NotificationsSetCommand.parse(["--no-digest"])
+        let saved = try off.resolveDigest(state.inboxDigestSettings())
+        #expect(!saved.enabled && saved.minute == 495)
+        #expect(try NotificationsSetCommand.parse(["--digest"]).resolveDigest(saved).enabled)
+        #expect(throws: InboxDigestSettingsError.minuteOutOfRange) {
+            try NotificationsSetCommand.parse(["--digest-at", "24:00"]).resolveDigest(.standard)
+        }
+    }
+
+    @Test("The digest is shown with its time, following working hours when none was chosen")
+    func digestText() throws {
+        #expect(NotificationsText.lines(.standard).contains("Inbox digest: off"))
+        let on = try InboxDigestSettings(enabled: true)
+        #expect(NotificationsText.lines(.standard, digest: on).contains("Inbox digest: on at 09:00"))
+        #expect(NotificationSettingsOutput(.standard, digest: on).digest == .init(enabled: true, time: "09:00"))
+    }
+
     @Test("The same checks as the app apply")
     func validation() throws {
         let current = NotificationSettings.standard
@@ -41,7 +66,7 @@ struct NotificationsCommandTests {
 
     @Test("Conflicting or empty options are refused")
     func parsing() {
-        for arguments in [[], ["--on", "--off"], ["--hide-titles", "--show-titles"], ["--no-first", "--first", "5"], ["--no-final", "--final", "1"]] {
+        for arguments in [[], ["--on", "--off"], ["--hide-titles", "--show-titles"], ["--no-first", "--first", "5"], ["--no-final", "--final", "1"], ["--digest", "--no-digest"], ["--no-digest", "--digest-at", "09:00"]] {
             #expect(throws: (any Error).self) { try NotificationsSetCommand.parse(arguments) }
         }
     }
