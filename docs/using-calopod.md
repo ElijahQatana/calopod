@@ -87,7 +87,7 @@ calopod arm update ARM_ID --skip-declined --no-skip-all-day
 
 Working location and birthday entries are never copied, because they are not commitments. An Out of office event is copied as Busy like any other. The preview names the reason when one of these is left out.
 
-The default Rule is `busy`: the copy has the start, end and the title "Busy", nothing else. Use `full-details` only for a calendar you trust. It copies the title, location and notes, with attendees and links written into the notes. It never invites anyone and clears alerts so you aren't notified twice.
+The default Rule is `busy`: the copy has the start, end and the title "Busy", nothing else. Use `full-details` only for a calendar you trust. It copies the title, location and notes, with attendees and links written into the notes. It never invites anyone and clears alerts so you aren't notified twice. A Private event is copied as plain Busy unless the Arm has Include private events on (`--include-private`, `--no-include-private`). It starts off for a new Arm and stays on for Full details Arms made before it existed. On a Mac calendar the details of a private event show openly, because Calendar has no private flag.
 
 Rule `label` sits between the two: the copy has the start and end and a fixed title you set on the Arm, such as "Personal" or "Client". Nothing from the original's title, notes, location or people goes into it. A Private event is copied as plain "Busy" without the label. Changing an Arm's Rule or label updates its copies on the next sync instead of making new ones.
 
