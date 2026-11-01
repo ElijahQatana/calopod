@@ -150,6 +150,23 @@ final class WorkingHoursModelTests: XCTestCase {
         XCTAssertEqual(model.hours.days.count, 1)
     }
 
+    func testTheFocusLengthIsSavedPickedUpAndChecked() throws {
+        let state = LocalStateRepository(database: try CalopodDatabase.inMemory())
+        let model = WorkingHoursModel(state: state)
+        var changes = 0
+        model.onChange = { changes += 1 }
+        model.setFocus(minutes: 90)
+        model.setFocus(minutes: 90)
+        XCTAssertEqual(try state.focusSettings().minutes, 90)
+        XCTAssertEqual(changes, 1)
+        model.setFocus(minutes: 5)
+        XCTAssertEqual(model.focus.minutes, 90)
+        XCTAssertNotNil(model.notice)
+        try state.saveFocusSettings(FocusSettings(minutes: 180))
+        model.reload()
+        XCTAssertEqual(model.focus.minutes, 180)
+    }
+
     func testTheTimePickerRoundTripsAndShowsMidnightAsTheLastMinute() {
         XCTAssertEqual(WorkingHoursSection.minute(WorkingHoursSection.date(570)), 570)
         XCTAssertEqual(WorkingHoursSection.minute(WorkingHoursSection.date(1440)), 1439)

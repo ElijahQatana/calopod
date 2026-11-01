@@ -7,6 +7,10 @@ public struct AvailabilityDayReport: Equatable, Sendable {
     public let day: DateInterval
     public let result: AvailabilityResult
     public let summary: AvailabilityDay
+    /// The shortest stretch that counts as focus time, in seconds.
+    public var focusSeconds = FocusSettings.standard.seconds
+
+    public var lacksFocus: Bool { result.lacksFocus(in: day, length: focusSeconds) }
 }
 
 /// Reads the local copy and works out availability for whole days, using the saved working hours.
@@ -22,6 +26,7 @@ public struct AvailabilityService: Sendable {
     public func report(days: [Date], calendar: Calendar = .current) throws -> [AvailabilityDayReport] {
         let repository = try makeRepository()
         let hours = try repository.workingHours()
+        let focus = try repository.focusSettings().seconds
         let sources = try selectedCalendarSources(connectionID: nil, calendarID: nil, repository: repository)
         let ranges = days.compactMap { start -> DateInterval? in
             calendar.date(byAdding: .day, value: 1, to: start).map { DateInterval(start: start, end: $0) }
@@ -35,7 +40,8 @@ public struct AvailabilityService: Sendable {
             let result = AvailabilityCalculator.calculate(
                 instances: instances, from: range.start, through: range.end,
                 workingHours: hours, timeZone: calendar.timeZone)
-            return AvailabilityDayReport(day: range, result: result, summary: AvailabilityDay(result, day: range))
+            return AvailabilityDayReport(
+                day: range, result: result, summary: AvailabilityDay(result, day: range), focusSeconds: focus)
         }
     }
 }
