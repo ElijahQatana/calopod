@@ -111,11 +111,12 @@ struct ArmCard: View {
     }
 
     private var filtersMenu: some View {
-        let count = [arm.filters.skipDeclined, arm.filters.skipAllDay, arm.filters.skipDontClone].filter { $0 }.count
+        let count = [arm.filters.skipDeclined, arm.filters.skipAllDay, arm.filters.skipDontClone, arm.filters.skipFree].filter { $0 }.count
         return Menu {
             Toggle("Skip declined events", isOn: filterBinding(\.skipDeclined))
             Toggle("Skip all-day events", isOn: filterBinding(\.skipAllDay))
             Toggle("Skip events tagged #dontclone", isOn: filterBinding(\.skipDontClone))
+            Toggle("Skip events marked Free", isOn: filterBinding(\.skipFree))
         } label: {
             HStack(spacing: 4) {
                 Text(count == 0 ? "Filters" : "Filters: \(count)")

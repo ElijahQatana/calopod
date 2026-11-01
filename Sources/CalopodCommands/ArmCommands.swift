@@ -67,6 +67,9 @@ public struct ArmUpdateCommand: ParsableCommand {
     @Flag(inversion: .prefixedNo, help: "Leave out events with #dontclone in the title or notes.")
     public var skipDontclone: Bool?
 
+    @Flag(inversion: .prefixedNo, help: "Leave out events marked Free.")
+    public var skipFree: Bool?
+
     @Option(name: .long, help: "Minutes the copy starts before the event.")
     public var padBefore: Int?
 
@@ -83,7 +86,7 @@ public struct ArmUpdateCommand: ParsableCommand {
     public func run() throws {
         do {
             let changesPadding = padBefore != nil || padAfter != nil || padInPersonOnly != nil
-            let changesFilters = skipDeclined != nil || skipAllDay != nil || skipDontclone != nil
+            let changesFilters = skipDeclined != nil || skipAllDay != nil || skipDontclone != nil || skipFree != nil
             guard name != nil || rule != nil || label != nil || preferCurrentDevice || changesFilters || changesPadding else {
                 throw ValidationError(
                     "Choose --name, --rule, --label, --prefer-current-device, a filter such as --skip-declined or padding such as --pad-before."
@@ -110,7 +113,8 @@ public struct ArmUpdateCommand: ParsableCommand {
                     filters: ArmFilters(
                         skipDeclined: skipDeclined ?? arm.filters.skipDeclined,
                         skipAllDay: skipAllDay ?? arm.filters.skipAllDay,
-                        skipDontClone: skipDontclone ?? arm.filters.skipDontClone
+                        skipDontClone: skipDontclone ?? arm.filters.skipDontClone,
+                        skipFree: skipFree ?? arm.filters.skipFree
                     )
                 )
             }
@@ -179,6 +183,9 @@ public struct ArmAddCommand: ParsableCommand {
     @Flag(help: "Leave out events with #dontclone in the title or notes.")
     public var skipDontclone = false
 
+    @Flag(help: "Leave out events marked Free.")
+    public var skipFree = false
+
     @Option(name: .long, help: "Minutes the copy starts before the event.")
     public var padBefore: Int = 0
 
@@ -203,7 +210,8 @@ public struct ArmAddCommand: ParsableCommand {
                 filters: ArmFilters(
                     skipDeclined: skipDeclined,
                     skipAllDay: skipAllDay,
-                    skipDontClone: skipDontclone
+                    skipDontClone: skipDontclone,
+                    skipFree: skipFree
                 ),
                 label: label,
                 padding: ArmPadding(
@@ -375,6 +383,7 @@ private func armItem(_ arm: StoredArm, status: ArmSyncStatus? = nil) -> CommandI
             arm.filters.skipDeclined ? "skip-declined" : nil,
             arm.filters.skipAllDay ? "skip-all-day" : nil,
             arm.filters.skipDontClone ? "skip-dontclone" : nil,
+            arm.filters.skipFree ? "skip-free" : nil,
         ].compactMap { $0 },
         syncState: status?.state.rawValue,
         lastSyncAt: InboxCLI.date(status?.lastSyncAt),

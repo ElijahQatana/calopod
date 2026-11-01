@@ -633,10 +633,10 @@ func commandVersionMatchesTheVersionFile() throws {
 
 @Test("arm add and update take the filter flags")
 func armFilterFlags() throws {
-    let add = try ArmAddCommand.parse(["--target", "t", "--skip-declined", "--skip-dontclone"])
-    #expect(add.skipDeclined && add.skipDontclone && !add.skipAllDay)
-    let update = try ArmUpdateCommand.parse(["arm", "--no-skip-all-day", "--skip-declined"])
-    #expect(update.skipAllDay == false && update.skipDeclined == true && update.skipDontclone == nil)
+    let add = try ArmAddCommand.parse(["--target", "t", "--skip-declined", "--skip-dontclone", "--skip-free"])
+    #expect(add.skipDeclined && add.skipDontclone && add.skipFree && !add.skipAllDay)
+    let update = try ArmUpdateCommand.parse(["arm", "--no-skip-all-day", "--skip-declined", "--no-skip-free"])
+    #expect(update.skipAllDay == false && update.skipDeclined == true && update.skipDontclone == nil && update.skipFree == false)
 }
 
 @Test("arm add and update take the label Rule and its label")
