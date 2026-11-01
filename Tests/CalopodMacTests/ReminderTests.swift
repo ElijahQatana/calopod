@@ -49,12 +49,13 @@ final class ReminderPlannerTests: XCTestCase {
     private func event(
         _ id: String, in minutes: Double, title: String = "Team standup", calendar: String = "work",
         response: ScheduleResponse = .accepted, allDay: Bool = false, copy: Bool = false,
-        location: String? = nil, link: Bool = false
+        location: String? = nil, link: Bool = false, overlaps: [String] = [], copyOverlaps: [String] = []
     ) -> ScheduleEvent {
         let start = now.addingTimeInterval(minutes * 60)
         return ScheduleEvent(
             id: id, calendarID: calendar, title: title, startsAt: start, endsAt: start.addingTimeInterval(1800),
-            isAllDay: allDay, location: location, response: response, isCopy: copy, meeting: link ? zoom : nil)
+            isAllDay: allDay, location: location, response: response, isCopy: copy, overlaps: overlaps,
+            copyOverlaps: copyOverlaps, meeting: link ? zoom : nil)
     }
 
     private func schedule(_ events: [ScheduleEvent]) -> CalendarSchedule {
@@ -128,6 +129,40 @@ final class ReminderPlannerTests: XCTestCase {
         // A web address is not shown as a place.
         XCTAssertTrue(plan([event("c", in: 30, location: "https://example.zoom.us/j/1", link: true)])[0].body.hasSuffix("Join"))
         XCTAssertFalse(plan([event("d", in: 30)])[0].body.contains("Join"))
+    }
+
+    func testOverlapAddsOneLineToBothReminders() throws {
+        let cases: [(overlaps: [String], hide: Bool, line: String?)] = [
+            (["synthetic-review"], false, "Overlaps with synthetic-review"),
+            (["synthetic-review", "b", "c"], false, "Overlaps with synthetic-review and 2 others"),
+            (["synthetic-review", "b"], false, "Overlaps with synthetic-review and 1 other"),
+            (["synthetic-review", "b"], true, "Overlaps with another event"),
+            ([], false, nil),
+        ]
+        for item in cases {
+            let planned = plan([event("e", in: 30, overlaps: item.overlaps)], try .standard.changing(hideTitles: item.hide))
+            XCTAssertEqual(planned.map(\.kind), [.first, .final])
+            for reminder in planned {
+                XCTAssertEqual(Array(reminder.body.components(separatedBy: "\n").dropFirst()), item.line.map { [$0] } ?? [])
+                XCTAssertFalse(item.hide && reminder.body.contains("synthetic-review"))
+            }
+        }
+    }
+
+    func testOnlyCopiesAddNoLine() {
+        // Copies Calopod made, padded ones included, are listed apart from overlaps.
+        let planned = plan([event("e", in: 30, copyOverlaps: ["Busy"])])
+        XCTAssertTrue(planned.allSatisfy { !$0.body.contains("Overlaps") })
+    }
+
+    func testOverlapChangesTheFingerprint() {
+        let plain = plan([event("e", in: 30)])
+        let overlapping = plan([event("e", in: 30, overlaps: ["synthetic-review"])])
+        XCTAssertEqual(plain.map(\.id), overlapping.map(\.id))
+        XCTAssertTrue(zip(plain, overlapping).allSatisfy { $0.fingerprint != $1.fingerprint })
+        let diff = ReminderReconciler.diff(
+            desired: overlapping, pending: plain.map { PendingReminder(id: $0.id, fingerprint: $0.fingerprint) })
+        XCTAssertEqual(diff.add.map(\.id), overlapping.map(\.id))
     }
 
     func testJoinIsOnlyOfferedWithALink() {

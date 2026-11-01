@@ -80,8 +80,8 @@ enum ReminderPlanner {
         hide ? "Meeting starting in \(minutesText(minutes))" : "\(event.title), in \(minutesText(minutes))"
     }
 
-    /// The start time and the calendar's shown name, then the location or Join. With titles hidden only
-    /// the time is shown, so nothing about the event leaks onto the screen.
+    /// The start time and the calendar's shown name, then the location or Join, then a line when the event overlaps
+    /// another. With titles hidden only the time and that line are shown, so nothing about the event leaks onto the screen.
     static func body(_ event: ScheduleEvent, calendar: String?, hide: Bool, timeZone: TimeZone, locale: Locale) -> String {
         let style = Date.FormatStyle(date: .omitted, time: .shortened, locale: locale, timeZone: timeZone)
         var parts = [event.startsAt.formatted(style)]
@@ -91,7 +91,16 @@ enum ReminderPlanner {
         } else if event.meeting != nil {
             parts.append("Join")
         }
-        return parts.joined(separator: " · ")
+        var text = parts.joined(separator: " · ")
+        if let first = event.overlaps.first {
+            text += "\n" + overlapText(first, others: event.overlaps.count - 1, hide: hide)
+        }
+        return text
+    }
+
+    static func overlapText(_ title: String, others: Int, hide: Bool) -> String {
+        if hide { return "Overlaps with another event" }
+        return others == 0 ? "Overlaps with \(title)" : "Overlaps with \(title) and \(others) other\(others == 1 ? "" : "s")"
     }
 
     /// A short single line, and nothing that is just a web address.

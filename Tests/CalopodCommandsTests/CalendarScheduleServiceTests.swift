@@ -63,6 +63,40 @@ struct CalendarScheduleServiceTests {
         #expect(schedule.events.count == 5)
     }
 
+    @Test("Events that only touch, and cancelled ones, do not overlap")
+    func touchingAndCancelledAddNoOverlap() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let state = LocalStateRepository(database: try CalopodDatabase(path: root.appendingPathComponent("state.sqlite").path))
+        try state.saveConnection(StoredConnection(
+            id: "connection", configurationID: "config", provider: "google", displayLabel: "Example", isEnabled: true))
+        try state.replaceCalendarBindings(connectionID: "connection", bindings: [
+            StoredCalendarBinding(
+                id: "work", connectionID: "connection", providerCalendarID: "work", displayLabel: "Work",
+                isSelected: true, isReadOnly: false, responseIdentityScope: .authenticatedUser)
+        ])
+        func event(_ key: String, hour: Int, cancelled: Bool = false) -> StoredNormalizedInstance {
+            StoredNormalizedInstance(
+                sourceKeyHash: key, connectionID: "connection", calendarBindingID: "work",
+                providerEventID: key, recurrenceID: nil,
+                startsAt: Date(timeIntervalSince1970: Double(hour) * 3600),
+                endsAt: Date(timeIntervalSince1970: Double(hour + 1) * 3600),
+                isAllDay: false, availability: "busy", isCancelled: cancelled, isPrivate: false,
+                title: "Event \(key)", contentFingerprint: key, providerUpdatedAt: nil, url: nil,
+                currentUserResponse: EventResponse(state: .accepted, evidence: .googleSelf))
+        }
+        try state.applyEventRefresh(
+            connectionID: "connection", calendarBindingID: "work",
+            windowStart: Date(timeIntervalSince1970: 0), windowEnd: Date(timeIntervalSince1970: 200_000),
+            instances: [event("a", hour: 10), event("b", hour: 11), event("c", hour: 10, cancelled: true)],
+            cancelledSourceKeyHashes: [], isFullRefresh: true, cursorUpdates: [])
+
+        let schedule = try CalendarScheduleService(makeRepository: { state }).schedule()
+
+        #expect(schedule.events.allSatisfy { $0.overlaps.isEmpty })
+    }
+
     @Test("A copy records its mode, arm, original calendar and the answer on the original")
     func copyOrigin() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
