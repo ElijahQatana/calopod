@@ -87,6 +87,23 @@ final class AvailabilityTests: XCTestCase {
         XCTAssertEqual(model.found.first?.start, day().addingTimeInterval(13 * 3600))
     }
 
+    func testCopyTextHasEveryWindowFoundAndNothingWhenThereAreNone() async {
+        var clock = day()
+        let model = AvailabilityModel(calendar: utc, now: { clock }, load: { days in
+            days.prefix(2).map { start in
+                let free = [AvailabilityInterval(kind: .free, start: start.addingTimeInterval(9 * 3600), end: start.addingTimeInterval(11 * 3600))]
+                let range = DateInterval(start: start, duration: 86_400), result = AvailabilityResult(busy: [], free: free)
+                return AvailabilityDayReport(day: range, result: result, summary: AvailabilityDay(result, day: range))
+            }
+        })
+        await model.reload()
+        clock = day(-7)
+        model.findText = "1h"
+        XCTAssertEqual(model.foundText, "Sun Dec 28, 9:00 to 11:00 AM GMT\nMon Dec 29, 9:00 to 11:00 AM GMT")
+        model.findText = "3h"
+        XCTAssertEqual(model.foundText, "")
+    }
+
     func testAFailedReadSaysSoAndClearsOldDays() async {
         struct Broken: Error {}
         let model = AvailabilityModel(calendar: utc, now: { self.day() }, load: { _ in throw Broken() })
