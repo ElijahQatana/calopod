@@ -128,13 +128,16 @@ public struct ScheduleEvent: Identifiable, Equatable, Sendable {
     public let replyUnavailableReason: String?
     /// The Teams, Zoom, Meet or Webex link in the event. Copies never have one.
     public let meeting: MeetingLink?
+    public let isRecurring: Bool
+    public let isSkipped: Bool
 
     public init(
         id: String, calendarID: String, title: String, startsAt: Date, endsAt: Date,
         isAllDay: Bool = false, location: String? = nil, organizer: String? = nil,
         response: ScheduleResponse = .accepted, isCopy: Bool = false, copyOrigin: ScheduleCopyOrigin? = nil, overlaps: [String] = [], copyOverlaps: [String] = [],
         change: ScheduleChange = .none, copiedTo: [ScheduleCopy] = [],
-        replies: [ConflictChoice] = [], replyUnavailableReason: String? = nil, meeting: MeetingLink? = nil
+        replies: [ConflictChoice] = [], replyUnavailableReason: String? = nil, meeting: MeetingLink? = nil,
+        isRecurring: Bool = false, isSkipped: Bool = false
     ) {
         self.id = id
         self.calendarID = calendarID
@@ -154,6 +157,8 @@ public struct ScheduleEvent: Identifiable, Equatable, Sendable {
         self.replies = replies
         self.replyUnavailableReason = replyUnavailableReason
         self.meeting = meeting
+        self.isRecurring = isRecurring
+        self.isSkipped = isSkipped
     }
 }
 
@@ -166,7 +171,8 @@ extension ScheduleEvent {
             id: id, calendarID: calendarID, title: title, startsAt: startsAt, endsAt: endsAt,
             isAllDay: isAllDay, location: location, organizer: organizer, response: response,
             isCopy: isCopy, copyOrigin: copyOrigin, overlaps: overlaps, copyOverlaps: titles, change: change,
-            copiedTo: copiedTo, replies: replies, replyUnavailableReason: replyUnavailableReason, meeting: meeting)
+            copiedTo: copiedTo, replies: replies, replyUnavailableReason: replyUnavailableReason, meeting: meeting,
+            isRecurring: isRecurring, isSkipped: isSkipped)
     }
 }
 
@@ -234,6 +240,7 @@ public struct CalendarScheduleService: Sendable {
 
         // Where each event is copied. The copies themselves are not stored as events.
         let allArms = try repository.arms()
+        let skips = try repository.eventSkips()
         let copies = try CopyTarget.bySource(repository, arms: allArms)
         func calendarName(_ binding: String) -> String {
             if let known = names[binding] { return known }
@@ -267,7 +274,9 @@ public struct CalendarScheduleService: Sendable {
                 copiedTo: targets.map { ScheduleCopy(calendarName: calendarName($0.bindingID), fullDetails: $0.fullDetails, calendarID: $0.bindingID) },
                 replies: replies,
                 replyUnavailableReason: replies.isEmpty ? ConflictResolutionService.reasonText(choices.unavailableReasons) : nil,
-                meeting: JoinSelector.link(for: event)
+                meeting: JoinSelector.link(for: event),
+                isRecurring: event.providerSeriesID != nil,
+                isSkipped: skips.contains { $0.matches(event) }
             ))
             // The copy is drawn at the source's time on the calendar that holds it.
             for target in targets where names[target.bindingID] != nil && target.bindingID != event.calendarBindingID {
