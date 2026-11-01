@@ -35,6 +35,7 @@ extension CalopodDatabase {
         "v31_focus_length",
         "v32_event_flags",
         "v33_include_private",
+        "v34_skipped_events",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -561,6 +562,20 @@ extension CalopodDatabase {
                 table.add(column: "include_private", .boolean).notNull().defaults(to: false)
             }
             try database.execute(sql: "UPDATE arms SET include_private = 1 WHERE rule_mode = 'full-details'")
+        }
+
+        // Ids and times only, no titles. No foreign key, so a skip outlasts a refresh that drops the event for a while.
+        migrator.registerMigration("v34_skipped_events") { database in
+            try database.execute(sql: """
+                CREATE TABLE skipped_events (
+                    calendar_binding_id TEXT NOT NULL,
+                    ref TEXT NOT NULL,
+                    occurrence TEXT NOT NULL,
+                    is_portable INTEGER NOT NULL,
+                    skipped_at DATETIME NOT NULL,
+                    PRIMARY KEY (calendar_binding_id, ref, occurrence)
+                ) WITHOUT ROWID;
+                """)
         }
 
         return migrator
