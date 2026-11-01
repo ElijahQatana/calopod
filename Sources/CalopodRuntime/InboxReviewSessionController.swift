@@ -182,6 +182,32 @@ public struct InboxReviewSessionController: Sendable {
         return session
     }
 
+    /// Puts the card's event away until `until`. Sends and acknowledges nothing; the event must be unchanged.
+    public func snooze(until: Date, card: InboxReviewCard, freshnessCutoff: Date, refresh: Refresh) async throws -> InboxReviewSession {
+        let lock = try ProcessLock.acquire(at: lockURL)
+        defer { withExtendedLifetime(lock) {} }
+        var (session, generation) = try load(card.sessionID)
+        guard generation == card.generation else { throw InboxReviewSessionError.freshDecisionRequired }
+        let key = card.context.focused.event.sourceKeyHash
+        guard let index = session.entries.firstIndex(where: { $0.sourceKeyHash == key }) else { throw InboxReviewSessionError.itemNotQueued }
+        guard !session.entries[index].actions.contains(where: { !$0.accounted }) else { throw InboxReviewSessionError.unresolvedDecision }
+        let before = try await refresh()
+        _ = try InboxCalendarContextBuilder.revalidate(card.context, against: before, chosenKey: key,
+                                                       choice: .hold, freshnessCutoff: freshnessCutoff)
+        guard let snooze = InboxAttentionQuery.snooze(key, until: until, in: before, asOf: now(), freshnessCutoff: freshnessCutoff) else {
+            throw InboxReviewSessionError.itemNotQueued
+        }
+        session.summary = nil
+        try state.snoozeInboxItem(snooze, now: now())
+        session.entries[index].outcome = .snoozed
+        session.entries[index].response = nil
+        session.metrics.observeExternalChanges(before: session.lastSnapshot, after: before, freshnessCutoff: freshnessCutoff)
+        session.lastSnapshot = try state.inboxContextSnapshot()
+        try save(session, generation: &generation)
+        try finish(&session, generation: &generation, freshnessCutoff: freshnessCutoff)
+        return session
+    }
+
     /// A vanished or unsupported card can be explicitly deferred without an RSVP.
     public func deferUnavailable(sessionID: String, sourceKeyHash: String, freshnessCutoff: Date, hold: Bool = false) throws -> InboxReviewSession {
         let lock = try ProcessLock.acquire(at: lockURL)

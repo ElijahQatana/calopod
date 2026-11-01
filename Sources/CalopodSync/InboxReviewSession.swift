@@ -3,7 +3,7 @@ import CalopodStore
 import Foundation
 
 public enum InboxReviewOutcome: String, Codable, Sendable {
-    case hold, confirmed, failed, unknown, unavailable, stale
+    case hold, snoozed, confirmed, failed, unknown, unavailable, stale
 }
 
 public struct InboxReviewAction: Codable, Equatable, Sendable {
@@ -50,6 +50,8 @@ public struct InboxReviewSummary: Codable, Equatable, Sendable {
     public var resolvedConflicts: Int?
     /// Events in those pairs, which is what the Inbox Conflicts filter lists. Nil in older sessions.
     public var remainingConflictEvents: Int?
+    /// Nil in older sessions.
+    public var snoozed: Int?
     public let contextIsComplete: Bool
     public let attributionIsComplete: Bool
     public var queueReviewed: Bool { remainingQueueItems == 0 }
@@ -130,7 +132,7 @@ public struct InboxReviewSession: Codable, Equatable, Sendable {
             remainingInboxItems: Set(attention.rows.map { $0.item.event.sourceKeyHash }).union(uncertain).count,
             createdConflicts: metrics.createdPairs.count, remainingConflicts: attention.analysis.pairs.count,
             resolvedConflicts: metrics.startingPairs.subtracting(metrics.remainingPairs).count,
-            remainingConflictEvents: attention.rows.filter { !$0.conflicts.isEmpty }.count,
+            remainingConflictEvents: attention.rows.filter { !$0.conflicts.isEmpty }.count, snoozed: count(.snoozed),
             contextIsComplete: metrics.isComplete && attention.analysis.isComplete,
             attributionIsComplete: metrics.attributionIsComplete)
     }
@@ -165,6 +167,9 @@ extension InboxReviewSummary {
             line("Outcome unclear", unknown, "A reply may or may not have reached the calendar. It is never sent again; Resume checks it.",
                  emphasis: .caution, section: 0),
         ]
+        if let snoozed, snoozed > 0 {
+            rows.insert(line("Snoozed", snoozed, "Put away until later. Nothing was sent.", section: 0), at: 2)
+        }
         if notSent > 0 {
             rows.append(line("Not sent", notSent, "The calendar did not take the reply, or the event changed first. Nothing was changed.",
                              detail: parts.joined(separator: " · "), section: 0))
