@@ -22,7 +22,9 @@ enum BackgroundRefresh {
                 if first {
                     first = false
                     // A click on a reminder that launched the app waits for this first read.
-                    ReminderRouter.shared.attach { ReminderNavigation.open($0, schedule: schedule, navigation: navigation) }
+                    ReminderRouter.shared.attach(
+                        open: { ReminderNavigation.open($0, schedule: schedule, navigation: navigation) },
+                        openInbox: { ReminderNavigation.openInbox(navigation: navigation) })
                 }
                 try? await Task.sleep(for: .seconds(30))
             }

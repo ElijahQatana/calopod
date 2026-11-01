@@ -27,7 +27,7 @@ struct SettingsScreen: View {
         transparency
         windowStyle
         WorkingHoursSection(model: workingHours)
-        NotificationsSection(model: reminders)
+        NotificationsSection(model: reminders, workingHours: workingHours.hours, permission: permissions.notifications)
         permissionsSection
         iPhoneSection
         commandLine

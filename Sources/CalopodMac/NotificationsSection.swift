@@ -1,9 +1,13 @@
+import CalopodCommands
+import CalopodStore
 import SwiftUI
 
 /// Meeting reminders in Settings: a master switch, a first and a final reminder with their own times,
-/// and whether notifications show the event title.
+/// and whether notifications show the event title. The daily Inbox digest sits below them.
 struct NotificationsSection: View {
     let model: NotificationSettingsModel
+    let workingHours: WorkingHours
+    let permission: NotificationPermissionState?
 
     var body: some View {
         CardSection("Notifications", footnote: footnote) {
@@ -20,6 +24,21 @@ struct NotificationsSection: View {
                 toggle("Hide event titles in notifications", model.settings.hideTitles) { value in model.apply { try $0.changing(hideTitles: value) } }
                     .disabled(!model.settings.enabled)
             }
+            CardRow("Daily Inbox digest") { toggle("Daily Inbox digest", model.digest.enabled) { value in model.applyDigest(enabled: value) } }
+            if model.digest.enabled {
+                CardRow("Digest time") {
+                    DatePicker(
+                        "Digest time",
+                        selection: Binding(
+                            get: { WorkingHoursSection.date(model.digest.minute(workingHours: workingHours)) },
+                            set: { newValue in MainActor.assumeIsolated { model.applyDigest(minute: WorkingHoursSection.minute(newValue)) } }),
+                        displayedComponents: .hourAndMinute
+                    ).labelsHidden()
+                }
+                if permission == .denied || permission == .notDetermined {
+                    CardRow { Banner(kind: .caution, text: "Notifications are not allowed for Calopod, so the digest will not appear. Allow them under Permissions.") }
+                }
+            }
             if let notice = model.notice { CardRow { Banner(kind: .caution, text: notice) } }
         }
         .onAppear { model.reload() }
@@ -29,6 +48,8 @@ struct NotificationsSection: View {
         "Times are minutes before the start, from 1 to 120. The final reminder comes after the first, so it needs fewer minutes. "
             + "With titles hidden a notification only says a meeting is starting. "
             + "macOS keeps the reminders scheduled, so they still arrive when Calopod is closed. "
+            + "The digest is one notification a day with counts of what is waiting in the Inbox, never titles, and is skipped when nothing is. "
+            + "It comes at the start of your working day unless you pick a time. "
             + "The command line can change these with calopod notifications."
     }
 

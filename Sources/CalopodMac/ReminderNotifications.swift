@@ -8,6 +8,7 @@ import UserNotifications
 enum ReminderResponse: Equatable, Sendable {
     case open(eventID: String)
     case join(MeetingLink, eventID: String)
+    case openInbox
 
     static let eventKey = "calopod.event"
     static let joinKey = "calopod.join"
@@ -15,6 +16,9 @@ enum ReminderResponse: Equatable, Sendable {
     /// A click on the notification itself, or Open in Calopod, opens the event. Join opens the meeting,
     /// or the event when the link is no longer usable. Dismissing does nothing.
     static func parse(actionIdentifier: String, info: [String: String]) -> ReminderResponse? {
+        if info[InboxDigest.infoKey] != nil {
+            return [UNNotificationDefaultActionIdentifier, ReminderActionID.open].contains(actionIdentifier) ? .openInbox : nil
+        }
         guard let eventID = info[eventKey] else { return nil }
         switch actionIdentifier {
         case ReminderActionID.join:
@@ -36,7 +40,9 @@ final class ReminderRouter {
 
     private let joiner: any MeetingJoining
     private var openEvent: (@MainActor (String) -> Void)?
+    private var openInbox: (@MainActor () -> Void)?
     private var queued: String?
+    private var inboxQueued = false
 
     init(joiner: any MeetingJoining = MeetingJoiner.system) { self.joiner = joiner }
 
@@ -47,15 +53,22 @@ final class ReminderRouter {
             Task { _ = await joiner.join(link) }
         case .open(let id):
             if let openEvent { openEvent(id) } else { queued = id }
+        case .openInbox:
+            if let openInbox { openInbox() } else { inboxQueued = true }
         }
     }
 
     /// Called once the schedule is loaded. Anything clicked before then is delivered now.
-    func attach(open: @escaping @MainActor (String) -> Void) {
+    func attach(open: @escaping @MainActor (String) -> Void, openInbox: @escaping @MainActor () -> Void) {
         openEvent = open
+        self.openInbox = openInbox
         if let id = queued {
             queued = nil
             open(id)
+        }
+        if inboxQueued {
+            inboxQueued = false
+            openInbox()
         }
     }
 }
@@ -149,6 +162,20 @@ struct UserNotificationCenter: ReminderCenter {
         try? await center.add(UNNotificationRequest(identifier: reminder.id, content: content, trigger: trigger))
     }
 
+    func add(_ digest: PlannedDigest) async {
+        let content = UNMutableNotificationContent()
+        content.title = InboxDigest.title
+        content.body = digest.body
+        content.sound = .default
+        content.categoryIdentifier = ReminderCategory.open
+        content.interruptionLevel = .active
+        content.userInfo = [InboxDigest.infoKey: "1", Self.fingerprintKey: digest.fingerprint]
+        let parts: Set<Calendar.Component> = [.year, .month, .day, .hour, .minute, .second]
+        let trigger = UNCalendarNotificationTrigger(
+            dateMatching: Calendar.current.dateComponents(parts, from: digest.fireDate), repeats: false)
+        try? await center.add(UNNotificationRequest(identifier: InboxDigest.id, content: content, trigger: trigger))
+    }
+
     func remove(ids: [String]) async {
         center.removePendingNotificationRequests(withIdentifiers: ids)
     }
@@ -159,6 +186,13 @@ struct UserNotificationCenter: ReminderCenter {
 /// Where Open in Calopod goes: the same place as the menu bar Next card, which is the event in Calendar.
 @MainActor
 enum ReminderNavigation {
+    static func openInbox(
+        navigation: AppNavigation, show: () -> Void = { MainWindowOpener.shared.bringForward() }
+    ) {
+        navigation.openInbox()
+        show()
+    }
+
     static func open(
         _ eventID: String, schedule: CalendarModel, navigation: AppNavigation,
         show: () -> Void = { MainWindowOpener.shared.bringForward() }
