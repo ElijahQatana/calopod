@@ -19,10 +19,13 @@ calopod iphone [on | off | status | calendars]
 calopod update [check]
 calopod doctor
 calopod support export | backup | verify | restore
+calopod config export | import
 calopod-setup [--arms]
 ```
 
 `iphone on` and `iphone off` choose whether the Mac app uploads the [iPhone feed](iphone-feed.md); `iphone status` shows the choice and how the last upload went. `on` needs the Mac app, and `off` deletes the uploaded copy. `iphone calendars` lists your calendars and, with `--on` and `--off` (a calendar's identifier or exact name, repeatable), chooses which ones send their events to the phone. None are chosen at first, and the event titles of chosen calendars are stored in your iCloud. `iphone status` says how many are chosen.
+
+`config export` prints your settings as a file and `config import FILE` loads one after showing the changes. See [Move to a new Mac](troubleshooting.md#move-to-a-new-mac).
 
 `update check` asks GitHub for the newest release and says whether it is newer than the one you are running. It only reads: nothing is downloaded or installed, and no calendar data is sent. It exits with 75 if GitHub can't be reached. The Mac app does the same from Settings.
 
