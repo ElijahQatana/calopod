@@ -26,6 +26,16 @@ struct InboxReviewTerminalTests {
         #expect(await f.remote.writes == 3)
     }
 
+    @Test func snoozeKeyPutsItemAwayWithoutSending() async throws {
+        let f = try TranscriptFixture(count: 3)
+        defer { f.remove() }
+        let (session, text) = try await f.run(["z", "t", "z", "2001-01-01", "h", "y"])
+        #expect(session.summary?.snoozed == 1 && session.summary?.hold == 1 && session.summary?.yes == 1)
+        #expect(text.contains("[z] Snooze"))
+        #expect(text.contains("Not snoozed"))
+        #expect(await f.remote.writes == 1)
+    }
+
     @Test func emptyAndUnavailable() async throws {
         for count in [0, 1] {
             let f = try TranscriptFixture(count: count, backend: "eventkit")

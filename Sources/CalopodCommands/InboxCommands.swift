@@ -18,12 +18,13 @@ public struct InboxOptions: ParsableArguments {
 
 public struct InboxCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(commandName: "inbox", abstract: "Read retained local inbox observations.",
-        subcommands: [InboxActivityCommand.self, InboxRefreshCommand.self, InboxInspectCommand.self, InboxAcknowledgeCommand.self, InboxConfigCommand.self, InboxReviewCommand.self])
+        subcommands: [InboxActivityCommand.self, InboxRefreshCommand.self, InboxInspectCommand.self, InboxAcknowledgeCommand.self, InboxSnoozeCommand.self, InboxUnsnoozeCommand.self, InboxConfigCommand.self, InboxReviewCommand.self])
     @OptionGroup public var options: InboxOptions
+    @Flag(name: .long, help: "List snoozed items instead.") public var snoozed = false
     public init() {}
     public func run() async throws {
         do {
-            try writeInbox(options: options, activity: false)
+            try writeInbox(options: options, activity: false, snoozed: snoozed)
         } catch { try failCommand(error) }
     }
 }
@@ -108,12 +109,12 @@ public struct InboxAcknowledgeCommand: AsyncParsableCommand {
     }
 }
 
-private func writeInbox(options: InboxOptions, activity: Bool, all: Bool = false) throws {
+private func writeInbox(options: InboxOptions, activity: Bool, all: Bool = false, snoozed: Bool = false) throws {
     let resolved = try resolveRange(options.range, default: .none)
     let read = try CommandEnvironment.runtimeEnvironment().readOnlyState()
     defer { withExtendedLifetime(read) {} }
     let repository = read.repository
-    let payload = try InboxCLI.list(repository: repository, options: options, range: resolved, activity: activity, all: all)
+    let payload = try InboxCLI.list(repository: repository, options: options, range: resolved, activity: activity, all: all, snoozed: snoozed)
     try OutputRenderer.write(command: activity ? "inbox.activity" : "inbox", payload: payload,
         format: options.output.format, showIDs: options.output.ids, human: options.output.localContext(repository: repository))
     if options.explain, !activity { print(try InboxCLI.explainCopies(payload, repository: repository)) }
@@ -145,6 +146,7 @@ public struct InboxItemDetail: Codable, Equatable, Sendable {
     let conflicts: [InboxConflictDetail]
     let limits: [String]
     let presence: String
+    var snoozedUntil: String? = nil
 }
 public struct InboxConflictDetail: Codable, Equatable, Sendable {
     let eventID: String
@@ -208,12 +210,13 @@ enum InboxCLI {
             unprovenDuplicateBindingIDs: full.unprovenDuplicateBindingIDs.intersection(bindings), snoozes: full.snoozes)
     }
     static func list(repository: LocalStateRepository, options: InboxOptions, range: ResolvedDateRange?,
-                     activity: Bool, all: Bool = false, now: Date = Date()) throws -> CommandPayload {
+                     activity: Bool, all: Bool = false, snoozed: Bool = false, now: Date = Date()) throws -> CommandPayload {
         let snapshot = try snapshot(repository, options: options)
         let names = CalendarNames(repository)
         let full = try repository.inboxContextSnapshot()
         let query = InboxAttentionQuery.evaluate(full, filter: InboxAttentionFilter(window: range?.window,
-            excludeMaybe: options.excludeMaybe, conflictsOnly: options.conflicts, asOf: now), freshnessCutoff: now.addingTimeInterval(-3600))
+            excludeMaybe: options.excludeMaybe, conflictsOnly: options.conflicts, asOf: now,
+            snoozed: snoozed ? .only : .hide), freshnessCutoff: now.addingTimeInterval(-3600))
         var items: [CommandItem]
         if activity {
             let bindings = Set(snapshot.sources.map(\.bindingID))
@@ -310,7 +313,7 @@ enum InboxCLI {
             activityTypes: activity?.types.map(\.rawValue) ?? observed?.tombstone.map { [$0.rawValue] } ?? [], location: details ? event.location : nil,
             notes: details ? event.notes : nil, url: details ? event.url : nil, organizer: details ? event.organizer : nil,
             conflicts: conflicts, limits: event.currentUserResponse.limits.map(\.rawValue) + event.currentUserResponse.actionCapability.unavailableReasons.map(\.rawValue) + ["provider-read-only-command"],
-            presence: row?.item.isPresenceConfirmed == false ? "unconfirmed" : "observed")
+            presence: row?.item.isPresenceConfirmed == false ? "unconfirmed" : "observed", snoozedUntil: date(row?.snoozedUntil))
         return CommandItem(id: id(event.sourceKeyHash, revision), kind: "inbox", label: event.title, parentID: event.calendarBindingID,
             startsAt: date(event.startsAt), endsAt: date(event.endsAt), allDay: event.isAllDay,
             cancelled: event.isCancelled || (activity == nil && observed?.tombstone != nil) || activity?.types.contains(.removed) == true || activity?.types.contains(.cancelled) == true, inbox: detail)
