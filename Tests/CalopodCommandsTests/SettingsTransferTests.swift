@@ -10,6 +10,8 @@ struct SettingsTransferTests {
     @Test("The file has no ids from this Mac")
     func exportContents() throws {
         let mac = try makeMac(prefix: "old", configured: true)
+        _ = try mac.currentDevice(configurationID: "default")
+        _ = try mac.iPhoneFeedZone()
         let text = String(decoding: try SettingsFile(repository: mac).encoded(), as: UTF8.self)
         let device = try mac.currentDevice(configurationID: "default").id
         let zone = try mac.iPhoneFeedZone().macID
@@ -17,6 +19,53 @@ struct SettingsTransferTests {
             #expect(!text.contains(secret))
         }
         #expect(text.contains("\"Synthetic work\""))
+    }
+
+    @Test("A new Mac gets the same settings, and a second import has nothing to do")
+    func roundTrip() throws {
+        let old = try makeMac(prefix: "old", configured: true)
+        let new = try makeMac(prefix: "new", configured: false)
+        let file = try SettingsFile(repository: old)
+        let importer = SettingsImporter(repository: new)
+        let plan = try importer.plan(file)
+        #expect(plan.missingConnections.isEmpty && plan.unmatched.isEmpty)
+        #expect(importer.apply(plan) == SettingsImportResult(applied: plan.lines.count))
+        // Arms made in the same instant have no fixed order.
+        #expect(try inArmOrder(SettingsFile(repository: new)) == inArmOrder(file))
+        #expect(try importer.plan(file).lines.isEmpty)
+    }
+
+    @Test("The preview writes nothing")
+    func previewOnly() throws {
+        let old = try makeMac(prefix: "old", configured: true)
+        let new = try makeMac(prefix: "new", configured: false)
+        let before = try SettingsFile(repository: new)
+        let plan = try SettingsImporter(repository: new).plan(SettingsFile(repository: old))
+        #expect(plan.lines.contains("Add Arm \"Synthetic busy\"") && plan.addsArms)
+        #expect(try SettingsFile(repository: new) == before)
+    }
+
+    @Test("Calendars and connections that are not found are listed and left alone")
+    func unmatched() throws {
+        let old = try makeMac(prefix: "old", configured: true)
+        let new = try makeMac(prefix: "new", configured: false, skipping: "Synthetic personal", withoutMac: true)
+        let importer = SettingsImporter(repository: new)
+        let plan = try importer.plan(SettingsFile(repository: old))
+        #expect(plan.missingConnections == ["Calendars on this Mac"])
+        #expect(plan.unmatched.contains("Calendar \"Synthetic personal\""))
+        #expect(plan.unmatched.contains { $0.hasPrefix("Arm") })
+        _ = importer.apply(plan)
+        #expect(try new.arms().isEmpty)
+        let selected = try new.connections().flatMap { try new.calendarBindings(connectionID: $0.id) }.filter(\.isSelected)
+        #expect(selected.map(\.displayLabel) == ["Synthetic work"])
+    }
+
+    @Test("A calendar name found twice is not guessed")
+    func ambiguous() throws {
+        let old = try makeMac(prefix: "old", configured: true)
+        let new = try makeMac(prefix: "new", configured: false, duplicating: "Synthetic work")
+        let plan = try SettingsImporter(repository: new).plan(SettingsFile(repository: old))
+        #expect(plan.unmatched.contains("Calendar \"Synthetic work\""))
     }
 
     @Test("Unusable files are refused", arguments: [
@@ -30,6 +79,38 @@ struct SettingsTransferTests {
     func refused(text: String, error: SettingsFileError) {
         #expect(throws: error) { try SettingsFile.decode(Data(text.utf8)) }
     }
+
+    @Test("A setting out of range is refused before anything is written")
+    func outOfRange() throws {
+        let old = try makeMac(prefix: "old", configured: true)
+        var file = try SettingsFile(repository: old)
+        file.reminders.firstMinutes = 500
+        let new = try makeMac(prefix: "new", configured: false)
+        #expect(throws: SettingsFileError.unusable) { try SettingsImporter(repository: new).plan(file) }
+    }
+
+    @Test("An Arm already here is updated, not added again")
+    func existingArm() throws {
+        let old = try makeMac(prefix: "old", configured: true)
+        let new = try makeMac(prefix: "new", configured: false)
+        let importer = SettingsImporter(repository: new)
+        _ = importer.apply(try importer.plan(SettingsFile(repository: old)))
+        var file = try SettingsFile(repository: old)
+        let index = try #require(file.arms.firstIndex { !$0.main })
+        file.arms[index].padding = ArmPadding(beforeMinutes: 5, afterMinutes: 10)
+        file.arms[index].enabled = false
+        let plan = try importer.plan(file)
+        #expect(plan.lines == ["Change Arm \"Synthetic busy\" (padding, turn off)"])
+        _ = importer.apply(plan)
+        let arm = try #require(try new.arm(id: file.arms[index].id))
+        #expect(arm.padding.afterMinutes == 10 && !arm.isEnabled)
+    }
+}
+
+private func inArmOrder(_ file: SettingsFile) -> SettingsFile {
+    var file = file
+    file.arms.sort { $0.id < $1.id }
+    return file
 }
 
 /// A Mac with a Google connection and the calendars of this Mac. Ids start with `prefix` so the two
@@ -43,9 +124,10 @@ private func makeMac(
     if !withoutMac {
         connections.append(("eventkit-device", "eventkit", "Calendars on this Mac", ["Synthetic target"]))
     }
-    for (id, provider, label, names) in connections {
+    for (index, (id, provider, label, names)) in connections.enumerated() {
         try repository.saveConnection(StoredConnection(
-            id: id, configurationID: "default", provider: provider, displayLabel: label, isEnabled: true))
+            id: id, configurationID: "default", provider: provider, displayLabel: label, isEnabled: true),
+            now: Date(timeIntervalSince1970: Double(index)))
         let all = names.filter { $0 != skipping } + (duplicating.map { [$0] } ?? [])
         try repository.replaceCalendarBindings(connectionID: id, bindings: all.enumerated().map { index, name in
             StoredCalendarBinding(
