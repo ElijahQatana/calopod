@@ -8,6 +8,7 @@ struct WorkingHoursSection: View {
     var body: some View {
         CardSection("Working hours", footnote: footnote) {
             ForEach(1...7, id: \.self) { weekday in row(weekday) }
+            focusRow
             if let notice = model.notice { CardRow { Banner(kind: .caution, text: notice) } }
         }
         .onAppear { model.reload() }
@@ -15,7 +16,16 @@ struct WorkingHoursSection: View {
 
     private var footnote: String {
         "Availability counts free time only inside these hours, in your local time zone. Busy time outside them is still shown. "
-            + "The command line can change them with calopod hours."
+            + "Availability flags days with no free stretch as long as the focus time. The command line can change both with calopod hours."
+    }
+
+    private var focusRow: some View {
+        CardRow("Focus time") {
+            Stepper(
+                EventDuration.text(model.focus.seconds),
+                value: Binding(get: { model.focus.minutes }, set: { model.setFocus(minutes: $0) }),
+                in: FocusSettings.minutes, step: 15)
+        }
     }
 
     private func row(_ weekday: Int) -> some View {

@@ -39,6 +39,17 @@ enum AvailabilityText {
 
     static func overlaps(_ count: Int) -> String { count == 1 ? "1 overlap" : "\(count) overlaps" }
 
+    /// "3h 30m" for the strip, where "3 hr 30 min" would not fit.
+    static func stretch(_ seconds: TimeInterval) -> String {
+        let minutes = Int((seconds / 60).rounded())
+        let (hours, rest) = (minutes / 60, minutes % 60)
+        switch (hours, rest) {
+        case (0, _): return "\(rest)m"
+        case (_, 0): return "\(hours)h"
+        default: return "\(hours)h \(rest)m"
+        }
+    }
+
     /// The working window of the day, or why there is none.
     static func hours(_ report: AvailabilityDayReport) -> String {
         guard let windows = report.result.workingWindows else { return "Working hours are not applied." }
@@ -129,9 +140,10 @@ struct AvailabilitySummary: View {
 /// Free and busy time for a week on the Availability page: a dot per day, the totals for the chosen day, and its
 /// free windows, busy blocks and busy time outside working hours. Free and busy count only inside working hours.
 struct AvailabilityCard: View {
-    let model: AvailabilityModel
+    @Bindable var model: AvailabilityModel
     let notices: [String]
     let openSettings: () -> Void
+    @State private var copied = false
     private static let listLimit = 6
 
     var body: some View {
@@ -144,6 +156,7 @@ struct AvailabilityCard: View {
                     CardRow { Text("Availability could not be read.").foregroundStyle(.secondary) }
                 } else {
                     CardRow { strip }
+                    CardRow { find }
                     if let report = model.selectedReport { detail(report) }
                     CardRow {
                         Button("Change working hours in Settings", action: openSettings)
@@ -158,13 +171,15 @@ struct AvailabilityCard: View {
     private var strip: some View {
         HStack(spacing: 6) {
             ForEach(model.days, id: \.self) { day in
-                let load = model.report(for: day)?.summary.load
+                let report = model.report(for: day)
+                let load = report?.summary.load
                 let chosen = day == model.selected
                 Button { model.selected = day } label: {
                     VStack(spacing: 6) {
                         Text(day.formatted(.dateTime.weekday(.narrow))).font(Theme.Fonts.tinyMedium).foregroundStyle(.secondary)
                         Text(day.formatted(.dateTime.day())).font(Theme.Fonts.bodySemibold).monospacedDigit()
                         dot(load)
+                        longest(report)
                     }
                     .frame(maxWidth: .infinity).padding(.vertical, 8)
                     .overlay(RoundedRectangle(cornerRadius: Theme.controlRadius, style: .continuous)
@@ -172,10 +187,29 @@ struct AvailabilityCard: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(day.formatted(.dateTime.weekday(.wide).day().month(.wide)) + ", " + (load?.words ?? "not loaded")
-                    + (model.isToday(day) ? ", today" : ""))
+                .accessibilityLabel(spokenLabel(day, report))
                 .accessibilityAddTraits(chosen ? .isSelected : [])
             }
+        }
+    }
+
+    private func spokenLabel(_ day: Date, _ report: AvailabilityDayReport?) -> String {
+        var label = day.formatted(.dateTime.weekday(.wide).day().month(.wide)) + ", " + (report?.summary.load.words ?? "not loaded")
+        if let report, report.summary.load != .dayOff {
+            label += ", longest free stretch " + EventDuration.total(report.summary.longestFreeSeconds)
+            if report.lacksFocus { label += ", short of focus time" }
+        }
+        return label + (model.isToday(day) ? ", today" : "")
+    }
+
+    @ViewBuilder
+    private func longest(_ report: AvailabilityDayReport?) -> some View {
+        if let report, report.summary.load != .dayOff {
+            Text(AvailabilityText.stretch(report.summary.longestFreeSeconds)).font(Theme.Fonts.tiny).monospacedDigit()
+                .foregroundStyle(report.lacksFocus ? Theme.cautionText : Color.secondary)
+        } else {
+            // Keeps a day off the same height as the others.
+            Text(" ").font(Theme.Fonts.tiny)
         }
     }
 
@@ -189,6 +223,44 @@ struct AvailabilityCard: View {
         }
     }
 
+    // MARK: Find a time
+
+    private var find: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text("Find a time").font(Theme.Fonts.bodySemibold)
+                TextField("45m or 2h", text: $model.findText)
+                    .textFieldStyle(.roundedBorder).frame(width: 110)
+                    .onChange(of: model.foundText) { copied = false }
+                if !model.found.isEmpty {
+                    Button(copied ? "Copied" : "Copy", action: copyFound)
+                }
+            }
+            if model.findSeconds != nil {
+                if model.found.isEmpty {
+                    Text("No free window that long this week.").foregroundStyle(.secondary)
+                }
+                ForEach(Array(model.found.prefix(Self.listLimit).enumerated()), id: \.offset) { _, window in
+                    HStack {
+                        Text(window.start.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
+                        Text(AvailabilityText.range(window.start, window.end)).monospacedDigit()
+                        Spacer(minLength: 8)
+                        Text(EventDuration.text(window.end.timeIntervalSince(window.start)))
+                            .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+                    }
+                }
+                if model.found.count > Self.listLimit {
+                    Text("and \(model.found.count - Self.listLimit) more").foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private func copyFound() {
+        NSPasteboard.general.clearContents()
+        copied = NSPasteboard.general.setString(model.foundText, forType: .string)
+    }
+
     // MARK: Chosen day
 
     @ViewBuilder
@@ -200,6 +272,10 @@ struct AvailabilityCard: View {
                     tile("Free", EventDuration.total(summary.freeSeconds), note: AvailabilityText.hours(report))
                     tile("Busy", EventDuration.total(summary.busySeconds), note: AvailabilityText.overlaps(summary.overlaps),
                          flagged: summary.overlaps > 0)
+                    tile("Longest free", EventDuration.total(summary.longestFreeSeconds),
+                         note: report.lacksFocus ? "Shorter than your \(EventDuration.text(report.focusSeconds)) focus time"
+                             : "Meets your \(EventDuration.text(report.focusSeconds)) focus time",
+                         flagged: report.lacksFocus)
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 Text("\(report.day.start.formatted(.dateTime.weekday(.wide))) is \(summary.load.words).")

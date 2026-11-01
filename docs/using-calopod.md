@@ -38,6 +38,22 @@ Availability rules:
 - Copies made by Calopod are left out, so nothing is counted twice. Time that an Arm pads onto its copies is added to the events it copies, so it counts as busy.
 - Free and busy time count only inside your working hours, so 3 a.m. isn't free and a 7 p.m. meeting doesn't make the day look fuller. Meetings before or after working hours, and every meeting on a day off, are listed separately as outside working hours, so a late meeting doesn't disappear. A meeting that crosses the start or end of the day is split there. Add `--ignore-working-hours` to count the whole day.
 
+To find a free slot of a given length, use `availability find`:
+
+```sh
+calopod availability find --duration 45m --within 5d
+```
+
+It lists the free windows that are at least that long, starting from now, using the same busy time, padding and working hours as `availability`. `--within` takes days or hours (`5d`, `36h`) and defaults to 7 days; `--day` or `--from` and `--through` pick a range instead. Add `--ignore-working-hours` to count the whole day. `--cached`, `--connection`, `--calendar` and `--timezone` work as above. The Availability page in the Mac app has a Find a time field that does the same for the week it shows.
+
+Add `--copy` to also copy the windows as plain text for a message, such as `Tue Nov 3, 2:00 to 4:00 PM EST`, in the time zone of the range. The text is printed too; where there is no clipboard tool, nothing is copied. JSON output is unchanged.
+
+`availability` also lists each day's longest free stretch, and flags a working day with no stretch as long as your focus time, two hours until you change it. Days off are never flagged.
+
+```sh
+calopod hours focus 90m
+```
+
 Working hours are set per weekday in your local time zone, with days off allowed. Until you set them they are Monday to Friday, 9:00 to 17:00.
 
 ```sh
@@ -47,7 +63,7 @@ calopod hours set --days fri --start 08:30 --end 13:00
 calopod hours set --days sat,sun --off
 ```
 
-The Mac app reads and changes the same hours in Settings.
+The Mac app reads and changes the same hours and focus time in Settings.
 
 Dates can be a single `--day`, or `--from` and `--through`. A plain date means the whole local day, in your time zone unless you pass `--timezone`. Full timestamps need an offset such as `-04:00`.
 
