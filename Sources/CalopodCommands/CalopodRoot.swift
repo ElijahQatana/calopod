@@ -20,6 +20,7 @@ public struct CalopodRoot: AsyncParsableCommand {
             AvailabilityCommand.self,
             HoursCommand.self,
             IPhoneCommand.self,
+            ConfigCommand.self,
             UpdateCommand.self,
             SyncCommand.self,
             DoctorCommand.self,
