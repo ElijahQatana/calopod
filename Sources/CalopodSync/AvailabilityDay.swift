@@ -15,6 +15,8 @@ public struct AvailabilityDay: Equatable, Sendable {
     public let busySeconds: TimeInterval
     /// Busy time before or after working hours, and all of it on a day off.
     public let outsideSeconds: TimeInterval
+    /// The longest single free stretch.
+    public let longestFreeSeconds: TimeInterval
     public let overlaps: Int
     public let load: AvailabilityLoad
 
@@ -26,6 +28,7 @@ public struct AvailabilityDay: Equatable, Sendable {
         freeSeconds = result.free.reduce(0) { $0 + $1.end.timeIntervalSince($1.start) }
         busySeconds = result.busy.reduce(0) { $0 + $1.end.timeIntervalSince($1.start) }
         outsideSeconds = result.outside.reduce(0) { $0 + $1.end.timeIntervalSince($1.start) }
+        longestFreeSeconds = result.longestFree(in: day)
         overlaps = result.overlaps
         if workingSeconds == 0 {
             load = .dayOff

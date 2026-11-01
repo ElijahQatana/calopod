@@ -126,7 +126,7 @@ func destinationCopies(
     return items.sorted { ($0.startsAt ?? "", $0.id) < ($1.startsAt ?? "", $1.id) }
 }
 
-private func outputDate(_ date: Date?) -> String? {
+func outputDate(_ date: Date?) -> String? {
     guard let date else { return nil }
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -134,11 +134,23 @@ private func outputDate(_ date: Date?) -> String? {
     return formatter.string(from: date)
 }
 
-/// Shows combined Busy and Free intervals for a range. Only times are used, never titles or
-/// locations.
+/// Shows combined Busy and Free intervals for a range, or finds a free slot of a given length.
 public struct AvailabilityCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "availability",
+        abstract: "Show combined busy and free intervals, or find a free slot.",
+        subcommands: [AvailabilityShowCommand.self, AvailabilityFindCommand.self],
+        defaultSubcommand: AvailabilityShowCommand.self
+    )
+
+    public init() {}
+}
+
+/// Shows combined Busy and Free intervals for a range. Only times are used, never titles or
+/// locations.
+public struct AvailabilityShowCommand: AsyncParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "show",
         abstract: "Show combined busy and free intervals for a day or range."
     )
 
@@ -184,6 +196,8 @@ public struct AvailabilityCommand: AsyncParsableCommand {
                 timeZone: TimeZone(identifier: resolved.timeZoneIdentifier) ?? .current
             )
             let items = Self.items(availability)
+            let focus = try repository.focusSettings().seconds
+            let days = Self.days(availability, range: resolved, focus: focus)
             let day = AvailabilityDay(
                 availability, day: DateInterval(start: resolved.window.start, end: resolved.window.end))
             var human = output.localContext(repository: repository)
@@ -192,6 +206,10 @@ public struct AvailabilityCommand: AsyncParsableCommand {
                     "Free \(Self.duration(day.freeSeconds)), busy \(Self.duration(day.busySeconds)), outside working hours \(Self.duration(day.outsideSeconds)).",
                     "Free and busy time count only inside working hours (see calopod hours). Use --ignore-working-hours to count the whole day.",
                 ]
+            }
+            let short = days.filter(\.short).map(\.date)
+            if !short.isEmpty {
+                human.footer.append("No free stretch of \(Self.duration(focus)) on \(short.joined(separator: ", ")).")
             }
             try OutputRenderer.write(
                 command: "availability",
@@ -210,7 +228,9 @@ public struct AvailabilityCommand: AsyncParsableCommand {
                     },
                     totals: AvailabilityTotalsOutput(
                         freeSeconds: Int(day.freeSeconds), busySeconds: Int(day.busySeconds),
-                        outsideSeconds: Int(day.outsideSeconds))
+                        outsideSeconds: Int(day.outsideSeconds)),
+                    days: days,
+                    focusSeconds: Int(focus)
                 ),
                 warnings: refresh.warnings,
                 format: output.format,
@@ -223,7 +243,24 @@ public struct AvailabilityCommand: AsyncParsableCommand {
     }
 }
 
-extension AvailabilityCommand {
+extension AvailabilityShowCommand {
+    /// The local days of the range, each with its longest free stretch.
+    static func days(_ result: AvailabilityResult, range: ResolvedDateRange, focus: TimeInterval) -> [AvailabilityDayOutput] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: range.timeZoneIdentifier) ?? .current
+        let format = Date.ISO8601FormatStyle(timeZone: calendar.timeZone).year().month().day()
+        var days: [AvailabilityDayOutput] = []
+        var start = calendar.startOfDay(for: range.window.start)
+        while start < range.window.end, let next = calendar.date(byAdding: .day, value: 1, to: start) {
+            let day = DateInterval(start: max(start, range.window.start), end: min(next, range.window.end))
+            days.append(AvailabilityDayOutput(
+                date: start.formatted(format), longestFreeSeconds: Int(result.longestFree(in: day)),
+                short: result.lacksFocus(in: day, length: focus)))
+            start = next
+        }
+        return days
+    }
+
     /// Busy time outside working hours is its own kind: before-hours, after-hours or day-off. The
     /// busy kind is only time inside working hours.
     static func items(_ result: AvailabilityResult) -> [CommandItem] {
@@ -273,7 +310,7 @@ extension AvailabilityCommand {
     }
 }
 
-private func commandSources(_ sources: [CalendarReadSource], names: CalendarNames) -> [CommandSource] {
+func commandSources(_ sources: [CalendarReadSource], names: CalendarNames) -> [CommandSource] {
     sources.map {
         names.source(CommandSource(
             id: $0.calendar.id,

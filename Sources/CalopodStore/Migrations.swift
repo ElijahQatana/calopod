@@ -32,6 +32,7 @@ extension CalopodDatabase {
         "v28_arm_sync_health",
         "v29_inbox_snoozes",
         "v30_inbox_digest",
+        "v31_focus_length",
     ]
 
     static var migrator: DatabaseMigrator {
@@ -529,6 +530,16 @@ extension CalopodDatabase {
                     id INTEGER PRIMARY KEY CHECK (id = 1),
                     enabled INTEGER NOT NULL,
                     minute INTEGER CHECK (minute BETWEEN 0 AND 1439)
+                );
+                """)
+        }
+
+        // One row, like the meeting reminders.
+        migrator.registerMigration("v31_focus_length") { database in
+            try database.execute(sql: """
+                CREATE TABLE focus_settings (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    minutes INTEGER NOT NULL CHECK (minutes BETWEEN 15 AND 1440)
                 );
                 """)
         }
