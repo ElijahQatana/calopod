@@ -1,4 +1,5 @@
 import CalopodCommands
+import CalopodSync
 import Foundation
 import Observation
 
@@ -10,6 +11,7 @@ final class AvailabilityModel {
     private(set) var reports: [AvailabilityDayReport] = []
     private(set) var loadFailed = false
     var selected: Date
+    var findText = ""
     private(set) var weekStart: Date
 
     let calendar: Calendar
@@ -42,6 +44,14 @@ final class AvailabilityModel {
     }
 
     var selectedReport: AvailabilityDayReport? { reports.first { $0.day.start == selected } }
+
+    /// The free windows in the shown week that fit the length typed in the Find field, from now on.
+    var found: [AvailabilityInterval] {
+        guard let seconds = findSeconds else { return [] }
+        return reports.flatMap { $0.result.freeWindows(atLeast: seconds, after: now()) }
+    }
+
+    var findSeconds: TimeInterval? { FindSpan(findText.trimmingCharacters(in: .whitespaces))?.seconds }
 
     func report(for day: Date) -> AvailabilityDayReport? { reports.first { $0.day.start == day } }
 

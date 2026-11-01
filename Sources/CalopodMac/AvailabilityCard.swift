@@ -129,7 +129,7 @@ struct AvailabilitySummary: View {
 /// Free and busy time for a week on the Availability page: a dot per day, the totals for the chosen day, and its
 /// free windows, busy blocks and busy time outside working hours. Free and busy count only inside working hours.
 struct AvailabilityCard: View {
-    let model: AvailabilityModel
+    @Bindable var model: AvailabilityModel
     let notices: [String]
     let openSettings: () -> Void
     private static let listLimit = 6
@@ -144,6 +144,7 @@ struct AvailabilityCard: View {
                     CardRow { Text("Availability could not be read.").foregroundStyle(.secondary) }
                 } else {
                     CardRow { strip }
+                    CardRow { find }
                     if let report = model.selectedReport { detail(report) }
                     CardRow {
                         Button("Change working hours in Settings", action: openSettings)
@@ -186,6 +187,35 @@ struct AvailabilityCard: View {
         } else {
             // A day off, or nothing read yet: an empty ring rather than a status color.
             Circle().strokeBorder(Color.secondary.opacity(0.6), lineWidth: 1).frame(width: 10, height: 10)
+        }
+    }
+
+    // MARK: Find a time
+
+    private var find: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text("Find a time").font(Theme.Fonts.bodySemibold)
+                TextField("45m or 2h", text: $model.findText)
+                    .textFieldStyle(.roundedBorder).frame(width: 110)
+            }
+            if model.findSeconds != nil {
+                if model.found.isEmpty {
+                    Text("No free window that long this week.").foregroundStyle(.secondary)
+                }
+                ForEach(Array(model.found.prefix(Self.listLimit).enumerated()), id: \.offset) { _, window in
+                    HStack {
+                        Text(window.start.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
+                        Text(AvailabilityText.range(window.start, window.end)).monospacedDigit()
+                        Spacer(minLength: 8)
+                        Text(EventDuration.text(window.end.timeIntervalSince(window.start)))
+                            .font(Theme.Fonts.secondary).foregroundStyle(.secondary)
+                    }
+                }
+                if model.found.count > Self.listLimit {
+                    Text("and \(model.found.count - Self.listLimit) more").foregroundStyle(.secondary)
+                }
+            }
         }
     }
 
