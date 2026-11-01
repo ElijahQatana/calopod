@@ -27,6 +27,26 @@ struct InboxScreenServiceTests {
         #expect(Set(board.entries.map(\.id)) == ["needs", "maybe", "chg", "mb", "a", "b"])
     }
 
+    @Test("A snoozed item leaves the counts, is listed under Snoozed, and comes back when unsnoozed")
+    func snoozedItemsAreListedApart() throws {
+        let f = try InboxFixture()
+        let maybe = try #require(try f.service.board().entries.first { $0.id == "maybe" })
+        try f.service.snooze(revisionID: maybe.revisionID, until: .tomorrow)
+
+        let board = try f.service.board()
+        #expect(board.count(.all) == 5)
+        #expect(board.count(.maybe) == 1)
+        #expect(!board.entries.contains { $0.id == "maybe" })
+        #expect(board.count(.snoozed) == 1)
+        #expect(board.snoozed.first?.snoozedUntil != nil)
+        #expect(try f.service.detail(for: "maybe").entry.snoozedUntil != nil)
+
+        try f.service.unsnooze(revisionID: maybe.revisionID)
+        let back = try f.service.board()
+        #expect(back.count(.all) == 6)
+        #expect(back.snoozed.isEmpty)
+    }
+
     @Test("Copies Calopod made are left out")
     func copiesExcluded() throws {
         let f = try InboxFixture()

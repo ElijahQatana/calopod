@@ -7,7 +7,7 @@ import Foundation
 
 /// The Mac Inbox filters. Each one selects rows by the shared attention reasons.
 public enum InboxFilter: String, CaseIterable, Identifiable, Sendable {
-    case all, needsRSVP, maybe, changed, conflicts
+    case all, needsRSVP, maybe, changed, conflicts, snoozed
 
     public var id: String { rawValue }
 
@@ -18,6 +18,7 @@ public enum InboxFilter: String, CaseIterable, Identifiable, Sendable {
         case .maybe: "Maybe"
         case .changed: "Changed"
         case .conflicts: "Conflicts"
+        case .snoozed: "Snoozed"
         }
     }
 
@@ -28,6 +29,7 @@ public enum InboxFilter: String, CaseIterable, Identifiable, Sendable {
         case .maybe: reasons.contains(.maybe)
         case .changed: reasons.contains(.changedAfterResponse)
         case .conflicts: reasons.contains(.conflict)
+        case .snoozed: false
         }
     }
 }
@@ -50,6 +52,8 @@ public struct InboxEntry: Identifiable, Equatable, Sendable {
     public let changeIsUncertain: Bool
     public let overlapCount: Int
     public var meeting: MeetingLink?
+    /// When a snooze that is still holding ends.
+    public var snoozedUntil: Date?
 
     /// Only a change after a reply can be acknowledged.
     public var canAcknowledge: Bool { reasons.contains(.changedAfterResponse) }
@@ -57,6 +61,8 @@ public struct InboxEntry: Identifiable, Equatable, Sendable {
 
 public struct InboxBoard: Equatable, Sendable {
     public let entries: [InboxEntry]
+    /// Items put away. They are not in `entries` or its counts.
+    public var snoozed: [InboxEntry] = []
     /// Calendars that are stale or only partly read.
     public let incompleteCalendars: [String]
     public let isComplete: Bool
@@ -71,7 +77,9 @@ public struct InboxBoard: Equatable, Sendable {
         return "\(which) out of date or only partly read, \(suffix)"
     }
 
-    public func entries(for filter: InboxFilter) -> [InboxEntry] { entries.filter { filter.matches($0.reasons) } }
+    public func entries(for filter: InboxFilter) -> [InboxEntry] {
+        filter == .snoozed ? snoozed : entries.filter { filter.matches($0.reasons) }
+    }
     public func count(_ filter: InboxFilter) -> Int { entries(for: filter).count }
 }
 
@@ -173,13 +181,16 @@ public struct InboxScreenService: Sendable {
         let result = InboxAttentionQuery.evaluate(
             snapshot, filter: InboxAttentionFilter(asOf: now()), freshnessCutoff: freshnessCutoff)
         let entries = result.rows.map { entry($0, in: snapshot) }
+        let snoozed = InboxAttentionQuery.evaluate(
+            snapshot, filter: InboxAttentionFilter(asOf: now(), snoozed: .only), freshnessCutoff: freshnessCutoff)
         let incomplete = Set(result.analysis.warnings.compactMap { warning -> String? in
             guard [.staleSource, .incompleteCoverage, .unknownSource].contains(warning.kind),
                   let id = warning.bindingID else { return nil }
             return label(of: id, in: snapshot)
         })
         return InboxBoard(
-            entries: entries, incompleteCalendars: incomplete.sorted(), isComplete: result.analysis.isComplete,
+            entries: entries, snoozed: snoozed.rows.map { entry($0, in: snapshot) },
+            incompleteCalendars: incomplete.sorted(), isComplete: result.analysis.isComplete,
             lastChecked: snapshot.sources.compactMap { $0.coverage?.observedAt }.max()
         )
     }
@@ -189,7 +200,7 @@ public struct InboxScreenService: Sendable {
         let state = try makeRepository()
         let snapshot = try state.inboxContextSnapshot()
         let result = InboxAttentionQuery.evaluate(
-            snapshot, filter: InboxAttentionFilter(asOf: now()), freshnessCutoff: freshnessCutoff)
+            snapshot, filter: InboxAttentionFilter(asOf: now(), snoozed: .all), freshnessCutoff: freshnessCutoff)
         guard let row = result.rows.first(where: { $0.item.event.sourceKeyHash == id }) else {
             throw InboxCalendarContextError.eventUnavailable
         }
@@ -232,6 +243,19 @@ public struct InboxScreenService: Sendable {
         _ = try InboxCLI.acknowledge(revisionID, repository: try makeRepository())
     }
 
+    /// Puts one item away on this Mac. Never sends a reply.
+    public func snooze(revisionID: String, until choice: InboxSnoozeChoice) throws {
+        let lock = try ProcessLock.acquire(at: try makeLockURL())
+        defer { withExtendedLifetime(lock) {} }
+        _ = try InboxCLI.snooze(revisionID, until: choice, repository: try makeRepository(), now: now())
+    }
+
+    public func unsnooze(revisionID: String) throws {
+        let lock = try ProcessLock.acquire(at: try makeLockURL())
+        defer { withExtendedLifetime(lock) {} }
+        _ = try InboxCLI.unsnooze(revisionID, repository: try makeRepository())
+    }
+
     /// Sends one explicit reply, revalidated just before it goes. A changed event is skipped and reported.
     public func reply(to id: String, _ choice: ConflictChoice) async -> InboxReplyResult {
         func result(_ line: ConflictApplyReport.Line) -> InboxReplyResult { .init(status: line.status, message: line.message) }
@@ -272,11 +296,13 @@ public struct InboxScreenService: Sendable {
 
     private func entry(_ row: InboxAttentionRow, in snapshot: InboxContextSnapshot) -> InboxEntry {
         Self.entry(row.item.event, observation: row.item.observation, source: row.source, reasons: row.reasons,
-                   changeIsUncertain: row.changeTiming == .uncertain, overlapCount: row.conflicts.count)
+                   changeIsUncertain: row.changeTiming == .uncertain, overlapCount: row.conflicts.count,
+                   snoozedUntil: row.snoozedUntil)
     }
 
     static func entry(_ event: StoredNormalizedInstance, observation: InboxObservation?, source: InboxContextSource,
-                      reasons: [InboxAttentionReason], changeIsUncertain: Bool, overlapCount: Int) -> InboxEntry {
+                      reasons: [InboxAttentionReason], changeIsUncertain: Bool, overlapCount: Int,
+                      snoozedUntil: Date? = nil) -> InboxEntry {
         let organizer = event.organizer.flatMap { $0.name ?? $0.emailAddress }
         return InboxEntry(
             id: event.sourceKeyHash,
@@ -287,7 +313,8 @@ public struct InboxScreenService: Sendable {
             calendarName: source.calendarLabel ?? source.connectionLabel ?? "Unknown calendar",
             organizer: organizer, location: event.location,
             response: event.currentUserResponse.state, reasons: reasons,
-            changeIsUncertain: changeIsUncertain, overlapCount: overlapCount, meeting: JoinSelector.link(for: event))
+            changeIsUncertain: changeIsUncertain, overlapCount: overlapCount, meeting: JoinSelector.link(for: event),
+            snoozedUntil: snoozedUntil)
     }
 
     /// The strip of surrounding events. `focusedKey` is the one being looked at.

@@ -135,9 +135,23 @@ struct InboxReviewSheet: View {
             BusyLine(text: text).frame(maxWidth: .infinity, minHeight: 160)
         case .card: EmptyView() // drawn by `cardBody`
         case .confirm(let card, let reply): confirmView(card, reply)
+        case .snooze: snoozeChoices
         case .problem(let text, _): Banner(kind: .caution, text: text)
         case .summary: ReviewSummary(progress: model.progress, paused: model.paused, calendarSkips: model.calendarSkips)
         }
+    }
+
+    private var snoozeChoices: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Snooze until").font(Theme.Fonts.sectionTitle)
+            HStack(spacing: 8) {
+                Button { Task { await model.perform(.snoozeUntil(.laterToday)) } } label: { keyed("Later today", "L") }
+                Button { Task { await model.perform(.snoozeUntil(.tomorrow)) } } label: { keyed("Tomorrow", "T") }
+            }
+            SnoozeDatePicker { day in Task { await model.perform(.snoozeUntil(.day(day))) } }
+            Hint { Text("It comes back sooner if the event changes or starts. Nothing is sent or marked.") }
+        }
+        .controlSize(.large)
     }
 
     private var start: some View {
@@ -150,7 +164,7 @@ struct InboxReviewSheet: View {
             if model.saved?.hasUnclear != true {
                 Toggle("Only events that overlap something", isOn: Binding(get: { model.overlapsOnly }, set: { model.overlapsOnly = $0 }))
                 Toggle("Leave out events I answered Maybe", isOn: Binding(get: { model.skipMaybe }, set: { model.skipMaybe = $0 }))
-                Hint { Text("Yes, Maybe and No send your reply to the calendar and may notify the organizer. Hold sends nothing. Keys: Y, N, M, H, G then a number, S to stop.") }
+                Hint { Text("Yes, Maybe and No send your reply to the calendar and may notify the organizer. Hold sends nothing. Keys: Y, N, M, H, Z to snooze, G then a number, S to stop.") }
             }
         }
         .controlSize(.large)
@@ -279,6 +293,11 @@ struct InboxReviewSheet: View {
                 Spacer()
                 Button { Task { await model.perform(.send) } } label: { keyed("Send", "⏎") }.buttonStyle(.accentFilled)
             })
+        case .snooze:
+            AnyView(HStack {
+                Button { Task { await model.perform(.cancel) } } label: { keyed("Back", "Esc") }
+                Spacer()
+            })
         case .problem:
             AnyView(HStack {
                 Button { Task { await model.perform(.refresh) } } label: { keyed("Refresh", "R") }
@@ -338,6 +357,8 @@ struct InboxReviewSheet: View {
                 }
             }
             Spacer()
+            Button { Task { await model.perform(.snooze) } } label: { keyed("Snooze", "Z") }
+                .help("Hide it until later. Nothing is sent or marked.")
             Button { Task { await model.perform(.hold) } } label: { keyed("Hold", "H") }
                 .help("Skip it for this session. Nothing is sent or marked.")
         }

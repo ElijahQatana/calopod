@@ -3,6 +3,7 @@ import CalopodCommands
 enum ReviewKey: Equatable {
     case reply(ConflictChoice)
     case hold, stop, back, refresh
+    case snooze, snoozeUntil(InboxSnoozeChoice)
     /// For events answered in the Calendar app: open it, or move on once answered there.
     case openCalendar, doneInCalendar
     case goTo(Int)
@@ -11,7 +12,7 @@ enum ReviewKey: Equatable {
 
 /// Turns key presses into review commands. G waits for a number.
 struct ReviewKeyboard {
-    enum Mode { case card, confirm, problem }
+    enum Mode { case card, confirm, problem, snooze }
 
     static let returnKey = "\r"
     static let escapeKey = "\u{1b}"
@@ -30,6 +31,13 @@ struct ReviewKeyboard {
             case Self.escapeKey, "b": .cancel
             default: nil
             }
+        case .snooze:
+            return switch key {
+            case "l": .snoozeUntil(.laterToday)
+            case "t": .snoozeUntil(.tomorrow)
+            case Self.escapeKey, "b": .cancel
+            default: nil
+            }
         case .problem:
             return switch key {
             case "r": .refresh
@@ -45,6 +53,7 @@ struct ReviewKeyboard {
             case "n": .reply(.no)
             case "m": .reply(.maybe)
             case "h": .hold
+            case "z": .snooze
             case "o": .openCalendar
             case "d": .doneInCalendar
             case "b": .back

@@ -7,6 +7,7 @@ import CalopodSync
 import Foundation
 
 public typealias InboxReviewSummaryLine = CalopodSync.InboxReviewSummaryLine
+public typealias InboxSnoozeChoice = CalopodSync.InboxSnoozeChoice
 
 /// The totals the review summary shows. Reviewed and resolved are different things.
 public struct InboxReviewTotals: Equatable, Sendable {
@@ -70,6 +71,7 @@ public struct InboxReviewCardInfo: Sendable {
 public enum InboxReviewStep: Equatable, Sendable {
     case recorded(ConflictChoice)
     case held
+    case snoozed(Date)
     /// The event changed first. Nothing was sent; show it again.
     case changed
     /// The calendar did not take the reply, or it was not allowed. Nothing changed.
@@ -172,6 +174,24 @@ public struct InboxReviewService: Sendable {
     /// Skips the event for this session. Sends and marks nothing.
     public func hold(card: InboxReviewCardInfo) async -> (InboxReviewStep, InboxReviewProgress?) {
         await decide(.hold, card: card)
+    }
+
+    /// Sends and marks nothing. An event that changed first stays.
+    public func snooze(_ choice: InboxSnoozeChoice, card: InboxReviewCardInfo) async -> (InboxReviewStep, InboxReviewProgress?) {
+        let sessionID = card.card.sessionID
+        guard let until = choice.until(from: now()) else { return (.failed("That time has already passed."), nil) }
+        do {
+            let (controller, state) = try controller()
+            let done = try await controller.snooze(until: until, card: card.card, freshnessCutoff: cutoff, refresh: makeRefresh(state))
+            return (.snoozed(until), progress(done))
+        } catch CalopodRuntimeError.busy {
+            return (.busy, nil)
+        } catch {
+            let moved = error is InboxReviewSessionError || error is InboxCalendarContextError
+                || error as? InboxReviewSessionStoreError == .changed
+            return (moved ? .changed : .failed("Calopod could not snooze that. Nothing was changed."),
+                    (try? controller().0.session(id: sessionID)).map(progress))
+        }
     }
 
     /// Holds an event whose card could not be opened. No reply is involved.

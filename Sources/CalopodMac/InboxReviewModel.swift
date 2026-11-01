@@ -12,6 +12,7 @@ final class InboxReviewModel {
         case working(String)
         case card(InboxReviewCardInfo)
         case confirm(InboxReviewCardInfo, ConflictChoice)
+        case snooze(InboxReviewCardInfo)
         /// Nothing was sent. Offers Refresh, Hold and Stop.
         case problem(String, key: String?)
         case summary
@@ -58,6 +59,7 @@ final class InboxReviewModel {
         switch phase {
         case .card: .card
         case .confirm: .confirm
+        case .snooze: .snooze
         case .problem: .problem
         case .start, .working, .summary: nil
         }
@@ -121,6 +123,13 @@ final class InboxReviewModel {
             if card.replies.contains(reply) { notice = nil; phase = .confirm(card, reply) }
         case (.card(let card), .hold):
             await finish(await service.hold(card: card), card: card)
+        case (.card(let card), .snooze):
+            phase = .snooze(card)
+        case (.snooze(let card), .snoozeUntil(let choice)):
+            phase = .working("Snoozing…")
+            await finish(await service.snooze(choice, card: card), card: card)
+        case (.snooze(let card), .cancel):
+            phase = .card(card)
         case (.card(let card), .goTo(let number)):
             guard card.neighbors.indices.contains(number - 1) else { return }
             focus = (card.neighbors[number - 1].id, focus?.origin ?? card.entry.id)
@@ -195,6 +204,10 @@ final class InboxReviewModel {
             await next()
         case .held:
             notice = held
+            focus = nil
+            await next()
+        case .snoozed(let until):
+            notice = "Snoozed until \(until.formatted(date: .abbreviated, time: .shortened)). Nothing was sent."
             focus = nil
             await next()
         case .changed:

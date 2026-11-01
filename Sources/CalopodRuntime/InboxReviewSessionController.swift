@@ -182,7 +182,7 @@ public struct InboxReviewSessionController: Sendable {
         return session
     }
 
-    /// Puts the card's event away until `until`. Sends and acknowledges nothing; the event must be unchanged.
+    /// Sends and acknowledges nothing. The event must be unchanged.
     public func snooze(until: Date, card: InboxReviewCard, freshnessCutoff: Date, refresh: Refresh) async throws -> InboxReviewSession {
         let lock = try ProcessLock.acquire(at: lockURL)
         defer { withExtendedLifetime(lock) {} }

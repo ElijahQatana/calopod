@@ -40,7 +40,7 @@ public struct InboxAttentionRow: Equatable, Sendable {
     /// Uncertain order must not be rendered as a proven change after an RSVP.
     public let changeTiming: InboxResponseTiming?
     public let conflicts: [InboxConflict]
-    /// When a snooze that is still holding ends. Nil when the item is not snoozed.
+    /// Nil unless a snooze is still holding.
     public let snoozedUntil: Date?
 }
 
