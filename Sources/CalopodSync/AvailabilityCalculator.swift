@@ -202,3 +202,25 @@ public enum AvailabilityCalculator {
         return windows
     }
 }
+
+extension AvailabilityResult {
+    /// Free windows at least `length` seconds long, cut to start no earlier than `after`.
+    public func freeWindows(atLeast length: TimeInterval, after: Date? = nil) -> [AvailabilityInterval] {
+        free.compactMap { interval in
+            let start = max(interval.start, after ?? interval.start)
+            guard interval.end.timeIntervalSince(start) >= length else { return nil }
+            return AvailabilityInterval(kind: .free, start: start, end: interval.end)
+        }
+    }
+
+    /// The longest free stretch inside `day`, cut at its edges.
+    public func longestFree(in day: DateInterval) -> TimeInterval {
+        free.map { min($0.end, day.end).timeIntervalSince(max($0.start, day.start)) }.max().map { max($0, 0) } ?? 0
+    }
+
+    /// A day with working time but no free stretch of `length`. A day off is never short.
+    public func lacksFocus(in day: DateInterval, length: TimeInterval) -> Bool {
+        let working = workingWindows.map { $0.contains { $0.start < day.end && day.start < $0.end } } ?? true
+        return working && longestFree(in: day) < length
+    }
+}

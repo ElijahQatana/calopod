@@ -62,6 +62,48 @@ final class AvailabilityTests: XCTestCase {
         XCTAssertEqual(model.selected, day())
     }
 
+    func testFindListsTheShownWeeksWindowsThatAreLongEnough() async {
+        var clock = day()
+        let model = AvailabilityModel(calendar: utc, now: { clock }, load: { days in
+            days.map { start in
+                // Free 9:00 to 10:30 and 13:00 to 17:00 on each day.
+                let free = [(9.0, 10.5), (13.0, 17.0)].map {
+                    AvailabilityInterval(kind: .free, start: start.addingTimeInterval($0.0 * 3600), end: start.addingTimeInterval($0.1 * 3600))
+                }
+                let range = DateInterval(start: start, duration: 86_400), result = AvailabilityResult(busy: [], free: free)
+                return AvailabilityDayReport(day: range, result: result, summary: AvailabilityDay(result, day: range))
+            }
+        })
+        await model.reload()
+        clock = day(-7)
+        for (text, count, valid) in [("", 0, false), ("soon", 0, false), ("2h", 7, true), (" 90m ", 14, true), ("5h", 0, true)] {
+            model.findText = text
+            XCTAssertEqual(model.found.count, count, text)
+            XCTAssertEqual(model.findSeconds != nil, valid, text)
+        }
+        // Time already gone does not count: Thursday's morning window is too short by then.
+        clock = day().addingTimeInterval(10 * 3600)
+        model.findText = "90m"
+        XCTAssertEqual(model.found.first?.start, day().addingTimeInterval(13 * 3600))
+    }
+
+    func testCopyTextHasEveryWindowFoundAndNothingWhenThereAreNone() async {
+        var clock = day()
+        let model = AvailabilityModel(calendar: utc, now: { clock }, load: { days in
+            days.prefix(2).map { start in
+                let free = [AvailabilityInterval(kind: .free, start: start.addingTimeInterval(9 * 3600), end: start.addingTimeInterval(11 * 3600))]
+                let range = DateInterval(start: start, duration: 86_400), result = AvailabilityResult(busy: [], free: free)
+                return AvailabilityDayReport(day: range, result: result, summary: AvailabilityDay(result, day: range))
+            }
+        })
+        await model.reload()
+        clock = day(-7)
+        model.findText = "1h"
+        XCTAssertEqual(model.foundText, "Sun Dec 28, 9:00 to 11:00 AM GMT\nMon Dec 29, 9:00 to 11:00 AM GMT")
+        model.findText = "3h"
+        XCTAssertEqual(model.foundText, "")
+    }
+
     func testAFailedReadSaysSoAndClearsOldDays() async {
         struct Broken: Error {}
         let model = AvailabilityModel(calendar: utc, now: { self.day() }, load: { _ in throw Broken() })
@@ -106,6 +148,23 @@ final class WorkingHoursModelTests: XCTestCase {
         try state.saveWorkingHours(WorkingHours(days: [1: WorkingHours.Day(startMinute: 600, endMinute: 660)]))
         model.reload()
         XCTAssertEqual(model.hours.days.count, 1)
+    }
+
+    func testTheFocusLengthIsSavedPickedUpAndChecked() throws {
+        let state = LocalStateRepository(database: try CalopodDatabase.inMemory())
+        let model = WorkingHoursModel(state: state)
+        var changes = 0
+        model.onChange = { changes += 1 }
+        model.setFocus(minutes: 90)
+        model.setFocus(minutes: 90)
+        XCTAssertEqual(try state.focusSettings().minutes, 90)
+        XCTAssertEqual(changes, 1)
+        model.setFocus(minutes: 5)
+        XCTAssertEqual(model.focus.minutes, 90)
+        XCTAssertNotNil(model.notice)
+        try state.saveFocusSettings(FocusSettings(minutes: 180))
+        model.reload()
+        XCTAssertEqual(model.focus.minutes, 180)
     }
 
     func testTheTimePickerRoundTripsAndShowsMidnightAsTheLastMinute() {

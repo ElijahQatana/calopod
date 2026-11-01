@@ -72,9 +72,9 @@ func restoreExcludesCachedReadersUntilTheyFinish() throws {
 @Test
 func cachedFlagsAreAvailableForBothCalendarReads() throws {
     #expect(try EventsCommand.parse(["--cached"]).cached)
-    #expect(try AvailabilityCommand.parse(["--cached"]).cached)
+    #expect(try AvailabilityShowCommand.parse(["--cached"]).cached)
     #expect(try !EventsCommand.parse([]).cached)
-    #expect(try !AvailabilityCommand.parse([]).cached)
+    #expect(try !AvailabilityShowCommand.parse([]).cached)
 }
 
 private struct CachedStateFixture {

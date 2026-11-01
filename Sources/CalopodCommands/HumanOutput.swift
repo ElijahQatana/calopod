@@ -214,7 +214,7 @@ enum HumanOutputRenderer {
                     }
                     if localIDs { lines.append("  ID: \(clean(item.id))") }
                 }
-                if !items.isEmpty && !shared && !localIDs && command != "availability" {
+                if !items.isEmpty && !shared && !localIDs && !command.hasPrefix("availability") {
                     lines.append("")
                     lines.append("Use --ids to show exact identifiers for commands.")
                 }

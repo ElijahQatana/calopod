@@ -9,8 +9,8 @@ calopod arm add | list | inspect | update | disable | remove
 calopod main configure | inspect
 calopod events
 calopod join [event]
-calopod availability
-calopod hours [set]
+calopod availability [find]
+calopod hours [set|focus]
 calopod notifications [set]
 calopod sync
 calopod inbox [activity | refresh | inspect | acknowledge | snooze | unsnooze | review | config]
@@ -33,6 +33,10 @@ calopod-setup [--arms]
 `notifications` shows the meeting reminder and Inbox digest settings, and `notifications set` changes them: `--first` and `--final` for the reminder times, `--hide-titles`, and `--digest`, `--no-digest` and `--digest-at 08:30` for the digest. The notifications themselves come from the Mac app.
 
 `availability` counts free and busy time only inside working hours. Busy time before or after them, and all of it on a day off, is listed separately and not counted as busy. `--ignore-working-hours` counts the whole day. In the JSON, items with `availability` of `busy` now cover only time inside working hours; before this change they also included time outside them. New items have `availability` set to `before-hours`, `after-hours` or `day-off`, with the label "Before hours", "After hours" or "Day off". A new `totals` object has `freeSeconds`, `busySeconds` and `outsideSeconds`. `workingWindows` is unchanged: one start and end for each working window in the range, left out when working hours are ignored.
+
+`hours focus 90m` sets how long a free stretch must be to count as focus time, from 15 minutes to 24 hours, two hours by default; `hours` shows it as `focusMinutes` in JSON. `availability` JSON gains `days`, one entry per local day with `date`, `longestFreeSeconds` and `short`, which is true for a working day with no free stretch of `focusSeconds`. `totals` and the other fields are unchanged.
+
+`availability find --duration 45m --within 5d` lists the free windows at least that long, from now. In JSON, `items` holds only free windows with `startsAt` and `endsAt`, and `lengthSeconds` is the length asked for. `schemaVersion` is unchanged.
 
 `events` lists the Teams, Zoom, Meet or Webex link of each event (`Join:` in text, `joinProvider` and `joinURL` in JSON). `join` opens one: give it an id from `events --ids`, or leave it out for the event the menu bar card shows as next: the meeting that is on now during its first 10 minutes, then the next one to start within 12 hours. It opens the meeting app when there is one, otherwise the link in the browser.
 
