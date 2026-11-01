@@ -212,4 +212,15 @@ extension AvailabilityResult {
             return AvailabilityInterval(kind: .free, start: start, end: interval.end)
         }
     }
+
+    /// The longest free stretch inside `day`, cut at its edges.
+    public func longestFree(in day: DateInterval) -> TimeInterval {
+        free.map { min($0.end, day.end).timeIntervalSince(max($0.start, day.start)) }.max().map { max($0, 0) } ?? 0
+    }
+
+    /// A day with working time but no free stretch of `length`. A day off is never short.
+    public func lacksFocus(in day: DateInterval, length: TimeInterval) -> Bool {
+        let working = workingWindows.map { $0.contains { $0.start < day.end && day.start < $0.end } } ?? true
+        return working && longestFree(in: day) < length
+    }
 }
