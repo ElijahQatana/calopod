@@ -100,7 +100,8 @@ public struct ManagedEventConvergenceService: Sendable {
                 window: window,
                 sourceSnapshotComplete: true,
                 targetSnapshotComplete: true,
-                targetOriginals: targetOriginals
+                targetOriginals: targetOriginals,
+                skips: try repository.eventSkips()
             ).items
             if items.allSatisfy({ $0.action == .noOp }) {
                 return ManagedEventLifecycleSummary(

@@ -560,6 +560,7 @@ public struct AgentControlService: Sendable {
         case .markedFree: "Left out because it is marked Free"
         case .workingLocation: "Left out because it is a working location"
         case .birthday: "Left out because it is a birthday"
+        case .skipped: "Left out because you chose Don't copy"
         case .verifiedDuplicates: "Duplicate copies found"
         case .mappingMissing: "Copy exists but is not tracked"
         case .providerIdentityChanged: "Calendar account changed"

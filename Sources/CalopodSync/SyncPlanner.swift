@@ -71,7 +71,8 @@ public enum SyncPlanner {
         window: SyncWindow,
         sourceSnapshotComplete: Bool,
         targetSnapshotComplete: Bool = true,
-        targetOriginals: [StoredNormalizedInstance] = []
+        targetOriginals: [StoredNormalizedInstance] = [],
+        skips: [EventSkip] = []
     ) -> SyncPlan {
         let armSourceIDs = Set(arm.sourceBindingIDs)
         let inWindow = sources.filter {
@@ -80,11 +81,14 @@ public enum SyncPlanner {
                 && $0.endsAt > window.start
                 && $0.startsAt < window.end
         }
+        func leftOutReason(_ source: StoredNormalizedInstance) -> SyncPlanReason? {
+            skips.contains { $0.matches(source) } ? .skipped : arm.filters.leftOutReason(source)
+        }
         // A filtered event is planned like one that left the source.
-        let boundedSources = inWindow.filter { arm.filters.copies($0) }
+        let boundedSources = inWindow.filter { leftOutReason($0) == nil }
         let leftOutReasons = Dictionary(
             inWindow.compactMap { source in
-                arm.filters.leftOutReason(source).map {
+                leftOutReason(source).map {
                     (mirrorKey(armID: arm.id, sourceKeyHash: source.sourceKeyHash), $0)
                 }
             },
