@@ -159,6 +159,11 @@ final class SetupModel {
         await run(nil) { try service.setPadding(armID: armID, padding: padding) }
     }
 
+    func setIncludePrivate(_ armID: String, _ includePrivate: Bool) async {
+        let service = service
+        await run(nil) { try service.setIncludePrivate(armID: armID, includePrivate: includePrivate) }
+    }
+
     func setFilters(_ armID: String, _ filters: ArmFilters) async {
         let service = service
         await run(nil) { try service.setFilters(armID: armID, filters: filters) }

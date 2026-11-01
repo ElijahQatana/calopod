@@ -873,3 +873,28 @@ func allDayWrite(zone: String) async throws {
     #expect((object["end"] as? [String: String]) == ["dateTime": "2026-10-06T00:00:00.0000000", "timeZone": "UTC"])
     #expect(object["isAllDay"] as? Bool == true)
 }
+
+@Suite("Microsoft event flags")
+struct MicrosoftFlagTests {
+    @Test(arguments: [
+        (#""showAs":"free""#, ProviderAvailability.free, false, EventKind?.none),
+        (#""showAs":"busy""#, .busy, false, nil),
+        (#""showAs":"oof""#, .unavailable, false, nil),
+        (#""showAs":"workingElsewhere""#, .tentative, false, .workingLocation),
+        (#""sensitivity":"private""#, .busy, true, nil),
+        (#""sensitivity":"confidential""#, .busy, true, nil),
+        (#""sensitivity":"normal""#, .busy, false, nil),
+    ])
+    func flags(fields: String, availability: ProviderAvailability, isPrivate: Bool, kind: EventKind?) async throws {
+        let json = #"{"value":[{"id":"synthetic","start":{"dateTime":"2026-11-05T14:00:00Z"},"end":{"dateTime":"2026-11-05T15:00:00Z"},\#(fields)}]}"#
+        let client = MicrosoftGraphClient(transport: ClosureTransport { _ in
+            HTTPResponse(statusCode: 200, body: Data(json.utf8))
+        })
+        let page = try await client.events(accessToken: "synthetic", connectionID: "microsoft-test",
+                                           calendarID: "synthetic-calendar", from: Date(), through: Date())
+        let event = try #require(page.events.first)
+        #expect(event.availability == availability)
+        #expect(event.isPrivate == isPrivate)
+        #expect(event.kind == kind)
+    }
+}

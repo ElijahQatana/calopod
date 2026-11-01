@@ -566,14 +566,15 @@ struct SyncPlannerTests {
     }
 }
 
-private func storedArm(ruleMode: ArmRuleMode, isMain: Bool = false) -> StoredArm {
+private func storedArm(ruleMode: ArmRuleMode, isMain: Bool = false, includePrivate: Bool = true) -> StoredArm {
     StoredArm(
         id: "arm-one",
         configurationID: "synthetic-configuration",
         sourceBindingIDs: ["source-calendar"],
         targetBindingID: "target-calendar",
         ruleMode: ruleMode,
-        isMain: isMain
+        isMain: isMain,
+        includePrivate: includePrivate
     )
 }
 

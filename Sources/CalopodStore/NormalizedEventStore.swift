@@ -21,6 +21,7 @@ public struct StoredNormalizedInstance: Codable, Equatable, Sendable {
     public let availability: String
     public let isCancelled: Bool
     public let isPrivate: Bool
+    public let kind: EventKind?
     public let title: String?
     public let contentFingerprint: String
     public let providerUpdatedAt: Date?
@@ -44,6 +45,7 @@ public struct StoredNormalizedInstance: Codable, Equatable, Sendable {
         availability: String,
         isCancelled: Bool,
         isPrivate: Bool,
+        kind: EventKind? = nil,
         title: String?,
         contentFingerprint: String,
         providerUpdatedAt: Date?,
@@ -70,6 +72,7 @@ public struct StoredNormalizedInstance: Codable, Equatable, Sendable {
         self.availability = availability
         self.isCancelled = isCancelled
         self.isPrivate = isPrivate
+        self.kind = kind
         self.title = title
         self.contentFingerprint = contentFingerprint
         self.providerUpdatedAt = providerUpdatedAt
@@ -88,7 +91,7 @@ public struct StoredNormalizedInstance: Codable, Equatable, Sendable {
             calendarBindingID: calendarBindingID, providerEventID: providerEventID,
             recurrenceID: recurrenceID, startsAt: startsAt, endsAt: endsAt, isAllDay: isAllDay,
             availability: availability, isCancelled: isCancelled, isPrivate: isPrivate,
-            title: title, contentFingerprint: contentFingerprint,
+            kind: kind, title: title, contentFingerprint: contentFingerprint,
             providerUpdatedAt: providerUpdatedAt, location: location, notes: notes, url: url,
             organizer: organizer, attendees: attendees, currentUserResponse: currentUserResponse,
             providerSeriesID: providerSeriesID, timeZoneIdentifier: timeZoneIdentifier,
@@ -173,8 +176,8 @@ extension LocalStateRepository {
                          is_all_day, availability, is_cancelled, content_fingerprint,
                          seen_generation, title, is_private, provider_updated_at,
                          location, notes, url, organizer_json, attendees_json, response_json, provider_series_id, time_zone, last_seen_at,
-                         provider_external_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         provider_external_id, event_kind)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(source_key_hash) DO UPDATE SET
                         connection_id = excluded.connection_id,
                         calendar_binding_id = excluded.calendar_binding_id,
@@ -199,7 +202,8 @@ extension LocalStateRepository {
                         provider_series_id = excluded.provider_series_id,
                         time_zone = excluded.time_zone,
                         last_seen_at = excluded.last_seen_at,
-                        provider_external_id = excluded.provider_external_id
+                        provider_external_id = excluded.provider_external_id,
+                        event_kind = excluded.event_kind
                     """
             )
             for instance in instances {
@@ -229,6 +233,7 @@ extension LocalStateRepository {
                     instance.timeZoneIdentifier,
                     now,
                     instance.providerExternalID,
+                    instance.kind?.rawValue,
                 ])
             }
 
@@ -310,7 +315,7 @@ extension LocalStateRepository {
                            is_all_day, availability, is_cancelled, content_fingerprint,
                            title, is_private, provider_updated_at,
                            location, notes, url, organizer_json, attendees_json, response_json, provider_series_id, time_zone,
-                           provider_external_id
+                           provider_external_id, event_kind
                     FROM normalized_instances
                     WHERE calendar_binding_id IN (\(normalizedEventQuestionMarks(count: calendarBindingIDs.count)))
                       AND ends_at > ?
@@ -386,6 +391,7 @@ func normalizedInstance(_ row: Row) -> StoredNormalizedInstance {
         availability: row["availability"],
         isCancelled: row["is_cancelled"],
         isPrivate: row["is_private"],
+        kind: (row["event_kind"] as String?).flatMap(EventKind.init(rawValue:)),
         title: row["title"],
         contentFingerprint: row["content_fingerprint"],
         providerUpdatedAt: row["provider_updated_at"],

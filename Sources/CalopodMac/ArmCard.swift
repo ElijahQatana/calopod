@@ -32,6 +32,7 @@ struct ArmCard: View {
         VStack(alignment: .leading, spacing: 12) {
             topRow
             flow
+            if arm.rule == .fullDetails { includePrivateRow }
             if let status = arm.syncStatus { statusLine(status) }
             if editingLabel { labelEditor }
             if editingPadding { paddingEditor }
@@ -111,11 +112,12 @@ struct ArmCard: View {
     }
 
     private var filtersMenu: some View {
-        let count = [arm.filters.skipDeclined, arm.filters.skipAllDay, arm.filters.skipDontClone].filter { $0 }.count
+        let count = [arm.filters.skipDeclined, arm.filters.skipAllDay, arm.filters.skipDontClone, arm.filters.skipFree].filter { $0 }.count
         return Menu {
             Toggle("Skip declined events", isOn: filterBinding(\.skipDeclined))
             Toggle("Skip all-day events", isOn: filterBinding(\.skipAllDay))
             Toggle("Skip events tagged #dontclone", isOn: filterBinding(\.skipDontClone))
+            Toggle("Skip events marked Free", isOn: filterBinding(\.skipFree))
         } label: {
             HStack(spacing: 4) {
                 Text(count == 0 ? "Filters" : "Filters: \(count)")
@@ -171,6 +173,17 @@ struct ArmCard: View {
         .opacity(arm.isEnabled ? 1 : 0.55)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Copies from \(sources.map(\.1).joined(separator: ", ")) into \(model.targetName(of: arm))")
+    }
+
+    private var includePrivateRow: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Toggle("Include private events", isOn: Binding(
+                get: { arm.includePrivate },
+                set: { value in Task { await model.setIncludePrivate(arm.id, value) } }))
+            Text("Off copies a private event as plain Busy. On a Mac calendar a private event's details show openly.")
+                .foregroundStyle(.secondary)
+        }
+        .font(Theme.Fonts.secondary)
     }
 
     private func statusLine(_ status: ArmSyncStatus) -> some View {

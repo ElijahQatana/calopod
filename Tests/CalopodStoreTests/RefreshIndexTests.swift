@@ -1,3 +1,4 @@
+import CalopodDomain
 @testable import CalopodStore
 import Foundation
 import GRDB
@@ -36,6 +37,7 @@ func refreshIndexesUpgradeEveryEarlierSchema() throws {
             #expect(try String.fetchOne(db, sql: "SELECT status FROM sync_runs WHERE id = 'recover'") == "running")
             #expect(try Int.fetchOne(db, sql: "SELECT seen_generation FROM normalized_instances WHERE source_key_hash = 'source'") == 7)
             #expect(try Date.fetchOne(db, sql: "SELECT last_seen_at FROM normalized_instances WHERE source_key_hash = 'source'") == nil)
+            #expect(try String.fetchOne(db, sql: "SELECT event_kind FROM normalized_instances WHERE source_key_hash = 'source'") == nil)
             #expect(try String.fetchOne(db, sql: "SELECT proof_cursor_hash FROM tombstones") == "proof")
             #expect(try String.fetchOne(db, sql: "SELECT status FROM sync_operations") == "pending")
             #expect(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name IN ('normalized_instances_binding_generation', 'normalized_instances_binding_window', 'sync_runs_retention', 'sync_operations_mirror')") == 4)
@@ -95,4 +97,23 @@ func largeWindowRefreshUsesIndexesAndReplacesOnlyItsScope() throws {
         #expect(try Date.fetchOne(db, sql: "SELECT MIN(last_seen_at) FROM normalized_instances WHERE calendar_binding_id = 'calendar'") == end)
         #expect(try Int.fetchOne(db, sql: "SELECT MIN(seen_generation) FROM normalized_instances WHERE calendar_binding_id = 'calendar'") == 2)
     }
+}
+
+@Test
+func eventKindIsStoredAndReadBack() throws {
+    let database = try CalopodDatabase.inMemory()
+    let repository = LocalStateRepository(database: database)
+    try repository.saveConnection(StoredConnection(id: "connection", configurationID: "default", provider: "eventkit", displayLabel: nil, isEnabled: true))
+    try repository.replaceCalendarBindings(connectionID: "connection", bindings: [
+        StoredCalendarBinding(id: "calendar", connectionID: "connection", providerCalendarID: "calendar", displayLabel: nil, isSelected: true, isReadOnly: true),
+    ])
+    let start = Date(timeIntervalSince1970: 1_000_000)
+    let end = start.addingTimeInterval(100_000)
+    let kinds: [EventKind?] = [nil, .workingLocation, .birthday]
+    let events = kinds.enumerated().map { index, kind in
+        StoredNormalizedInstance(sourceKeyHash: "event-\(index)", connectionID: "connection", calendarBindingID: "calendar", providerEventID: "event-\(index)", recurrenceID: nil, startsAt: start.addingTimeInterval(Double(index)), endsAt: start.addingTimeInterval(Double(index + 60)), isAllDay: false, availability: "busy", isCancelled: false, isPrivate: false, kind: kind, title: nil, contentFingerprint: "synthetic", providerUpdatedAt: nil)
+    }
+    try repository.applyEventRefresh(connectionID: "connection", calendarBindingID: "calendar", windowStart: start, windowEnd: end, instances: events, cancelledSourceKeyHashes: [], isFullRefresh: true, cursorUpdates: [], now: end)
+    let stored = try repository.normalizedInstances(calendarBindingIDs: ["calendar"], from: start, through: end)
+    #expect(stored.map(\.kind) == kinds)
 }

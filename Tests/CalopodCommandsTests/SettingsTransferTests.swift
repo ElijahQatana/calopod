@@ -105,6 +105,26 @@ struct SettingsTransferTests {
         let arm = try #require(try new.arm(id: file.arms[index].id))
         #expect(arm.padding.afterMinutes == 10 && !arm.isEnabled)
     }
+
+    @Test("A file from before private events and the Free filter reads the old way")
+    func olderFile() throws {
+        let old = try makeMac(prefix: "old", configured: true)
+        let new = try makeMac(prefix: "new", configured: false)
+        var json = try #require(JSONSerialization.jsonObject(with: SettingsFile(repository: old).encoded()) as? [String: Any])
+        json["arms"] = try (#require(json["arms"] as? [[String: Any]])).map { arm in
+            var arm = arm
+            arm["includePrivate"] = nil
+            arm["filters"] = (arm["filters"] as? [String: Any])?.filter { $0.key != "skipFree" }
+            return arm
+        }
+        let file = try SettingsFile.decode(JSONSerialization.data(withJSONObject: json))
+        #expect(file.arms.allSatisfy { $0.includePrivate == nil && !$0.filters.skipFree })
+        let importer = SettingsImporter(repository: new)
+        _ = importer.apply(try importer.plan(file))
+        let arms = try new.arms()
+        #expect(arms.filter { $0.includePrivate }.map(\.ruleMode) == [.fullDetails])
+        #expect(arms.count == 2)
+    }
 }
 
 private func inArmOrder(_ file: SettingsFile) -> SettingsFile {
@@ -149,9 +169,10 @@ private func makeMac(
 
     let service = ArmConfigurationService(repository: repository)
     try service.configureMainCalendar(id: "synthetic-main", sourceBindingIDs: [work.id], targetBindingID: target.id)
+    _ = try service.updateIncludePrivate(armID: "synthetic-main", includePrivate: true)
     try service.createArm(
         id: "synthetic-busy", sourceBindingIDs: [personal.id], targetBindingID: target.id, ruleMode: .label,
-        name: "Synthetic busy", filters: ArmFilters(skipDeclined: true), label: "Personal",
+        name: "Synthetic busy", filters: ArmFilters(skipDeclined: true, skipFree: true), label: "Personal",
         padding: ArmPadding(beforeMinutes: 10, afterMinutes: 15, inPersonOnly: true))
 
     try repository.saveWorkingHours(WorkingHours(days: Dictionary(uniqueKeysWithValues: (1...4).map {

@@ -526,6 +526,7 @@ private struct GoogleEvent: Decodable {
     let status: String?
     let transparency: String?
     let visibility: String?
+    let eventType: String?
     let summary: String?
     let description: String?
     let location: String?
@@ -550,6 +551,7 @@ private struct GoogleEvent: Decodable {
         case status
         case transparency
         case visibility
+        case eventType
         case summary
         case description
         case location
@@ -583,6 +585,7 @@ private struct GoogleEvent: Decodable {
             availability: transparency == "transparent" ? .free : .busy,
             isCancelled: status == "cancelled",
             isPrivate: visibility == "private" || visibility == "confidential",
+            kind: EventKind(googleEventType: eventType),
             title: summary,
             updatedAt: updated.flatMap(RFC3339.date(from:)),
             isManagedMirror: OwnershipMarkerCodec.marker(

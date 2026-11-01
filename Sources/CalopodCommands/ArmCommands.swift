@@ -67,6 +67,12 @@ public struct ArmUpdateCommand: ParsableCommand {
     @Flag(inversion: .prefixedNo, help: "Leave out events with #dontclone in the title or notes.")
     public var skipDontclone: Bool?
 
+    @Flag(inversion: .prefixedNo, help: "Leave out events marked Free.")
+    public var skipFree: Bool?
+
+    @Flag(inversion: .prefixedNo, help: "Keep the details of private events on a Full details Arm.")
+    public var includePrivate: Bool?
+
     @Option(name: .long, help: "Minutes the copy starts before the event.")
     public var padBefore: Int?
 
@@ -83,8 +89,9 @@ public struct ArmUpdateCommand: ParsableCommand {
     public func run() throws {
         do {
             let changesPadding = padBefore != nil || padAfter != nil || padInPersonOnly != nil
-            let changesFilters = skipDeclined != nil || skipAllDay != nil || skipDontclone != nil
-            guard name != nil || rule != nil || label != nil || preferCurrentDevice || changesFilters || changesPadding else {
+            let changesFilters = skipDeclined != nil || skipAllDay != nil || skipDontclone != nil || skipFree != nil
+            guard name != nil || rule != nil || label != nil || preferCurrentDevice || changesFilters || changesPadding
+                || includePrivate != nil else {
                 throw ValidationError(
                     "Choose --name, --rule, --label, --prefer-current-device, a filter such as --skip-declined or padding such as --pad-before."
                 )
@@ -110,7 +117,8 @@ public struct ArmUpdateCommand: ParsableCommand {
                     filters: ArmFilters(
                         skipDeclined: skipDeclined ?? arm.filters.skipDeclined,
                         skipAllDay: skipAllDay ?? arm.filters.skipAllDay,
-                        skipDontClone: skipDontclone ?? arm.filters.skipDontClone
+                        skipDontClone: skipDontclone ?? arm.filters.skipDontClone,
+                        skipFree: skipFree ?? arm.filters.skipFree
                     )
                 )
             }
@@ -123,6 +131,9 @@ public struct ArmUpdateCommand: ParsableCommand {
                         inPersonOnly: padInPersonOnly ?? arm.padding.inPersonOnly
                     )
                 )
+            }
+            if let includePrivate {
+                arm = try service.updateIncludePrivate(armID: arm.id, includePrivate: includePrivate)
             }
             if preferCurrentDevice {
                 arm = try service.preferCurrentDevice(armID: arm.id)
@@ -179,6 +190,12 @@ public struct ArmAddCommand: ParsableCommand {
     @Flag(help: "Leave out events with #dontclone in the title or notes.")
     public var skipDontclone = false
 
+    @Flag(help: "Leave out events marked Free.")
+    public var skipFree = false
+
+    @Flag(help: "Keep the details of private events on a Full details Arm.")
+    public var includePrivate = false
+
     @Option(name: .long, help: "Minutes the copy starts before the event.")
     public var padBefore: Int = 0
 
@@ -203,11 +220,13 @@ public struct ArmAddCommand: ParsableCommand {
                 filters: ArmFilters(
                     skipDeclined: skipDeclined,
                     skipAllDay: skipAllDay,
-                    skipDontClone: skipDontclone
+                    skipDontClone: skipDontclone,
+                    skipFree: skipFree
                 ),
                 label: label,
                 padding: ArmPadding(
-                    beforeMinutes: padBefore, afterMinutes: padAfter, inPersonOnly: padInPersonOnly)
+                    beforeMinutes: padBefore, afterMinutes: padAfter, inPersonOnly: padInPersonOnly),
+                includePrivate: includePrivate
             )
             try OutputRenderer.write(
                 command: "arm.add",
@@ -375,6 +394,7 @@ private func armItem(_ arm: StoredArm, status: ArmSyncStatus? = nil) -> CommandI
             arm.filters.skipDeclined ? "skip-declined" : nil,
             arm.filters.skipAllDay ? "skip-all-day" : nil,
             arm.filters.skipDontClone ? "skip-dontclone" : nil,
+            arm.filters.skipFree ? "skip-free" : nil,
         ].compactMap { $0 },
         syncState: status?.state.rawValue,
         lastSyncAt: InboxCLI.date(status?.lastSyncAt),

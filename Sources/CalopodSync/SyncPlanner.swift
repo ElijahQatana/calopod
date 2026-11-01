@@ -123,7 +123,9 @@ public enum SyncPlanner {
         for source in boundedSources.sorted(by: sourceOrder) {
             let mirrorKey = mirrorKey(armID: arm.id, sourceKeyHash: source.sourceKeyHash)
             desiredMirrorKeys.insert(mirrorKey)
-            let justBusy = arm.ruleMode == .fullDetails && EventTag.read(source).contains(.justBusy)
+            let tagged = arm.ruleMode == .fullDetails && EventTag.read(source).contains(.justBusy)
+            let hidden = arm.ruleMode == .fullDetails && source.isPrivate && !arm.includePrivate
+            let justBusy = tagged || hidden
             let payload = desiredPayload(
                 source: source,
                 arm: arm,
@@ -199,7 +201,8 @@ public enum SyncPlanner {
                     mirrorKey: mirrorKey,
                     sourceKeyHash: source.sourceKeyHash,
                     action: action,
-                    reason: justBusy && (action == .create || action == .update) ? .taggedJustBusy : reason,
+                    reason: justBusy && (action == .create || action == .update)
+                        ? (tagged ? .taggedJustBusy : .privateEvent) : reason,
                     desiredFingerprint: fingerprint,
                     payload: payload
                 )
@@ -364,7 +367,8 @@ public enum SyncPlanner {
                 isAllDay: source.isAllDay,
                 availability: source.availability,
                 title: arm.plainCopyTitle(isPrivate: source.isPrivate),
-                isPrivate: nil,
+                // A Full details copy is read back with a private flag even when it shows no words.
+                isPrivate: justBusy && targetProvider != .eventKit ? false : nil,
                 location: nil,
                 notes: nil,
                 timeZoneIdentifier: source.isAllDay ? source.timeZoneIdentifier : nil

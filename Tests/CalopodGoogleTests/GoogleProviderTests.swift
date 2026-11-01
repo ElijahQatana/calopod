@@ -866,3 +866,30 @@ func allDayRead() async throws {
     )
     #expect(page.events.map(\.timeZoneIdentifier) == ["Europe/Paris", "Asia/Tokyo", nil])
 }
+
+@Suite("Google event flags")
+struct GoogleFlagTests {
+    @Test(arguments: [
+        (#""transparency":"transparent""#, ProviderAvailability.free, false, EventKind?.none),
+        (#""transparency":"opaque""#, .busy, false, nil),
+        (#""visibility":"private""#, .busy, true, nil),
+        (#""visibility":"confidential""#, .busy, true, nil),
+        (#""visibility":"public""#, .busy, false, nil),
+        (#""eventType":"outOfOffice""#, .busy, false, nil),
+        (#""eventType":"workingLocation""#, .busy, false, .workingLocation),
+        (#""eventType":"birthday""#, .busy, false, .birthday),
+        (#""eventType":"default""#, .busy, false, nil),
+    ])
+    func flags(fields: String, availability: ProviderAvailability, isPrivate: Bool, kind: EventKind?) async throws {
+        let json = #"{"items":[{"id":"synthetic","start":{"dateTime":"2026-11-05T14:00:00Z"},"end":{"dateTime":"2026-11-05T15:00:00Z"},\#(fields)}]}"#
+        let client = GoogleCalendarClient(transport: RecordingTransport { _ in
+            HTTPResponse(statusCode: 200, body: Data(json.utf8))
+        })
+        let page = try await client.events(accessToken: "synthetic", connectionID: "google-test",
+                                           calendarID: "synthetic-calendar", from: Date(), through: Date())
+        let event = try #require(page.events.first)
+        #expect(event.availability == availability)
+        #expect(event.isPrivate == isPrivate)
+        #expect(event.kind == kind)
+    }
+}

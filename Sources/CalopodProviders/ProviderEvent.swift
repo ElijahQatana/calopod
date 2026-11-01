@@ -30,6 +30,7 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
     public let tombstoneEvidence: ProviderTombstoneEvidence?
     public let isCancelled: Bool
     public let isPrivate: Bool
+    public let kind: EventKind?
     public let title: String?
     public let updatedAt: Date?
     public let isManagedMirror: Bool
@@ -58,6 +59,7 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
         availability: ProviderAvailability,
         isCancelled: Bool,
         isPrivate: Bool,
+        kind: EventKind? = nil,
         title: String?,
         updatedAt: Date?,
         isManagedMirror: Bool = false,
@@ -85,6 +87,7 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
         self.tombstoneEvidence = tombstoneEvidence
         self.isCancelled = isCancelled
         self.isPrivate = isPrivate
+        self.kind = kind
         self.title = title
         self.updatedAt = updatedAt
         self.isManagedMirror = isManagedMirror
@@ -113,6 +116,7 @@ public struct ProviderEvent: Codable, Equatable, Sendable {
             availability: availability,
             isCancelled: isCancelled,
             isPrivate: isPrivate,
+            kind: kind,
             title: title,
             updatedAt: updatedAt,
             isManagedMirror: true,

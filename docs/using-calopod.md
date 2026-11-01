@@ -79,13 +79,15 @@ calopod arm disable ARM_ID
 calopod arm remove ARM_ID
 ```
 
-An Arm copies everything unless you turn on a filter. `--skip-declined`, `--skip-all-day` and `--skip-dontclone` leave out events you declined, all-day events, and events with `#dontclone` in the title or notes. They work with `arm add`, and `arm update` takes them and the matching `--no-skip-...` flags. When an event starts to match a filter, the copy Calopod made of it is removed on the next sync, and the preview lists that as a removal. [Event tags](tags.md) work on every Arm: `#justbusy` copies one event as plain Busy.
+An Arm copies everything unless you turn on a filter. `--skip-declined`, `--skip-all-day`, `--skip-dontclone` and `--skip-free` leave out events you declined, all-day events, events with `#dontclone` in the title or notes, and events marked Free. They work with `arm add`, and `arm update` takes them and the matching `--no-skip-...` flags. When an event starts to match a filter, the copy Calopod made of it is removed on the next sync, and the preview lists that as a removal. [Event tags](tags.md) work on every Arm: `#justbusy` copies one event as plain Busy.
 
 ```sh
 calopod arm update ARM_ID --skip-declined --no-skip-all-day
 ```
 
-The default Rule is `busy`: the copy has the start, end and the title "Busy", nothing else. Use `full-details` only for a calendar you trust. It copies the title, location and notes, with attendees and links written into the notes. It never invites anyone and clears alerts so you aren't notified twice.
+Working location and birthday entries are never copied, because they are not commitments. An Out of office event is copied as Busy like any other. The preview names the reason when one of these is left out.
+
+The default Rule is `busy`: the copy has the start, end and the title "Busy", nothing else. Use `full-details` only for a calendar you trust. It copies the title, location and notes, with attendees and links written into the notes. It never invites anyone and clears alerts so you aren't notified twice. A Private event is copied as plain Busy unless the Arm has Include private events on (`--include-private`, `--no-include-private`). It starts off for a new Arm and stays on for Full details Arms made before it existed. On a Mac calendar the details of a private event show openly, because Calendar has no private flag.
 
 Rule `label` sits between the two: the copy has the start and end and a fixed title you set on the Arm, such as "Personal" or "Client". Nothing from the original's title, notes, location or people goes into it. A Private event is copied as plain "Busy" without the label. Changing an Arm's Rule or label updates its copies on the next sync instead of making new ones.
 

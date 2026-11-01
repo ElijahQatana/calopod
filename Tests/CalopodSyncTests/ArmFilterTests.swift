@@ -9,6 +9,7 @@ struct ArmFilterTests {
     private static let declined = ArmFilters(skipDeclined: true)
     private static let allDay = ArmFilters(skipAllDay: true)
     private static let tagged = ArmFilters(skipDontClone: true)
+    private static let free = ArmFilters(skipFree: true)
 
     @Test("Each filter leaves out its own events and nothing else", arguments: [
         (declined, event("declined", response: .declined), false),
@@ -18,19 +19,50 @@ struct ArmFilterTests {
         (tagged, event("tagged-title", title: "Review #dontclone"), false),
         (tagged, event("tagged-notes", notes: "Private\n#dontclone"), false),
         (tagged, event("plain"), true),
+        (free, event("free", availability: "free"), false),
+        (free, event("busy"), true),
+        (free, event("out-of-office", availability: "unavailable"), true),
+        (free, event("tentative", availability: "tentative"), true),
+        (free, event("private", isPrivate: true), true),
         (ArmFilters(), event("declined", response: .declined), true),
         (ArmFilters(), event("all-day", allDay: true), true),
         (ArmFilters(), event("tagged-title", title: "Review #dontclone"), true),
+        (ArmFilters(), event("free", availability: "free"), true),
     ])
     func copies(filters: ArmFilters, source: StoredNormalizedInstance, copied: Bool) throws {
         let items = try plan(filters, sources: [source]).items
         #expect(items.map(\.action) == (copied ? [.create] : []))
     }
 
+    @Test("Working location and birthday entries are never copied", arguments: [
+        ArmFilters(), free, ArmFilters(skipAllDay: true),
+    ])
+    func kindsAreLeftOut(filters: ArmFilters) throws {
+        let sources = [
+            event("place", kind: .workingLocation), event("birthday", allDay: true, kind: .birthday),
+            event("meeting"),
+        ]
+        #expect(try plan(filters, sources: sources).items.compactMap(\.sourceKeyHash) == ["key-meeting"])
+    }
+
+    @Test("Private and Out of office events are copied as Busy", arguments: [
+        event("private", isPrivate: true), event("out-of-office", availability: "unavailable"),
+    ])
+    func copiedAsBusy(source: StoredNormalizedInstance) throws {
+        let item = try #require(plan(Self.free, sources: [source]).items.first)
+        #expect(item.action == .create)
+        #expect(item.payload?.title == "Busy")
+        #expect(item.payload?.isPrivate == nil)
+        #expect(item.payload?.availability == source.availability)
+    }
+
     @Test("A copy is removed once its event matches a filter", arguments: [
         (declined, event("a", response: .declined), SyncPlanReason.filteredOut),
         (allDay, event("a", allDay: true), .filteredOut),
         (tagged, event("a", notes: "#dontclone"), .taggedDontClone),
+        (free, event("a", availability: "free"), .markedFree),
+        (ArmFilters(), event("a", kind: .workingLocation), .workingLocation),
+        (ArmFilters(), event("a", allDay: true, kind: .birthday), .birthday),
     ])
     func removesCopy(filters: ArmFilters, now: StoredNormalizedInstance, reason: SyncPlanReason) throws {
         let copy = Copy(of: event("a"))
@@ -44,6 +76,7 @@ struct ArmFilterTests {
 
     @Test("A copy stays when the filter is off", arguments: [
         event("a", response: .declined), event("a", allDay: true), event("a", title: "#dontclone"),
+        event("a", availability: "free"),
     ])
     func keepsCopyWithoutFilter(now: StoredNormalizedInstance) throws {
         let copy = Copy(of: now)
@@ -136,7 +169,7 @@ struct ArmFilterTests {
             targetBindingID: "synthetic-target"
         )
         #expect(arm.filters.isEmpty)
-        let filters = ArmFilters(skipDeclined: true, skipDontClone: true)
+        let filters = ArmFilters(skipDeclined: true, skipDontClone: true, skipFree: true)
         let updated = try service.updateFilters(armID: arm.id, filters: filters)
         #expect(updated.filters == filters)
         #expect(try repository.arm(id: arm.id) == updated)
@@ -187,14 +220,14 @@ private func plan(
 private func event(
     _ key: String, title: String? = "Planning", notes: String? = nil, start: TimeInterval = 2_000,
     end: TimeInterval = 3_000, allDay: Bool = false, response: EventResponseState = .notApplicable,
-    series: String? = nil
+    series: String? = nil, availability: String = "busy", isPrivate: Bool = false, kind: EventKind? = nil
 ) -> StoredNormalizedInstance {
     StoredNormalizedInstance(
         sourceKeyHash: "key-\(key)", connectionID: "connection", calendarBindingID: "source",
         providerEventID: series ?? "id-\(key)", recurrenceID: series.map { _ in "occurrence-\(key)" },
         startsAt: Date(timeIntervalSince1970: start), endsAt: Date(timeIntervalSince1970: end),
-        isAllDay: allDay, availability: "busy", isCancelled: false, isPrivate: false, title: title,
-        contentFingerprint: "f-\(key)", providerUpdatedAt: nil, notes: notes,
+        isAllDay: allDay, availability: availability, isCancelled: false, isPrivate: isPrivate,
+        kind: kind, title: title, contentFingerprint: "f-\(key)", providerUpdatedAt: nil, notes: notes,
         currentUserResponse: EventResponse(state: response),
         providerSeriesID: series, timeZoneIdentifier: allDay ? "UTC" : nil)
 }
