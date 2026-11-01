@@ -20,6 +20,9 @@ public enum SyncPlanReason: String, Codable, Sendable {
     case filteredOut = "filtered-out"
     case taggedDontClone = "tagged-dont-clone"
     case taggedJustBusy = "tagged-just-busy"
+    case markedFree = "marked-free"
+    case workingLocation = "working-location"
+    case birthday
     case verifiedDuplicates = "verified-duplicates"
     case mappingMissing = "mapping-missing"
     case providerIdentityChanged = "provider-identity-changed"
