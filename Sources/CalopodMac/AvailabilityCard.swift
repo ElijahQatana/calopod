@@ -132,6 +132,7 @@ struct AvailabilityCard: View {
     @Bindable var model: AvailabilityModel
     let notices: [String]
     let openSettings: () -> Void
+    @State private var copied = false
     private static let listLimit = 6
 
     var body: some View {
@@ -198,6 +199,10 @@ struct AvailabilityCard: View {
                 Text("Find a time").font(Theme.Fonts.bodySemibold)
                 TextField("45m or 2h", text: $model.findText)
                     .textFieldStyle(.roundedBorder).frame(width: 110)
+                    .onChange(of: model.foundText) { copied = false }
+                if !model.found.isEmpty {
+                    Button(copied ? "Copied" : "Copy", action: copyFound)
+                }
             }
             if model.findSeconds != nil {
                 if model.found.isEmpty {
@@ -217,6 +222,11 @@ struct AvailabilityCard: View {
                 }
             }
         }
+    }
+
+    private func copyFound() {
+        NSPasteboard.general.clearContents()
+        copied = NSPasteboard.general.setString(model.foundText, forType: .string)
     }
 
     // MARK: Chosen day

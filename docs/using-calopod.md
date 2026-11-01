@@ -46,6 +46,8 @@ calopod availability find --duration 45m --within 5d
 
 It lists the free windows that are at least that long, starting from now, using the same busy time, padding and working hours as `availability`. `--within` takes days or hours (`5d`, `36h`) and defaults to 7 days; `--day` or `--from` and `--through` pick a range instead. Add `--ignore-working-hours` to count the whole day. `--cached`, `--connection`, `--calendar` and `--timezone` work as above. The Availability page in the Mac app has a Find a time field that does the same for the week it shows.
 
+Add `--copy` to also copy the windows as plain text for a message, such as `Tue Nov 3, 2:00 to 4:00 PM EST`, in the time zone of the range. The text is printed too; where there is no clipboard tool, nothing is copied. JSON output is unchanged.
+
 Working hours are set per weekday in your local time zone, with days off allowed. Until you set them they are Monday to Friday, 9:00 to 17:00.
 
 ```sh

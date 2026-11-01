@@ -51,6 +51,9 @@ final class AvailabilityModel {
         return reports.flatMap { $0.result.freeWindows(atLeast: seconds, after: now()) }
     }
 
+    /// Every window found, as text to paste into a message, in the zone the page shows.
+    var foundText: String { FreeSlotText.text(found, timeZone: calendar.timeZone) }
+
     var findSeconds: TimeInterval? { FindSpan(findText.trimmingCharacters(in: .whitespaces))?.seconds }
 
     func report(for day: Date) -> AvailabilityDayReport? { reports.first { $0.day.start == day } }

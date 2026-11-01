@@ -29,6 +29,30 @@ struct AvailabilityFindTests {
         #expect(try AvailabilityFindCommand.parse(["--duration", "2h"]).within == nil)
     }
 
+    @Test("Copy is off unless asked for")
+    func copyFlag() throws {
+        #expect(try AvailabilityFindCommand.parse(["--duration", "45m", "--copy"]).copy)
+        #expect(try !AvailabilityFindCommand.parse(["--duration", "45m"]).copy)
+    }
+
+    @Test("The text is copied and shown, and nothing is copied without windows")
+    func copyNote() {
+        let zone = TimeZone(identifier: "UTC")!
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let windows = [AvailabilityInterval(kind: .free, start: start, end: start.addingTimeInterval(3_600))]
+        let cases: [(windows: [AvailabilityInterval], works: Bool, copied: String?, note: String)] = [
+            (windows, true, "Fri Jan 15, 8:00 to 9:00 AM GMT", "Fri Jan 15, 8:00 to 9:00 AM GMT\nCopied to the clipboard."),
+            (windows, false, "Fri Jan 15, 8:00 to 9:00 AM GMT", "Fri Jan 15, 8:00 to 9:00 AM GMT\nNo clipboard tool was found, so nothing was copied."),
+            ([], true, nil, "No free windows, so nothing was copied."),
+        ]
+        for item in cases {
+            var copied: String?
+            let note = AvailabilityFindCommand.copyNote(item.windows, timeZone: zone) { copied = $0; return item.works }
+            #expect(copied == item.copied)
+            #expect(note == item.note)
+        }
+    }
+
     @Test("Nonsense lengths and spans are refused")
     func refused() {
         let cases: [[String]] = [
