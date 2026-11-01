@@ -202,3 +202,14 @@ public enum AvailabilityCalculator {
         return windows
     }
 }
+
+extension AvailabilityResult {
+    /// Free windows at least `length` seconds long, cut to start no earlier than `after`.
+    public func freeWindows(atLeast length: TimeInterval, after: Date? = nil) -> [AvailabilityInterval] {
+        free.compactMap { interval in
+            let start = max(interval.start, after ?? interval.start)
+            guard interval.end.timeIntervalSince(start) >= length else { return nil }
+            return AvailabilityInterval(kind: .free, start: start, end: interval.end)
+        }
+    }
+}

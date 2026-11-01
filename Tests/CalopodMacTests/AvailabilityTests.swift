@@ -62,6 +62,31 @@ final class AvailabilityTests: XCTestCase {
         XCTAssertEqual(model.selected, day())
     }
 
+    func testFindListsTheShownWeeksWindowsThatAreLongEnough() async {
+        var clock = day()
+        let model = AvailabilityModel(calendar: utc, now: { clock }, load: { days in
+            days.map { start in
+                // Free 9:00 to 10:30 and 13:00 to 17:00 on each day.
+                let free = [(9.0, 10.5), (13.0, 17.0)].map {
+                    AvailabilityInterval(kind: .free, start: start.addingTimeInterval($0.0 * 3600), end: start.addingTimeInterval($0.1 * 3600))
+                }
+                let range = DateInterval(start: start, duration: 86_400), result = AvailabilityResult(busy: [], free: free)
+                return AvailabilityDayReport(day: range, result: result, summary: AvailabilityDay(result, day: range))
+            }
+        })
+        await model.reload()
+        clock = day(-7)
+        for (text, count, valid) in [("", 0, false), ("soon", 0, false), ("2h", 7, true), (" 90m ", 14, true), ("5h", 0, true)] {
+            model.findText = text
+            XCTAssertEqual(model.found.count, count, text)
+            XCTAssertEqual(model.findSeconds != nil, valid, text)
+        }
+        // Time already gone does not count: Thursday's morning window is too short by then.
+        clock = day().addingTimeInterval(10 * 3600)
+        model.findText = "90m"
+        XCTAssertEqual(model.found.first?.start, day().addingTimeInterval(13 * 3600))
+    }
+
     func testAFailedReadSaysSoAndClearsOldDays() async {
         struct Broken: Error {}
         let model = AvailabilityModel(calendar: utc, now: { self.day() }, load: { _ in throw Broken() })

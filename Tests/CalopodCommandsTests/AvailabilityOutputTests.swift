@@ -19,7 +19,7 @@ struct AvailabilityOutputTests {
                 OutsideInterval(side: .after, start: at(19.5), end: at(20)),
             ])
 
-        let items = AvailabilityCommand.items(result)
+        let items = AvailabilityShowCommand.items(result)
 
         #expect(items.map(\.availability) == ["before-hours", "free", "busy", "after-hours"])
         #expect(items.map(\.label) == ["Before hours", "Free", "Busy", "After hours"])
