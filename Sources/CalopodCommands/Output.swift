@@ -107,6 +107,8 @@ public struct CommandPayload: Codable, Equatable, Sendable {
     public let workingWindows: [WorkingWindowOutput]?
     /// For `calopod availability`: seconds free, busy and outside working hours across the range.
     public let totals: AvailabilityTotalsOutput?
+    /// For `calopod availability find`: the shortest window asked for, in seconds.
+    public let lengthSeconds: Int?
 
     public init(
         status: String,
@@ -159,7 +161,8 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         notifications: NotificationSettingsOutput? = nil,
         workingHours: WorkingHoursOutput? = nil,
         workingWindows: [WorkingWindowOutput]? = nil,
-        totals: AvailabilityTotalsOutput? = nil
+        totals: AvailabilityTotalsOutput? = nil,
+        lengthSeconds: Int? = nil
     ) {
         self.status = status
         self.message = message
@@ -212,6 +215,7 @@ public struct CommandPayload: Codable, Equatable, Sendable {
         self.workingHours = workingHours
         self.workingWindows = workingWindows
         self.totals = totals
+        self.lengthSeconds = lengthSeconds
     }
 }
 

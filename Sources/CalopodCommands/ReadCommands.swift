@@ -126,7 +126,7 @@ func destinationCopies(
     return items.sorted { ($0.startsAt ?? "", $0.id) < ($1.startsAt ?? "", $1.id) }
 }
 
-private func outputDate(_ date: Date?) -> String? {
+func outputDate(_ date: Date?) -> String? {
     guard let date else { return nil }
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -134,11 +134,23 @@ private func outputDate(_ date: Date?) -> String? {
     return formatter.string(from: date)
 }
 
-/// Shows combined Busy and Free intervals for a range. Only times are used, never titles or
-/// locations.
+/// Shows combined Busy and Free intervals for a range, or finds a free slot of a given length.
 public struct AvailabilityCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "availability",
+        abstract: "Show combined busy and free intervals, or find a free slot.",
+        subcommands: [AvailabilityShowCommand.self, AvailabilityFindCommand.self],
+        defaultSubcommand: AvailabilityShowCommand.self
+    )
+
+    public init() {}
+}
+
+/// Shows combined Busy and Free intervals for a range. Only times are used, never titles or
+/// locations.
+public struct AvailabilityShowCommand: AsyncParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "show",
         abstract: "Show combined busy and free intervals for a day or range."
     )
 
@@ -223,7 +235,7 @@ public struct AvailabilityCommand: AsyncParsableCommand {
     }
 }
 
-extension AvailabilityCommand {
+extension AvailabilityShowCommand {
     /// Busy time outside working hours is its own kind: before-hours, after-hours or day-off. The
     /// busy kind is only time inside working hours.
     static func items(_ result: AvailabilityResult) -> [CommandItem] {
@@ -273,7 +285,7 @@ extension AvailabilityCommand {
     }
 }
 
-private func commandSources(_ sources: [CalendarReadSource], names: CalendarNames) -> [CommandSource] {
+func commandSources(_ sources: [CalendarReadSource], names: CalendarNames) -> [CommandSource] {
     sources.map {
         names.source(CommandSource(
             id: $0.calendar.id,
