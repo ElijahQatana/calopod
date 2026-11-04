@@ -6,11 +6,11 @@ import XCTest
 final class DayStripLayoutTests: XCTestCase {
     private let top = Date(timeIntervalSince1970: 1_792_000_800) // an exact hour
 
-    private func entry(_ id: String, _ startMinute: Double, _ minutes: Double, focused: Bool = false) -> InboxContextEntry {
+    private func entry(_ id: String, _ startMinute: Double, _ minutes: Double, focused: Bool = false, allDay: Bool = false) -> InboxContextEntry {
         InboxContextEntry(
             id: id, title: id, calendarID: "work", calendarName: "Work",
             startsAt: top.addingTimeInterval(startMinute * 60), endsAt: top.addingTimeInterval((startMinute + minutes) * 60),
-            isFocused: focused, overlapsFocused: false)
+            isFocused: focused, overlapsFocused: false, isAllDay: allDay)
     }
 
     func testOverlapsShareColumnsAndShortEventsKeepRoom() {
@@ -22,6 +22,12 @@ final class DayStripLayoutTests: XCTestCase {
         XCTAssertEqual(placed["late"]?.columns, 1)
         XCTAssertEqual(placed["ops"]?.top, 90)
         XCTAssertGreaterThanOrEqual(placed["late"]?.height ?? 0, 30)
+    }
+
+    func testAllDayGoesToTheBannerNotTheGrid() {
+        let entries = [entry("holiday", 0, 1440, focused: true, allDay: true), entry("sync", 90, 30)]
+        XCTAssertEqual(DayStripLayout.blocks(entries, windowStart: top).map(\.id), ["sync"])
+        XCTAssertEqual(DayStripLayout.banner(entries).map(\.id), ["holiday"])
     }
 
     func testWindowAcrossMidnightStaysWhole() {
