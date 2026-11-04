@@ -63,7 +63,8 @@ public enum InboxConflictCalculator {
         }
         let blocking = events.filter {
             let response = overrides[$0.sourceKeyHash] ?? $0.currentUserResponse.state
-            return response != .declined && $0.availability != "free"
+            guard response != .declined, $0.availability != "free" else { return false }
+            return !$0.isAllDay || $0.availability == "unavailable" || EventTag.read($0).contains(.blocking)
         }.sorted { ($0.startsAt, $0.sourceKeyHash) < ($1.startsAt, $1.sourceKeyHash) }
         var conflicts: [InboxConflict] = []
         for (index, event) in blocking.enumerated() {

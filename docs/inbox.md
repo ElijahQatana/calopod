@@ -7,6 +7,8 @@ The inbox gathers events that need your attention from the calendars you selecte
 - events that changed after you responded
 - events that overlap another event (conflicts)
 
+An all-day event is not a conflict unless it is marked out of office or tagged [`#blocking`](tags.md). Free and declined events never are.
+
 ```sh
 calopod inbox
 calopod inbox --conflicts --exclude-maybe

@@ -43,6 +43,19 @@ struct InboxConflictTests {
         #expect(InboxConflictCalculator.conflictOnlyEvents(in: snapshot(events), analysis: analysis).map(\.event.sourceKeyHash) == ["a", "tentative-accepted"])
     }
 
+    @Test("An all-day event blocks only when out of office or tagged #blocking", arguments: [
+        ("busy", "Offsite", nil, false), ("tentative", "Offsite", nil, false), ("unavailable", "Offsite", nil, true),
+        ("busy", "Offsite #blocking", nil, true), ("busy", "Offsite", "Plan\n#Blocking", true),
+        ("busy", "Offsite #blocking", "#justbusy", false), ("busy", "Offsite #blockings", nil, false),
+        ("free", "Offsite #blocking", nil, false),
+    ] as [(String, String, String?, Bool)])
+    func allDay(availability: String, title: String, notes: String?, blocks: Bool) {
+        let marked = event("a", availability: availability, allDay: true, title: title, notes: notes)
+        #expect(analyze([marked, event("b")]).pairs.isEmpty != blocks)
+        #expect(analyze([marked, event("c", allDay: true, title: "Other", notes: "#blocking")]).pairs.isEmpty != blocks)
+        #expect(analyze([event("a"), event("b", start: 11_000)]).pairs.count == 1)
+    }
+
     @Test("Unproven same-title copies and three-event groups retain separate pair identities")
     func groups() throws {
         let events = [event("a"), event("b", binding: "other"), event("c", start: 11_000, end: 13_000)]
@@ -63,7 +76,7 @@ struct InboxConflictTests {
         let start = try #require(calendar.date(from: DateComponents(year: 2026, month: month, day: month == 3 ? 8 : 1)))
         let end = try #require(calendar.date(byAdding: .day, value: 1, to: start))
         #expect(end.timeIntervalSince(start) == Double(month == 3 ? 23 : 25) * 3600)
-        let allDay = event("a", start: start.timeIntervalSince1970, end: end.timeIntervalSince1970, allDay: true)
+        let allDay = event("a", start: start.timeIntervalSince1970, end: end.timeIntervalSince1970, availability: "unavailable", allDay: true)
         let late = event("b", start: end.timeIntervalSince1970 - 3600, end: end.timeIntervalSince1970 + 3600)
         let sources = [source("calendar", coverageStart: start.addingTimeInterval(-10_000), coverageEnd: end.addingTimeInterval(10_000)), source("other", coverageStart: start.addingTimeInterval(-10_000), coverageEnd: end.addingTimeInterval(10_000))]
         let preview = try InboxCalendarContextBuilder.build(snapshot: InboxContextSnapshot(sources: sources, events: [allDay, late].map { InboxContextEvent(event: $0) }), focusedKey: "a", settings: InboxContextSettings(), freshnessCutoff: cutoff)
@@ -168,11 +181,11 @@ struct InboxConflictTests {
     func date(_ value: Double) -> Date { Date(timeIntervalSince1970: value) }
     func event(_ key: String, binding: String = "calendar", start: Double = 10_000, end: Double = 12_000,
                availability: String = "busy", response: EventResponseState = .accepted, cancelled: Bool = false,
-               allDay: Bool = false, supported: Bool = false, scopes: [RSVPActionScope] = [.occurrence]) -> StoredNormalizedInstance {
+               allDay: Bool = false, title: String = "Synthetic event", notes: String? = nil, supported: Bool = false, scopes: [RSVPActionScope] = [.occurrence]) -> StoredNormalizedInstance {
         StoredNormalizedInstance(sourceKeyHash: key, connectionID: binding, calendarBindingID: binding,
             providerEventID: key, recurrenceID: nil, startsAt: date(start), endsAt: date(end), isAllDay: allDay,
-            availability: availability, isCancelled: cancelled, isPrivate: false, title: "Synthetic event",
-            contentFingerprint: "synthetic", providerUpdatedAt: nil,
+            availability: availability, isCancelled: cancelled, isPrivate: false, title: title,
+            contentFingerprint: "synthetic", providerUpdatedAt: nil, notes: notes,
             currentUserResponse: EventResponse(state: response, evidence: .googleSelf,
                 actionCapability: supported ? RSVPActionCapability(supportedScopes: scopes) : nil))
     }
