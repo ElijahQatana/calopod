@@ -21,6 +21,7 @@ enum DayStripLayout {
     /// Side by side columns come from the Calendar screen's own layout, so both agree. Times are
     /// moved so the top of the window is midnight, which keeps a window across midnight whole.
     static func blocks(_ entries: [InboxContextEntry], windowStart: Date) -> [Block] {
+        let entries = entries.filter { !$0.isAllDay }
         var utc = Calendar(identifier: .gregorian)
         utc.timeZone = TimeZone(identifier: "UTC")!
         let origin = Date(timeIntervalSince1970: 86_400 * 100)
@@ -36,6 +37,9 @@ enum DayStripLayout {
             }
         }
     }
+
+    /// All-day events sit in a banner above the hours, not in the grid.
+    static func banner(_ entries: [InboxContextEntry]) -> [InboxContextEntry] { entries.filter(\.isAllDay) }
 
     /// Whole hours inside the window, as minutes below its top.
     static func hourMarks(from start: Date, to end: Date, calendar: Calendar = .current) -> [(date: Date, minutes: Double)] {
@@ -91,44 +95,53 @@ struct ContextStrip: View {
         let blocks = DayStripLayout.blocks(detail.context, windowStart: axis.start)
         let marks = DayStripLayout.hourMarks(from: axis.start, to: axis.end)
         let inset = DayStripLayout.inset
-        GeometryReader { proxy in
-            let perMinute = fillsHeight
-                ? DayStripLayout.pointsPerHour(hours: minutes / 60, available: proxy.size.height) / 60
-                : DayStripLayout.pointsPerMinute
-            let total = CGFloat(minutes) * perMinute
-            ScrollViewReader { scroller in
-                ScrollView {
-                    ZStack(alignment: .topLeading) {
-                        ForEach(marks, id: \.date) { mark in
-                            HStack(spacing: 6) {
-                                Text(mark.date.formatted(date: .omitted, time: .shortened))
-                                    .font(Theme.Fonts.tiny).foregroundStyle(.secondary)
-                                    .frame(width: Self.axisWidth - 6, alignment: .trailing)
-                                Rectangle().fill(.quaternary).frame(height: 0.5)
-                            }
-                            .offset(y: inset + CGFloat(mark.minutes) * perMinute - 8)
-                            .accessibilityHidden(true)
-                        }
-                        ForEach(blocks) { placed in
-                            let area = max(proxy.size.width - Self.axisWidth - 8, 60)
-                            let width = area / CGFloat(placed.columns)
-                            block(placed.entry)
-                                .frame(width: max(width - 3, 24), height: max(CGFloat(placed.height) * perMinute - 2, 18))
-                                .padding(.leading, Self.axisWidth + CGFloat(placed.column) * width)
-                                .padding(.top, inset + CGFloat(placed.top) * perMinute)
-                                .id(placed.id)
-                        }
-                    }
-                    .frame(width: proxy.size.width, height: total + 2 * inset, alignment: .topLeading)
+        let banner = DayStripLayout.banner(detail.context)
+        VStack(spacing: 6) {
+            if !banner.isEmpty {
+                VStack(spacing: 2) {
+                    ForEach(banner) { block($0).frame(height: 22) }
                 }
-                .scrollBounceBehavior(.basedOnSize)
-                .onAppear {
-                    if let focused = detail.context.first(where: \.isFocused) { scroller.scrollTo(focused.id, anchor: .center) }
+                .padding(.leading, Self.axisWidth)
+            }
+            GeometryReader { proxy in
+                let perMinute = fillsHeight
+                    ? DayStripLayout.pointsPerHour(hours: minutes / 60, available: proxy.size.height) / 60
+                    : DayStripLayout.pointsPerMinute
+                let total = CGFloat(minutes) * perMinute
+                ScrollViewReader { scroller in
+                    ScrollView {
+                        ZStack(alignment: .topLeading) {
+                            ForEach(marks, id: \.date) { mark in
+                                HStack(spacing: 6) {
+                                    Text(mark.date.formatted(date: .omitted, time: .shortened))
+                                        .font(Theme.Fonts.tiny).foregroundStyle(.secondary)
+                                        .frame(width: Self.axisWidth - 6, alignment: .trailing)
+                                    Rectangle().fill(.quaternary).frame(height: 0.5)
+                                }
+                                .offset(y: inset + CGFloat(mark.minutes) * perMinute - 8)
+                                .accessibilityHidden(true)
+                            }
+                            ForEach(blocks) { placed in
+                                let area = max(proxy.size.width - Self.axisWidth - 8, 60)
+                                let width = area / CGFloat(placed.columns)
+                                block(placed.entry)
+                                    .frame(width: max(width - 3, 24), height: max(CGFloat(placed.height) * perMinute - 2, 18))
+                                    .padding(.leading, Self.axisWidth + CGFloat(placed.column) * width)
+                                    .padding(.top, inset + CGFloat(placed.top) * perMinute)
+                                    .id(placed.id)
+                            }
+                        }
+                        .frame(width: proxy.size.width, height: total + 2 * inset, alignment: .topLeading)
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
+                    .onAppear {
+                        if let focused = detail.context.first(where: \.isFocused) { scroller.scrollTo(focused.id, anchor: .center) }
+                    }
                 }
             }
+            .frame(height: fillsHeight ? nil : DayStripLayout.height(forMinutes: minutes, inset: inset))
+            .frame(maxHeight: fillsHeight ? .infinity : nil)
         }
-        .frame(height: fillsHeight ? nil : DayStripLayout.height(forMinutes: minutes, inset: inset))
-        .frame(maxHeight: fillsHeight ? .infinity : nil)
         .padding(.vertical, 6).padding(.horizontal, 8)
         .cardSurface()
     }
