@@ -199,6 +199,15 @@ extension LocalStateRepository {
 private struct CopyContext {
     let arms: [Row]
     let mapped: [Row]
+    let armsBySource: [String: [Row]]
+    let mappedBySourceKey: [String: [Row]]
+
+    init(arms: [Row], mapped: [Row]) {
+        self.arms = arms
+        self.mapped = mapped
+        armsBySource = Dictionary(grouping: arms) { $0["source_binding_id"] }
+        mappedBySourceKey = Dictionary(grouping: mapped) { $0["source_key_hash"] }
+    }
 }
 
 private func copyContext(_ db: Database) throws -> CopyContext {
@@ -249,8 +258,8 @@ private func copyDiagnoses(
     for other in events.map(\.event) where other.sourceKeyHash != event.sourceKeyHash
         && other.calendarBindingID != event.calendarBindingID {
         if overlappingOnly && !(other.startsAt < event.endsAt && event.startsAt < other.endsAt) { continue }
-        let routes = context.arms.filter { ($0["source_binding_id"] as String) == other.calendarBindingID }
-        let stored = context.mapped.filter { ($0["source_key_hash"] as String) == other.sourceKeyHash }
+        let routes = context.armsBySource[other.calendarBindingID] ?? []
+        let stored = context.mappedBySourceKey[other.sourceKeyHash] ?? []
         let modes = routes.map {
             ($0["rule_mode"] as String, $0["copy_label"] as String?, ($0["target_binding_id"] as String) == event.calendarBindingID, copyPadding($0))
         } + stored.map { ($0["rule_mode"] as String, $0["copy_label"] as String?, true, copyPadding($0)) }
