@@ -6,6 +6,7 @@ Put a tag in an event's notes or title to tell Calopod what to do with it.
 | --- | --- |
 | `#dontclone` | The event is not copied. It counts on an Arm that has the filter on (Skip events tagged #dontclone, or `--skip-dontclone`). A copy Calopod already made is removed on the next sync. |
 | `#justbusy` | The event is copied as plain Busy, even by a Full details Arm, with no title, location or notes. Busy and Label Arms already copy no words, so it changes nothing there. It works on every Arm without a setting. |
+| `#blocking` | An all-day event counts as a conflict with other events. Without it, an all-day event is left out of conflicts unless it is marked out of office. |
 
 A tag is read in any case, and only as a whole word, so `#DontClone` counts and `#dontcloned` does not. Calopod looks in the notes first and uses the title only when the notes have no tag. If an event has both tags, `#dontclone` wins on an Arm that skips it.
 

@@ -4,6 +4,7 @@ import Foundation
 enum EventTag: String, CaseIterable {
     case dontClone = "dontclone"
     case justBusy = "justbusy"
+    case blocking = "blocking"
 
     private static let tagCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "#_-"))
 

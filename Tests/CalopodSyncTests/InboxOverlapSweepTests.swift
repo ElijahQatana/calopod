@@ -25,7 +25,7 @@ struct InboxOverlapSweepTests {
             item("a", 10, 12), item("b", 12, 14),                  // back to back
             item("c", 9, 20), item("d", 13, 14), item("e", 15, 16), // nested in c
             item("f", 30, 32), item("g", 30, 32),                   // identical times
-            item("h", 40, 64, allDay: true), item("i", 50, 51),     // all-day over a timed event
+            item("h", 40, 64, allDay: true, availability: "unavailable"), item("i", 50, 51), // out-of-office all-day
             item("j", 70, 72), item("k", 71, 73, confirmed: false), // unconfirmed copy
             item("l", 80, 82, availability: "free"), item("m", 80, 82, response: .declined), item("n", 80, 82),
         ]
