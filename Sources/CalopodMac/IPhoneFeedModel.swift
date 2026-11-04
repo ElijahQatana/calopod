@@ -50,7 +50,8 @@ final class IPhoneFeedModel {
 
     /// Reads the saved setting, which the command line may have changed, and does whatever is due.
     func tick() async {
-        reload()
+        // A run reloads when it finishes.
+        guard availability.isAvailable, !isBusy else { return reload() }
         await run(force: false)
     }
 
